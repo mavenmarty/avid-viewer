@@ -124,7 +124,26 @@ class Store(private val context: Context) {
         }
     }
 
+    // ---- movies & series per playlist ----
+    fun saveVod(playlistId: String, list: List<VodItem>) {
+        val a = JSONArray()
+        list.forEach { a.put(it.toJson()) }
+        writeAtomic(File(dataDir, "vod_$playlistId.json"), a.toString())
+    }
+
+    fun loadVod(playlistId: String): List<VodItem> {
+        val f = File(dataDir, "vod_$playlistId.json")
+        if (!f.exists()) return emptyList()
+        return try {
+            val a = JSONArray(f.readText())
+            List(a.length()) { VodItem.fromJson(a.getJSONObject(it)) }
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
     fun deletePlaylistData(playlistId: String) {
+        File(dataDir, "vod_$playlistId.json").delete()
         File(dataDir, "channels_$playlistId.json").delete()
         File(dataDir, "guide_$playlistId.json").delete()
     }

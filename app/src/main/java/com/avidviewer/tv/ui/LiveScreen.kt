@@ -43,13 +43,6 @@ fun LiveScreen(vm: AppViewModel) {
     }
     val groups = vm.groups()
     val numbers = vm.numbers()
-    var focusedKey by remember { mutableStateOf(vm.currentKey) }
-
-    // Play the focused channel in the preview after a short pause, so scrolling stays smooth.
-    LaunchedEffect(focusedKey) {
-        delay(700)
-        vm.preview(focusedKey)
-    }
 
     Row(Modifier.fillMaxSize()) {
         LazyColumn(
@@ -80,8 +73,8 @@ fun LiveScreen(vm: AppViewModel) {
             item { SectionTitle(vm.groupName(vm.selectedGroup ?: ""), Modifier.padding(start = 8.dp, bottom = 6.dp, top = 6.dp)) }
             items(list, key = { it.key }) { c ->
                 ChannelRow(vm, c, numbers[c.key], selected = c.key == vm.currentKey,
-                    onFocus = { focusedKey = c.key },
-                    onClick = { vm.openFullScreen(c.key, PlayContext.GROUP) })
+                    onFocus = {},
+                    onClick = { vm.selectChannel(c.key, PlayContext.GROUP) })
             }
         }
         PreviewPane(vm, Modifier.width(270.dp).fillMaxHeight().padding(12.dp))
@@ -130,6 +123,7 @@ private fun PreviewPane(vm: AppViewModel, modifier: Modifier) {
     Column(modifier, verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Box(Modifier.fillMaxWidth().aspectRatio(16f / 9f).clip(RoundedCornerShape(10.dp))) {
             VideoSurface(vm, Modifier.fillMaxSize())
+            if (vm.player.mediaItemCount == 0) Label("Press OK on a channel to preview it", size = 12.sp, color = C.Muted, lines = 2, modifier = Modifier.align(Alignment.Center).padding(10.dp))
             vm.playerError?.let {
                 Label(it, size = 11.sp, color = C.Soft, lines = 4, modifier = Modifier.align(Alignment.Center).padding(10.dp))
             }
@@ -147,7 +141,7 @@ private fun PreviewPane(vm: AppViewModel, modifier: Modifier) {
                 TvButton("Watch", primary = true) { vm.openFullScreen(c.key, PlayContext.GROUP) }
                 TvButton(if (vm.isFavorite(c.key)) "★ Saved" else "☆ Favorite") { vm.toggleFavorite(c.key) }
             }
-            Label("Tip: press Menu or hold OK on a channel to add it to Favorites.", size = 11.sp, lines = 2)
+            Label("OK on a channel: preview · OK again: full screen · Menu or hold OK: favorite", size = 11.sp, lines = 2)
         }
     }
 }

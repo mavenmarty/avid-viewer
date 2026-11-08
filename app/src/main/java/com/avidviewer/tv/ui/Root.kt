@@ -44,9 +44,11 @@ fun AppRoot(vm: AppViewModel) {
                 NavRail(vm)
                 Box(Modifier.fillMaxHeight().weight(1f)) {
                     when (vm.screen) {
+                        Screen.SEARCH -> SearchScreen(vm)
                         Screen.FAVORITES -> FavoritesScreen(vm)
                         Screen.LIVE -> LiveScreen(vm)
                         Screen.GUIDE -> GuideScreen(vm)
+                        Screen.SPORTS -> SportsScreen(vm)
                         Screen.MANAGE -> ManageScreen(vm)
                         Screen.PLAYLISTS -> PlaylistsScreen(vm)
                         Screen.SETTINGS -> SettingsScreen(vm)
@@ -75,7 +77,7 @@ private fun NavRail(vm: AppViewModel) {
             Text("Avid Viewer", color = C.Text, fontSize = 15.sp, fontWeight = FontWeight.Bold)
         }
         val items = listOf(
-            Screen.FAVORITES to "Favorites", Screen.LIVE to "Live TV", Screen.GUIDE to "TV Guide",
+            Screen.SEARCH to "Search", Screen.FAVORITES to "Favorites", Screen.LIVE to "Live TV", Screen.GUIDE to "TV Guide", Screen.SPORTS to "Sports",
             Screen.MANAGE to "Manage", Screen.PLAYLISTS to "Playlists", Screen.SETTINGS to "Settings",
         )
         items.forEachIndexed { i, (s, label) ->
@@ -84,7 +86,7 @@ private fun NavRail(vm: AppViewModel) {
                 modifier = Modifier.fillMaxWidth().height(38.dp).then(if (i == 0) Modifier.focusRequester(first) else Modifier),
                 color = if (active) C.Accent else Color.Transparent,
                 focusedColor = if (active) Color(0xFFFFC35C) else C.Surface2,
-                onClick = { vm.screen = s },
+                onClick = { if (s == Screen.SPORTS) vm.openSportsScreen() else { if (s == Screen.SETTINGS) vm.settingsSection = "general"; vm.screen = s } },
             ) {
                 Text(
                     label, color = if (active) C.OnAccent else C.Soft, fontSize = 14.sp,
@@ -92,7 +94,7 @@ private fun NavRail(vm: AppViewModel) {
                     modifier = Modifier.padding(horizontal = 12.dp),
                 )
             }
-            if (s == Screen.FAVORITES || s == Screen.GUIDE) Spacer(Modifier.height(6.dp))
+            if (s == Screen.FAVORITES || s == Screen.SPORTS) Spacer(Modifier.height(6.dp))
         }
         Spacer(Modifier.weight(1f))
         if (vm.prefs.showClock) {
@@ -103,6 +105,11 @@ private fun NavRail(vm: AppViewModel) {
         }
         vm.weatherLine()?.let {
             Label(it, size = 13.sp, color = C.Soft, lines = 2, modifier = Modifier.padding(start = 8.dp, top = 6.dp))
+        }
+        vm.update?.let { rel ->
+            TvButton("Update ${rel.versionName}", primary = true, modifier = Modifier.padding(start = 4.dp, top = 8.dp)) {
+                vm.settingsSection = "general"; vm.screen = Screen.SETTINGS
+            }
         }
         vm.status?.let {
             Label(it, size = 11.sp, lines = 3, modifier = Modifier.padding(start = 8.dp, top = 8.dp))

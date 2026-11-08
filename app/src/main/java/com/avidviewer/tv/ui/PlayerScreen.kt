@@ -67,6 +67,15 @@ fun PlayerScreen(vm: AppViewModel) {
             .focusRequester(focus)
             .onKeyEvent {
                 if (it.type != KeyEventType.KeyDown) return@onKeyEvent false
+                if (vm.vodPlaying != null) return@onKeyEvent when (it.key) {
+                    Key.DirectionLeft, Key.MediaRewind -> { vm.seek(-10_000); infoTick++; true }
+                    Key.DirectionRight, Key.MediaFastForward -> { vm.seek(30_000); infoTick++; true }
+                    Key.DirectionCenter, Key.Enter, Key.NumPadEnter, Key.MediaPlayPause -> {
+                        if (vm.player.isPlaying) vm.player.pause() else vm.player.play(); infoTick++; true
+                    }
+                    Key.DirectionUp, Key.DirectionDown, Key.Info -> { infoTick++; true }
+                    else -> false
+                }
                 when (it.key) {
                     Key.DirectionUp, Key.ChannelUp -> { vm.step(-1); infoTick++; true }
                     Key.DirectionDown, Key.ChannelDown -> { vm.step(1); infoTick++; true }
@@ -91,7 +100,39 @@ fun PlayerScreen(vm: AppViewModel) {
             )
         }
 
-        if (showInfo) InfoBar(vm, Modifier.align(Alignment.BottomCenter))
+        if (showInfo || (vm.vodPlaying != null && !vm.player.isPlaying)) {
+            if (vm.vodPlaying != null) VodBar(vm, Modifier.align(Alignment.BottomCenter)) else InfoBar(vm, Modifier.align(Alignment.BottomCenter))
+        }
+    }
+}
+
+@Composable
+private fun VodBar(vm: AppViewModel, modifier: Modifier) {
+    val item = vm.vodPlaying ?: return
+    var pos by remember { mutableStateOf(0L) }
+    var dur by remember { mutableStateOf(0L) }
+    LaunchedEffect(item.key) {
+        while (true) {
+            pos = vm.player.currentPosition
+            dur = vm.player.duration.coerceAtLeast(0L)
+            delay(500)
+        }
+    }
+    fun t(ms: Long): String { val s = ms / 1000; return if (s >= 3600) "%d:%02d:%02d".format(s / 3600, (s / 60) % 60, s % 60) else "%d:%02d".format(s / 60, s % 60) }
+    Column(modifier.fillMaxWidth().background(Color(0xF510151C)).padding(horizontal = 28.dp, vertical = 16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Label(item.name, size = 20.sp, color = C.Text, weight = FontWeight.Bold)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Label(t(pos), size = 12.sp)
+            Spacer(Modifier.width(10.dp))
+            androidx.compose.material3.LinearProgressIndicator(
+                progress = { if (dur > 0) (pos.toFloat() / dur).coerceIn(0f, 1f) else 0f },
+                modifier = Modifier.weight(1f).height(4.dp).clip(RoundedCornerShape(2.dp)),
+                color = C.Accent, trackColor = C.Line, drawStopIndicator = {},
+            )
+            Spacer(Modifier.width(10.dp))
+            Label(if (dur > 0) t(dur) else "--:--", size = 12.sp)
+        }
+        Label((if (vm.player.isPlaying) "" else "Paused · ") + "OK: play/pause · ◀ back 10s · ▶ forward 30s · Back: exit", size = 11.sp)
     }
 }
 

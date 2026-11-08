@@ -231,6 +231,26 @@ fun SettingsScreen(vm: AppViewModel) {
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         item { Text("Settings", color = C.Text, fontSize = 24.sp, fontWeight = FontWeight.Bold) }
+        item {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                TvButton("General", selected = vm.settingsSection == "general") { vm.settingsSection = "general" }
+                TvButton("Sports tab", selected = vm.settingsSection == "sports") { vm.settingsSection = "sports" }
+            }
+        }
+        if (vm.settingsSection == "sports") {
+            sportsSettings(vm)
+            return@LazyColumn
+        }
+        item {
+            SettingBlock("App updates", "Installed: version ${vm.installed.second}" + (vm.update?.let { " · version ${it.versionName} available" } ?: "")) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (vm.update != null) TvButton(if (vm.updateBusy) "Working…" else "Download and install", primary = true) { if (!vm.updateBusy) vm.installUpdate() }
+                    TvButton("Check now") { vm.checkForUpdate() }
+                    TvButton(if (p.autoUpdateCheck) "Auto-check: on" else "Auto-check: off", selected = p.autoUpdateCheck) { vm.updatePrefs { it.copy(autoUpdateCheck = !it.autoUpdateCheck) } }
+                }
+                vm.updateStatus?.let { Label(it, size = 12.sp, color = C.Soft, lines = 3) }
+            }
+        }
         item { SectionTitle("On-screen display", Modifier.padding(top = 6.dp)) }
         item { ToggleRow("Show clock", "Time and date in the menu and the full-screen info bar", p.showClock) { vm.updatePrefs { it.copy(showClock = !it.showClock) } } }
         item { ToggleRow("Show weather", "Current conditions for your postal code, refreshed every 30 minutes", p.showWeather) { vm.toggleWeather() } }
@@ -323,5 +343,51 @@ private fun SettingBlock(title: String, desc: String, content: @Composable () ->
         Label(title, size = 15.sp, color = C.Text, weight = FontWeight.SemiBold)
         Label(desc, size = 12.sp, lines = 2)
         content()
+    }
+}
+
+// ---------------------------------------------------------------- Sports tab settings
+private fun androidx.compose.foundation.lazy.LazyListScope.sportsSettings(vm: AppViewModel) {
+    item {
+        Label("Choose which categories appear on the Sports screen. Each one matches your provider's channel groups and channel names, plus guide listings that mention it. The order here is the order of the filter buttons.", size = 12.sp, lines = 3)
+    }
+    val cats = vm.prefs.sportCats
+    cats.forEachIndexed { i, c ->
+        item(key = "cat-" + c.id) {
+            Row(
+                Modifier.fillMaxWidth().height(54.dp).clip(RoundedCornerShape(10.dp)).background(C.Surface).padding(horizontal = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                TvButton(if (c.on) "On" else "Off", selected = c.on) {
+                    vm.updateSportCats(cats.mapIndexed { j, x -> if (j == i) x.copy(on = !x.on) else x })
+                }
+                Column(Modifier.weight(1f).padding(horizontal = 6.dp)) {
+                    Label(c.name, size = 15.sp, color = C.Text, weight = FontWeight.SemiBold)
+                    Label("Matches: " + c.keywords.joinToString(", "), size = 11.sp)
+                }
+                TvButton("▲") { if (i > 0) vm.updateSportCats(cats.toMutableList().apply { add(i - 1, removeAt(i)) }) }
+                TvButton("▼") { if (i < cats.size - 1) vm.updateSportCats(cats.toMutableList().apply { add(i + 1, removeAt(i)) }) }
+                if (!c.builtin) TvButton("Remove") { vm.updateSportCats(cats.filterIndexed { j, _ -> j != i }) }
+            }
+        }
+    }
+    item(key = "cat-add") {
+        var name by remember { mutableStateOf("") }
+        var kw by remember { mutableStateOf("") }
+        SettingBlock("Add your own category", "For example, name \"Vikings\" and match \"vikings, minnesota\". Separate words with commas.") {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                TvField("Name", name, modifier = Modifier.width(180.dp)) { name = it }
+                TvField("Match words", kw, modifier = Modifier.width(280.dp)) { kw = it }
+                TvButton("Add", primary = true) {
+                    val n = name.trim()
+                    if (n.isNotEmpty()) {
+                        val words = (kw.ifBlank { n }).split(',').map { it.trim().lowercase() }.filter { it.isNotEmpty() }
+                        vm.updateSportCats(cats + com.avidviewer.tv.data.SportCat("c" + System.currentTimeMillis(), n, words, true, false))
+                        name = ""; kw = ""
+                    }
+                }
+            }
+        }
     }
 }

@@ -100,7 +100,8 @@ object Xtream {
 object M3u {
     private val attr = Regex("""([A-Za-z0-9_-]+)="([^"]*)"""")
 
-    fun channels(p: Playlist): List<Channel> = Net.open(p.m3uUrl.trim()) { input ->
+    /** Live channels; movies and series entries go into [vodOut] when given. */
+    fun channels(p: Playlist, vodOut: MutableList<VodItem>? = null): List<Channel> = Net.open(p.m3uUrl.trim()) { input ->
         val out = ArrayList<Channel>()
         var pending: Triple<String, Map<String, String>, String?>? = null
         var n = 0
@@ -117,8 +118,15 @@ object M3u {
                     val pnd = pending
                     if (pnd != null) {
                         val url = line
-                        // Skip on-demand movies and series; v1 is live TV only.
-                        if (!url.contains("/movie/") && !url.contains("/series/")) {
+                        val isMovie = url.contains("/movie/"); val isEpisode = url.contains("/series/")
+                        if (isMovie || isEpisode) {
+                            vodOut?.add(
+                                VodItem(
+                                    key = "${p.id}:v${n++}", playlistId = p.id, kind = if (isMovie) "movie" else "episode",
+                                    name = pnd.first, logo = pnd.second["tvg-logo"]?.ifBlank { null }, url = url,
+                                )
+                            )
+                        } else {
                             out.add(
                                 Channel(
                                     key = "${p.id}:${n++}",

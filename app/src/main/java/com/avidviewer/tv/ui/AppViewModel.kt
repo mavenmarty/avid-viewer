@@ -25,6 +25,13 @@ import com.avidviewer.tv.data.Prefs
 import com.avidviewer.tv.data.Program
 import com.avidviewer.tv.data.Store
 import com.avidviewer.tv.data.USER_AGENT
+import com.avidviewer.tv.data.Episode
+import com.avidviewer.tv.data.Updater
+import com.avidviewer.tv.data.Scores
+import com.avidviewer.tv.data.SportCat
+import com.avidviewer.tv.data.SportEvent
+import com.avidviewer.tv.data.VodItem
+import com.avidviewer.tv.data.XtreamVod
 import com.avidviewer.tv.data.Weather
 import com.avidviewer.tv.data.WeatherService
 import com.avidviewer.tv.data.Xmltv
@@ -39,12 +46,19 @@ import java.util.Locale
 import java.util.TimeZone
 import java.util.UUID
 
-enum class Screen { FAVORITES, LIVE, GUIDE, MANAGE, PLAYLISTS, SETTINGS, PLAYER }
+enum class Screen { SEARCH, FAVORITES, LIVE, GUIDE, SPORTS, MANAGE, PLAYLISTS, SETTINGS, PLAYER }
 
 /** Where full-screen Up/Down and Channel Up/Down move: the group the user came from, or Favorites. */
-enum class PlayContext { GROUP, FAVORITES }
+enum class PlayContext { GROUP, FAVORITES, SPORTS }
 
 data class GroupInfo(val raw: String, val name: String, val count: Int, val hidden: Boolean)
+
+/** One search result. Channel and program hits tune [channelKey]; movie/episode hits play [vod]; series hits open episodes. */
+data class Hit(val kind: String, val playlistId: String, val title: String, val detail: String, val logo: String?, val channelKey: String? = null, val vod: VodItem? = null)
+
+data class PlaylistHits(val playlist: Playlist, val stations: List<Hit>, val programs: List<Hit>, val movies: List<Hit>, val series: List<Hit>) {
+    val total get() = stations.size + programs.size + movies.size + series.size
+}
 
 @OptIn(UnstableApi::class)
 class AppViewModel(app: Application) : AndroidViewModel(app) {
@@ -67,6 +81,24 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     var playerError by mutableStateOf<String?>(null); private set
     var now by mutableLongStateOf(System.currentTimeMillis()); private set
     var weather by mutableStateOf<Weather?>(null); private set
+    var vod by mutableStateOf<List<VodItem>>(emptyList()); private set
+    var vodPlaying by mutableStateOf<VodItem?>(null); private set
+    var searchQuery by mutableStateOf("")
+    var searchResults by mutableStateOf<List<PlaylistHits>?>(null); private set
+    var searching by mutableStateOf(false); private set
+    var seriesOpen by mutableStateOf<VodItem?>(null); private set
+    var episodes by mutableStateOf<List<Episode>?>(null); private set
+    var sportEvents by mutableStateOf<List<SportEvent>>(emptyList()); private set
+    var sportCat by mutableStateOf<String?>(null) // null = All
+    var settingsSection by mutableStateOf("general")
+    var update by mutableStateOf<Updater.Release?>(null); private set
+    var updateStatus by mutableStateOf<String?>(null); private set
+    var updateBusy by mutableStateOf(false); private set
+    val installed: Pair<Long, String> = runCatching { Updater.installedVersion(app) }.getOrDefault(0L to "")
+    var selectedEvent by mutableStateOf<String?>(null)
+    private var sportsPlayCat: String? = null
+    private var scoreCache: Map<String, List<Scores.Game>> = emptyMap()
+    private val otherData = HashMap<String, Triple<List<Channel>, Map<String, List<Program>>, List<VodItem>>>()
     var weatherError by mutableStateOf<String?>(null); private set
     var postalStatus by mutableStateOf<String?>(null); private set
 
@@ -101,11 +133,24 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             }
         }
         viewModelScope.launch {
+            var n = 0
+            while (true) {
+                // Scores every 90 s while Sports is on screen, otherwise every 6 minutes.
+                val sportsVisible = screen == Screen.SPORTS || (screen == Screen.PLAYER && playContext == PlayContext.SPORTS)
+                if (sportsVisible || n % 4 == 0) refreshScores()
+                rebuildSportEvents()
+                n++
+                delay(90_000)
+            }
+        }
+        viewModelScope.launch {
             while (true) {
                 refreshWeather()
                 delay(30 * 60 * 1000L) // every 30 minutes
             }
         }
+        Updater.onStatus = { msg -> viewModelScope.launch { updateStatus = msg; updateBusy = false } }
+        if (prefs.autoUpdateCheck) checkForUpdate(quiet = true)
         if (playlists.isEmpty()) screen = Screen.PLAYLISTS
         activePlaylist()?.let { loadActive(refresh = false) }
     }
@@ -251,14 +296,37 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             if (refresh || cached.isEmpty()) {
                 status = "Loading channels from ${p.name}…"
                 try {
+                    val m3uVod = ArrayList<VodItem>()
                     val list = withContext(Dispatchers.IO) {
-                        if (p.isXtream) Xtream.liveChannels(p, prefs.streamFormat) else M3u.channels(p)
+                        if (p.isXtream) Xtream.liveChannels(p, prefs.streamFormat) else M3u.channels(p, m3uVod)
                     }
                     withContext(Dispatchers.IO) { store.saveChannels(p.id, list) }
                     applyChannels(list)
                     status = "Loaded ${list.size} channels."
+                    otherData.remove(p.id)
+                    if (!p.isXtream) {
+                        withContext(Dispatchers.IO) { store.saveVod(p.id, m3uVod) }
+                        vod = m3uVod
+                    }
                 } catch (e: Exception) {
                     status = if (cached.isEmpty()) "Couldn't load channels: ${e.message}" else "Couldn't refresh, showing saved channels."
+                }
+            }
+            val savedVod = withContext(Dispatchers.IO) { store.loadVod(p.id) }
+            if (savedVod.isNotEmpty()) vod = savedVod
+            if (p.isXtream && (refresh || savedVod.isEmpty())) {
+                status = "Loading movies and series…"
+                try {
+                    val list = withContext(Dispatchers.IO) {
+                        val movies = runCatching { XtreamVod.movies(p) }.getOrDefault(emptyList())
+                        movies + runCatching { XtreamVod.series(p) }.getOrDefault(emptyList())
+                    }
+                    if (list.isNotEmpty()) {
+                        withContext(Dispatchers.IO) { store.saveVod(p.id, list) }
+                        vod = list
+                    }
+                } catch (e: Exception) {
+                    status = "Couldn't load movies and series: ${e.message}"
                 }
             }
             val (savedGuide, savedAt) = withContext(Dispatchers.IO) { store.loadGuide(p.id) }
@@ -281,6 +349,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             val g = withContext(Dispatchers.IO) { Xmltv.read(url, wanted, from, to) }
             withContext(Dispatchers.IO) { store.saveGuide(p.id, g) }
             guide = g
+            rebuildSportEvents()
             status = "Guide loaded for ${g.size} channels."
         } catch (e: Exception) {
             status = "Couldn't load the TV guide: ${e.message}"
@@ -386,9 +455,18 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         start(c)
     }
 
+    /** True when [key] is the channel already playing in the preview. */
+    fun isPreviewing(key: String?) = key != null && currentKey == key && vodPlaying == null && player.mediaItemCount > 0 && playerError == null
+
+    /** First OK on a channel plays it in the preview window; OK again on the same channel goes full screen. */
+    fun selectChannel(key: String?, ctx: PlayContext) {
+        if (isPreviewing(key)) openFullScreen(key, ctx) else preview(key)
+    }
+
     fun openFullScreen(key: String?, ctx: PlayContext) {
         val c = channel(key) ?: return
         playContext = ctx
+        if (ctx == PlayContext.SPORTS) sportsPlayCat = sportCat
         if (ctx == PlayContext.GROUP) selectedGroup = c.group
         if (screen != Screen.PLAYER) lastScreen = screen
         if (currentKey != key || player.mediaItemCount == 0 || playerError != null) start(c)
@@ -398,11 +476,234 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     fun closeFullScreen() {
         osd = null
+        if (vodPlaying != null) {
+            player.stop()
+            player.clearMediaItems()
+            vodPlaying = null
+        }
         screen = lastScreen
+    }
+
+    // ---------------- app updates ----------------
+    fun checkForUpdate(quiet: Boolean = false) {
+        viewModelScope.launch {
+            if (!quiet) updateStatus = "Checking for updates…"
+            val r = runCatching { withContext(Dispatchers.IO) { Updater.latest() } }
+            r.onSuccess { rel ->
+                update = rel?.takeIf { it.versionCode > installed.first }
+                updateStatus = when {
+                    rel == null -> if (quiet) null else "Couldn't read the latest release."
+                    update != null -> "Version ${rel.versionName} is available."
+                    else -> if (quiet) null else "You have the latest version."
+                }
+            }.onFailure { if (!quiet) updateStatus = "Couldn't check for updates: ${it.message}" }
+        }
+    }
+
+    fun installUpdate() {
+        val rel = update ?: return
+        val ctx = getApplication<Application>()
+        if (!Updater.canInstall(ctx)) {
+            updateStatus = "Allow Avid Viewer to install apps, then choose Install again. On Fire TV: Settings › My Fire TV › Developer options › Install unknown apps › Avid Viewer."
+            Updater.permissionIntent(ctx)?.let { runCatching { ctx.startActivity(it) } }
+            return
+        }
+        viewModelScope.launch {
+            updateBusy = true
+            try {
+                val file = withContext(Dispatchers.IO) { Updater.download(ctx, rel.apkUrl) { pct -> viewModelScope.launch { updateStatus = "Downloading ${rel.versionName}… $pct%" } } }
+                updateStatus = "Installing…"
+                withContext(Dispatchers.IO) { Updater.install(ctx, file) }
+            } catch (e: Exception) {
+                updateStatus = "Update failed: ${e.message}"
+                updateBusy = false
+            }
+        }
+    }
+
+    // ---------------- sports ----------------
+    fun enabledCats(): List<SportCat> = prefs.sportCats.filter { it.on }
+
+    private val noEvent = Regex("(?i)no event|off air|offline|no programming|to be announced|\\btba\\b|coming soon|stay tuned|event schedule|no games?")
+    private val matchup = Regex("(?i) at | vs\\.? | v\\. | @ ")
+
+    private suspend fun refreshScores() {
+        val cats = enabledCats().map { it.id }.filter { Scores.supports(it) }
+        if (cats.isEmpty()) return
+        val m = HashMap<String, List<Scores.Game>>(scoreCache)
+        for (c in cats) {
+            runCatching { withContext(Dispatchers.IO) { Scores.fetch(c) } }.onSuccess { m[c] = it }
+        }
+        scoreCache = m
+    }
+
+    private suspend fun rebuildSportEvents() {
+        val cats = enabledCats(); val chs = channels; val g = guide; val scores = scoreCache
+        if (chs.isEmpty()) { sportEvents = emptyList(); return }
+        val names = chs.associate { it.key to channelName(it) }
+        val groupsByRaw = chs.associate { it.group to groupName(it.group) }
+        sportEvents = withContext(Dispatchers.Default) {
+            val t = System.currentTimeMillis()
+            val from = t - 12 * 3600 * 1000L; val to = t + 48 * 3600 * 1000L
+            val out = LinkedHashMap<String, SportEvent>()
+            for (cat in cats) {
+                val kws = cat.keywords.map { it.lowercase() }.filter { it.isNotBlank() }
+                if (kws.isEmpty()) continue
+                fun hasKw(s: String) = kws.any { s.contains(it) }
+                for (c in chs) {
+                    val catChannel = hasKw(((groupsByRaw[c.group] ?: c.group) + " " + c.group + " " + (names[c.key] ?: c.name)).lowercase())
+                    val progs = c.epgId?.let { g[it] } ?: emptyList()
+                    if (catChannel && progs.isEmpty()) continue
+                    for (p in progs) {
+                        if (p.end <= from || p.start >= to) continue
+                        val text = (p.title + " " + (p.subtitle ?: "")).lowercase()
+                        val isEvent = if (catChannel) !noEvent.containsMatchIn(p.title) else hasKw(text) && (matchup.containsMatchIn(p.title) || matchup.containsMatchIn(p.subtitle ?: ""))
+                        if (!isEvent) continue
+                        val title = if (p.subtitle != null && matchup.containsMatchIn(p.subtitle) && !matchup.containsMatchIn(p.title)) p.subtitle else p.title
+                        val key = cat.id + "|" + title.lowercase().replace(Regex("[^a-z0-9]"), "") + "|" + p.start / 60000
+                        val prev = out[key]
+                        out[key] = if (prev == null) SportEvent(key, cat.id, title, p.start, p.end, listOf(c.key), scores[cat.id]?.let { Scores.match(title, it) })
+                        else prev.copy(channelKeys = prev.channelKeys + c.key)
+                    }
+                }
+            }
+            out.values.sortedBy { it.start }
+        }
+    }
+
+    fun sportsVisibleEvents(): List<SportEvent> = sportEvents.filter { sportCat == null || it.catId == sportCat }
+
+    fun updateSportCats(list: List<SportCat>) {
+        updatePrefs { it.copy(sportCats = list) }
+        if (sportCat != null && list.none { it.id == sportCat && it.on }) sportCat = null
+        viewModelScope.launch { refreshScores(); rebuildSportEvents() }
+    }
+
+    fun openSportsScreen() {
+        screen = Screen.SPORTS
+        viewModelScope.launch { refreshScores(); rebuildSportEvents() }
+    }
+
+    // ---------------- search (all playlists) ----------------
+    private suspend fun dataFor(p: Playlist): Triple<List<Channel>, Map<String, List<Program>>, List<VodItem>> {
+        if (p.id == activePlaylist()?.id) return Triple(channels, guide, vod)
+        otherData[p.id]?.let { return it }
+        val t = withContext(Dispatchers.IO) { Triple(store.loadChannels(p.id), store.loadGuide(p.id).first, store.loadVod(p.id)) }
+        otherData[p.id] = t
+        return t
+    }
+
+    fun search(query: String) {
+        val q = query.trim()
+        searchQuery = query
+        if (q.length < 2) { searchResults = null; return }
+        viewModelScope.launch {
+            searching = true
+            val needle = q.lowercase()
+            val nowMs = System.currentTimeMillis()
+            val out = ArrayList<PlaylistHits>()
+            for (p in playlists) {
+                val (chs, g, v) = dataFor(p)
+                val res = withContext(Dispatchers.Default) {
+                    val names = if (p.id == activePlaylist()?.id) chs.associate { it.key to channelName(it) } else chs.associate { it.key to it.name }
+                    val stations = chs.filter { (names[it.key] ?: it.name).lowercase().contains(needle) }.take(50)
+                        .map { Hit("channel", p.id, names[it.key] ?: it.name, groupName(it.group), it.logo, channelKey = it.key) }
+                    val progs = ArrayList<Pair<Long, Hit>>()
+                    for (c in chs) {
+                        val list = c.epgId?.let { g[it] } ?: continue
+                        for (pr in list) {
+                            if (pr.end <= nowMs) continue
+                            if (pr.title.lowercase().contains(needle) || pr.subtitle?.lowercase()?.contains(needle) == true) {
+                                val whenText = if (pr.start <= nowMs) "On now" else "${dayLabel(pr.start)} ${fmtTime(pr.start)}"
+                                progs.add(pr.start to Hit("program", p.id, pr.title + (pr.subtitle?.let { " · $it" } ?: ""), "${names[c.key] ?: c.name} · $whenText", c.logo, channelKey = c.key))
+                            }
+                        }
+                    }
+                    val vodHits = v.filter { it.name.lowercase().contains(needle) }
+                    PlaylistHits(
+                        playlist = p,
+                        stations = stations,
+                        programs = progs.sortedBy { it.first }.take(60).map { it.second },
+                        movies = vodHits.filter { it.kind == "movie" }.take(50).map { Hit("movie", p.id, it.name, "Movie", it.logo, vod = it) },
+                        series = vodHits.filter { it.kind != "movie" }.take(50).map { Hit(it.kind, p.id, it.name, if (it.kind == "series") "Series" else "Episode", it.logo, vod = it) },
+                    )
+                }
+                out.add(res)
+            }
+            searchResults = out
+            searching = false
+        }
+    }
+
+    fun dayLabel(ms: Long): String {
+        val f = SimpleDateFormat("yyyyMMdd", Locale.US).apply { timeZone = this@AppViewModel.timeZone }
+        val d = f.format(ms); val today = f.format(now); val tomorrow = f.format(now + 24 * 3600 * 1000L)
+        return when (d) {
+            today -> "Today"
+            tomorrow -> "Tomorrow"
+            else -> SimpleDateFormat("EEE", Locale.getDefault()).apply { timeZone = this@AppViewModel.timeZone }.format(ms)
+        }
+    }
+
+    /** Tunes a channel from any playlist, switching the active playlist first if needed. */
+    fun openHit(h: Hit) {
+        when (h.kind) {
+            "channel", "program" -> viewModelScope.launch {
+                if (h.playlistId != activePlaylist()?.id) {
+                    val p = playlists.firstOrNull { it.id == h.playlistId } ?: return@launch
+                    val (chs, g, v) = dataFor(p)
+                    updatePrefs { it.copy(activePlaylist = p.id) }
+                    channels = chs; guide = g; vod = v
+                    selectedGroup = null; currentKey = null
+                    applyChannels(chs)
+                }
+                openFullScreen(h.channelKey, PlayContext.GROUP)
+            }
+            "movie", "episode" -> h.vod?.let { playVod(it) }
+            "series" -> h.vod?.let { openSeries(it) }
+        }
+    }
+
+    fun openSeries(item: VodItem) {
+        seriesOpen = item
+        episodes = null
+        val p = playlists.firstOrNull { it.id == item.playlistId } ?: return
+        viewModelScope.launch {
+            episodes = try {
+                withContext(Dispatchers.IO) { XtreamVod.episodes(p, item.seriesId ?: "") }
+            } catch (e: Exception) {
+                emptyList()
+            }
+        }
+    }
+
+    fun closeSeries() { seriesOpen = null; episodes = null }
+
+    fun playEpisode(e: Episode) {
+        val s = seriesOpen ?: return
+        playVod(VodItem("${s.key}:${e.season}:${e.number}", s.playlistId, "episode", "${s.name} · S${e.season} E${e.number} · ${e.title}", s.logo, e.url))
+    }
+
+    fun playVod(item: VodItem) {
+        recordWatch()
+        if (screen != Screen.PLAYER) lastScreen = screen
+        vodPlaying = item
+        playerError = null
+        player.setMediaItem(MediaItem.fromUri(item.url))
+        player.prepare()
+        player.playWhenReady = true
+        screen = Screen.PLAYER
+    }
+
+    fun seek(ms: Long) {
+        val d = player.duration
+        val target = (player.currentPosition + ms).coerceAtLeast(0L)
+        player.seekTo(if (d > 0) target.coerceAtMost(d - 1000) else target)
     }
 
     private fun start(c: Channel) {
         recordWatch()
+        vodPlaying = null
         currentKey = c.key
         playerError = null
         val item = MediaItem.Builder().setUri(c.url).apply {
@@ -423,7 +724,17 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     private fun contextList(): List<Channel> =
         if (playContext == PlayContext.FAVORITES) favoriteChannels() else channelsIn(selectedGroup ?: channel(currentKey)?.group)
 
+    private fun liveEvents(cat: String?): List<SportEvent> =
+        sportEvents.filter { (cat == null || it.catId == cat) && now >= it.start && now < it.end && it.channelKeys.isNotEmpty() }
+
+    fun catName(id: String?): String = if (id == null) "Sports" else prefs.sportCats.firstOrNull { it.id == id }?.name ?: "Sports"
+
     fun contextLabel(): String {
+        if (playContext == PlayContext.SPORTS) {
+            val live = liveEvents(sportsPlayCat)
+            val i = live.indexOfFirst { currentKey in it.channelKeys }
+            return "Live in ${catName(sportsPlayCat)}" + if (i >= 0) " · ${i + 1} of ${live.size}" else ""
+        }
         val list = contextList()
         val i = list.indexOfFirst { it.key == currentKey }
         val name = if (playContext == PlayContext.FAVORITES) "Favorites" else groupName(selectedGroup ?: "")
@@ -432,6 +743,15 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Remote Up / Channel Up = -1 (previous), Down / Channel Down = +1 (next). Wraps at both ends. */
     fun step(dir: Int) {
+        if (playContext == PlayContext.SPORTS) {
+            val live = liveEvents(sportsPlayCat)
+            if (live.isEmpty()) { flashOsd("No live events in ${catName(sportsPlayCat)}"); return }
+            var i = live.indexOfFirst { currentKey in it.channelKeys }
+            i = if (i < 0) 0 else (i + dir + live.size) % live.size
+            channel(live[i].channelKeys.first())?.let { start(it) }
+            flashOsd(contextLabel() + " · " + live[i].title)
+            return
+        }
         val list = contextList()
         if (list.isEmpty()) return
         var i = list.indexOfFirst { it.key == currentKey }

@@ -57,16 +57,11 @@ fun GuideScreen(vm: AppViewModel) {
     val winStart = (vm.now / half) * half
     val winEnd = winStart + WINDOW_MIN * 60 * 1000L
     var focusProg by remember { mutableStateOf<Pair<String, Program?>?>(null) }
-    var previewKey by remember { mutableStateOf(vm.currentKey) }
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
     val rowFocus = remember(list.size, vm.selectedGroup) { List(list.size) { FocusRequester() } }
     var pendingFocus by remember { mutableStateOf<Int?>(null) }
 
-    LaunchedEffect(previewKey) {
-        delay(800)
-        vm.preview(previewKey)
-    }
     LaunchedEffect(pendingFocus) {
         val i = pendingFocus ?: return@LaunchedEffect
         delay(60)
@@ -111,7 +106,7 @@ fun GuideScreen(vm: AppViewModel) {
                 Label((fc?.let { vm.channelName(it) } ?: "") + (fp?.let { " · ${vm.fmtTime(it.start)} – ${vm.fmtTime(it.end)}" } ?: ""), size = 12.sp)
                 Label(fp?.title ?: "No guide information", size = 18.sp, color = C.Text, weight = FontWeight.Bold)
                 Label(listOfNotNull(fp?.subtitle?.let { "“$it”" }, if (fp?.isNew == true) "New" else null).joinToString(" · "), size = 13.sp, color = C.Soft)
-                Label("OK: watch · CH+/CH−: page · Menu: favorite", size = 11.sp)
+                Label("OK: preview · OK again: full screen · CH+/CH−: page · Menu: favorite", size = 11.sp)
             }
         }
         // Groups
@@ -135,9 +130,9 @@ fun GuideScreen(vm: AppViewModel) {
                     Row(Modifier.fillMaxWidth().height(44.dp), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
                         Focusable(
                             modifier = Modifier.width(146.dp).fillMaxHeight().focusRequester(rowFocus[idx]),
-                            onFocus = { focusProg = c.key to vm.nowNext(c).first; previewKey = c.key },
+                            onFocus = { focusProg = c.key to vm.nowNext(c).first },
                             onMenu = { vm.toggleFavorite(c.key) },
-                            onClick = { vm.openFullScreen(c.key, PlayContext.GROUP) },
+                            onClick = { vm.selectChannel(c.key, PlayContext.GROUP) },
                         ) {
                             Label("${numbers[c.key] ?: ""}", size = 11.sp, modifier = Modifier.width(26.dp).padding(start = 6.dp))
                             ChannelBadge(vm.channelName(c), c.logo, 26.dp)
@@ -148,8 +143,8 @@ fun GuideScreen(vm: AppViewModel) {
                             Focusable(
                                 modifier = Modifier.width((WINDOW_MIN * DP_PER_MIN).dp).fillMaxHeight(),
                                 color = C.Surface.copy(alpha = 0.6f),
-                                onFocus = { focusProg = c.key to null; previewKey = c.key },
-                                onClick = { vm.openFullScreen(c.key, PlayContext.GROUP) },
+                                onFocus = { focusProg = c.key to null },
+                                onClick = { vm.selectChannel(c.key, PlayContext.GROUP) },
                             ) { Label("No guide information", size = 12.sp, modifier = Modifier.padding(horizontal = 10.dp)) }
                         } else {
                             var cursor = winStart
@@ -161,9 +156,9 @@ fun GuideScreen(vm: AppViewModel) {
                                     modifier = Modifier.width(((((b - a) / 60000f) * DP_PER_MIN).dp - 3.dp).coerceAtLeast(4.dp)).fillMaxHeight(),
                                     color = if (isNow) C.Surface2 else C.Surface,
                                     focusedColor = C.Line,
-                                    onFocus = { focusProg = c.key to p; previewKey = c.key },
+                                    onFocus = { focusProg = c.key to p },
                                     onMenu = { vm.toggleFavorite(c.key) },
-                                    onClick = { vm.openFullScreen(c.key, PlayContext.GROUP) },
+                                    onClick = { vm.selectChannel(c.key, PlayContext.GROUP) },
                                 ) {
                                     Column(Modifier.padding(horizontal = 8.dp)) {
                                         Label((if (p.isNew) "NEW · " else "") + p.title, size = 12.sp, color = C.Text, weight = FontWeight.SemiBold)
