@@ -1,0 +1,400 @@
+package com.avidviewer.tv.ui
+
+import android.app.Application
+import android.text.format.DateFormat
+import androidx.annotation.OptIn
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.viewModelScope
+import androidx.media3.common.MediaItem
+import androidx.media3.common.MimeTypes
+import androidx.media3.common.PlaybackException
+import androidx.media3.common.Player
+import androidx.media3.common.util.UnstableApi
+import androidx.media3.datasource.DefaultHttpDataSource
+import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import com.avidviewer.tv.data.Channel
+import com.avidviewer.tv.data.HistoryEntry
+import com.avidviewer.tv.data.M3u
+import com.avidviewer.tv.data.Playlist
+import com.avidviewer.tv.data.Prefs
+import com.avidviewer.tv.data.Program
+import com.avidviewer.tv.data.Store
+import com.avidviewer.tv.data.USER_AGENT
+import com.avidviewer.tv.data.Xmltv
+import com.avidviewer.tv.data.Xtream
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.text.SimpleDateFormat
+import java.util.Locale
+import java.util.TimeZone
+import java.util.UUID
+
+enum class Screen { FAVORITES, LIVE, GUIDE, MANAGE, PLAYLISTS, SETTINGS, PLAYER }
+
+/** Where full-screen Up/Down and Channel Up/Down move: the group the user came from, or Favorites. */
+enum class PlayContext { GROUP, FAVORITES }
+
+data class GroupInfo(val raw: String, val name: String, val count: Int, val hidden: Boolean)
+
+@OptIn(UnstableApi::class)
+class AppViewModel(app: Application) : AndroidViewModel(app) {
+    val store = Store(app)
+
+    var playlists by mutableStateOf(store.loadPlaylists()); private set
+    var prefs by mutableStateOf(store.loadPrefs()); private set
+    var channels by mutableStateOf<List<Channel>>(emptyList()); private set
+    var guide by mutableStateOf<Map<String, List<Program>>>(emptyMap()); private set
+    var history by mutableStateOf(store.loadHistory()); private set
+
+    var screen by mutableStateOf(Screen.LIVE)
+    var lastScreen by mutableStateOf(Screen.LIVE)
+    var selectedGroup by mutableStateOf<String?>(null)
+    var currentKey by mutableStateOf<String?>(null); private set
+    var playContext by mutableStateOf(PlayContext.GROUP)
+    var osd by mutableStateOf<String?>(null); private set
+    var status by mutableStateOf<String?>(null)
+    var busy by mutableStateOf(false); private set
+    var playerError by mutableStateOf<String?>(null); private set
+    var now by mutableLongStateOf(System.currentTimeMillis()); private set
+
+    val player: ExoPlayer = ExoPlayer.Builder(app)
+        .setMediaSourceFactory(
+            DefaultMediaSourceFactory(app).setDataSourceFactory(
+                DefaultHttpDataSource.Factory().setUserAgent(USER_AGENT).setAllowCrossProtocolRedirects(true)
+                    .setConnectTimeoutMs(15000).setReadTimeoutMs(20000)
+            )
+        )
+        .build()
+
+    private var osdJob: Job? = null
+    private var watchStart = 0L
+    private var watchKey: String? = null
+
+    init {
+        if (prefs.clearCacheOnExit) store.clearCache() // catches exits Android didn't report
+        player.addListener(object : Player.Listener {
+            override fun onPlayerError(error: PlaybackException) {
+                playerError = "Can't play this channel (${error.errorCodeName}). Try another channel, or switch Stream format in Settings."
+            }
+
+            override fun onIsPlayingChanged(isPlaying: Boolean) {
+                if (isPlaying) playerError = null
+            }
+        })
+        viewModelScope.launch {
+            while (true) {
+                now = System.currentTimeMillis()
+                delay(15_000)
+            }
+        }
+        if (playlists.isEmpty()) screen = Screen.PLAYLISTS
+        activePlaylist()?.let { loadActive(refresh = false) }
+    }
+
+    // ---------------- time ----------------
+    val timeZone: TimeZone
+        get() = if (prefs.timeZone == "auto") TimeZone.getDefault() else TimeZone.getTimeZone(prefs.timeZone)
+
+    fun fmtTime(ms: Long): String {
+        val pattern = if (DateFormat.is24HourFormat(getApplication())) "HH:mm" else "h:mm a"
+        return SimpleDateFormat(pattern, Locale.getDefault()).apply { timeZone = this@AppViewModel.timeZone }.format(ms)
+    }
+
+    fun fmtDate(ms: Long): String =
+        SimpleDateFormat("EEE, MMM d", Locale.getDefault()).apply { timeZone = this@AppViewModel.timeZone }.format(ms)
+
+    fun zoneLabel(): String = timeZone.getDisplayName(timeZone.inDaylightTime(java.util.Date(now)), TimeZone.SHORT)
+
+    // ---------------- playlists ----------------
+    fun activePlaylist(): Playlist? = playlists.firstOrNull { it.id == prefs.activePlaylist } ?: playlists.firstOrNull()
+
+    fun addPlaylist(name: String, type: String, server: String, user: String, pass: String, m3u: String, epg: String) {
+        val p = Playlist(
+            id = UUID.randomUUID().toString().take(8),
+            name = name.ifBlank { if (type == "xtream") "My provider" else "M3U playlist" },
+            type = type, server = server.trim(), username = user.trim(), password = pass,
+            m3uUrl = m3u.trim(), epgUrl = epg.trim(),
+        )
+        viewModelScope.launch {
+            busy = true
+            status = "Checking ${p.name}…"
+            val problem = withContext(Dispatchers.IO) {
+                if (p.isXtream) Xtream.checkLogin(p) else if (p.m3uUrl.isBlank()) "Enter the playlist link." else null
+            }
+            if (problem != null) {
+                status = problem
+                busy = false
+                return@launch
+            }
+            playlists = playlists + p
+            store.savePlaylists(playlists)
+            updatePrefs { it.copy(activePlaylist = p.id) }
+            busy = false
+            loadActive(refresh = true)
+        }
+    }
+
+    fun removePlaylist(id: String) {
+        playlists = playlists.filterNot { it.id == id }
+        store.savePlaylists(playlists)
+        store.deletePlaylistData(id)
+        if (prefs.activePlaylist == id) {
+            updatePrefs { it.copy(activePlaylist = playlists.firstOrNull()?.id) }
+            channels = emptyList(); guide = emptyMap()
+            if (playlists.isNotEmpty()) loadActive(refresh = false)
+        }
+    }
+
+    fun refreshPlaylist(id: String) {
+        if (prefs.activePlaylist != id) updatePrefs { it.copy(activePlaylist = id) }
+        loadActive(refresh = true)
+    }
+
+    fun setActive(id: String) {
+        updatePrefs { it.copy(activePlaylist = id) }
+        loadActive(refresh = false)
+    }
+
+    /** Loads channels and guide from storage, downloading when missing, stale or [refresh] is set. */
+    fun loadActive(refresh: Boolean) {
+        val p = activePlaylist() ?: return
+        viewModelScope.launch {
+            busy = true
+            val cached = withContext(Dispatchers.IO) { store.loadChannels(p.id) }
+            if (cached.isNotEmpty()) applyChannels(cached)
+            if (refresh || cached.isEmpty()) {
+                status = "Loading channels from ${p.name}…"
+                try {
+                    val list = withContext(Dispatchers.IO) {
+                        if (p.isXtream) Xtream.liveChannels(p, prefs.streamFormat) else M3u.channels(p)
+                    }
+                    withContext(Dispatchers.IO) { store.saveChannels(p.id, list) }
+                    applyChannels(list)
+                    status = "Loaded ${list.size} channels."
+                } catch (e: Exception) {
+                    status = if (cached.isEmpty()) "Couldn't load channels: ${e.message}" else "Couldn't refresh, showing saved channels."
+                }
+            }
+            val (savedGuide, savedAt) = withContext(Dispatchers.IO) { store.loadGuide(p.id) }
+            if (savedGuide.isNotEmpty()) guide = savedGuide
+            val stale = System.currentTimeMillis() - savedAt > 8 * 3600 * 1000L
+            if (refresh || stale || savedGuide.isEmpty()) refreshGuide(p)
+            busy = false
+        }
+    }
+
+    private suspend fun refreshGuide(p: Playlist) {
+        val url = p.guideUrl().ifBlank { withContext(Dispatchers.IO) { M3u.headerGuideUrl(p) } ?: "" }
+        if (url.isBlank()) return
+        val wanted = channels.mapNotNull { it.epgId }.toSet()
+        if (wanted.isEmpty()) return
+        status = "Loading TV guide…"
+        try {
+            val from = System.currentTimeMillis() - 3 * 3600 * 1000L
+            val to = System.currentTimeMillis() + 36 * 3600 * 1000L
+            val g = withContext(Dispatchers.IO) { Xmltv.read(url, wanted, from, to) }
+            withContext(Dispatchers.IO) { store.saveGuide(p.id, g) }
+            guide = g
+            status = "Guide loaded for ${g.size} channels."
+        } catch (e: Exception) {
+            status = "Couldn't load the TV guide: ${e.message}"
+        }
+    }
+
+    private fun applyChannels(list: List<Channel>) {
+        channels = list
+        val gs = groups()
+        if (selectedGroup == null || gs.none { it.raw == selectedGroup }) selectedGroup = gs.firstOrNull()?.raw
+        if (currentKey == null) currentKey = prefs.lastChannel?.takeIf { k -> list.any { it.key == k } } ?: list.firstOrNull()?.key
+    }
+
+    // ---------------- prefs ----------------
+    fun updatePrefs(f: (Prefs) -> Prefs) {
+        prefs = f(prefs)
+        store.savePrefs(prefs)
+    }
+
+    // ---------------- groups & channels ----------------
+    fun groupName(raw: String) = prefs.groupNames[raw] ?: raw
+    fun channelName(c: Channel) = prefs.channelNames[c.key] ?: c.name
+
+    fun groups(includeHidden: Boolean = false): List<GroupInfo> {
+        val counts = LinkedHashMap<String, Int>()
+        channels.forEach { counts[it.group] = (counts[it.group] ?: 0) + 1 }
+        val ordered = prefs.groupOrder.filter { it in counts } + counts.keys.filterNot { it in prefs.groupOrder }
+        return ordered.map { GroupInfo(it, groupName(it), counts[it] ?: 0, it in prefs.hiddenGroups) }
+            .filter { includeHidden || !it.hidden }
+    }
+
+    fun channelsIn(group: String?): List<Channel> {
+        if (group == null) return emptyList()
+        val list = channels.filter { it.group == group }
+        val order = prefs.channelOrder[group] ?: return list
+        val byKey = list.associateBy { it.key }
+        return order.mapNotNull { byKey[it] } + list.filterNot { it.key in order }
+    }
+
+    fun channel(key: String?): Channel? = channels.firstOrNull { it.key == key }
+
+    /** Channel numbers follow the user's group and channel order, skipping hidden groups. */
+    fun numbers(): Map<String, Int> {
+        val m = HashMap<String, Int>()
+        var n = 1
+        groups().forEach { g -> channelsIn(g.raw).forEach { m[it.key] = n++ } }
+        return m
+    }
+
+    fun moveGroup(raw: String, dir: Int) {
+        val order = groups(includeHidden = true).map { it.raw }.toMutableList()
+        val i = order.indexOf(raw); val j = i + dir
+        if (i < 0 || j !in order.indices) return
+        order[i] = order[j].also { order[j] = order[i] }
+        updatePrefs { it.copy(groupOrder = order) }
+    }
+
+    fun moveChannel(key: String, dir: Int) {
+        val c = channel(key) ?: return
+        val order = channelsIn(c.group).map { it.key }.toMutableList()
+        val i = order.indexOf(key); val j = i + dir
+        if (i < 0 || j !in order.indices) return
+        order[i] = order[j].also { order[j] = order[i] }
+        updatePrefs { it.copy(channelOrder = it.channelOrder + (c.group to order)) }
+    }
+
+    fun renameGroup(raw: String, name: String) = updatePrefs {
+        it.copy(groupNames = if (name.isBlank() || name == raw) it.groupNames - raw else it.groupNames + (raw to name.trim()))
+    }
+
+    fun renameChannel(key: String, name: String) {
+        val c = channel(key) ?: return
+        updatePrefs { it.copy(channelNames = if (name.isBlank() || name == c.name) it.channelNames - key else it.channelNames + (key to name.trim())) }
+    }
+
+    fun toggleHidden(raw: String) = updatePrefs {
+        it.copy(hiddenGroups = if (raw in it.hiddenGroups) it.hiddenGroups - raw else it.hiddenGroups + raw)
+    }
+
+    fun isFavorite(key: String?) = key != null && key in prefs.favorites
+
+    fun toggleFavorite(key: String?) {
+        key ?: return
+        updatePrefs { it.copy(favorites = if (key in it.favorites) it.favorites - key else it.favorites + key) }
+    }
+
+    fun favoriteChannels(): List<Channel> = prefs.favorites.mapNotNull { channel(it) }
+
+    // ---------------- guide ----------------
+    fun programs(c: Channel?): List<Program> = c?.epgId?.let { guide[it] } ?: emptyList()
+
+    fun nowNext(c: Channel?): Pair<Program?, Program?> {
+        val list = programs(c)
+        val i = list.indexOfFirst { now >= it.start && now < it.end }
+        if (i < 0) return null to list.firstOrNull { it.start > now }
+        return list[i] to list.getOrNull(i + 1)
+    }
+
+    // ---------------- playback ----------------
+    fun preview(key: String?) {
+        val c = channel(key) ?: return
+        if (currentKey == key && player.playbackState != Player.STATE_IDLE && player.mediaItemCount > 0 && playerError == null) return
+        start(c)
+    }
+
+    fun openFullScreen(key: String?, ctx: PlayContext) {
+        val c = channel(key) ?: return
+        playContext = ctx
+        if (ctx == PlayContext.GROUP) selectedGroup = c.group
+        if (screen != Screen.PLAYER) lastScreen = screen
+        if (currentKey != key || player.mediaItemCount == 0 || playerError != null) start(c)
+        screen = Screen.PLAYER
+        flashOsd(contextLabel())
+    }
+
+    fun closeFullScreen() {
+        osd = null
+        screen = lastScreen
+    }
+
+    private fun start(c: Channel) {
+        recordWatch()
+        currentKey = c.key
+        playerError = null
+        val item = MediaItem.Builder().setUri(c.url).apply {
+            if (c.url.contains(".m3u8", ignoreCase = true)) setMimeType(MimeTypes.APPLICATION_M3U8)
+        }.build()
+        player.setMediaItem(item)
+        player.prepare()
+        player.playWhenReady = true
+        watchKey = c.key; watchStart = System.currentTimeMillis()
+        updatePrefs { it.copy(lastChannel = c.key) }
+    }
+
+    fun stop() {
+        recordWatch()
+        player.stop()
+    }
+
+    private fun contextList(): List<Channel> =
+        if (playContext == PlayContext.FAVORITES) favoriteChannels() else channelsIn(selectedGroup ?: channel(currentKey)?.group)
+
+    fun contextLabel(): String {
+        val list = contextList()
+        val i = list.indexOfFirst { it.key == currentKey }
+        val name = if (playContext == PlayContext.FAVORITES) "Favorites" else groupName(selectedGroup ?: "")
+        return if (i < 0) name else "$name · ${i + 1} of ${list.size}"
+    }
+
+    /** Remote Up / Channel Up = -1 (previous), Down / Channel Down = +1 (next). Wraps at both ends. */
+    fun step(dir: Int) {
+        val list = contextList()
+        if (list.isEmpty()) return
+        var i = list.indexOfFirst { it.key == currentKey }
+        i = if (i < 0) 0 else (i + dir + list.size) % list.size
+        start(list[i])
+        val wrapped = (dir > 0 && i == 0) || (dir < 0 && i == list.size - 1)
+        flashOsd(contextLabel() + if (wrapped && list.size > 1) " · back to ${if (dir > 0) "top" else "bottom"} of list" else "")
+    }
+
+    private fun flashOsd(text: String) {
+        osd = text
+        osdJob?.cancel()
+        osdJob = viewModelScope.launch {
+            delay(2500)
+            osd = null
+        }
+    }
+
+    // ---------------- watch history (on device only) ----------------
+    private fun recordWatch() {
+        val k = watchKey ?: return
+        val secs = (System.currentTimeMillis() - watchStart) / 1000
+        watchKey = null
+        if (prefs.historyPaused || secs < 10) return
+        history = history + HistoryEntry(k, watchStart, secs)
+        store.saveHistory(history)
+    }
+
+    fun clearHistory() {
+        history = emptyList()
+        store.saveHistory(emptyList())
+    }
+
+    fun onAppExit() {
+        recordWatch()
+        if (prefs.clearCacheOnExit) store.clearCache()
+    }
+
+    override fun onCleared() {
+        recordWatch()
+        player.release()
+        super.onCleared()
+    }
+}
