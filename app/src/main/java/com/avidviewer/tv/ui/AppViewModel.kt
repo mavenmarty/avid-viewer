@@ -70,8 +70,11 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     var guide by mutableStateOf<Map<String, List<Program>>>(emptyMap()); private set
     var history by mutableStateOf(store.loadHistory()); private set
 
-    var screen by mutableStateOf(Screen.LIVE)
-    var lastScreen by mutableStateOf(Screen.LIVE)
+    var screen by mutableStateOf(Screen.GUIDE)
+    var lastScreen by mutableStateOf(Screen.GUIDE)
+    private var startupPreviewDone = false
+    /** Bumped when the TV Guide should scroll to and focus the current channel. */
+    var guideFocusTick by mutableStateOf(0)
     var selectedGroup by mutableStateOf<String?>(null)
     var currentKey by mutableStateOf<String?>(null); private set
     var playContext by mutableStateOf(PlayContext.GROUP)
@@ -360,8 +363,17 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     private fun applyChannels(list: List<Channel>) {
         channels = list
         val gs = groups()
-        if (selectedGroup == null || gs.none { it.raw == selectedGroup }) selectedGroup = gs.firstOrNull()?.raw
         if (currentKey == null) currentKey = prefs.lastChannel?.takeIf { k -> list.any { it.key == k } } ?: list.firstOrNull()?.key
+        // Open on the last channel's category in the guide.
+        val lastGroup = channel(currentKey)?.group
+        if (selectedGroup == null || gs.none { it.raw == selectedGroup }) {
+            selectedGroup = lastGroup?.takeIf { g -> gs.any { it.raw == g } } ?: gs.firstOrNull()?.raw
+        }
+        if (!startupPreviewDone && currentKey != null) {
+            startupPreviewDone = true
+            preview(currentKey) // the last channel plays in the guide's preview window
+            guideFocusTick++
+        }
     }
 
     // ---------------- prefs ----------------
@@ -481,8 +493,17 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             player.stop()
             player.clearMediaItems()
             vodPlaying = null
+            screen = lastScreen
+            return
         }
-        screen = lastScreen
+        if (playContext == PlayContext.GROUP) {
+            // Back from live TV: the guide, on this channel's category, with the channel focused.
+            channel(currentKey)?.let { selectedGroup = it.group }
+            screen = Screen.GUIDE
+            guideFocusTick++
+        } else {
+            screen = lastScreen
+        }
     }
 
     // ---------------- app updates ----------------

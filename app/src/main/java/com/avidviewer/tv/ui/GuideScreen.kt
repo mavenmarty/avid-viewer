@@ -62,6 +62,15 @@ fun GuideScreen(vm: AppViewModel) {
     val rowFocus = remember(list.size, vm.selectedGroup) { List(list.size) { FocusRequester() } }
     var pendingFocus by remember { mutableStateOf<Int?>(null) }
 
+    // Scroll to and focus the current channel (at startup and when returning from full screen).
+    LaunchedEffect(vm.guideFocusTick) {
+        val idx = list.indexOfFirst { it.key == vm.currentKey }
+        if (idx >= 0) {
+            delay(150)
+            listState.scrollToItem((idx - 2).coerceAtLeast(0))
+            pendingFocus = idx
+        }
+    }
     LaunchedEffect(pendingFocus) {
         val i = pendingFocus ?: return@LaunchedEffect
         delay(60)

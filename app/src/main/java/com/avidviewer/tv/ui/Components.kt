@@ -35,18 +35,20 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 
+/** Palette taken from the Avid Viewer icon: deep navy, electric blue and silver. */
 object C {
-    val Bg = Color(0xFF0B0F14)
-    val Rail = Color(0xFF10151C)
-    val Surface = Color(0xFF161C25)
-    val Surface2 = Color(0xFF1E2632)
-    val Line = Color(0xFF2A3340)
-    val Text = Color(0xFFE8ECF1)
-    val Soft = Color(0xFFC5CEDA)
-    val Muted = Color(0xFF9AA6B5)
-    val Accent = Color(0xFFF5A524)
-    val OnAccent = Color(0xFF1A1204)
-    val Live = Color(0xFFD93A3A)
+    val Bg = Color(0xFF040915)
+    val Rail = Color(0xFF071022)
+    val Surface = Color(0xFF0C1A33)
+    val Surface2 = Color(0xFF132A52)
+    val Line = Color(0xFF1E3B6B)
+    val Text = Color(0xFFEAF2FF)
+    val Soft = Color(0xFFBCCBE4)
+    val Muted = Color(0xFF8FA6CA)
+    val Accent = Color(0xFF1E9BFF)
+    val AccentFocus = Color(0xFF6CC2FF)
+    val OnAccent = Color(0xFF02132E)
+    val Live = Color(0xFFE5484D)
 }
 
 /**
@@ -79,7 +81,7 @@ fun Focusable(
             }
             .clip(shape)
             .background(if (focused) focusedColor else color)
-            .then(if (focused) Modifier.border(2.dp, Color.White, shape) else Modifier)
+            .then(if (focused) Modifier.border(2.dp, C.AccentFocus, shape) else Modifier)
             .combinedClickable(onLongClick = onMenu, onClick = onClick),
         verticalAlignment = Alignment.CenterVertically,
     ) { content(focused) }
@@ -98,7 +100,7 @@ fun TvButton(
         modifier = modifier,
         shape = RoundedCornerShape(20.dp),
         color = if (on) C.Accent else C.Surface2,
-        focusedColor = if (on) Color(0xFFFFC35C) else C.Line,
+        focusedColor = if (on) C.AccentFocus else C.Line,
         onClick = onClick,
     ) {
         Text(

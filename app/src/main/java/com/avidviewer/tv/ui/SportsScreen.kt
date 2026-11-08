@@ -128,7 +128,7 @@ fun SportsScreen(vm: AppViewModel) {
 private fun EventCard(vm: AppViewModel, e: SportEvent, st: EvState, isSelected: Boolean, modifier: Modifier) {
     Column(
         modifier.clip(RoundedCornerShape(12.dp))
-            .background(if (st == EvState.LIVE) Color(0xFF231A1F) else C.Surface)
+            .background(if (st == EvState.LIVE) Color(0xFF2A1426) else C.Surface)
             .padding(8.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {

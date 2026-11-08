@@ -79,8 +79,8 @@ fun AppRoot(vm: AppViewModel) {
                 },
             )
         }
-        // Back from any screen other than Live TV returns to Live TV; Back on Live TV exits.
-        BackHandler(enabled = vm.screen != Screen.LIVE && vm.screen != Screen.PLAYER) { vm.screen = Screen.LIVE }
+        // Back from any other screen returns to the TV Guide; Back on the guide exits.
+        BackHandler(enabled = vm.screen != Screen.GUIDE && vm.screen != Screen.PLAYER) { vm.screen = Screen.GUIDE }
     }
 }
 
@@ -109,7 +109,7 @@ private fun NavRail(vm: AppViewModel) {
             Focusable(
                 modifier = Modifier.fillMaxWidth().height(38.dp).then(if (i == 0) Modifier.focusRequester(first) else Modifier),
                 color = if (active) C.Accent else Color.Transparent,
-                focusedColor = if (active) Color(0xFFFFC35C) else C.Surface2,
+                focusedColor = if (active) C.AccentFocus else C.Surface2,
                 onClick = { if (s == Screen.SPORTS) vm.openSportsScreen() else { if (s == Screen.SETTINGS) vm.settingsSection = "general"; vm.screen = s } },
             ) {
                 Text(
