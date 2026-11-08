@@ -101,6 +101,9 @@ private fun NavRail(vm: AppViewModel) {
                 Label(vm.fmtDate(vm.now))
             }
         }
+        vm.weatherLine()?.let {
+            Label(it, size = 13.sp, color = C.Soft, lines = 2, modifier = Modifier.padding(start = 8.dp, top = 6.dp))
+        }
         vm.status?.let {
             Label(it, size = 11.sp, lines = 3, modifier = Modifier.padding(start = 8.dp, top = 8.dp))
         }

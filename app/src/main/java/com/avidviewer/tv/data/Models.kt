@@ -80,6 +80,13 @@ data class Prefs(
     val clearCacheOnExit: Boolean = false,
     val historyPaused: Boolean = false,
     val lastChannel: String? = null,
+    val postalCode: String = "",
+    val placeName: String = "",
+    val placeTz: String = "",
+    val lat: Double = 0.0,
+    val lon: Double = 0.0,
+    val units: String = "F",
+    val showWeather: Boolean = true,
 ) {
     fun toJson(): JSONObject {
         val o = JSONObject()
@@ -96,6 +103,8 @@ data class Prefs(
         o.put("clearCacheOnExit", clearCacheOnExit)
         o.put("historyPaused", historyPaused)
         o.put("lastChannel", lastChannel ?: "")
+        o.put("postalCode", postalCode).put("placeName", placeName).put("placeTz", placeTz)
+        o.put("lat", lat).put("lon", lon).put("units", units).put("showWeather", showWeather)
         return o
     }
 
@@ -119,6 +128,13 @@ data class Prefs(
                 clearCacheOnExit = o.optBoolean("clearCacheOnExit", false),
                 historyPaused = o.optBoolean("historyPaused", false),
                 lastChannel = o.optString("lastChannel").ifBlank { null },
+                postalCode = o.optString("postalCode"),
+                placeName = o.optString("placeName"),
+                placeTz = o.optString("placeTz"),
+                lat = o.optDouble("lat", 0.0),
+                lon = o.optDouble("lon", 0.0),
+                units = o.optString("units", "F"),
+                showWeather = o.optBoolean("showWeather", true),
             )
         }
     }

@@ -126,10 +126,14 @@ private fun InfoBar(vm: AppViewModel, modifier: Modifier) {
                 Label(vm.fmtTime(next.start), size = 12.sp)
             }
         }
-        if (vm.prefs.showClock) {
-            Column(horizontalAlignment = Alignment.End, modifier = Modifier.width(110.dp)) {
-                Text(vm.fmtTime(vm.now), color = C.Text, fontSize = 26.sp, fontWeight = FontWeight.Bold)
-                Label(vm.fmtDate(vm.now), size = 12.sp)
+        val wx = vm.weatherLine()
+        if (vm.prefs.showClock || wx != null) {
+            Column(horizontalAlignment = Alignment.End, modifier = Modifier.width(150.dp)) {
+                if (vm.prefs.showClock) {
+                    Text(vm.fmtTime(vm.now), color = C.Text, fontSize = 26.sp, fontWeight = FontWeight.Bold)
+                    Label(vm.fmtDate(vm.now), size = 12.sp)
+                }
+                if (wx != null) Label(wx, size = 13.sp, color = C.Soft, modifier = Modifier.padding(top = 4.dp))
             }
         }
     }

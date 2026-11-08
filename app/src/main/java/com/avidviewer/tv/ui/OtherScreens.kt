@@ -216,7 +216,7 @@ fun PlaylistsScreen(vm: AppViewModel) {
 
 // ---------------------------------------------------------------- Settings
 private val ZONES = listOf(
-    "auto" to "Auto (device)",
+    "auto" to "Auto", "device" to "Device",
     "America/New_York" to "Eastern", "America/Chicago" to "Central", "America/Denver" to "Mountain",
     "America/Phoenix" to "Arizona", "America/Los_Angeles" to "Pacific", "America/Anchorage" to "Alaska",
     "Pacific/Honolulu" to "Hawaii", "America/Halifax" to "Atlantic",
@@ -233,13 +233,32 @@ fun SettingsScreen(vm: AppViewModel) {
         item { Text("Settings", color = C.Text, fontSize = 24.sp, fontWeight = FontWeight.Bold) }
         item { SectionTitle("On-screen display", Modifier.padding(top = 6.dp)) }
         item { ToggleRow("Show clock", "Time and date in the menu and the full-screen info bar", p.showClock) { vm.updatePrefs { it.copy(showClock = !it.showClock) } } }
+        item { ToggleRow("Show weather", "Current conditions for your postal code, refreshed every 30 minutes", p.showWeather) { vm.toggleWeather() } }
+        item {
+            var code by remember(p.postalCode) { mutableStateOf(p.postalCode) }
+            SettingBlock(
+                "Postal code",
+                if (p.postalCode.isBlank()) "US ZIP or Canadian postal code. Used for weather and the Auto time zone. Only the code is sent, to Open-Meteo."
+                else "${p.postalCode} · ${p.placeName}. Used for weather and the Auto time zone.",
+            ) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    TvField("Postal code", code, modifier = Modifier.width(220.dp)) { code = it.take(8) }
+                    TvButton("Save", primary = true) { vm.setPostalCode(code) }
+                    TvButton("°F", selected = p.units == "F") { vm.setUnits("F") }
+                    TvButton("°C", selected = p.units == "C") { vm.setUnits("C") }
+                }
+                vm.postalStatus?.let { Label(it, size = 12.sp, color = C.Soft) }
+                vm.weatherLine()?.let { Label("Now: $it", size = 12.sp, color = C.Soft) }
+            }
+        }
         item {
             SettingBlock("Time zone", "Guide times, program times and the clock use this zone. Now: ${vm.fmtTime(vm.now)} ${vm.zoneLabel()}") {
+                Label(vm.timeZoneSource(), size = 12.sp, color = C.Soft)
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    ZONES.take(5).forEach { (id, label) -> TvButton(label, selected = p.timeZone == id) { vm.updatePrefs { it.copy(timeZone = id) } } }
+                    ZONES.take(6).forEach { (id, label) -> TvButton(label, selected = p.timeZone == id) { vm.updatePrefs { it.copy(timeZone = id) } } }
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    ZONES.drop(5).forEach { (id, label) -> TvButton(label, selected = p.timeZone == id) { vm.updatePrefs { it.copy(timeZone = id) } } }
+                    ZONES.drop(6).forEach { (id, label) -> TvButton(label, selected = p.timeZone == id) { vm.updatePrefs { it.copy(timeZone = id) } } }
                 }
             }
         }

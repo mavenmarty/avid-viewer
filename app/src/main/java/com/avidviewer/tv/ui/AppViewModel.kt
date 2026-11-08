@@ -25,6 +25,8 @@ import com.avidviewer.tv.data.Prefs
 import com.avidviewer.tv.data.Program
 import com.avidviewer.tv.data.Store
 import com.avidviewer.tv.data.USER_AGENT
+import com.avidviewer.tv.data.Weather
+import com.avidviewer.tv.data.WeatherService
 import com.avidviewer.tv.data.Xmltv
 import com.avidviewer.tv.data.Xtream
 import kotlinx.coroutines.Dispatchers
@@ -64,6 +66,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     var busy by mutableStateOf(false); private set
     var playerError by mutableStateOf<String?>(null); private set
     var now by mutableLongStateOf(System.currentTimeMillis()); private set
+    var weather by mutableStateOf<Weather?>(null); private set
+    var weatherError by mutableStateOf<String?>(null); private set
+    var postalStatus by mutableStateOf<String?>(null); private set
 
     val player: ExoPlayer = ExoPlayer.Builder(app)
         .setMediaSourceFactory(
@@ -95,13 +100,86 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 delay(15_000)
             }
         }
+        viewModelScope.launch {
+            while (true) {
+                refreshWeather()
+                delay(30 * 60 * 1000L) // every 30 minutes
+            }
+        }
         if (playlists.isEmpty()) screen = Screen.PLAYLISTS
         activePlaylist()?.let { loadActive(refresh = false) }
     }
 
     // ---------------- time ----------------
+    /** "auto" uses the postal code's zone when one is set, otherwise the device's zone. */
     val timeZone: TimeZone
-        get() = if (prefs.timeZone == "auto") TimeZone.getDefault() else TimeZone.getTimeZone(prefs.timeZone)
+        get() = when {
+            prefs.timeZone == "device" -> TimeZone.getDefault()
+            prefs.timeZone == "auto" && prefs.placeTz.isNotBlank() -> TimeZone.getTimeZone(prefs.placeTz)
+            prefs.timeZone == "auto" -> TimeZone.getDefault()
+            else -> TimeZone.getTimeZone(prefs.timeZone)
+        }
+
+    fun timeZoneSource(): String = when {
+        prefs.timeZone == "auto" && prefs.placeTz.isNotBlank() -> "From postal code ${prefs.postalCode} (${prefs.placeName})"
+        prefs.timeZone == "auto" || prefs.timeZone == "device" -> "From this device"
+        else -> "Set manually"
+    }
+
+    // ---------------- postal code & weather ----------------
+    fun setPostalCode(code: String) {
+        val c = code.trim().uppercase()
+        if (c.isEmpty()) {
+            updatePrefs { it.copy(postalCode = "", placeName = "", placeTz = "", lat = 0.0, lon = 0.0) }
+            weather = null
+            postalStatus = "Postal code removed."
+            return
+        }
+        viewModelScope.launch {
+            postalStatus = "Looking up $c…"
+            val place = try {
+                withContext(Dispatchers.IO) { WeatherService.lookup(c) }
+            } catch (e: Exception) {
+                postalStatus = "Couldn't look up $c: ${e.message}"
+                return@launch
+            }
+            if (place == null) {
+                postalStatus = "No place found for $c. Check the code and try again."
+                return@launch
+            }
+            updatePrefs { it.copy(postalCode = c, placeName = place.name, placeTz = place.timeZone, lat = place.lat, lon = place.lon) }
+            postalStatus = "Found ${place.name}."
+            refreshWeather()
+        }
+    }
+
+    fun setUnits(u: String) {
+        updatePrefs { it.copy(units = u) }
+        viewModelScope.launch { refreshWeather() }
+    }
+
+    private suspend fun refreshWeather() {
+        val p = prefs
+        if (!p.showWeather || p.postalCode.isBlank() || (p.lat == 0.0 && p.lon == 0.0)) return
+        try {
+            weather = withContext(Dispatchers.IO) { WeatherService.current(p.lat, p.lon, p.units) }
+            weatherError = null
+        } catch (e: Exception) {
+            weatherError = "Weather unavailable"
+        }
+    }
+
+    fun toggleWeather() {
+        updatePrefs { it.copy(showWeather = !it.showWeather) }
+        if (prefs.showWeather) viewModelScope.launch { refreshWeather() }
+    }
+
+    /** e.g. "62°F · Partly cloudy", or null when weather is off or not set up. */
+    fun weatherLine(): String? {
+        if (!prefs.showWeather || prefs.postalCode.isBlank()) return null
+        val w = weather ?: return weatherError
+        return "${w.temp}°${w.units}" + if (w.condition.isNotBlank()) " · ${w.condition}" else ""
+    }
 
     fun fmtTime(ms: Long): String {
         val pattern = if (DateFormat.is24HourFormat(getApplication())) "HH:mm" else "h:mm a"
