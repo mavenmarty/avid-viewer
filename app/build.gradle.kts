@@ -18,7 +18,7 @@ android {
 
     // The release key comes from GitHub Actions secrets. Every build is signed with the
     // same key so new versions install over old ones and keep your data.
-    val ksPath = System.getenv("SIGNING_KEYSTORE_PATH")
+    val ksPath = System.getenv("SIGNING_KEYSTORE_PATH")?.ifBlank { null }
     signingConfigs {
         if (ksPath != null) {
             create("release") {
