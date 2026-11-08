@@ -16,6 +16,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Text
@@ -41,38 +45,29 @@ fun LiveScreen(vm: AppViewModel) {
         EmptyState(vm, "No channels yet", "Add your provider on the Playlists screen.")
         return
     }
-    val groups = vm.groups()
     val numbers = vm.numbers()
+    val list0 = vm.channelsIn(vm.selectedGroup)
+    val rowFocus = remember(list0.size, vm.selectedGroup) { List(list0.size) { FocusRequester() } }
+    val listState = rememberLazyListState()
+    // Land on the playing channel (or the first one) after choosing a category.
+    LaunchedEffect(vm.guideFocusTick, vm.selectedGroup) {
+        if (vm.navMode != NavMode.GROUPS || list0.isEmpty()) return@LaunchedEffect
+        val idx = list0.indexOfFirst { it.key == vm.currentKey }.coerceAtLeast(0)
+        listState.scrollToItem(idx)
+        delay(120)
+        runCatching { rowFocus[idx].requestFocus() }
+    }
 
     Row(Modifier.fillMaxSize()) {
-        LazyColumn(
-            Modifier.width(190.dp).fillMaxHeight().background(C.Bg),
-            contentPadding = PaddingValues(10.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
-        ) {
-            item { SectionTitle("Groups", Modifier.padding(start = 8.dp, bottom = 6.dp, top = 6.dp)) }
-            items(groups, key = { it.raw }) { g ->
-                val on = g.raw == vm.selectedGroup
-                Focusable(
-                    modifier = Modifier.fillMaxWidth().height(38.dp),
-                    color = if (on) C.Surface2 else C.Bg,
-                    onFocus = { vm.selectedGroup = g.raw },
-                    onClick = { vm.selectedGroup = g.raw },
-                ) {
-                    Label(g.name, size = 14.sp, color = if (on) C.Text else C.Soft, weight = if (on) FontWeight.Bold else FontWeight.Normal, modifier = Modifier.padding(start = 10.dp).weight(1f))
-                    Label("${g.count}", size = 12.sp, modifier = Modifier.padding(end = 10.dp))
-                }
-            }
-        }
         val list = vm.channelsIn(vm.selectedGroup)
         LazyColumn(
             Modifier.weight(1f).fillMaxHeight(),
+            state = listState,
             contentPadding = PaddingValues(10.dp),
             verticalArrangement = Arrangement.spacedBy(5.dp),
         ) {
-            item { SectionTitle(vm.groupName(vm.selectedGroup ?: ""), Modifier.padding(start = 8.dp, bottom = 6.dp, top = 6.dp)) }
-            items(list, key = { it.key }) { c ->
-                ChannelRow(vm, c, numbers[c.key], selected = c.key == vm.currentKey,
+            itemsIndexed(list, key = { _, c -> c.key }) { i, c ->
+                ChannelRow(vm, c, numbers[c.key], selected = c.key == vm.currentKey, modifier = Modifier.focusRequester(rowFocus.getOrElse(i) { FocusRequester() }),
                     onFocus = {},
                     onClick = { vm.selectChannel(c.key, PlayContext.GROUP) })
             }
@@ -82,10 +77,10 @@ fun LiveScreen(vm: AppViewModel) {
 }
 
 @Composable
-fun ChannelRow(vm: AppViewModel, c: Channel, num: Int?, selected: Boolean, onFocus: () -> Unit, onClick: () -> Unit) {
+fun ChannelRow(vm: AppViewModel, c: Channel, num: Int?, selected: Boolean, modifier: Modifier = Modifier, onFocus: () -> Unit, onClick: () -> Unit) {
     val (now, _) = vm.nowNext(c)
     Focusable(
-        modifier = Modifier.fillMaxWidth().height(56.dp),
+        modifier = modifier.fillMaxWidth().height(56.dp),
         color = if (selected) C.Surface2 else C.Surface,
         onFocus = onFocus,
         onMenu = { vm.toggleFavorite(c.key) },

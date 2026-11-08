@@ -64,8 +64,8 @@ fun GuideScreen(vm: AppViewModel) {
 
     // Scroll to and focus the current channel (at startup and when returning from full screen).
     LaunchedEffect(vm.guideFocusTick) {
-        val idx = list.indexOfFirst { it.key == vm.currentKey }
-        if (idx >= 0) {
+        val idx = list.indexOfFirst { it.key == vm.currentKey }.let { if (it < 0 && list.isNotEmpty()) 0 else it }
+        if (idx >= 0 && vm.navMode == NavMode.GROUPS) {
             delay(150)
             listState.scrollToItem((idx - 2).coerceAtLeast(0))
             pendingFocus = idx
@@ -119,11 +119,7 @@ fun GuideScreen(vm: AppViewModel) {
             }
         }
         // Groups
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            items(vm.groups(), key = { it.raw }) { g ->
-                TvButton(g.name, selected = g.raw == vm.selectedGroup) { vm.selectedGroup = g.raw }
-            }
-        }
+        Label(vm.groupName(vm.selectedGroup ?: "") + "  ·  ${list.size} channels", size = 13.sp, color = C.Soft, weight = FontWeight.Bold)
         // Timeline header
         Row(Modifier.fillMaxWidth().height(18.dp)) {
             Label("Today · ${vm.zoneLabel()}", size = 12.sp, modifier = Modifier.width(150.dp))

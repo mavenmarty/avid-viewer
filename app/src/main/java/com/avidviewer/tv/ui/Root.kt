@@ -41,7 +41,10 @@ fun AppRoot(vm: AppViewModel) {
             PlayerScreen(vm)
         } else {
             Row(Modifier.fillMaxSize()) {
-                NavRail(vm)
+                val browsing = vm.screen == Screen.LIVE || vm.screen == Screen.GUIDE
+                if (vm.navMode != NavMode.GROUPS || !browsing) NavRail(vm)
+                if (browsing && vm.navMode == NavMode.COLLAPSED) PlaylistTree(vm)
+                if (browsing && vm.navMode == NavMode.GROUPS) GroupNav(vm)
                 Box(Modifier.fillMaxHeight().weight(1f)) {
                     when (vm.screen) {
                         Screen.SEARCH -> SearchScreen(vm)
@@ -79,67 +82,9 @@ fun AppRoot(vm: AppViewModel) {
                 },
             )
         }
-        // Back from any other screen returns to the TV Guide; Back on the guide exits.
-        BackHandler(enabled = vm.screen != Screen.GUIDE && vm.screen != Screen.PLAYER) { vm.screen = Screen.GUIDE }
+        // Back walks up the menu levels; Back at the full menu on the TV Guide exits.
+        BackHandler(enabled = vm.screen != Screen.PLAYER && !(vm.navMode == NavMode.FULL && vm.screen == Screen.GUIDE)) { vm.navBack() }
     }
-}
-
-@Composable
-private fun NavRail(vm: AppViewModel) {
-    val first = remember { FocusRequester() }
-    Column(
-        Modifier.width(168.dp).fillMaxHeight().background(C.Rail).padding(horizontal = 10.dp, vertical = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp),
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(start = 6.dp, bottom = 14.dp)) {
-            androidx.compose.foundation.Image(
-                painter = androidx.compose.ui.res.painterResource(com.avidviewer.tv.R.drawable.logo),
-                contentDescription = null,
-                modifier = Modifier.size(34.dp).clip(RoundedCornerShape(8.dp)),
-            )
-            Spacer(Modifier.width(8.dp))
-            Text("Avid Viewer", color = C.Text, fontSize = 15.sp, fontWeight = FontWeight.Bold)
-        }
-        val items = listOf(
-            Screen.SEARCH to "Search", Screen.FAVORITES to "Favorites", Screen.LIVE to "Live TV", Screen.GUIDE to "TV Guide", Screen.SPORTS to "Sports",
-            Screen.MANAGE to "Manage", Screen.PLAYLISTS to "Playlists", Screen.SETTINGS to "Settings",
-        )
-        items.forEachIndexed { i, (s, label) ->
-            val active = vm.screen == s
-            Focusable(
-                modifier = Modifier.fillMaxWidth().height(38.dp).then(if (i == 0) Modifier.focusRequester(first) else Modifier),
-                color = if (active) C.Accent else Color.Transparent,
-                focusedColor = if (active) C.AccentFocus else C.Surface2,
-                onClick = { if (s == Screen.SPORTS) vm.openSportsScreen() else { if (s == Screen.SETTINGS) vm.settingsSection = "general"; vm.screen = s } },
-            ) {
-                Text(
-                    label, color = if (active) C.OnAccent else C.Soft, fontSize = 14.sp,
-                    fontWeight = if (active) FontWeight.Bold else FontWeight.Medium,
-                    modifier = Modifier.padding(horizontal = 12.dp),
-                )
-            }
-            if (s == Screen.FAVORITES || s == Screen.SPORTS) Spacer(Modifier.height(6.dp))
-        }
-        Spacer(Modifier.weight(1f))
-        if (vm.prefs.showClock) {
-            Column(Modifier.padding(start = 8.dp)) {
-                Text(vm.fmtTime(vm.now), color = C.Text, fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
-                Label(vm.fmtDate(vm.now))
-            }
-        }
-        vm.weatherLine()?.let {
-            Label(it, size = 13.sp, color = C.Soft, lines = 2, modifier = Modifier.padding(start = 8.dp, top = 6.dp))
-        }
-        vm.update?.let { rel ->
-            TvButton("Update ${rel.versionName}", primary = true, modifier = Modifier.padding(start = 4.dp, top = 8.dp)) {
-                vm.settingsSection = "general"; vm.screen = Screen.SETTINGS
-            }
-        }
-        vm.status?.let {
-            Label(it, size = 12.sp, lines = 3, modifier = Modifier.padding(start = 8.dp, top = 8.dp))
-        }
-    }
-    LaunchedEffect(Unit) { runCatching { first.requestFocus() } }
 }
 
 /** Video surface for the shared player. Several screens can show it; only one at a time is on screen. */

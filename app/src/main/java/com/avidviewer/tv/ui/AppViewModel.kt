@@ -51,6 +51,13 @@ enum class Screen { SEARCH, FAVORITES, LIVE, GUIDE, SPORTS, MANAGE, PLAYLISTS, S
 /** Where full-screen Up/Down and Channel Up/Down move: the group the user came from, or Favorites. */
 enum class PlayContext { GROUP, FAVORITES, SPORTS }
 
+/**
+ * Left navigation depth.
+ * FULL: menu with icons and labels. COLLAPSED: icons only (plus the playlist tree on Live TV / TV Guide).
+ * GROUPS: menu hidden; the active playlist's categories are the left navigation.
+ */
+enum class NavMode { FULL, COLLAPSED, GROUPS }
+
 data class GroupInfo(val raw: String, val name: String, val count: Int, val hidden: Boolean)
 
 /** One search result. Channel and program hits tune [channelKey]; movie/episode hits play [vod]; series hits open episodes. */
@@ -71,6 +78,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     var history by mutableStateOf(store.loadHistory()); private set
 
     var screen by mutableStateOf(Screen.GUIDE)
+    var navMode by mutableStateOf(NavMode.GROUPS)
+    var expandedPlaylist by mutableStateOf<String?>(null)
+    var playlistGroups by mutableStateOf<Map<String, List<GroupInfo>>>(emptyMap()); private set
     var lastScreen by mutableStateOf(Screen.GUIDE)
     private var startupPreviewDone = false
     /** Bumped when the TV Guide should scroll to and focus the current channel. */
@@ -155,7 +165,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
         Updater.onStatus = { msg -> viewModelScope.launch { updateStatus = msg; updateBusy = false } }
         if (prefs.autoUpdateCheck) checkForUpdate(quiet = true)
-        if (playlists.isEmpty()) screen = Screen.PLAYLISTS
+        if (playlists.isEmpty()) { screen = Screen.PLAYLISTS; navMode = NavMode.COLLAPSED }
         activePlaylist()?.let { loadActive(refresh = false) }
     }
 
@@ -500,6 +510,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             // Back from live TV: the guide, on this channel's category, with the channel focused.
             channel(currentKey)?.let { selectedGroup = it.group }
             screen = Screen.GUIDE
+            navMode = NavMode.GROUPS
             guideFocusTick++
         } else {
             screen = lastScreen
@@ -668,17 +679,75 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** Tunes a channel from any playlist, switching the active playlist first if needed. */
+    private suspend fun switchPlaylist(pid: String) {
+        if (pid == activePlaylist()?.id) return
+        val p = playlists.firstOrNull { it.id == pid } ?: return
+        val (chs, g, v) = dataFor(p)
+        updatePrefs { it.copy(activePlaylist = p.id) }
+        channels = chs; guide = g; vod = v
+        selectedGroup = null; currentKey = null
+        applyChannels(chs)
+        rebuildSportEvents()
+    }
+
+    // ---------------- left navigation ----------------
+    fun navSelect(s: Screen) {
+        if (s == Screen.SPORTS) openSportsScreen() else {
+            if (s == Screen.SETTINGS) settingsSection = "general"
+            screen = s
+        }
+        navMode = NavMode.COLLAPSED
+        if (s == Screen.LIVE || s == Screen.GUIDE) {
+            expandedPlaylist = activePlaylist()?.id
+            loadPlaylistGroups(expandedPlaylist)
+        }
+    }
+
+    fun togglePlaylist(pid: String) {
+        expandedPlaylist = if (expandedPlaylist == pid) null else pid
+        loadPlaylistGroups(pid)
+    }
+
+    private fun loadPlaylistGroups(pid: String?) {
+        val p = playlists.firstOrNull { it.id == pid } ?: return
+        if (p.id == activePlaylist()?.id) { playlistGroups = playlistGroups + (p.id to groups()); return }
+        viewModelScope.launch {
+            val (chs, _, _) = dataFor(p)
+            val counts = LinkedHashMap<String, Int>()
+            chs.forEach { counts[it.group] = (counts[it.group] ?: 0) + 1 }
+            val list = counts.filterKeys { it !in prefs.hiddenGroups }.map { (raw, n) -> GroupInfo(raw, groupName(raw), n, false) }
+            playlistGroups = playlistGroups + (p.id to list)
+        }
+    }
+
+    /** Picking a category: switch playlist if needed, hide the menu and show categories as the left nav. */
+    fun chooseGroup(pid: String, raw: String) {
+        viewModelScope.launch {
+            switchPlaylist(pid)
+            selectedGroup = raw
+            navMode = NavMode.GROUPS
+            guideFocusTick++
+        }
+    }
+
+    /** Back walks up the navigation: categories → playlists → full menu → TV Guide. Returns false to let the app exit. */
+    fun navBack(): Boolean = when (navMode) {
+        NavMode.GROUPS -> {
+            navMode = NavMode.COLLAPSED
+            expandedPlaylist = activePlaylist()?.id
+            loadPlaylistGroups(expandedPlaylist)
+            true
+        }
+        NavMode.COLLAPSED -> { navMode = NavMode.FULL; true }
+        NavMode.FULL -> if (screen != Screen.GUIDE && channels.isNotEmpty()) {
+            screen = Screen.GUIDE; navMode = NavMode.GROUPS; guideFocusTick++; true
+        } else false
+    }
+
     fun openHit(h: Hit) {
         when (h.kind) {
             "channel", "program" -> viewModelScope.launch {
-                if (h.playlistId != activePlaylist()?.id) {
-                    val p = playlists.firstOrNull { it.id == h.playlistId } ?: return@launch
-                    val (chs, g, v) = dataFor(p)
-                    updatePrefs { it.copy(activePlaylist = p.id) }
-                    channels = chs; guide = g; vod = v
-                    selectedGroup = null; currentKey = null
-                    applyChannels(chs)
-                }
+                switchPlaylist(h.playlistId)
                 openFullScreen(h.channelKey, PlayContext.GROUP)
             }
             "movie", "episode" -> h.vod?.let { playVod(it) }
