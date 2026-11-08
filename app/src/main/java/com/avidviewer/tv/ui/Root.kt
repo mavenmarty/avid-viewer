@@ -57,6 +57,28 @@ fun AppRoot(vm: AppViewModel) {
                 }
             }
         }
+        // New version found: ask before updating (never interrupts full-screen viewing).
+        val rel = vm.update
+        if (rel != null && !vm.updatePromptDismissed && vm.screen != Screen.PLAYER) {
+            androidx.compose.material3.AlertDialog(
+                onDismissRequest = { if (!vm.updateBusy) vm.updatePromptDismissed = true },
+                containerColor = C.Surface,
+                title = { Text("Update available", color = C.Text, fontWeight = FontWeight.Bold) },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Label("Avid Viewer ${rel.versionName} is ready to install. You have ${vm.installed.second}.", size = 14.sp, color = C.Soft, lines = 2)
+                        Label("Your playlists, favorites and settings are kept.", size = 13.sp, lines = 2)
+                        vm.updateStatus?.let { Label(it, size = 13.sp, color = C.Accent, lines = 3) }
+                    }
+                },
+                confirmButton = {
+                    TvButton(if (vm.updateBusy) "Updating…" else "Update now", primary = true) { if (!vm.updateBusy) vm.installUpdate() }
+                },
+                dismissButton = {
+                    TvButton("Later") { vm.updatePromptDismissed = true }
+                },
+            )
+        }
         // Back from any screen other than Live TV returns to Live TV; Back on Live TV exits.
         BackHandler(enabled = vm.screen != Screen.LIVE && vm.screen != Screen.PLAYER) { vm.screen = Screen.LIVE }
     }

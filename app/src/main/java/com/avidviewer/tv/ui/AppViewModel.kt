@@ -94,6 +94,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     var update by mutableStateOf<Updater.Release?>(null); private set
     var updateStatus by mutableStateOf<String?>(null); private set
     var updateBusy by mutableStateOf(false); private set
+    var updatePromptDismissed by mutableStateOf(false)
     val installed: Pair<Long, String> = runCatching { Updater.installedVersion(app) }.getOrDefault(0L to "")
     var selectedEvent by mutableStateOf<String?>(null)
     private var sportsPlayCat: String? = null
