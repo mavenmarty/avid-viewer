@@ -44,11 +44,11 @@ object C {
     val Line = Color(0xFF1E3B6B)
     val Text = Color(0xFFEAF2FF)
     val Soft = Color(0xFFBCCBE4)
-    val Muted = Color(0xFF8FA6CA)
+    val Muted = Color(0xFF98AFD2)
     val Accent = Color(0xFF1E9BFF)
     val AccentFocus = Color(0xFF6CC2FF)
     val OnAccent = Color(0xFF02132E)
-    val Live = Color(0xFFE5484D)
+    val Live = Color(0xFFD13438)
 }
 
 /**
@@ -120,7 +120,7 @@ fun Label(text: String, size: TextUnit = 13.sp, color: Color = C.Muted, weight: 
 
 @Composable
 fun SectionTitle(text: String, modifier: Modifier = Modifier) =
-    Label(text.uppercase(), size = 11.sp, weight = FontWeight.Bold, modifier = modifier)
+    Label(text.uppercase(), size = 12.sp, weight = FontWeight.Bold, modifier = modifier)
 
 /** Channel logo, or a coloured badge with initials when there's no logo. */
 @Composable
@@ -132,7 +132,7 @@ fun ChannelBadge(name: String, logo: String?, size: Dp = 32.dp) {
             .background(badgeColor(name)),
         contentAlignment = Alignment.Center,
     ) {
-        Text(initials(name), color = Color.White, fontSize = (size.value * 0.34f).sp, fontWeight = FontWeight.Bold)
+        Text(initials(name), color = Color.White, fontSize = (size.value * 0.36f).coerceAtLeast(11f).sp, fontWeight = FontWeight.Bold)
         if (logo != null) {
             AsyncImage(
                 model = logo,

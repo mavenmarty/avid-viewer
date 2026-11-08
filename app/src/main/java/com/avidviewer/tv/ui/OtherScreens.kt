@@ -80,7 +80,7 @@ fun ManageScreen(vm: AppViewModel) {
                         Focusable(Modifier.weight(1f).fillMaxHeight(), color = androidx.compose.ui.graphics.Color.Transparent, onClick = { manageGroup = g.raw }) {
                             Column(Modifier.padding(horizontal = 6.dp)) {
                                 Label(g.name, size = 14.sp, color = if (g.hidden) C.Muted else C.Text, weight = FontWeight.SemiBold)
-                                Label("${g.count} channels" + if (g.hidden) " · hidden" else "", size = 11.sp)
+                                Label("${g.count} channels" + if (g.hidden) " · hidden" else "", size = 12.sp)
                             }
                         }
                         TvButton("▲") { vm.moveGroup(g.raw, -1) }
@@ -169,7 +169,7 @@ fun PlaylistsScreen(vm: AppViewModel) {
             vm.playlists.forEach { p ->
                 Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(C.Surface).padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Label(p.name + if (p.id == active?.id) "  · active" else "", size = 15.sp, color = C.Text, weight = FontWeight.SemiBold)
-                    Label(if (p.isXtream) "Xtream Codes · ${p.server}" else "M3U · ${p.m3uUrl}", size = 11.sp)
+                    Label(if (p.isXtream) "Xtream Codes · ${p.server}" else "M3U · ${p.m3uUrl}", size = 12.sp)
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         if (p.id != active?.id) TvButton("Use") { vm.setActive(p.id) }
                         TvButton("Refresh") { vm.refreshPlaylist(p.id) }
@@ -196,7 +196,7 @@ fun PlaylistsScreen(vm: AppViewModel) {
                 item { TvField("Server (DNS), e.g. http://example.com:8080", server) { server = it } }
                 item { TvField("Username", user) { user = it } }
                 item { TvField("Password", pass, password = true) { pass = it } }
-                item { Label("Live TV and the TV guide load from your login. Your password is stored encrypted on this device only.", size = 11.sp, lines = 2) }
+                item { Label("Live TV and the TV guide load from your login. Your password is stored encrypted on this device only.", size = 12.sp, lines = 2) }
             } else {
                 item { TvField("M3U playlist link", m3u) { m3u = it } }
                 item { TvField("TV guide (XMLTV) link, optional", epg) { epg = it } }
@@ -307,7 +307,7 @@ fun SettingsScreen(vm: AppViewModel) {
                 TvButton("Clear watch history") { vm.clearHistory() }
             }
         }
-        item { Label("Avid Viewer ${appVersion(vm)}", size = 11.sp, modifier = Modifier.padding(top = 10.dp)) }
+        item { Label("Avid Viewer ${appVersion(vm)}", size = 12.sp, modifier = Modifier.padding(top = 10.dp)) }
     }
 }
 
@@ -325,6 +325,7 @@ private fun ToggleRow(title: String, desc: String, on: Boolean, onToggle: () -> 
             Label(title, size = 15.sp, color = C.Text, weight = FontWeight.SemiBold)
             Label(desc, size = 12.sp, lines = 2)
         }
+        Label(if (on) "On" else "Off", size = 13.sp, color = if (on) C.Accent else C.Muted, weight = FontWeight.Bold, modifier = Modifier.padding(end = 8.dp))
         Row(
             Modifier.padding(end = 14.dp).width(46.dp).height(26.dp).clip(RoundedCornerShape(13.dp)).background(if (on) C.Accent else C.Line).padding(3.dp),
             horizontalArrangement = if (on) Arrangement.End else Arrangement.Start,
@@ -364,7 +365,7 @@ private fun androidx.compose.foundation.lazy.LazyListScope.sportsSettings(vm: Ap
                 }
                 Column(Modifier.weight(1f).padding(horizontal = 6.dp)) {
                     Label(c.name, size = 15.sp, color = C.Text, weight = FontWeight.SemiBold)
-                    Label("Matches: " + c.keywords.joinToString(", "), size = 11.sp)
+                    Label("Matches: " + c.keywords.joinToString(", "), size = 12.sp)
                 }
                 TvButton("▲") { if (i > 0) vm.updateSportCats(cats.toMutableList().apply { add(i - 1, removeAt(i)) }) }
                 TvButton("▼") { if (i < cats.size - 1) vm.updateSportCats(cats.toMutableList().apply { add(i + 1, removeAt(i)) }) }

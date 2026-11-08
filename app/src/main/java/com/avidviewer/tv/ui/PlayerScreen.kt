@@ -132,7 +132,7 @@ private fun VodBar(vm: AppViewModel, modifier: Modifier) {
             Spacer(Modifier.width(10.dp))
             Label(if (dur > 0) t(dur) else "--:--", size = 12.sp)
         }
-        Label((if (vm.player.isPlaying) "" else "Paused · ") + "OK: play/pause · ◀ back 10s · ▶ forward 30s · Back: exit", size = 11.sp)
+        Label((if (vm.player.isPlaying) "" else "Paused · ") + "OK: play/pause · ◀ back 10s · ▶ forward 30s · Back: exit", size = 12.sp)
     }
 }
 

@@ -136,7 +136,7 @@ private fun NavRail(vm: AppViewModel) {
             }
         }
         vm.status?.let {
-            Label(it, size = 11.sp, lines = 3, modifier = Modifier.padding(start = 8.dp, top = 8.dp))
+            Label(it, size = 12.sp, lines = 3, modifier = Modifier.padding(start = 8.dp, top = 8.dp))
         }
     }
     LaunchedEffect(Unit) { runCatching { first.requestFocus() } }

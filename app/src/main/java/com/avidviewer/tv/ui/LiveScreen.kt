@@ -97,6 +97,7 @@ fun ChannelRow(vm: AppViewModel, c: Channel, num: Int?, selected: Boolean, onFoc
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Label(vm.channelName(c), size = 14.sp, color = C.Text, weight = FontWeight.SemiBold, modifier = Modifier.weight(1f, fill = false))
                 if (vm.isFavorite(c.key)) Text("  ★", color = C.Accent, fontSize = 12.sp)
+                if (selected) Text("  ▶ Playing", color = C.Accent, fontSize = 12.sp, fontWeight = FontWeight.Bold)
             }
             Label(now?.let { "${it.title} · ${vm.fmtTime(it.start)}–${vm.fmtTime(it.end)}" } ?: "No guide information", size = 12.sp)
             ProgressBar(now, vm.now, Modifier.padding(top = 3.dp))
@@ -125,7 +126,7 @@ private fun PreviewPane(vm: AppViewModel, modifier: Modifier) {
             VideoSurface(vm, Modifier.fillMaxSize())
             if (vm.player.mediaItemCount == 0) Label("Press OK on a channel to preview it", size = 12.sp, color = C.Muted, lines = 2, modifier = Modifier.align(Alignment.Center).padding(10.dp))
             vm.playerError?.let {
-                Label(it, size = 11.sp, color = C.Soft, lines = 4, modifier = Modifier.align(Alignment.Center).padding(10.dp))
+                Label(it, size = 12.sp, color = C.Soft, lines = 4, modifier = Modifier.align(Alignment.Center).padding(10.dp))
             }
         }
         if (c != null) {
@@ -141,7 +142,7 @@ private fun PreviewPane(vm: AppViewModel, modifier: Modifier) {
                 TvButton("Watch", primary = true) { vm.openFullScreen(c.key, PlayContext.GROUP) }
                 TvButton(if (vm.isFavorite(c.key)) "★ Saved" else "☆ Favorite") { vm.toggleFavorite(c.key) }
             }
-            Label("OK on a channel: preview · OK again: full screen · Menu or hold OK: favorite", size = 11.sp, lines = 2)
+            Label("OK on a channel: preview · OK again: full screen · Menu or hold OK: favorite", size = 12.sp, lines = 2)
         }
     }
 }

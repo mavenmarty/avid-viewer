@@ -115,7 +115,7 @@ fun GuideScreen(vm: AppViewModel) {
                 Label((fc?.let { vm.channelName(it) } ?: "") + (fp?.let { " · ${vm.fmtTime(it.start)} – ${vm.fmtTime(it.end)}" } ?: ""), size = 12.sp)
                 Label(fp?.title ?: "No guide information", size = 18.sp, color = C.Text, weight = FontWeight.Bold)
                 Label(listOfNotNull(fp?.subtitle?.let { "“$it”" }, if (fp?.isNew == true) "New" else null).joinToString(" · "), size = 13.sp, color = C.Soft)
-                Label("OK: preview · OK again: full screen · CH+/CH−: page · Menu: favorite", size = 11.sp)
+                Label("OK: preview · OK again: full screen · CH+/CH−: page · Menu: favorite", size = 12.sp)
             }
         }
         // Groups
@@ -126,10 +126,10 @@ fun GuideScreen(vm: AppViewModel) {
         }
         // Timeline header
         Row(Modifier.fillMaxWidth().height(18.dp)) {
-            Label("Today · ${vm.zoneLabel()}", size = 11.sp, modifier = Modifier.width(150.dp))
+            Label("Today · ${vm.zoneLabel()}", size = 12.sp, modifier = Modifier.width(150.dp))
             Box(Modifier.weight(1f)) {
                 for (i in 0 until WINDOW_MIN / 30) {
-                    Label(vm.fmtTime(winStart + i * half), size = 11.sp, modifier = Modifier.offset(x = (i * 30 * DP_PER_MIN).dp))
+                    Label(vm.fmtTime(winStart + i * half), size = 12.sp, modifier = Modifier.offset(x = (i * 30 * DP_PER_MIN).dp))
                 }
             }
         }
@@ -143,7 +143,7 @@ fun GuideScreen(vm: AppViewModel) {
                             onMenu = { vm.toggleFavorite(c.key) },
                             onClick = { vm.selectChannel(c.key, PlayContext.GROUP) },
                         ) {
-                            Label("${numbers[c.key] ?: ""}", size = 11.sp, modifier = Modifier.width(26.dp).padding(start = 6.dp))
+                            Label("${numbers[c.key] ?: ""}", size = 12.sp, modifier = Modifier.width(26.dp).padding(start = 6.dp))
                             ChannelBadge(vm.channelName(c), c.logo, 26.dp)
                             Label(vm.channelName(c), size = 12.sp, color = C.Text, weight = FontWeight.SemiBold, modifier = Modifier.padding(start = 6.dp, end = 4.dp))
                         }
@@ -171,7 +171,7 @@ fun GuideScreen(vm: AppViewModel) {
                                 ) {
                                     Column(Modifier.padding(horizontal = 8.dp)) {
                                         Label((if (p.isNew) "NEW · " else "") + p.title, size = 12.sp, color = C.Text, weight = FontWeight.SemiBold)
-                                        Label("${vm.fmtTime(p.start)} – ${vm.fmtTime(p.end)}", size = 10.sp)
+                                        Label("${vm.fmtTime(p.start)} – ${vm.fmtTime(p.end)}", size = 12.sp)
                                     }
                                 }
                                 cursor = b

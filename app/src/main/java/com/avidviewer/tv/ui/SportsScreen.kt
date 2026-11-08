@@ -1,6 +1,7 @@
 package com.avidviewer.tv.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -62,7 +63,7 @@ fun SportsScreen(vm: AppViewModel) {
                     val st = state(selected)
                     Text(
                         if (st == EvState.LIVE) "LIVE" else if (st == EvState.FINAL) "FINAL" else "STARTS ${vm.fmtTime(selected.start)}",
-                        color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold,
+                        color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold,
                         modifier = Modifier.padding(8.dp).clip(RoundedCornerShape(4.dp)).background(if (st == EvState.LIVE) C.Live else C.Line).padding(horizontal = 6.dp, vertical = 2.dp),
                     )
                 }
@@ -129,6 +130,7 @@ private fun EventCard(vm: AppViewModel, e: SportEvent, st: EvState, isSelected: 
     Column(
         modifier.clip(RoundedCornerShape(12.dp))
             .background(if (st == EvState.LIVE) Color(0xFF2A1426) else C.Surface)
+            .then(if (st == EvState.LIVE) Modifier.border(2.dp, C.Live, RoundedCornerShape(12.dp)) else Modifier)
             .padding(8.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
@@ -148,14 +150,14 @@ private fun EventCard(vm: AppViewModel, e: SportEvent, st: EvState, isSelected: 
                         EvState.UP -> "${vm.dayLabel(e.start)} ${vm.fmtTime(e.start)}"
                     }
                     Text(
-                        status, fontSize = 10.sp, fontWeight = FontWeight.Bold,
+                        status, fontSize = 12.sp, fontWeight = FontWeight.Bold,
                         color = if (st == EvState.LIVE) Color.White else if (st == EvState.UP) C.Accent else C.Soft,
                         modifier = Modifier.clip(RoundedCornerShape(4.dp)).background(if (st == EvState.LIVE) C.Live else C.Surface2).padding(horizontal = 6.dp, vertical = 2.dp),
                     )
                 }
                 Label(e.title, size = 14.sp, color = C.Text, weight = FontWeight.Bold, lines = 2)
                 e.score?.takeIf { st != EvState.UP }?.let { Label(scoreLine(it), size = 16.sp, color = C.Text, weight = FontWeight.Bold) }
-                Label("${vm.fmtTime(e.start)} – ${vm.fmtTime(e.end)} ${vm.zoneLabel()}", size = 11.sp)
+                Label("${vm.fmtTime(e.start)} – ${vm.fmtTime(e.end)} ${vm.zoneLabel()}", size = 12.sp)
             }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(5.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -163,7 +165,7 @@ private fun EventCard(vm: AppViewModel, e: SportEvent, st: EvState, isSelected: 
                 val c = vm.channel(k)
                 if (c != null) TvButton("▶ " + vm.channelName(c).take(22)) { vm.openFullScreen(k, PlayContext.SPORTS) }
             }
-            if (e.channelKeys.size > 2) Label("+${e.channelKeys.size - 2}", size = 11.sp)
+            if (e.channelKeys.size > 2) Label("+${e.channelKeys.size - 2}", size = 12.sp)
         }
     }
 }
@@ -171,7 +173,7 @@ private fun EventCard(vm: AppViewModel, e: SportEvent, st: EvState, isSelected: 
 @Composable
 private fun LeagueTag(id: String, name: String) {
     Text(
-        name.uppercase(), color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.ExtraBold,
+        name.uppercase(), color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.ExtraBold,
         modifier = Modifier.clip(RoundedCornerShape(4.dp)).background(LEAGUE_COLORS[id] ?: C.Line).padding(horizontal = 6.dp, vertical = 2.dp),
     )
 }
