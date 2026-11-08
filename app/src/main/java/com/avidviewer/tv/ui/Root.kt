@@ -92,9 +92,11 @@ private fun NavRail(vm: AppViewModel) {
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(start = 6.dp, bottom = 14.dp)) {
-            Box(Modifier.size(26.dp).clip(RoundedCornerShape(7.dp)).background(C.Accent), contentAlignment = Alignment.Center) {
-                Text("▶", color = C.OnAccent, fontSize = 12.sp)
-            }
+            androidx.compose.foundation.Image(
+                painter = androidx.compose.ui.res.painterResource(com.avidviewer.tv.R.drawable.logo),
+                contentDescription = null,
+                modifier = Modifier.size(34.dp).clip(RoundedCornerShape(8.dp)),
+            )
             Spacer(Modifier.width(8.dp))
             Text("Avid Viewer", color = C.Text, fontSize = 15.sp, fontWeight = FontWeight.Bold)
         }
