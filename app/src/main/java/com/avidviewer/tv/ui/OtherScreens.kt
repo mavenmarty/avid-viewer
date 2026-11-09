@@ -109,7 +109,7 @@ fun ManageScreen(vm: AppViewModel) {
     if (manageGroup == null || groups.none { it.raw == manageGroup }) manageGroup = groups.firstOrNull()?.raw
 
     Column(Modifier.fillMaxSize().padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text("Manage channels", color = C.Text, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+        Text("Manage channels", color = C.Text, fontSize = 18.sp, fontWeight = FontWeight.Bold)
         Label("Rename, reorder or hide groups and channels. Changes apply everywhere, including channel numbers and the TV Guide.", size = 12.sp, lines = 2)
         Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
             LazyColumn(Modifier.width(360.dp).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(5.dp)) {
@@ -333,6 +333,16 @@ private val ZONES = listOf(
 @Composable
 fun SettingsScreen(vm: AppViewModel) {
     val p = vm.prefs
+    if (vm.settingsSection == "manage") {
+        Column(Modifier.fillMaxSize()) {
+            Column(Modifier.padding(start = 20.dp, top = 20.dp, end = 20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Settings", color = C.Text, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+                SettingsTabs(vm)
+            }
+            ManageScreen(vm)
+        }
+        return
+    }
     LazyColumn(
         Modifier.fillMaxSize(),
         contentPadding = PaddingValues(20.dp),
@@ -343,6 +353,7 @@ fun SettingsScreen(vm: AppViewModel) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 TvButton("General", selected = vm.settingsSection == "general") { vm.settingsSection = "general" }
                 TvButton("Sports tab", selected = vm.settingsSection == "sports") { vm.settingsSection = "sports" }
+                TvButton("Manage channels", selected = vm.settingsSection == "manage") { vm.settingsSection = "manage" }
             }
         }
         if (vm.settingsSection == "sports") {
@@ -498,5 +509,14 @@ private fun androidx.compose.foundation.lazy.LazyListScope.sportsSettings(vm: Ap
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun SettingsTabs(vm: AppViewModel) {
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        TvButton("General", selected = vm.settingsSection == "general") { vm.settingsSection = "general" }
+        TvButton("Sports tab", selected = vm.settingsSection == "sports") { vm.settingsSection = "sports" }
+        TvButton("Manage channels", selected = vm.settingsSection == "manage") { vm.settingsSection = "manage" }
     }
 }

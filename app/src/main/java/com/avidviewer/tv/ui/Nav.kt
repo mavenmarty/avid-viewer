@@ -72,7 +72,6 @@ private val MENU = listOf(
     Triple(Screen.SPORTS, "Sports", NavIcons.Sports),
     Triple(Screen.MOVIES, "Movies", NavIcons.Movies),
     Triple(Screen.SERIES, "Series", NavIcons.Series),
-    Triple(Screen.MANAGE, "Manage", NavIcons.Manage),
     Triple(Screen.PLAYLISTS, "Playlists", NavIcons.Playlists),
     Triple(Screen.SETTINGS, "Settings", NavIcons.Settings),
 )

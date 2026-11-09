@@ -738,7 +738,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         if (s == Screen.MOVIES || s == Screen.SERIES) closeVodDetail()
         if (s == Screen.SPORTS) openSportsScreen() else {
             if (s == Screen.SETTINGS) settingsSection = "general"
-            screen = s
+            if (s == Screen.MANAGE) { settingsSection = "manage"; screen = Screen.SETTINGS } else screen = s
         }
         navMode = NavMode.COLLAPSED
         if (s == Screen.LIVE || s == Screen.GUIDE) {
