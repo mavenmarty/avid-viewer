@@ -338,7 +338,7 @@ private val SECTIONS = listOf(
     SettingsSection("location", "Location & weather", NavIcons.Location),
     SettingsSection("display", "Display & time", NavIcons.Guide),
     SettingsSection("sports", "Sports tab", NavIcons.Sports),
-    SettingsSection("discover", "New & Recommended", NavIcons.Discover),
+    SettingsSection("discover", "Discover", NavIcons.Discover),
     SettingsSection("playback", "Playback", NavIcons.Live),
     SettingsSection("privacy", "Privacy & analytics", NavIcons.Privacy),
     SettingsSection("storage", "Storage", NavIcons.Storage),
@@ -608,7 +608,7 @@ private fun androidx.compose.foundation.lazy.LazyListScope.discoverSettings(vm: 
     if (p.tmdbKeyEnc.isNotBlank()) {
         item {
             LaunchedEffect(Unit) { if (vm.availableServices.isEmpty()) vm.loadServices() }
-            SettingBlock("My streaming services", "Pick the services you subscribe to. New & Recommended can then show only titles you can watch now. Region: ${vm.region()}") {
+            SettingBlock("My streaming services", "Pick the services you subscribe to. Discover can then show only titles you can watch now. Region: ${vm.region()}") {
                 if (vm.availableServices.isEmpty()) Label("Loading services…", size = 12.sp)
                 vm.availableServices.chunked(5).forEach { row ->
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {

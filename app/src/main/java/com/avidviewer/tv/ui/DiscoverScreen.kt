@@ -38,7 +38,7 @@ import kotlinx.coroutines.delay
 
 private val TABS = listOf("new" to "New", "trending" to "Trending", "foryou" to "For you", "theaters" to "In theaters")
 
-/** New & Recommended: new releases, trending and personal picks, with where to watch. Data: TMDB and JustWatch. */
+/** Discover: new releases, trending and personal picks, with where to watch. Data: TMDB and JustWatch. */
 @Composable
 fun DiscoverScreen(vm: AppViewModel) {
     val detail = vm.discoverDetail
@@ -46,7 +46,7 @@ fun DiscoverScreen(vm: AppViewModel) {
 
     Column(Modifier.fillMaxSize().padding(start = 16.dp, end = 16.dp, top = 16.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("New & Recommended", color = C.Text, fontSize = 22.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(end = 10.dp))
+            Text("Discover", color = C.Text, fontSize = 22.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(end = 10.dp))
             TABS.forEach { (id, label) -> TvButton(label, selected = vm.discoverTab == id) { vm.chooseDiscoverTab(id) } }
             Spacer(Modifier.weight(1f))
             if (vm.prefs.myServices.isNotEmpty()) {
@@ -56,8 +56,8 @@ fun DiscoverScreen(vm: AppViewModel) {
         Spacer(Modifier.padding(top = 10.dp))
         if (vm.tmdbKey().isBlank()) {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Label("New & Recommended needs your free TMDB API key.", size = 16.sp, color = C.Text, weight = FontWeight.Bold)
-                Label("Enter it in Settings › New & Recommended. It's stored encrypted on this device only.", size = 14.sp, color = C.Soft, lines = 2)
+                Label("Discover needs your free TMDB API key.", size = 16.sp, color = C.Text, weight = FontWeight.Bold)
+                Label("Enter it in Settings › Discover. It's stored encrypted on this device only.", size = 14.sp, color = C.Soft, lines = 2)
                 TvButton("Open Settings", primary = true) { vm.settingsSection = "discover"; vm.navSelect(Screen.SETTINGS); vm.settingsSection = "discover" }
             }
             return@Column

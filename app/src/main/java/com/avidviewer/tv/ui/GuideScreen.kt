@@ -55,6 +55,7 @@ fun GuideScreen(vm: AppViewModel) {
         EmptyState(vm, "No channels yet", "Add your provider on the Playlists screen.")
         return
     }
+    @Suppress("UNUSED_VARIABLE") val favTick = vm.favDataTick // redraw when other playlists' favorites load
     val list = vm.channelsIn(vm.selectedGroup)
     val numbers = vm.numbers()
     val half = 30 * 60 * 1000L
@@ -116,7 +117,7 @@ fun GuideScreen(vm: AppViewModel) {
             val fc = vm.channel(focusProg?.first ?: vm.currentKey)
             val fp = focusProg?.second ?: vm.nowNext(fc).first
             Column(Modifier.weight(1f).fillMaxHeight().clip(RoundedCornerShape(10.dp)).background(C.Surface).padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Label((fc?.let { vm.channelName(it) } ?: "") + (fp?.let { " · ${vm.fmtTime(it.start)} – ${vm.fmtTime(it.end)}" } ?: ""), size = 12.sp)
+                Label(listOfNotNull(fc?.let { vm.channelName(it) }, fc?.let { vm.playlistName(it) }?.ifBlank { null }, fp?.let { "${vm.fmtTime(it.start)} – ${vm.fmtTime(it.end)}" }).joinToString(" · "), size = 12.sp)
                 Label(fp?.title ?: "No guide information", size = 18.sp, color = C.Text, weight = FontWeight.Bold)
                 Label(listOfNotNull(fp?.subtitle?.let { "“$it”" }, if (fp?.isNew == true) "New" else null).joinToString(" · "), size = 13.sp, color = C.Soft)
                 Label("OK: preview · OK again: full screen · CH+/CH−: page · Menu: favorite", size = 12.sp)
@@ -124,6 +125,9 @@ fun GuideScreen(vm: AppViewModel) {
         }
         // Groups
         Label(vm.groupName(vm.selectedGroup ?: "") + "  ·  ${list.size} channels", size = 13.sp, color = C.Soft, weight = FontWeight.Bold)
+        if (list.isEmpty() && vm.selectedGroup == FAV_GROUP) {
+            Label("No favorites yet. Press Menu (or hold OK) on any channel to add it — favorites from every playlist appear here.", size = 13.sp, color = C.Soft, lines = 2)
+        }
         // Timeline header
         Row(Modifier.fillMaxWidth().height(18.dp)) {
             Label("Today · ${vm.zoneLabel()}", size = 12.sp, modifier = Modifier.width((CH_COL + 3).dp))

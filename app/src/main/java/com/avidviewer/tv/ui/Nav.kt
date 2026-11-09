@@ -70,8 +70,7 @@ object NavIcons {
 
 private val MENU = listOf(
     Triple(Screen.SEARCH, "Search", NavIcons.Search),
-    Triple(Screen.DISCOVER, "New & Recommended", NavIcons.Discover),
-    Triple(Screen.FAVORITES, "Favorites", NavIcons.Favorites),
+    Triple(Screen.DISCOVER, "Discover", NavIcons.Discover),
     Triple(Screen.GUIDE, "TV Guide", NavIcons.Guide),
     Triple(Screen.SPORTS, "Sports", NavIcons.Sports),
     Triple(Screen.MOVIES, "Movies", NavIcons.Movies),
@@ -123,7 +122,7 @@ fun NavRail(vm: AppViewModel) {
                     )
                 }
             }
-            if (s == Screen.FAVORITES || s == Screen.SERIES) Spacer(Modifier.height(4.dp))
+            if (s == Screen.DISCOVER || s == Screen.SERIES) Spacer(Modifier.height(4.dp))
         }
         Spacer(Modifier.weight(1f))
         if (vm.prefs.showClock) {
@@ -157,7 +156,20 @@ fun PlaylistTree(vm: AppViewModel) {
         contentPadding = PaddingValues(10.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        item { SectionTitle("Playlists", Modifier.padding(start = 6.dp, top = 6.dp, bottom = 6.dp)) }
+        item {
+            Focusable(
+                modifier = Modifier.fillMaxWidth().height(44.dp),
+                color = C.Surface,
+                onClick = { vm.ensureFavoriteData(); vm.chooseGroup(active ?: "", FAV_GROUP) },
+            ) {
+                Text("★", color = C.Accent, fontSize = 14.sp, modifier = Modifier.padding(start = 10.dp, end = 8.dp))
+                Column(Modifier.weight(1f)) {
+                    Label("Favorites", size = 14.sp, color = C.Text, weight = FontWeight.SemiBold)
+                    Label("${vm.prefs.favorites.size} channels · all playlists", size = 12.sp)
+                }
+            }
+        }
+        item { SectionTitle("Playlists", Modifier.padding(start = 6.dp, top = 10.dp, bottom = 6.dp)) }
         if (vm.playlists.isEmpty()) item { Label("No playlists yet. Add one on the Playlists screen.", size = 13.sp, lines = 3) }
         vm.playlists.forEach { p ->
             val open = vm.expandedPlaylist == p.id
@@ -207,6 +219,17 @@ fun GroupNav(vm: AppViewModel) {
             }
         }
         item { SectionTitle(vm.activePlaylist()?.name ?: "Categories", Modifier.padding(start = 6.dp, top = 8.dp, bottom = 6.dp)) }
+        item(key = "fav") {
+            val on = vm.selectedGroup == FAV_GROUP
+            Focusable(
+                modifier = Modifier.fillMaxWidth().height(38.dp),
+                color = if (on) C.Surface2 else Color.Transparent,
+                onClick = { vm.ensureFavoriteData(); vm.chooseGroup(vm.activePlaylist()?.id ?: "", FAV_GROUP) },
+            ) {
+                Label((if (on) "▶ " else "") + "★ Favorites", size = 14.sp, color = if (on) C.Text else C.Accent, weight = FontWeight.Bold, modifier = Modifier.padding(start = 10.dp).weight(1f))
+                Label("${vm.prefs.favorites.size}", size = 12.sp, modifier = Modifier.padding(end = 10.dp))
+            }
+        }
         items(groups, key = { it.raw }) { g ->
             val on = g.raw == vm.selectedGroup
             Focusable(

@@ -148,7 +148,7 @@ private fun InfoBar(vm: AppViewModel, modifier: Modifier) {
         ChannelBadge(vm.channelName(c), c.logo, 52.dp)
         Column(Modifier.weight(1f)) {
             Row {
-                Label("${vm.numbers()[c.key] ?: ""} · ${vm.channelName(c)}" + if (vm.isFavorite(c.key)) "  ★" else "", size = 13.sp)
+                Label(listOf("${vm.numbers()[c.key] ?: ""}", vm.channelName(c) + if (vm.isFavorite(c.key)) "  ★" else "", vm.playlistName(c)).filter { it.isNotBlank() }.joinToString(" · "), size = 13.sp)
                 Label("  ·  ${vm.contextLabel()}", size = 13.sp, color = C.Accent)
             }
             Label(now?.title ?: "No guide information", size = 20.sp, color = C.Text, weight = FontWeight.Bold)

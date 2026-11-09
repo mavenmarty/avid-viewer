@@ -64,6 +64,9 @@ enum class PlayContext { GROUP, FAVORITES, SPORTS }
  */
 enum class NavMode { FULL, COLLAPSED, GROUPS }
 
+/** The combined Favorites category shown first in the TV Guide. */
+const val FAV_GROUP = "\u2605favorites"
+
 data class GroupInfo(val raw: String, val name: String, val count: Int, val hidden: Boolean)
 
 /** One search result. Channel and program hits tune [channelKey]; movie/episode hits play [vod]; series hits open episodes. */
@@ -103,7 +106,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     var vod by mutableStateOf<List<VodItem>>(emptyList()); private set
     var vodPlaying by mutableStateOf<VodItem?>(null); private set
     var vodError by mutableStateOf<String?>(null); private set
-    // New & Recommended (TMDB)
+    // Discover (TMDB)
     var discoverTab by mutableStateOf("new")
     var onlyMyServices by mutableStateOf(false)
     var discoverLists by mutableStateOf<Map<String, List<Title>>>(emptyMap()); private set
@@ -378,6 +381,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             if (savedGuide.isNotEmpty()) guide = savedGuide
             val stale = System.currentTimeMillis() - savedAt > 8 * 3600 * 1000L
             if (refresh || stale || savedGuide.isEmpty()) refreshGuide(p)
+            ensureFavoriteData()
             busy = false
         }
     }
@@ -424,7 +428,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     // ---------------- groups & channels ----------------
-    fun groupName(raw: String) = prefs.groupNames[raw] ?: raw
+    fun groupName(raw: String) = if (raw == FAV_GROUP) "★ Favorites" else prefs.groupNames[raw] ?: raw
     fun channelName(c: Channel) = prefs.channelNames[c.key] ?: c.name
 
     fun groups(includeHidden: Boolean = false): List<GroupInfo> {
@@ -437,13 +441,35 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     fun channelsIn(group: String?): List<Channel> {
         if (group == null) return emptyList()
+        if (group == FAV_GROUP) return prefs.favorites.mapNotNull { channel(it) }
         val list = channels.filter { it.group == group }
         val order = prefs.channelOrder[group] ?: return list
         val byKey = list.associateBy { it.key }
         return order.mapNotNull { byKey[it] } + list.filterNot { it.key in order }
     }
 
-    fun channel(key: String?): Channel? = channels.firstOrNull { it.key == key }
+    /** Looks in the active playlist first, then in other playlists' saved channels (for combined Favorites). */
+    fun channel(key: String?): Channel? {
+        if (key == null) return null
+        channels.firstOrNull { it.key == key }?.let { return it }
+        return otherData[key.substringBefore(':')]?.first?.firstOrNull { it.key == key }
+    }
+
+    fun playlistName(c: Channel?): String = c?.let { ch -> playlists.firstOrNull { ch.key.startsWith(it.id + ":") }?.name } ?: ""
+
+    /** Bumped when other playlists' favorites finish loading, so the guide redraws. */
+    var favDataTick by mutableStateOf(0); private set
+
+    /** Loads channels and guides of other playlists that hold favorites. */
+    fun ensureFavoriteData() {
+        val active = activePlaylist()?.id
+        val pids = prefs.favorites.map { it.substringBefore(':') }.distinct().filter { it != active && !otherData.containsKey(it) }
+        if (pids.isEmpty()) return
+        viewModelScope.launch {
+            pids.forEach { pid -> playlists.firstOrNull { it.id == pid }?.let { dataFor(it) } }
+            favDataTick++
+        }
+    }
 
     /** Channel numbers follow the user's group and channel order, skipping hidden groups. */
     fun numbers(): Map<String, Int> {
@@ -487,6 +513,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     fun toggleFavorite(key: String?) {
         key ?: return
+        viewModelScope.launch { ensureFavoriteData() }
         updatePrefs { it.copy(favorites = if (key in it.favorites) it.favorites - key else it.favorites + key) }
     }
 
@@ -523,7 +550,11 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     // ---------------- guide ----------------
-    fun programs(c: Channel?): List<Program> = c?.epgId?.let { guide[it] } ?: emptyList()
+    fun programs(c: Channel?): List<Program> {
+        val id = c?.epgId ?: return emptyList()
+        val pid = c.key.substringBefore(':')
+        return if (pid == activePlaylist()?.id) guide[id] ?: emptyList() else otherData[pid]?.second?.get(id) ?: emptyList()
+    }
 
     fun nowNext(c: Channel?): Pair<Program?, Program?> {
         val list = programs(c)
@@ -551,7 +582,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         val c = channel(key) ?: return
         playContext = ctx
         if (ctx == PlayContext.SPORTS) sportsPlayCat = sportCat
-        if (ctx == PlayContext.GROUP) selectedGroup = c.group
+        if (ctx == PlayContext.GROUP && selectedGroup != FAV_GROUP) selectedGroup = c.group
         if (screen != Screen.PLAYER) lastScreen = screen
         if (currentKey != key || player.mediaItemCount == 0 || playerError != null) start(c)
         screen = Screen.PLAYER
@@ -570,7 +601,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
         if (playContext == PlayContext.GROUP) {
             // Back from live TV: the guide, on this channel's category, with the channel focused.
-            channel(currentKey)?.let { selectedGroup = it.group }
+            if (selectedGroup != FAV_GROUP) channel(currentKey)?.let { selectedGroup = it.group }
             screen = Screen.GUIDE
             navMode = NavMode.GROUPS
             guideFocusTick++
@@ -579,7 +610,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    // ---------------- New & Recommended (TMDB) ----------------
+    // ---------------- Discover (TMDB) ----------------
     fun tmdbKey(): String = if (prefs.tmdbKeyEnc.isBlank()) "" else Crypto.decrypt(prefs.tmdbKeyEnc)
 
     /** Country for release dates and streaming services, from the postal code (US by default). */
@@ -593,7 +624,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             val ok = runCatching { withContext(Dispatchers.IO) { Tmdb.trending(k) } }
             ok.onSuccess {
                 updatePrefs { p -> p.copy(tmdbKeyEnc = Crypto.encrypt(k)) }
-                tmdbStatus = "Key saved. New & Recommended is ready."
+                tmdbStatus = "Key saved. Discover is ready."
                 discoverLists = emptyMap(); discoverLoadedAt.clear()
                 loadServices()
             }.onFailure { tmdbStatus = "That key didn't work: ${it.message}" }
@@ -882,6 +913,11 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     // ---------------- left navigation ----------------
     fun navSelect(target: Screen) {
         val s = if (target == Screen.LIVE) Screen.GUIDE else target
+        if (s == Screen.FAVORITES) {
+            ensureFavoriteData()
+            screen = Screen.GUIDE; selectedGroup = FAV_GROUP; navMode = NavMode.GROUPS; guideFocusTick++
+            return
+        }
         if (s == Screen.DISCOVER) { openDiscover(); navMode = NavMode.COLLAPSED; return }
         if (s == Screen.MOVIES || s == Screen.SERIES) closeVodDetail()
         if (s == Screen.SPORTS) openSportsScreen() else {
