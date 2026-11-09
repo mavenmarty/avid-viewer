@@ -44,6 +44,17 @@ import coil.compose.AsyncImage
 import com.avidviewer.tv.data.VodItem
 import kotlinx.coroutines.delay
 
+/** With more than one playlist offering movies & series, choose which one these screens show. */
+@Composable
+private fun VodSourcePicker(vm: AppViewModel) {
+    val pls = vm.vodPlaylists
+    if (pls.size < 2) return
+    val cur = vm.vodPlaylist()?.id
+    androidx.compose.foundation.layout.Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        pls.forEach { p -> TvButton(p.name, selected = p.id == cur) { vm.chooseVodPlaylist(p.id) } }
+    }
+}
+
 /** Movies or Series: categories on the left, posters on the right, details page on OK. */
 @Composable
 fun VodScreen(vm: AppViewModel, kind: String) {
@@ -53,13 +64,20 @@ fun VodScreen(vm: AppViewModel, kind: String) {
         return
     }
     val title = if (kind == "series") "Series" else "Movies"
+    LaunchedEffect(Unit) { vm.ensureVod() }
+    val src = vm.vodPlaylist()
     val all = vm.vodOf(kind)
     if (all.isEmpty()) {
         Column(Modifier.fillMaxSize().padding(30.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text(title, color = C.Text, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+            VodSourcePicker(vm)
             Label(
-                vm.vodError ?: if (vm.busy) (vm.status ?: "Loading…") else
-                    "No ${title.lowercase()} from ${vm.activePlaylist()?.name ?: "your playlist"} yet. If your provider offers them, choose Refresh on the Playlists screen.",
+                when {
+                    src == null -> "Movies & series are switched off for every playlist. Turn them on for a playlist in Settings › Playlists."
+                    vm.vodLoading -> vm.status ?: "Loading ${title.lowercase()} from ${src.name}…"
+                    vm.vodError != null -> vm.vodError!!
+                    else -> "No ${title.lowercase()} from ${src.name} yet. If your provider offers them, choose Refresh in Settings › Playlists."
+                },
                 size = 15.sp, color = C.Soft, lines = 4,
             )
             TvButton("Playlists", primary = true) { vm.navSelect(Screen.PLAYLISTS) }
@@ -92,6 +110,10 @@ fun VodScreen(vm: AppViewModel, kind: String) {
             }
         }
         Column(Modifier.weight(1f).fillMaxHeight().padding(start = 12.dp, end = 16.dp, top = 14.dp)) {
+            if (vm.vodPlaylists.size > 1) Row(Modifier.padding(bottom = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Label("From", size = 12.sp)
+                VodSourcePicker(vm)
+            }
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(bottom = 10.dp)) {
                 Label(if (vq.isNotBlank()) "Results for “$vq”  ·  ${items.size} titles" else "$current  ·  ${items.size} titles", size = 14.sp, color = C.Soft, weight = FontWeight.Bold, modifier = Modifier.weight(1f))
                 var text by remember(kind) { mutableStateOf(vq) }

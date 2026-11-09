@@ -167,7 +167,13 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     var selectedEvent by mutableStateOf<String?>(null)
     private var sportsPlayCat: String? = null
     private var scoreCache: Map<String, List<Scores.Game>> = emptyMap()
-    private val otherData = HashMap<String, Triple<List<Channel>, Map<String, List<Program>>, List<VodItem>>>()
+    /** Live channels + guide of playlists other than the active one, loaded only when needed. */
+    private val otherLive = HashMap<String, Pair<List<Channel>, Map<String, List<Program>>>>()
+    /** Movies & series of playlists other than the VOD source, loaded only for search. */
+    private val otherVod = HashMap<String, List<VodItem>>()
+    /** Which playlist [vod] currently holds (null = not loaded yet; VOD loads only when a VOD screen needs it). */
+    private var vodLoadedFor: String? = null
+    var vodLoading by mutableStateOf(false); private set
     var weatherError by mutableStateOf<String?>(null); private set
     var postalStatus by mutableStateOf<String?>(null); private set
 
@@ -310,7 +316,80 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** Playlists that are switched on; disabled ones are kept but hidden everywhere. */
     val shownPlaylists: List<Playlist> get() = playlists.filter { it.enabled }
 
-    fun activePlaylist(): Playlist? = shownPlaylists.firstOrNull { it.id == prefs.activePlaylist } ?: shownPlaylists.firstOrNull()
+    /** Playlist that feeds the TV Guide and Sports: switched on, with live TV on (any switched-on one as a last resort). */
+    fun activePlaylist(): Playlist? =
+        shownPlaylists.firstOrNull { it.id == prefs.activePlaylist && it.liveOn } ?: shownPlaylists.firstOrNull { it.liveOn }
+            ?: shownPlaylists.firstOrNull { it.id == prefs.activePlaylist } ?: shownPlaylists.firstOrNull()
+
+    /** Playlists the TV Guide lists: switched on with live TV on. */
+    val livePlaylists: List<Playlist> get() = shownPlaylists.filter { it.liveOn }
+
+    /** Playlists Movies, Series, Discover and search can use: switched on with movies & series on. */
+    val vodPlaylists: List<Playlist> get() = shownPlaylists.filter { it.vodOn }
+
+    /** Playlist that feeds Movies, Series and Discover. */
+    fun vodPlaylist(): Playlist? = vodPlaylists.firstOrNull { it.id == prefs.vodPlaylist }
+        ?: vodPlaylists.firstOrNull { it.id == activePlaylist()?.id } ?: vodPlaylists.firstOrNull()
+
+    /** Loads movies & series for the VOD source if they aren't loaded yet (or [refresh] to download again). */
+    fun ensureVod(refresh: Boolean = false) {
+        val p = vodPlaylist()
+        if (p == null) { vod = emptyList(); vodLoadedFor = null; return }
+        if (!refresh && vodLoadedFor == p.id) return
+        vodLoadedFor = p.id
+        viewModelScope.launch { loadVodSource(p, refresh) }
+    }
+
+    fun chooseVodPlaylist(id: String) {
+        if (id == vodPlaylist()?.id) return
+        updatePrefs { it.copy(vodPlaylist = id) }
+        vod = emptyList(); vodLoadedFor = null
+        vodCategory = emptyMap(); vodScroll.clear()
+        ensureVod()
+    }
+
+    private suspend fun loadVodSource(p: Playlist, refresh: Boolean) {
+        vodLoading = true
+        val savedVod = withContext(Dispatchers.IO) { store.loadVod(p.id).distinctBy { it.key } }
+        if (vodLoadedFor != p.id) { vodLoading = false; return }
+        vod = savedVod
+        // An M3U playlist with live TV off: its movies come from the same file, so read it just for them.
+        if (!p.isXtream && (refresh || savedVod.isEmpty()) && !p.liveOn) {
+            status = "Loading movies from ${p.name}…"
+            runCatching {
+                val m3uVod = ArrayList<VodItem>()
+                withContext(Dispatchers.IO) { M3u.channels(p, m3uVod); store.saveVod(p.id, m3uVod) }
+                if (vodLoadedFor == p.id) vod = m3uVod.distinctBy { it.key }
+                status = "Loaded ${m3uVod.size} movies and series."
+            }.onFailure { vodError = "Movies couldn't load: ${it.message}" }
+        }
+        // Re-download when asked, when nothing is saved, or when the saved list predates categories.
+        val oldFormat = savedVod.isNotEmpty() && savedVod.all { it.category.isBlank() }
+        if (p.isXtream && (refresh || savedVod.isEmpty() || oldFormat)) {
+            status = "Loading movies from ${p.name}…"
+            val movies = withContext(Dispatchers.IO) { runCatching { XtreamVod.movies(p) } }
+            status = "Loading series…"
+            val series = withContext(Dispatchers.IO) { runCatching { XtreamVod.series(p) } }
+            val list = (movies.getOrDefault(emptyList()) + series.getOrDefault(emptyList())).distinctBy { it.key }
+            if (list.isNotEmpty()) {
+                withContext(Dispatchers.IO) { store.saveVod(p.id, list) }
+                if (vodLoadedFor == p.id) vod = list
+                otherVod.remove(p.id)
+            }
+            vodError = listOfNotNull(
+                movies.exceptionOrNull()?.let { "Movies couldn't load: ${it.message}" },
+                series.exceptionOrNull()?.let { "Series couldn't load: ${it.message}" },
+            ).joinToString("\n").ifBlank { null }
+            status = vodError ?: "Loaded ${movies.getOrDefault(emptyList()).size} movies and ${series.getOrDefault(emptyList()).size} series."
+        }
+        vodLoading = false
+    }
+
+    /** Forget loaded movies & series (after a playlist change); they load again when a VOD screen opens. */
+    private fun resetVod() {
+        vod = emptyList(); vodLoadedFor = null; otherVod.clear()
+        if (screen == Screen.MOVIES || screen == Screen.SERIES || screen == Screen.DISCOVER) ensureVod()
+    }
 
     fun addPlaylist(name: String, type: String, server: String, user: String, pass: String, m3u: String, epg: String, liveOn: Boolean = true, vodOn: Boolean = true) {
         val p = Playlist(
@@ -373,7 +452,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     private fun replacePlaylist(p: Playlist) {
         playlists = playlists.map { if (it.id == p.id) p else it }
         store.savePlaylists(playlists)
-        otherData.remove(p.id)
+        otherLive.remove(p.id); otherVod.remove(p.id)
         playlistGroups = playlistGroups - p.id
     }
 
@@ -387,13 +466,15 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             updatePrefs { it.copy(activePlaylist = id) }
             loadActive(refresh = false)
         } else if (!on && wasActive) reloadAfterActiveChange()
+        resetVod()
         rebuildSportEventsLater()
     }
 
     /** Chooses whether a playlist supplies live TV (with its guide) and movies & series. */
     fun setPlaylistContent(id: String, liveOn: Boolean, vodOn: Boolean) {
         val p = playlists.firstOrNull { it.id == id } ?: return
-        val turnedOn = (liveOn && !p.liveOn) || (vodOn && !p.vodOn)
+        val liveTurnedOn = liveOn && !p.liveOn
+        val wasActive = activePlaylist()?.id == id
         replacePlaylist(p.copy(liveOn = liveOn, vodOn = vodOn))
         status = "${p.name}: " + when {
             liveOn && vodOn -> "live TV and movies & series"
@@ -401,13 +482,19 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             vodOn -> "movies & series only"
             else -> "nothing is loaded until you turn live TV or movies & series back on"
         } + "."
-        if (activePlaylist()?.id == id) loadActive(refresh = false, download = turnedOn)
+        when {
+            // Live TV switched off on the guide's playlist: move the guide to another playlist with live TV.
+            wasActive && !liveOn -> reloadAfterActiveChange()
+            wasActive -> loadActive(refresh = false, download = liveTurnedOn)
+            activePlaylist()?.id == id -> reloadAfterActiveChange()
+        }
+        if (vodOn != p.vodOn) resetVod()
         rebuildSportEventsLater()
     }
 
     private fun reloadAfterActiveChange() {
         updatePrefs { it.copy(activePlaylist = activePlaylist()?.id) }
-        channels = emptyList(); guide = emptyMap(); vod = emptyList()
+        applyChannels(emptyList()); guide = emptyMap()
         selectedGroup = null; currentKey = null
         if (activePlaylist() != null) loadActive(refresh = false)
     }
@@ -420,9 +507,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         playlists = playlists.filterNot { it.id == id }
         store.savePlaylists(playlists)
         store.deletePlaylistData(id)
-        otherData.remove(id)
+        otherLive.remove(id); otherVod.remove(id)
         playlistGroups = playlistGroups - id
         if (wasActive || prefs.activePlaylist == id) reloadAfterActiveChange()
+        if (vodLoadedFor == id) resetVod()
         status = "Removed $gone."
         rebuildSportEventsLater()
     }
@@ -430,8 +518,16 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun refreshPlaylist(id: String) {
         val p = playlists.firstOrNull { it.id == id } ?: return
         if (!p.enabled) { status = "Turn ${p.name} on to refresh it."; return }
-        if (prefs.activePlaylist != id) updatePrefs { it.copy(activePlaylist = id) }
-        loadActive(refresh = true)
+        if (!p.liveOn && !p.vodOn) { status = "Turn on live TV or movies & series for ${p.name} first."; return }
+        if (p.liveOn) {
+            if (prefs.activePlaylist != id) updatePrefs { it.copy(activePlaylist = id) }
+            loadActive(refresh = true)
+        }
+        if (p.vodOn && p.isXtream) {
+            // Movies & series download again now only if they're in use; otherwise next time a VOD screen opens.
+            if (vodPlaylist()?.id == id) { vodLoadedFor = id; viewModelScope.launch { loadVodSource(p, refresh = true) } }
+            else viewModelScope.launch { withContext(Dispatchers.IO) { store.saveVod(id, emptyList()) }; otherVod.remove(id) }
+        }
     }
 
     fun setActive(id: String) {
@@ -445,7 +541,6 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             busy = true
             if (!p.liveOn) { applyChannels(emptyList()); guide = emptyMap() }
-            if (!p.vodOn) vod = emptyList()
             val cached = if (p.liveOn) withContext(Dispatchers.IO) { store.loadChannels(p.id) } else emptyList()
             if (cached.isNotEmpty()) applyChannels(cached)
             if (p.liveOn && (refresh || download || cached.isEmpty())) {
@@ -458,35 +553,16 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                     withContext(Dispatchers.IO) { store.saveChannels(p.id, list) }
                     applyChannels(list)
                     status = "Loaded ${list.size} channels."
-                    otherData.remove(p.id)
+                    otherLive.remove(p.id)
+                    // An M3U playlist lists its movies alongside its channels: save them for when VOD is used.
                     if (!p.isXtream && p.vodOn) {
                         withContext(Dispatchers.IO) { store.saveVod(p.id, m3uVod) }
-                        vod = m3uVod
+                        otherVod.remove(p.id)
+                        if (vodLoadedFor == p.id) vod = m3uVod
                     }
                 } catch (e: Exception) {
                     status = if (cached.isEmpty()) "Couldn't load channels: ${e.message}" else "Couldn't refresh, showing saved channels."
                 }
-            }
-            val savedVod = if (p.vodOn) withContext(Dispatchers.IO) { store.loadVod(p.id).distinctBy { it.key } } else emptyList()
-            if (savedVod.isNotEmpty()) vod = savedVod
-            // Re-download when asked, when nothing is saved, or when the saved list predates categories.
-            val oldFormat = savedVod.isNotEmpty() && savedVod.all { it.category.isBlank() }
-            if (p.vodOn && p.isXtream && (refresh || download || savedVod.isEmpty() || oldFormat)) {
-                status = "Loading movies…"
-                val movies = withContext(Dispatchers.IO) { runCatching { XtreamVod.movies(p) } }
-                status = "Loading series…"
-                val series = withContext(Dispatchers.IO) { runCatching { XtreamVod.series(p) } }
-                val list = (movies.getOrDefault(emptyList()) + series.getOrDefault(emptyList())).distinctBy { it.key }
-                if (list.isNotEmpty()) {
-                    withContext(Dispatchers.IO) { store.saveVod(p.id, list) }
-                    vod = list
-                    otherData.remove(p.id)
-                }
-                vodError = listOfNotNull(
-                    movies.exceptionOrNull()?.let { "Movies couldn't load: ${it.message}" },
-                    series.exceptionOrNull()?.let { "Series couldn't load: ${it.message}" },
-                ).joinToString("\n").ifBlank { null }
-                status = vodError ?: "Loaded ${movies.getOrDefault(emptyList()).size} movies and ${series.getOrDefault(emptyList()).size} series."
             }
             if (p.liveOn) {
                 val (savedGuide, savedAt) = withContext(Dispatchers.IO) { store.loadGuide(p.id) }
@@ -515,7 +591,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         val place = prefs.placeName
         if (place.isBlank()) { allSuggestions = emptyList(); return }
         viewModelScope.launch {
-            val data = shownPlaylists.filter { it.liveOn }.map { p -> p to dataFor(p).first }
+            val data = livePlaylists.map { p -> p to liveFor(p).first }
             allSuggestions = withContext(Dispatchers.Default) {
                 LocalSuggest.find(data, place, { raw -> groupName(raw) })
             }
@@ -628,7 +704,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         val p = playlists.firstOrNull { it.id == pid } ?: return emptyList()
         if (!p.liveOn) return emptyList()
         if (p.id == activePlaylist()?.id) return channels
-        return otherData[p.id]?.first ?: withContext(Dispatchers.IO) { store.loadChannels(p.id) }.distinctBy { it.key }
+        return otherLive[p.id]?.first ?: withContext(Dispatchers.IO) { store.loadChannels(p.id) }.distinctBy { it.key }
     }
 
     /** Categories of [chs] in the user's order: (name, channel count). */
@@ -661,8 +737,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         if (key == null) return null
         channels.firstOrNull { it.key == key }?.let { return it }
         val pid = key.substringBefore(':')
-        if (shownPlaylists.none { it.id == pid }) return null
-        return otherData[pid]?.first?.firstOrNull { it.key == key }
+        if (livePlaylists.none { it.id == pid }) return null
+        return otherLive[pid]?.first?.firstOrNull { it.key == key }
     }
 
     fun playlistName(c: Channel?): String = c?.let { ch -> playlists.firstOrNull { ch.key.startsWith(it.id + ":") }?.name } ?: ""
@@ -673,10 +749,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** Loads channels and guides of other playlists that hold favorites. */
     fun ensureFavoriteData() {
         val active = activePlaylist()?.id
-        val pids = (prefs.favorites + prefs.lists.flatMap { it.keys }).map { it.substringBefore(':') }.distinct().filter { it != active && !otherData.containsKey(it) }
+        val pids = (prefs.favorites + prefs.lists.flatMap { it.keys }).map { it.substringBefore(':') }.distinct().filter { it != active && !otherLive.containsKey(it) }
         if (pids.isEmpty()) return
         viewModelScope.launch {
-            pids.forEach { pid -> shownPlaylists.firstOrNull { it.id == pid }?.let { dataFor(it) } }
+            pids.forEach { pid -> livePlaylists.firstOrNull { it.id == pid }?.let { liveFor(it) } }
             favDataTick++
         }
     }
@@ -820,7 +896,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             val out = ArrayList<Pair<Playlist, Channel>>()
             for (p in shownPlaylists) {
                 if (p.id == active || prefs.favorites.none { it.startsWith(p.id + ":") }) continue
-                val chs = dataFor(p).first.associateBy { it.key }
+                val chs = liveFor(p).first.associateBy { it.key }
                 prefs.favorites.filter { it.startsWith(p.id + ":") }.mapNotNull { chs[it] }.forEach { out.add(p to it) }
             }
             otherFavorites = out
@@ -845,7 +921,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun programs(c: Channel?): List<Program> {
         val id = c?.epgId ?: return emptyList()
         val pid = c.key.substringBefore(':')
-        return if (pid == activePlaylist()?.id) guide[id] ?: emptyList() else otherData[pid]?.second?.get(id) ?: emptyList()
+        return if (pid == activePlaylist()?.id) guide[id] ?: emptyList() else otherLive[pid]?.second?.get(id) ?: emptyList()
     }
 
     fun nowNext(c: Channel?): Pair<Program?, Program?> {
@@ -1140,18 +1216,24 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     // ---------------- search (all playlists) ----------------
-    private suspend fun dataFor(p: Playlist): Triple<List<Channel>, Map<String, List<Program>>, List<VodItem>> {
-        if (p.id == activePlaylist()?.id) return Triple(channels, guide, vod)
-        otherData[p.id]?.let { return it }
-        val t = withContext(Dispatchers.IO) {
-            Triple(
-                if (p.liveOn) store.loadChannels(p.id) else emptyList(),
-                if (p.liveOn) store.loadGuide(p.id).first else emptyMap(),
-                if (p.vodOn) store.loadVod(p.id) else emptyList(),
-            )
-        }
-        otherData[p.id] = t
+    /** Live channels + guide of a playlist; nothing at all when its live TV is off. Never touches movies & series. */
+    private suspend fun liveFor(p: Playlist): Pair<List<Channel>, Map<String, List<Program>>> {
+        if (!p.liveOn || !p.enabled) return emptyList<Channel>() to emptyMap()
+        if (p.id == activePlaylist()?.id) return channels to guide
+        otherLive[p.id]?.let { return it }
+        val t = withContext(Dispatchers.IO) { store.loadChannels(p.id).distinctBy { it.key } to store.loadGuide(p.id).first }
+        otherLive[p.id] = t
         return t
+    }
+
+    /** Movies & series of a playlist; nothing when they're off. Only search uses other playlists' catalogs. */
+    private suspend fun vodFor(p: Playlist): List<VodItem> {
+        if (!p.vodOn || !p.enabled) return emptyList()
+        if (p.id == vodLoadedFor) return vod
+        otherVod[p.id]?.let { return it }
+        val v = withContext(Dispatchers.IO) { store.loadVod(p.id).distinctBy { it.key } }
+        otherVod[p.id] = v
+        return v
     }
 
     fun search(query: String) {
@@ -1164,7 +1246,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             val nowMs = System.currentTimeMillis()
             val out = ArrayList<PlaylistHits>()
             for (p in shownPlaylists) {
-                val (chs, g, v) = dataFor(p)
+                if (!p.liveOn && !p.vodOn) continue
+                val (chs, g) = liveFor(p)
+                val v = vodFor(p)
                 val res = withContext(Dispatchers.Default) {
                     val names = if (p.id == activePlaylist()?.id) chs.associate { it.key to channelName(it) } else chs.associate { it.key to it.name }
                     val stations = chs.filter { (names[it.key] ?: it.name).lowercase().contains(needle) }.take(50)
@@ -1210,9 +1294,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     private suspend fun switchPlaylist(pid: String) {
         if (pid == activePlaylist()?.id) return
         val p = shownPlaylists.firstOrNull { it.id == pid } ?: return
-        val (chs, g, v) = dataFor(p)
+        if (!p.liveOn) return
+        val (chs, g) = liveFor(p)
         updatePrefs { it.copy(activePlaylist = p.id) }
-        channels = chs; guide = g; vod = v
+        channels = chs; guide = g
         selectedGroup = null; currentKey = null
         applyChannels(chs)
         rebuildSportEvents()
@@ -1226,8 +1311,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             screen = Screen.GUIDE; selectedGroup = FAV_GROUP; navMode = NavMode.GROUPS; guideFocusTick++
             return
         }
-        if (s == Screen.DISCOVER) { openDiscover(); navMode = NavMode.COLLAPSED; return }
-        if (s == Screen.MOVIES || s == Screen.SERIES) closeVodDetail()
+        if (s == Screen.DISCOVER) { ensureVod(); openDiscover(); navMode = NavMode.COLLAPSED; return }
+        if (s == Screen.MOVIES || s == Screen.SERIES) { closeVodDetail(); ensureVod() }
         if (s == Screen.SPORTS) openSportsScreen() else {
             when (s) {
                 Screen.SETTINGS -> { settingsSection = "playlists"; screen = s }
@@ -1252,7 +1337,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         val p = playlists.firstOrNull { it.id == pid } ?: return
         if (p.id == activePlaylist()?.id) { playlistGroups = playlistGroups + (p.id to groups()); return }
         viewModelScope.launch {
-            val (chs, _, _) = dataFor(p)
+            val (chs, _) = liveFor(p)
             val counts = LinkedHashMap<String, Int>()
             chs.forEach { counts[it.group] = (counts[it.group] ?: 0) + 1 }
             val list = counts.filterKeys { !isGroupHidden(p.id, it) }.map { (raw, n) -> GroupInfo(raw, groupName(raw), n, false) }
