@@ -95,11 +95,11 @@ fun NavRail(vm: AppViewModel) {
     Column(
         Modifier.width(if (expanded) 176.dp else 60.dp).fillMaxHeight().background(C.Rail)
             .onFocusChanged { railFocused = it.hasFocus }
-            .padding(horizontal = 8.dp, vertical = 14.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp),
+            .padding(horizontal = 8.dp, vertical = 10.dp),
+        verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(start = 2.dp, bottom = 12.dp)) {
-            Image(painterResource(R.drawable.logo), contentDescription = "Avid Viewer", modifier = Modifier.size(40.dp).clip(RoundedCornerShape(9.dp)))
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(start = 4.dp, bottom = 8.dp)) {
+            Image(painterResource(R.drawable.logo), contentDescription = "Avid Viewer", modifier = Modifier.size(36.dp).clip(RoundedCornerShape(9.dp)))
             if (expanded) {
                 Spacer(Modifier.width(8.dp))
                 Text("Avid Viewer", color = C.Text, fontSize = 15.sp, fontWeight = FontWeight.Bold, maxLines = 1)
@@ -108,7 +108,7 @@ fun NavRail(vm: AppViewModel) {
         MENU.forEachIndexed { i, (s, label, icon) ->
             val active = vm.screen == s
             Focusable(
-                modifier = Modifier.fillMaxWidth().height(40.dp).focusRequester(requesters[i]),
+                modifier = Modifier.fillMaxWidth().height(36.dp).focusRequester(requesters[i]),
                 color = if (active) C.Accent else Color.Transparent,
                 focusedColor = if (active) C.AccentFocus else C.Surface2,
                 onClick = { vm.navSelect(s) },
@@ -121,7 +121,7 @@ fun NavRail(vm: AppViewModel) {
                     )
                 }
             }
-            if (s == Screen.FAVORITES || s == Screen.SERIES) Spacer(Modifier.height(6.dp))
+            if (s == Screen.FAVORITES || s == Screen.SERIES) Spacer(Modifier.height(4.dp))
         }
         Spacer(Modifier.weight(1f))
         if (vm.prefs.showClock) {
@@ -137,7 +137,6 @@ fun NavRail(vm: AppViewModel) {
                     vm.settingsSection = "general"; vm.screen = Screen.SETTINGS; vm.navMode = NavMode.COLLAPSED
                 }
             }
-            vm.status?.let { Label(it, size = 12.sp, lines = 3, modifier = Modifier.padding(start = 4.dp, top = 8.dp)) }
         }
     }
 }
