@@ -169,7 +169,7 @@ fun PlaylistTree(vm: AppViewModel) {
                 }
             }
         }
-        items(vm.prefs.lists, key = { "tl-" + it.id }) { l ->
+        items(vm.shownLists, key = { "tl-" + it.id }) { l ->
             val g = LIST_PREFIX + l.id
             Focusable(
                 modifier = Modifier.fillMaxWidth().height(44.dp),
@@ -245,7 +245,7 @@ fun GroupNav(vm: AppViewModel) {
                 Label("${vm.prefs.favorites.size}", size = 12.sp, modifier = Modifier.padding(end = 10.dp))
             }
         }
-        items(vm.prefs.lists, key = { "list-" + it.id }) { l ->
+        items(vm.shownLists, key = { "list-" + it.id }) { l ->
             val g = LIST_PREFIX + l.id
             val on = vm.selectedGroup == g
             Focusable(

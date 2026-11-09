@@ -181,13 +181,14 @@ data class Prefs(
 }
 
 /** A channel collection the user made, like Favorites. [keys] can come from any playlist. */
-data class ChannelList(val id: String, val name: String, val keys: List<String> = emptyList()) {
-    fun toJson(): JSONObject = JSONObject().put("id", id).put("name", name).put("keys", JSONArray(keys))
+data class ChannelList(val id: String, val name: String, val keys: List<String> = emptyList(), val hidden: Boolean = false) {
+    fun toJson(): JSONObject = JSONObject().put("id", id).put("name", name).put("keys", JSONArray(keys)).put("hidden", hidden)
 
     companion object {
         fun fromJson(o: JSONObject) = ChannelList(
             o.getString("id"), o.optString("name"),
             o.optJSONArray("keys")?.let { a -> List(a.length()) { a.getString(it) } } ?: emptyList(),
+            o.optBoolean("hidden", false),
         )
     }
 }

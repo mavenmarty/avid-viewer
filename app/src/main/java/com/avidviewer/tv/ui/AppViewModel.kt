@@ -917,7 +917,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun listKeys(group: String): List<String> = if (group == FAV_GROUP) prefs.favorites else userList(group)?.keys ?: emptyList()
 
     /** Every list as (group id, name), Favorites first. */
-    fun allLists(): List<Pair<String, String>> = listOf(FAV_GROUP to "★ Favorites") + prefs.lists.map { (LIST_PREFIX + it.id) to it.name }
+    fun allLists(): List<Pair<String, String>> = listOf(FAV_GROUP to "★ Favorites") + prefs.lists.map { (LIST_PREFIX + it.id) to (it.name + if (it.hidden) " (hidden)" else "") }
 
     fun inList(group: String, key: String) = key in listKeys(group)
 
@@ -945,6 +945,15 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         if (firstKey != null) viewModelScope.launch { ensureFavoriteData() }
         return LIST_PREFIX + id
     }
+
+    /** Hidden lists keep their channels but don't appear in the TV Guide's menus. */
+    fun setListHidden(group: String, hidden: Boolean) {
+        updatePrefs { p -> p.copy(lists = p.lists.map { if (LIST_PREFIX + it.id == group) it.copy(hidden = hidden) else it }) }
+        if (hidden && selectedGroup == group) { selectedGroup = FAV_GROUP; guideFocusTick++ }
+    }
+
+    /** Lists shown in the TV Guide's menus. */
+    val shownLists get() = prefs.lists.filter { !it.hidden }
 
     fun renameList(group: String, name: String) {
         if (name.isBlank()) return

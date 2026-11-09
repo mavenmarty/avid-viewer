@@ -905,8 +905,10 @@ private fun ListEditor(vm: AppViewModel) {
               val note = if (!pl.enabled) " (off)" else if (!pl.liveOn) " (live TV off)" else ""
               TvButton(pl.name + note, selected = pl.id == pid) { pid = pl.id }
           }
+          TvButton("☰ My lists (${vm.prefs.lists.size})", selected = pid == LISTS_TAB) { pid = LISTS_TAB }
       }
-      Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+      if (pid == LISTS_TAB) MyListsPane(vm, Modifier.weight(1f).fillMaxWidth())
+      else Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         // 2. Categories of the playlist
         Column(Modifier.width(260.dp).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             val hiddenCount = groups.count { vm.isGroupHidden(pid ?: "", it.first) }
@@ -962,6 +964,67 @@ private fun ListEditor(vm: AppViewModel) {
             }
         }
     }
+    }
+}
+
+private const val LISTS_TAB = "__lists__"
+
+/** List Editor › My lists: show, hide, rename, reorder or remove the lists you made. */
+@Composable
+private fun MyListsPane(vm: AppViewModel, modifier: Modifier) {
+    var renaming by remember { mutableStateOf<String?>(null) }
+    var removing by remember { mutableStateOf<String?>(null) }
+    var naming by remember { mutableStateOf(false) }
+    val lists = vm.prefs.lists
+    LazyColumn(modifier, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        item {
+            Label("★ Favorites is always first and can't be removed. Hidden lists keep their channels but don't appear in the TV Guide; show them again any time.", size = 12.sp, lines = Int.MAX_VALUE)
+        }
+        item {
+            Row(Modifier.fillMaxWidth().heightIn(min = 52.dp).clip(RoundedCornerShape(10.dp)).background(C.Surface).padding(horizontal = 12.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Label("★ Favorites", size = 14.sp, color = C.Text, weight = FontWeight.SemiBold)
+                    Label("${vm.prefs.favorites.size} channels", size = 12.sp)
+                }
+                Label("Always shown", size = 12.sp, color = C.Accent, weight = FontWeight.Bold)
+            }
+        }
+        if (lists.isEmpty()) item { Label("You haven't made any lists yet.", size = 13.sp, lines = Int.MAX_VALUE) }
+        itemsIndexed(lists, key = { _, l -> "ml-" + l.id }) { i, l ->
+            val g = LIST_PREFIX + l.id
+            Row(
+                Modifier.fillMaxWidth().heightIn(min = 56.dp).clip(RoundedCornerShape(10.dp)).background(C.Surface).padding(horizontal = 8.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                TvButton(if (l.hidden) "Hidden" else "Shown", selected = !l.hidden) { vm.setListHidden(g, !l.hidden) }
+                Column(Modifier.weight(1f).padding(horizontal = 6.dp)) {
+                    Label(l.name, size = 14.sp, color = if (l.hidden) C.Muted else C.Text, weight = FontWeight.SemiBold, lines = 2)
+                    Label("${l.keys.size} channels" + if (l.hidden) " · not in the TV Guide" else "", size = 12.sp)
+                }
+                TvButton("✎ Rename") { renaming = g }
+                TvButton("▲") { if (i > 0) vm.moveList(g, -1) }
+                TvButton("▼") { if (i < lists.size - 1) vm.moveList(g, 1) }
+                TvButton("Remove") { removing = g }
+            }
+        }
+        item { TvButton("＋ New list", primary = true) { naming = true } }
+    }
+    renaming?.let { g ->
+        RenameDialog("Rename list", vm.userList(g)?.name ?: "", onDismiss = { renaming = null }) { vm.renameList(g, it); renaming = null }
+    }
+    if (naming) RenameDialog("New list", "", onDismiss = { naming = false }) { vm.createList(it); naming = false }
+    removing?.let { g ->
+        val l = vm.userList(g)
+        val cancel = remember { FocusRequester() }
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { removing = null },
+            containerColor = C.Surface,
+            title = { Text("Remove “${l?.name ?: "list"}”?", color = C.Text, fontWeight = FontWeight.Bold) },
+            text = { Label("The list is deleted. Its ${l?.keys?.size ?: 0} channel(s) stay in your playlists. This can't be undone; to keep it for later, hide it instead.", size = 14.sp, color = C.Soft, lines = Int.MAX_VALUE) },
+            confirmButton = { TvButton("Remove", primary = true) { vm.deleteList(g); removing = null } },
+            dismissButton = { TvButton("Cancel", modifier = Modifier.focusRequester(cancel)) { removing = null } },
+        )
+        LaunchedEffect(g) { kotlinx.coroutines.delay(80); runCatching { cancel.requestFocus() } }
     }
 }
 
