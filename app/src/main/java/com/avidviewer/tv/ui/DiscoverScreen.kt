@@ -47,7 +47,7 @@ fun DiscoverScreen(vm: AppViewModel) {
     Column(Modifier.fillMaxSize().padding(start = 16.dp, end = 16.dp, top = 16.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("New & Recommended", color = C.Text, fontSize = 22.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(end = 10.dp))
-            TABS.forEach { (id, label) -> TvButton(label, selected = vm.discoverTab == id) { vm.setDiscoverTab(id) } }
+            TABS.forEach { (id, label) -> TvButton(label, selected = vm.discoverTab == id) { vm.chooseDiscoverTab(id) } }
             Spacer(Modifier.weight(1f))
             if (vm.prefs.myServices.isNotEmpty()) {
                 TvButton(if (vm.onlyMyServices) "✓ My services" else "My services", selected = vm.onlyMyServices) { vm.onlyMyServices = !vm.onlyMyServices }

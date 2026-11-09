@@ -617,7 +617,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         loadDiscover(discoverTab)
     }
 
-    fun setDiscoverTab(t: String) {
+    fun chooseDiscoverTab(t: String) {
         discoverTab = t
         loadDiscover(t)
     }
