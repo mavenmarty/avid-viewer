@@ -122,9 +122,9 @@ fun GuideScreen(vm: AppViewModel) {
     }
 
     /** Up/Down from a program: go to the program airing at [anchor] in the row above or below. */
-    fun moveRow(from: Int, dir: Int): Boolean {
-        val target = from + dir
-        if (target !in list.indices) return false
+    fun moveRow(from: Int, dir: Int, steps: Int = 1): Boolean {
+        if (from + dir !in list.indices) return false
+        val target = (from + dir * steps).coerceIn(0, list.size - 1)
         val visible = listState.layoutInfo.visibleItemsInfo.map { it.index }
         scope.launch {
             if (target !in visible || target == visible.lastOrNull() || target == visible.firstOrNull()) {
@@ -237,8 +237,8 @@ fun GuideScreen(vm: AppViewModel) {
                                     .onPreviewKeyEvent { e ->
                                         if (e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
                                         when (e.key) {
-                                            Key.DirectionUp -> moveRow(idx, -1)
-                                            Key.DirectionDown -> moveRow(idx, 1)
+                                            Key.DirectionUp -> moveRow(idx, -1, holdSteps(e))
+                                            Key.DirectionDown -> moveRow(idx, 1, holdSteps(e))
                                             else -> false
                                         }
                                     },
@@ -262,8 +262,8 @@ fun GuideScreen(vm: AppViewModel) {
                                         .onPreviewKeyEvent { e ->
                                             if (e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
                                             when (e.key) {
-                                                Key.DirectionUp -> moveRow(idx, -1)
-                                                Key.DirectionDown -> moveRow(idx, 1)
+                                                Key.DirectionUp -> moveRow(idx, -1, holdSteps(e))
+                                                Key.DirectionDown -> moveRow(idx, 1, holdSteps(e))
                                                 // Last program in view: scroll the guide forward to the next program.
                                                 Key.DirectionRight -> if (pi == progs.lastIndex && slots < maxSlots) { shiftTo(maxOf(p.end, winEnd - 60_000L), idx, true); true } else false
                                                 // First program in view: scroll back (at the start, Left goes to the channel name).

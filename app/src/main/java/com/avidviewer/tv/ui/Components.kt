@@ -1,5 +1,6 @@
 package com.avidviewer.tv.ui
 
+import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -168,4 +169,40 @@ fun Modifier.entryFocus(vm: AppViewModel, screen: Screen): Modifier {
         }
     }
     return this.then(androidx.compose.ui.Modifier.focusRequester(fr))
+}
+
+/**
+ * Press-and-hold acceleration for the remote's arrow keys. A tap (and the first moments of a hold)
+ * moves one item; holding longer moves 3, then 6, then 12 items per key repeat. Stops the moment
+ * the button is released, because nothing moves without a key event.
+ */
+fun holdSteps(e: androidx.compose.ui.input.key.KeyEvent): Int {
+    val r = e.nativeKeyEvent.repeatCount
+    return when {
+        r < 6 -> 1
+        r < 18 -> 3
+        r < 36 -> 6
+        else -> 12
+    }
+}
+
+/** Root-level handler: when an arrow key is held, move focus several items per repeat. */
+@Composable
+fun Modifier.holdToAccelerate(): Modifier {
+    val fm = androidx.compose.ui.platform.LocalFocusManager.current
+    return this.then(androidx.compose.ui.Modifier.onKeyEvent { e ->
+        if (e.type != KeyEventType.KeyDown) return@onKeyEvent false
+        val dir = when (e.key) {
+            Key.DirectionUp -> androidx.compose.ui.focus.FocusDirection.Up
+            Key.DirectionDown -> androidx.compose.ui.focus.FocusDirection.Down
+            Key.DirectionLeft -> androidx.compose.ui.focus.FocusDirection.Left
+            Key.DirectionRight -> androidx.compose.ui.focus.FocusDirection.Right
+            else -> return@onKeyEvent false
+        }
+        val n = holdSteps(e)
+        if (n <= 1) return@onKeyEvent false // normal one-step move
+        var moved = false
+        repeat(n) { if (fm.moveFocus(dir)) moved = true else return@repeat }
+        moved
+    })
 }

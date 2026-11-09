@@ -36,7 +36,7 @@ import androidx.media3.ui.PlayerView
 
 @Composable
 fun AppRoot(vm: AppViewModel) {
-    Box(Modifier.fillMaxSize().background(C.Bg)) {
+    Box(Modifier.fillMaxSize().background(C.Bg).holdToAccelerate()) {
         if (vm.screen == Screen.PLAYER) {
             PlayerScreen(vm)
         } else {
