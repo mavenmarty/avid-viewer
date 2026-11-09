@@ -13,6 +13,12 @@ data class Playlist(
     val password: String = "", // kept in memory only; stored encrypted
     val m3uUrl: String = "",
     val epgUrl: String = "",
+    /** Off: the playlist is kept but hidden everywhere (guide, search, favorites, sports). */
+    val enabled: Boolean = true,
+    /** Load live channels and the TV guide from this playlist. */
+    val liveOn: Boolean = true,
+    /** Load movies and series from this playlist. */
+    val vodOn: Boolean = true,
 ) {
     val isXtream get() = type == "xtream"
 

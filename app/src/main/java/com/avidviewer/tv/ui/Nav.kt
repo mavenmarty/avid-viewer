@@ -170,8 +170,8 @@ fun PlaylistTree(vm: AppViewModel) {
             }
         }
         item { SectionTitle("Playlists", Modifier.padding(start = 6.dp, top = 10.dp, bottom = 6.dp)) }
-        if (vm.playlists.isEmpty()) item { Label("No playlists yet. Add one on the Playlists screen.", size = 13.sp, lines = 3) }
-        vm.playlists.forEach { p ->
+        if (vm.shownPlaylists.isEmpty()) item { Label(if (vm.playlists.isEmpty()) "No playlists yet. Add one in Settings › Playlists." else "All playlists are turned off. Turn one on in Settings › Playlists.", size = 13.sp, lines = 3) }
+        vm.shownPlaylists.forEach { p ->
             val open = vm.expandedPlaylist == p.id
             item(key = "pl-" + p.id) {
                 Focusable(

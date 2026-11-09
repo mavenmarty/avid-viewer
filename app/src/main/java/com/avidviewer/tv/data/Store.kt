@@ -40,6 +40,9 @@ class Store(private val context: Context) {
                     password = Crypto.decrypt(o.optString("password")),
                     m3uUrl = o.optString("m3uUrl"),
                     epgUrl = o.optString("epgUrl"),
+                    enabled = o.optBoolean("enabled", true),
+                    liveOn = o.optBoolean("liveOn", true),
+                    vodOn = o.optBoolean("vodOn", true),
                 )
             }
         } catch (e: Exception) {
@@ -55,6 +58,7 @@ class Store(private val context: Context) {
                     .put("server", it.server).put("username", it.username)
                     .put("password", Crypto.encrypt(it.password))
                     .put("m3uUrl", it.m3uUrl).put("epgUrl", it.epgUrl)
+                    .put("enabled", it.enabled).put("liveOn", it.liveOn).put("vodOn", it.vodOn)
             )
         }
         writeAtomic(File(dir, "playlists.json"), a.toString())

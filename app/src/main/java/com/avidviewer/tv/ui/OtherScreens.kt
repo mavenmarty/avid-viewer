@@ -258,67 +258,250 @@ fun TvField(
 }
 
 // ---------------------------------------------------------------- Playlists
+private const val ADD_PLAYLIST = "__add__"
+
+/** An action that needs a yes before it runs. */
+private class Confirm(val title: String, val message: String, val yes: String, val run: () -> Unit)
+
+/**
+ * Settings › Playlists, laid out left to right for the remote:
+ * the list (Up/Down picks a playlist or "Add playlist"), then that playlist's actions and switches,
+ * then the add / edit form on the far right.
+ */
 @Composable
 fun PlaylistsScreen(vm: AppViewModel) {
-    var type by remember { mutableStateOf("xtream") }
-    var name by remember { mutableStateOf("") }
-    var server by remember { mutableStateOf("") }
-    var user by remember { mutableStateOf("") }
-    var pass by remember { mutableStateOf("") }
-    var m3u by remember { mutableStateOf("") }
-    var epg by remember { mutableStateOf("") }
-    val active = vm.activePlaylist()
+    var sel by remember { mutableStateOf(vm.activePlaylist()?.id ?: vm.playlists.firstOrNull()?.id ?: ADD_PLAYLIST) }
+    var editing by remember { mutableStateOf(false) }
+    var confirm by remember { mutableStateOf<Confirm?>(null) }
+    val selP = vm.playlists.firstOrNull { it.id == sel }
+    val adding = selP == null
+    val active = vm.activePlaylist()?.id
+    val seenSaves = remember { mutableStateOf(vm.playlistSaved) }
+    LaunchedEffect(vm.playlistSaved) {
+        if (vm.playlistSaved != seenSaves.value) {
+            seenSaves.value = vm.playlistSaved
+            editing = false
+            if (sel == ADD_PLAYLIST) sel = vm.prefs.activePlaylist ?: vm.playlists.lastOrNull()?.id ?: ADD_PLAYLIST
+        }
+    }
 
-    Row(Modifier.fillMaxSize().padding(20.dp), horizontalArrangement = Arrangement.spacedBy(20.dp)) {
-        Column(Modifier.width(280.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("Playlists", color = C.Text, fontSize = 24.sp, fontWeight = FontWeight.Bold)
-            Label("Bring your own provider. Avid Viewer doesn't include any channels.", size = 12.sp, lines = 2)
-            if (vm.playlists.isEmpty()) Label("No playlists yet.", size = 14.sp, color = C.Soft)
-            vm.playlists.forEach { p ->
-                Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(C.Surface).padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Label(p.name + if (p.id == active?.id) "  · active" else "", size = 15.sp, color = C.Text, weight = FontWeight.SemiBold)
-                    Label(if (p.isXtream) "Xtream Codes · ${p.server}" else "M3U · ${p.m3uUrl}", size = 12.sp)
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        if (p.id != active?.id) TvButton("Use") { vm.setActive(p.id) }
-                        TvButton("Refresh") { vm.refreshPlaylist(p.id) }
-                        TvButton("Remove") { vm.removePlaylist(p.id) }
-                    }
+    Row(Modifier.fillMaxSize().padding(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 12.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+        // 1. The list
+        LazyColumn(Modifier.width(220.dp).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            item { Text("Playlists", color = C.Text, fontSize = 22.sp, fontWeight = FontWeight.Bold) }
+            item { Label("Up/Down to choose · Right for options", size = 12.sp, modifier = Modifier.padding(bottom = 4.dp)) }
+            item(key = "add") {
+                Focusable(
+                    modifier = Modifier.fillMaxWidth().height(48.dp),
+                    color = if (adding) C.Surface2 else C.Surface,
+                    onFocus = { if (sel != ADD_PLAYLIST) { sel = ADD_PLAYLIST; editing = false } },
+                    onClick = { sel = ADD_PLAYLIST; editing = false },
+                ) {
+                    Text("＋", color = C.Accent, fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 12.dp, end = 10.dp))
+                    Label("Add playlist", size = 15.sp, color = C.Text, weight = FontWeight.SemiBold)
                 }
             }
-            vm.status?.let { Label(it, size = 12.sp, color = C.Soft, lines = 3) }
+            items(vm.playlists, key = { "pl-" + it.id }) { p ->
+                val on = p.id == sel
+                Focusable(
+                    modifier = Modifier.fillMaxWidth().height(58.dp),
+                    color = if (on) C.Surface2 else C.Surface,
+                    onFocus = { if (sel != p.id) { sel = p.id; editing = false } },
+                    onClick = { sel = p.id },
+                ) {
+                    Column(Modifier.weight(1f).padding(horizontal = 12.dp)) {
+                        Label(p.name, size = 15.sp, color = if (p.enabled) C.Text else C.Muted, weight = FontWeight.SemiBold)
+                        Label(playlistState(p, p.id == active), size = 12.sp, color = if (p.id == active) C.Accent else C.Muted)
+                    }
+                    if (on) Text("›", color = C.Accent, fontSize = 20.sp, modifier = Modifier.padding(end = 10.dp))
+                }
+            }
+            if (vm.playlists.isEmpty()) item { Label("No playlists yet. Avid Viewer doesn't include any channels; add your provider.", size = 12.sp, lines = 3) }
         }
-        LazyColumn(
-            Modifier.weight(1f).fillMaxHeight().clip(RoundedCornerShape(12.dp)).background(C.Surface),
-            contentPadding = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+
+        // 2. Actions and switches for the chosen playlist
+        if (selP != null) {
+            LazyColumn(Modifier.width(250.dp).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                item {
+                    Column(Modifier.padding(bottom = 4.dp)) {
+                        Label(selP.name, size = 17.sp, color = C.Text, weight = FontWeight.Bold, lines = 2)
+                        Label(if (selP.isXtream) "Xtream Codes" else "M3U link", size = 12.sp)
+                    }
+                }
+                item { TvButton("✎  Edit", modifier = Modifier.fillMaxWidth(), selected = editing) { editing = true } }
+                item {
+                    TvButton(if (vm.busy) "Working…" else "↻  Refresh", modifier = Modifier.fillMaxWidth()) {
+                        if (!vm.busy) confirm = Confirm(
+                            "Refresh ${selP.name}?",
+                            "Your saved channels, guide, movies and series for this playlist are replaced with what your provider has now. This can't be undone.",
+                            "Refresh",
+                        ) { vm.refreshPlaylist(selP.id) }
+                    }
+                }
+                item {
+                    TvButton("✕  Remove", modifier = Modifier.fillMaxWidth()) {
+                        confirm = Confirm(
+                            "Remove ${selP.name}?",
+                            "The playlist, its login and everything saved from it are deleted from this device. This can't be undone. To keep it for later, turn it off instead.",
+                            "Remove",
+                        ) {
+                            vm.removePlaylist(selP.id)
+                            sel = vm.playlists.firstOrNull()?.id ?: ADD_PLAYLIST
+                            editing = false
+                        }
+                    }
+                }
+                item { Spacer(Modifier.height(4.dp)) }
+                item { MiniToggle("Playlist on", if (selP.enabled) "Shown in the guide, search and Sports" else "Hidden everywhere; nothing is deleted", selP.enabled) { vm.setPlaylistEnabled(selP.id, !selP.enabled) } }
+                item { MiniToggle("Live TV & guide", if (selP.liveOn) "Channels and TV guide load" else "Live channels aren't loaded", selP.liveOn, enabled = selP.enabled) { vm.setPlaylistContent(selP.id, !selP.liveOn, selP.vodOn) } }
+                item { MiniToggle("Movies & series", if (selP.vodOn) "Movies and series load" else "Movies and series aren't loaded", selP.vodOn, enabled = selP.enabled) { vm.setPlaylistContent(selP.id, selP.liveOn, !selP.vodOn) } }
+                vm.status?.let { st -> item { Label(st, size = 12.sp, color = C.Soft, lines = 4, modifier = Modifier.padding(top = 4.dp)) } }
+            }
+        }
+
+        // 3. Add or edit form (far right)
+        Column(Modifier.weight(1f).fillMaxHeight().clip(RoundedCornerShape(12.dp)).background(C.Surface)) {
+            when {
+                adding -> PlaylistForm(vm, null, onCancel = null) { f ->
+                    vm.addPlaylist(f.name, f.type, f.server, f.user, f.pass, f.m3u, f.epg, f.liveOn, f.vodOn)
+                }
+                editing -> PlaylistForm(vm, selP, onCancel = { editing = false }) { f ->
+                    confirm = Confirm(
+                        "Save changes to ${selP!!.name}?",
+                        "If you changed the server, login or links, the saved channels and guide are cleared and downloaded again. Favorites from the old details may no longer match. This can't be undone.",
+                        "Save",
+                    ) { vm.updatePlaylist(selP.id, f.name, f.type, f.server, f.user, f.pass, f.m3u, f.epg) }
+                }
+                else -> PlaylistDetails(selP!!, selP.id == active)
+            }
+        }
+    }
+
+    confirm?.let { c ->
+        val cancelFocus = remember { FocusRequester() }
+        AlertDialog(
+            onDismissRequest = { confirm = null },
+            containerColor = C.Surface,
+            title = { Text(c.title, color = C.Text, fontWeight = FontWeight.Bold) },
+            text = { Label(c.message, size = 14.sp, color = C.Soft, lines = 6) },
+            confirmButton = { TvButton(c.yes, primary = true) { confirm = null; c.run() } },
+            dismissButton = { TvButton("Cancel", modifier = Modifier.focusRequester(cancelFocus)) { confirm = null } },
+        )
+        LaunchedEffect(c) { kotlinx.coroutines.delay(80); runCatching { cancelFocus.requestFocus() } }
+    }
+}
+
+private fun playlistState(p: com.avidviewer.tv.data.Playlist, active: Boolean): String = when {
+    !p.enabled -> "Off"
+    !p.liveOn && !p.vodOn -> "Nothing loaded"
+    else -> listOfNotNull(if (active) "Active" else null, if (p.liveOn) "Live" else null, if (p.vodOn) "VOD" else null).joinToString(" · ")
+}
+
+@Composable
+private fun MiniToggle(title: String, desc: String, on: Boolean, enabled: Boolean = true, onToggle: () -> Unit) {
+    Focusable(Modifier.fillMaxWidth().height(58.dp), onClick = { if (enabled) onToggle() }) {
+        Column(Modifier.weight(1f).padding(start = 12.dp, end = 8.dp)) {
+            Label(title, size = 14.sp, color = if (enabled) C.Text else C.Muted, weight = FontWeight.SemiBold)
+            Label(if (enabled) desc else "Turn the playlist on first", size = 12.sp, lines = 2)
+        }
+        Label(if (on) "On" else "Off", size = 12.sp, color = if (on && enabled) C.Accent else C.Muted, weight = FontWeight.Bold, modifier = Modifier.padding(end = 6.dp))
+        Row(
+            Modifier.padding(end = 12.dp).width(40.dp).height(22.dp).clip(RoundedCornerShape(11.dp)).background(if (on && enabled) C.Accent else C.Line).padding(3.dp),
+            horizontalArrangement = if (on) Arrangement.End else Arrangement.Start,
         ) {
-            item { Text("Add playlist", color = C.Text, fontSize = 17.sp, fontWeight = FontWeight.Bold) }
-            item {
+            Spacer(Modifier.width(16.dp).height(16.dp).clip(RoundedCornerShape(8.dp)).background(androidx.compose.ui.graphics.Color.White))
+        }
+    }
+}
+
+@Composable
+private fun PlaylistDetails(p: com.avidviewer.tv.data.Playlist, active: Boolean) {
+    Column(Modifier.fillMaxSize().padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Text("Details", color = C.Text, fontSize = 17.sp, fontWeight = FontWeight.Bold)
+        DetailLine("Name", p.name)
+        DetailLine("Type", if (p.isXtream) "Xtream Codes" else "M3U link")
+        if (p.isXtream) {
+            DetailLine("Server", p.server)
+            DetailLine("Username", p.username)
+            DetailLine("Password", "•••••• (stored encrypted on this device)")
+        } else {
+            DetailLine("Playlist link", p.m3uUrl)
+        }
+        DetailLine("TV guide", p.epgUrl.ifBlank { if (p.isXtream) "From your login" else "From the playlist, if it lists one" })
+        DetailLine("Status", playlistState(p, active).ifBlank { "On" })
+        Label("Choose Edit to change these details.", size = 12.sp, modifier = Modifier.padding(top = 6.dp))
+    }
+}
+
+@Composable
+private fun DetailLine(label: String, value: String) {
+    Column {
+        Label(label, size = 12.sp)
+        Label(value, size = 14.sp, color = C.Text, lines = 2)
+    }
+}
+
+private class PlaylistFields(
+    val name: String, val type: String, val server: String, val user: String, val pass: String,
+    val m3u: String, val epg: String, val liveOn: Boolean, val vodOn: Boolean,
+)
+
+/** The add form, or the edit form when [existing] is given. */
+@Composable
+private fun PlaylistForm(vm: AppViewModel, existing: com.avidviewer.tv.data.Playlist?, onCancel: (() -> Unit)?, onSubmit: (PlaylistFields) -> Unit) {
+    val k = existing?.id ?: ADD_PLAYLIST
+    var type by remember(k) { mutableStateOf(existing?.type ?: "xtream") }
+    var name by remember(k) { mutableStateOf(existing?.name ?: "") }
+    var server by remember(k) { mutableStateOf(existing?.server ?: "") }
+    var user by remember(k) { mutableStateOf(existing?.username ?: "") }
+    var pass by remember(k) { mutableStateOf("") }
+    var m3u by remember(k) { mutableStateOf(existing?.m3uUrl ?: "") }
+    var epg by remember(k) { mutableStateOf(existing?.epgUrl ?: "") }
+    var liveOn by remember(k) { mutableStateOf(true) }
+    var vodOn by remember(k) { mutableStateOf(true) }
+    LazyColumn(
+        Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(16.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        item { Text(if (existing == null) "Add playlist" else "Edit ${existing.name}", color = C.Text, fontSize = 17.sp, fontWeight = FontWeight.Bold) }
+        item {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                TvButton("Xtream Codes", selected = type == "xtream") { type = "xtream" }
+                TvButton("M3U link", selected = type == "m3u") { type = "m3u" }
+            }
+        }
+        item { TvField("Playlist name", name) { name = it } }
+        if (type == "xtream") {
+            item { TvField("Server (DNS), e.g. http://example.com:8080", server) { server = it } }
+            item { TvField("Username", user) { user = it } }
+            item { TvField(if (existing != null) "Password (leave empty to keep the current one)" else "Password", pass, password = true) { pass = it } }
+            item { Label("Live TV and the TV guide load from your login. Your password is stored encrypted on this device only.", size = 12.sp, lines = 2) }
+        } else {
+            item { TvField("M3U playlist link", m3u) { m3u = it } }
+            item { TvField("TV guide (XMLTV) link, optional", epg) { epg = it } }
+        }
+        if (existing == null) item {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Label("Load from this playlist", size = 12.sp)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    TvButton("Xtream Codes", selected = type == "xtream") { type = "xtream" }
-                    TvButton("M3U link", selected = type == "m3u") { type = "m3u" }
-                }
-            }
-            item { TvField("Playlist name", name) { name = it } }
-            if (type == "xtream") {
-                item { TvField("Server (DNS), e.g. http://example.com:8080", server) { server = it } }
-                item { TvField("Username", user) { user = it } }
-                item { TvField("Password", pass, password = true) { pass = it } }
-                item { Label("Live TV and the TV guide load from your login. Your password is stored encrypted on this device only.", size = 12.sp, lines = 2) }
-            } else {
-                item { TvField("M3U playlist link", m3u) { m3u = it } }
-                item { TvField("TV guide (XMLTV) link, optional", epg) { epg = it } }
-            }
-            item {
-                Spacer(Modifier.height(4.dp))
-                TvButton(if (vm.busy) "Working…" else "Add playlist", primary = true) {
-                    if (!vm.busy) {
-                        vm.addPlaylist(name, type, server, user, pass, m3u, epg)
-                        pass = ""
-                    }
+                    TvButton((if (liveOn) "✓ " else "") + "Live TV & guide", selected = liveOn) { liveOn = !liveOn }
+                    TvButton((if (vodOn) "✓ " else "") + "Movies & series", selected = vodOn) { vodOn = !vodOn }
                 }
             }
         }
+        item {
+            Row(Modifier.padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                TvButton(if (vm.busy) "Working…" else if (existing == null) "Add playlist" else "Save changes", primary = true) {
+                    if (!vm.busy) {
+                        onSubmit(PlaylistFields(name, type, server, user, pass, m3u, epg, liveOn, vodOn))
+                        if (existing == null) pass = ""
+                    }
+                }
+                if (onCancel != null) TvButton("Cancel") { onCancel() }
+            }
+        }
+        if (existing == null) vm.status?.let { st -> item { Label(st, size = 12.sp, color = C.Soft, lines = 3) } }
     }
 }
 
@@ -429,7 +612,7 @@ fun SettingsScreen(vm: AppViewModel) {
 }
 
 private fun sectionSummary(vm: AppViewModel, id: String): String? = when (id) {
-    "playlists" -> "${vm.playlists.size} added"
+    "playlists" -> "${vm.playlists.size} added" + (vm.playlists.count { !it.enabled }.takeIf { it > 0 }?.let { " · $it off" } ?: "")
     "location" -> vm.prefs.postalCode.ifBlank { null }?.let { "$it · ${vm.prefs.placeName.substringBefore(',')}" } ?: "Not set"
     "display" -> vm.zoneLabel()
     "sports" -> "${vm.prefs.sportCats.count { it.on }} categories on"
