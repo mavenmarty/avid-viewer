@@ -68,6 +68,8 @@ enum class PlayContext { GROUP, FAVORITES, SPORTS }
 enum class NavMode { FULL, COLLAPSED, GROUPS }
 
 /** The combined Favorites category shown first in the TV Guide. */
+enum class GuideFocus { TOP, KEEP, CURRENT }
+
 const val FAV_GROUP = "\u2605favorites"
 /** Group id prefix for the user's own channel lists: LIST_PREFIX + list id. */
 const val LIST_PREFIX = "\u2605list:"
@@ -102,6 +104,18 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     private var startupPreviewDone = false
     /** Bumped when the TV Guide should scroll to and focus the current channel. */
     var guideFocusTick by mutableStateOf(0)
+    /** What the guide does on the next [guideFocusTick]: jump to the top, keep its place, or find the current channel. */
+    var guideFocusMode = GuideFocus.CURRENT
+    /** Scroll position of the guide list, remembered per category: (category, first item, offset). */
+    var guideScroll: Triple<String?, Int, Int> = Triple(null, 0, 0)
+    /** Scroll position of the Movies / Series grid per kind: kind → (category, first item, offset). */
+    val vodScroll = HashMap<String, Triple<String, Int, Int>>()
+
+    /** Movies / Series category: a different category starts at the top; the same one keeps its place. */
+    fun chooseVodCategory(kind: String, name: String) {
+        if ((vodCategory[kind] ?: "All") != name) vodScroll[kind] = Triple(name, 0, 0)
+        vodCategory = vodCategory + (kind to name)
+    }
     var selectedGroup by mutableStateOf<String?>(null)
     var currentKey by mutableStateOf<String?>(null); private set
     var playContext by mutableStateOf(PlayContext.GROUP)
@@ -1196,7 +1210,11 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** Picking a category: switch playlist if needed, hide the menu and show categories as the left nav. */
     fun chooseGroup(pid: String, raw: String) {
         viewModelScope.launch {
+            val same = raw == selectedGroup && pid == activePlaylist()?.id
             switchPlaylist(pid)
+            // A newly chosen category starts at its first channel; choosing the same one keeps the scroll position.
+            guideFocusMode = if (same) GuideFocus.KEEP else GuideFocus.TOP
+            if (!same) guideScroll = Triple(raw, 0, 0)
             selectedGroup = raw
             navMode = NavMode.GROUPS
             guideFocusTick++

@@ -65,18 +65,35 @@ fun GuideScreen(vm: AppViewModel) {
     val winStart = (vm.now / half) * half
     val winEnd = winStart + WINDOW_MIN * 60 * 1000L
     var focusProg by remember { mutableStateOf<Pair<String, Program?>?>(null) }
-    val listState = rememberLazyListState()
+    val listState = remember(vm.selectedGroup) {
+        val (g, i, o) = vm.guideScroll
+        if (g == vm.selectedGroup) androidx.compose.foundation.lazy.LazyListState(i, o) else androidx.compose.foundation.lazy.LazyListState()
+    }
+    LaunchedEffect(listState) {
+        androidx.compose.runtime.snapshotFlow { listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset }
+            .collect { (i, o) -> vm.guideScroll = Triple(vm.selectedGroup, i, o) }
+    }
     val scope = rememberCoroutineScope()
     val rowFocus = remember(list.size, vm.selectedGroup) { List(list.size) { FocusRequester() } }
     var pendingFocus by remember { mutableStateOf<Int?>(null) }
 
     // Scroll to and focus the current channel (at startup and when returning from full screen).
     LaunchedEffect(vm.guideFocusTick) {
-        val idx = list.indexOfFirst { it.key == vm.currentKey }.let { if (it < 0 && list.isNotEmpty()) 0 else it }
-        if (idx >= 0 && vm.navMode == NavMode.GROUPS) {
-            delay(150)
-            listState.scrollToItem((idx - 2).coerceAtLeast(0))
-            pendingFocus = idx
+        val mode = vm.guideFocusMode
+        vm.guideFocusMode = GuideFocus.CURRENT
+        if (list.isEmpty() || vm.navMode != NavMode.GROUPS) return@LaunchedEffect
+        delay(150)
+        when (mode) {
+            // Newly chosen category: start at the top.
+            GuideFocus.TOP -> { listState.scrollToItem(0); pendingFocus = 0 }
+            // Same category again: stay where the list was.
+            GuideFocus.KEEP -> pendingFocus = listState.firstVisibleItemIndex.coerceIn(0, list.size - 1)
+            // Startup or back from full screen: the channel that was playing.
+            GuideFocus.CURRENT -> {
+                val idx = list.indexOfFirst { it.key == vm.currentKey }.let { if (it < 0) 0 else it }
+                listState.scrollToItem((idx - 2).coerceAtLeast(0))
+                pendingFocus = idx
+            }
         }
     }
     LaunchedEffect(pendingFocus) {

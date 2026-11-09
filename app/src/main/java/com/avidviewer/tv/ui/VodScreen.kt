@@ -84,7 +84,7 @@ fun VodScreen(vm: AppViewModel, kind: String) {
                 Focusable(
                     modifier = Modifier.fillMaxWidth().height(36.dp),
                     color = if (on) C.Surface2 else Color.Transparent,
-                    onClick = { vm.vodCategory = vm.vodCategory + (kind to name) },
+                    onClick = { vm.chooseVodCategory(kind, name) },
                 ) {
                     Label((if (on) "▶ " else "") + name, size = 13.sp, color = if (on) C.Text else C.Soft, weight = if (on) FontWeight.Bold else FontWeight.Normal, modifier = Modifier.padding(start = 10.dp).weight(1f))
                     if (count >= 0) Label("$count", size = 12.sp, modifier = Modifier.padding(end = 10.dp))
@@ -108,7 +108,20 @@ fun VodScreen(vm: AppViewModel, kind: String) {
                     }, size = 14.sp, color = C.Muted, lines = 2,
                 )
             } else {
+                // One scroll state per category: a new category starts at the top, the same one (or coming
+                // back from a title's page) keeps its place.
+                val gridKey = "$current|$vq"
+                val gridState = remember(kind, gridKey) {
+                    val saved = vm.vodScroll[kind]
+                    if (saved != null && saved.first == gridKey) androidx.compose.foundation.lazy.grid.LazyGridState(saved.second, saved.third)
+                    else androidx.compose.foundation.lazy.grid.LazyGridState()
+                }
+                LaunchedEffect(gridState) {
+                    androidx.compose.runtime.snapshotFlow { gridState.firstVisibleItemIndex to gridState.firstVisibleItemScrollOffset }
+                        .collect { (i, o) -> vm.vodScroll[kind] = Triple(gridKey, i, o) }
+                }
                 LazyVerticalGrid(
+                    state = gridState,
                     columns = GridCells.Fixed(6),
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
