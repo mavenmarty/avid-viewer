@@ -1,5 +1,11 @@
 package com.avidviewer.tv.ui
 
+import androidx.compose.foundation.border
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -223,8 +229,22 @@ fun PlaylistTree(vm: AppViewModel) {
 @Composable
 fun GroupNav(vm: AppViewModel) {
     val groups = vm.groups()
+    val navState = androidx.compose.foundation.lazy.rememberLazyListState()
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    // Re-order mode: keep the moving category on screen as it moves.
+    val moving = vm.movingGroup
+    LaunchedEffect(moving, groups.indexOfFirst { it.raw == moving }) {
+        if (moving == null) return@LaunchedEffect
+        val idx = groups.indexOfFirst { it.raw == moving }
+        if (idx < 0) return@LaunchedEffect
+        val headerItems = 4 + vm.shownLists.size // menu, title, favorites, new list, spacer… before categories
+        val item = idx + headerItems + 1
+        val vis = navState.layoutInfo.visibleItemsInfo.map { it.index }
+        if (vis.isNotEmpty() && (item <= vis.first() || item >= vis.last())) navState.scrollToItem((item - 3).coerceAtLeast(0))
+    }
     LazyColumn(
-        Modifier.width(210.dp).fillMaxHeight().background(C.Rail),
+        state = navState,
+        modifier = Modifier.width(210.dp).fillMaxHeight().background(C.Rail),
         contentPadding = PaddingValues(10.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
@@ -268,14 +288,24 @@ fun GroupNav(vm: AppViewModel) {
         item { Spacer(Modifier.height(6.dp)) }
         items(groups, key = { it.raw }) { g ->
             val on = g.raw == vm.selectedGroup
+            val isMoving = g.raw == moving
+            val fr = remember { FocusRequester() }
+            LaunchedEffect(isMoving) { if (isMoving) { kotlinx.coroutines.delay(60); runCatching { fr.requestFocus() } } }
             Focusable(
-                modifier = Modifier.fillMaxWidth().height(38.dp),
-                color = if (on) C.Surface2 else Color.Transparent,
-                onMenu = { vm.groupMenu = g.raw },
-                onClick = { vm.chooseGroup(vm.activePlaylist()?.id ?: "", g.raw) },
+                modifier = Modifier.fillMaxWidth().height(38.dp).focusRequester(fr)
+                    .then(if (isMoving) Modifier.border(2.dp, C.AccentFocus, androidx.compose.foundation.shape.RoundedCornerShape(8.dp)) else Modifier)
+                    .onPreviewKeyEvent { e ->
+                        if (!isMoving) return@onPreviewKeyEvent false
+                        // While re-ordering, the remote moves this category instead of the highlight.
+                        reorderKeys(e, onMove = { vm.moveGroupBy(g.raw, it) }, onTop = { vm.moveGroupTo(g.raw, 0) },
+                            onBottom = { vm.moveGroupTo(g.raw, Int.MAX_VALUE) }, onDone = { vm.movingGroup = null })
+                    },
+                color = if (isMoving) C.Surface2 else if (on) C.Surface2 else Color.Transparent,
+                onMenu = { if (!isMoving) vm.groupMenu = g.raw },
+                onClick = { if (isMoving) vm.movingGroup = null else vm.chooseGroup(vm.activePlaylist()?.id ?: "", g.raw) },
             ) {
-                Label((if (on) "▶ " else "") + g.name, size = 14.sp, color = if (on) C.Text else C.Soft, weight = if (on) FontWeight.Bold else FontWeight.Normal, modifier = Modifier.padding(start = 10.dp).weight(1f))
-                Label("${g.count}", size = 12.sp, modifier = Modifier.padding(end = 10.dp))
+                Label((if (isMoving) "⇅ " else if (on) "▶ " else "") + g.name, size = 14.sp, color = if (on || isMoving) C.Text else C.Soft, weight = if (on || isMoving) FontWeight.Bold else FontWeight.Normal, modifier = Modifier.padding(start = 10.dp).weight(1f))
+                Label(if (isMoving) "${groups.indexOf(g) + 1}/${groups.size}" else "${g.count}", size = 12.sp, color = if (isMoving) C.Accent else C.Muted, modifier = Modifier.padding(end = 10.dp))
             }
         }
     }

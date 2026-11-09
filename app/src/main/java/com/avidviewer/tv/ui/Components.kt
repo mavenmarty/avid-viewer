@@ -206,3 +206,24 @@ fun Modifier.holdToAccelerate(): Modifier {
         moved
     })
 }
+
+/**
+ * Keys while re-ordering an item in place: Up/Down move it (faster while held), Left sends it to the top,
+ * Right to the bottom, OK / Back / Menu finish. Finishing happens on key release so the same press
+ * doesn't also act on the screen behind. Consumes every key so the highlight stays on the item.
+ */
+fun reorderKeys(
+    e: androidx.compose.ui.input.key.KeyEvent,
+    onMove: (Int) -> Unit, onTop: () -> Unit, onBottom: () -> Unit, onDone: () -> Unit,
+): Boolean {
+    val done = e.key == Key.DirectionCenter || e.key == Key.Enter || e.key == Key.NumPadEnter ||
+        e.key == Key.Back || e.key == Key.Escape || e.key == Key.Menu
+    if (e.type == KeyEventType.KeyDown) when (e.key) {
+        Key.DirectionUp -> onMove(-holdSteps(e))
+        Key.DirectionDown -> onMove(holdSteps(e))
+        Key.DirectionLeft -> onTop()
+        Key.DirectionRight -> onBottom()
+        else -> {}
+    } else if (e.type == KeyEventType.KeyUp && done) onDone()
+    return true
+}

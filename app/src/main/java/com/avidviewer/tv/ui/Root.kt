@@ -1,5 +1,6 @@
 package com.avidviewer.tv.ui
 
+import androidx.compose.foundation.border
 import androidx.activity.compose.BackHandler
 import androidx.annotation.OptIn
 import androidx.compose.foundation.background
@@ -66,6 +67,7 @@ fun AppRoot(vm: AppViewModel) {
         ChannelOptionsDialog(vm)
         GroupOptionsDialog(vm)
         ListPickerDialog(vm)
+        ReorderHelp(vm)
         ListOptionsDialog(vm)
         // New version found: ask before updating (never interrupts full-screen viewing).
         val rel = vm.update
@@ -144,4 +146,23 @@ fun VideoSurface(vm: AppViewModel, modifier: Modifier = Modifier, fit: Boolean =
         onRelease = { it.player = null },
         modifier = modifier.background(Color.Black),
     )
+}
+
+/** On-screen instructions while a category or channel is being re-ordered. */
+@Composable
+private fun androidx.compose.foundation.layout.BoxScope.ReorderHelp(vm: AppViewModel) {
+    val what = vm.movingGroup?.let { "category “${vm.groupName(it)}”" }
+        ?: vm.movingChannel?.let { k -> vm.channel(k)?.let { "channel “${vm.channelName(it)}”" } }
+        ?: return
+    androidx.compose.foundation.layout.Column(
+        Modifier.align(androidx.compose.ui.Alignment.BottomCenter).padding(bottom = 18.dp)
+            .clip(androidx.compose.foundation.shape.RoundedCornerShape(14.dp)).background(C.Surface2)
+            .border(1.dp, C.AccentFocus, androidx.compose.foundation.shape.RoundedCornerShape(14.dp))
+            .padding(horizontal = 20.dp, vertical = 12.dp),
+        verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(4.dp),
+    ) {
+        Text("Re-ordering the $what", color = C.Text, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+        Text("▲ ▼  Move up or down (hold to move faster)     ◀  Move to the top     ▶  Move to the bottom", color = C.Soft, fontSize = 13.sp)
+        Text("OK or Back  Done — the new order is saved", color = C.Accent, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+    }
 }

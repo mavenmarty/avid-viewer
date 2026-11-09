@@ -860,12 +860,54 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         return m
     }
 
+    /** The category being re-ordered in the TV Guide's category list (null = not re-ordering). */
+    var movingGroup by mutableStateOf<String?>(null)
+
+    /** Moves a category to [index] among the visible categories (hidden ones keep their places). */
+    fun moveGroupTo(raw: String, index: Int) {
+        val all = groups(includeHidden = true).map { it.raw }.toMutableList()
+        val visible = groups().map { it.raw }.filter { it != raw }
+        if (raw !in all) return
+        val i = index.coerceIn(0, visible.size)
+        all.remove(raw)
+        val at = if (i >= visible.size) all.size else all.indexOf(visible[i])
+        all.add(at, raw)
+        updatePrefs { it.copy(groupOrder = all) }
+    }
+
+    /** Moves a category [delta] places among the visible categories. */
+    fun moveGroupBy(raw: String, delta: Int) {
+        val i = groups().indexOfFirst { it.raw == raw }
+        if (i >= 0) moveGroupTo(raw, i + delta)
+    }
+
     fun moveGroup(raw: String, dir: Int) {
         val order = groups(includeHidden = true).map { it.raw }.toMutableList()
         val i = order.indexOf(raw); val j = i + dir
         if (i < 0 || j !in order.indices) return
         order[i] = order[j].also { order[j] = order[i] }
         updatePrefs { it.copy(groupOrder = order) }
+    }
+
+    /** The channel being re-ordered in the TV Guide (null = not re-ordering). */
+    var movingChannel by mutableStateOf<String?>(null)
+
+    /** Moves a channel to [index] in the category or list the guide is showing. */
+    fun moveChannelTo(key: String, index: Int) {
+        val g = selectedGroup ?: return
+        val order = channelsIn(g).map { it.key }.toMutableList()
+        if (!order.remove(key)) return
+        order.add(index.coerceIn(0, order.size), key)
+        when {
+            g == FAV_GROUP -> updatePrefs { p -> p.copy(favorites = order + p.favorites.filter { it !in order }) }
+            g.startsWith(LIST_PREFIX) -> updatePrefs { p -> p.copy(lists = p.lists.map { if (LIST_PREFIX + it.id == g) it.copy(keys = order + it.keys.filter { k -> k !in order }) else it }) }
+            else -> updatePrefs { it.copy(channelOrder = it.channelOrder + (g to order)) }
+        }
+    }
+
+    fun moveChannelBy(key: String, delta: Int) {
+        val i = channelsIn(selectedGroup).indexOfFirst { it.key == key }
+        if (i >= 0) moveChannelTo(key, i + delta)
     }
 
     fun moveChannel(key: String, dir: Int) {
@@ -1468,7 +1510,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** Back walks up the navigation: categories → playlists → full menu → TV Guide. Returns false to let the app exit. */
-    fun navBack(): Boolean = when (navMode) {
+    fun navBack(): Boolean = if (movingGroup != null || movingChannel != null) { movingGroup = null; movingChannel = null; true } else when (navMode) {
         NavMode.GROUPS -> {
             navMode = NavMode.COLLAPSED
             expandedPlaylist = activePlaylist()?.id

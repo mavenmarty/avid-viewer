@@ -23,6 +23,7 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.border
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -113,6 +114,15 @@ fun GuideScreen(vm: AppViewModel) {
         delay(60)
         runCatching { rowFocus[i].requestFocus() }
         pendingFocus = null
+    }
+    // Re-ordering a channel: keep it on screen and highlighted as it moves.
+    val movingIdx = list.indexOfFirst { it.key == vm.movingChannel }
+    LaunchedEffect(vm.movingChannel, movingIdx) {
+        if (movingIdx < 0) return@LaunchedEffect
+        val vis = listState.layoutInfo.visibleItemsInfo.map { it.index }
+        if (vis.isEmpty() || movingIdx <= vis.first() || movingIdx >= vis.last()) listState.scrollToItem((movingIdx - 2).coerceAtLeast(0))
+        delay(40)
+        runCatching { rowFocus[movingIdx].requestFocus() }
     }
     LaunchedEffect(pendingProg, slots) {
         val i = pendingProg ?: return@LaunchedEffect
@@ -215,13 +225,21 @@ fun GuideScreen(vm: AppViewModel) {
                 itemsIndexed(list, key = { i, c -> "$i-${c.key}" }) { idx, c ->
                     Row(Modifier.fillMaxWidth().height(50.dp), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
                         // Channel name: a fixed-width cell with up to two lines (no widening while highlighted).
+                        val isMoving = c.key == vm.movingChannel
                         Focusable(
-                            modifier = Modifier.width(CH_COL.dp).fillMaxHeight().focusRequester(rowFocus[idx]),
+                            modifier = Modifier.width(CH_COL.dp).fillMaxHeight().focusRequester(rowFocus[idx])
+                                .then(if (isMoving) Modifier.border(2.dp, C.AccentFocus, RoundedCornerShape(8.dp)) else Modifier)
+                                .onPreviewKeyEvent { e ->
+                                    if (!isMoving) false
+                                    else reorderKeys(e, onMove = { vm.moveChannelBy(c.key, it) }, onTop = { vm.moveChannelTo(c.key, 0) },
+                                        onBottom = { vm.moveChannelTo(c.key, Int.MAX_VALUE) }, onDone = { vm.movingChannel = null })
+                                },
+                            color = if (isMoving) C.Surface2 else C.Surface,
                             onFocus = { focusProg = c.key to vm.nowNext(c).first },
-                            onMenu = { vm.channelMenu = c.key },
-                            onClick = { vm.selectChannel(c.key, PlayContext.GROUP) },
+                            onMenu = { if (!isMoving) vm.channelMenu = c.key },
+                            onClick = { if (isMoving) vm.movingChannel = null else vm.selectChannel(c.key, PlayContext.GROUP) },
                         ) {
-                            Label("${numbers[c.key] ?: ""}", size = 12.sp, modifier = Modifier.width(30.dp).padding(start = 6.dp))
+                            Label(if (isMoving) "⇅" else "${numbers[c.key] ?: ""}", size = 12.sp, color = if (isMoving) C.Accent else C.Muted, modifier = Modifier.width(30.dp).padding(start = 6.dp))
                             ChannelBadge(vm.channelName(c), c.logo, 28.dp)
                             Label(
                                 vm.channelName(c) + if (vm.isFavorite(c.key)) " ★" else "",
@@ -325,8 +343,7 @@ fun ChannelOptionsDialog(vm: AppViewModel) {
                 OptionRow("＋  Add to List…" + if (inLists.isNotBlank()) "   (in $inLists)" else "") { vm.channelMenu = null; vm.listPickerKey = key }
                 if (isListGroup(vm.selectedGroup)) OptionRow("−  Remove from ${vm.groupName(vm.selectedGroup!!).removePrefix("★ ").removePrefix("☰ ")}") { vm.toggleInList(vm.selectedGroup!!, key); vm.channelMenu = null }
                 OptionRow("✎  Rename") { renaming = true }
-                OptionRow("▲  Move up") { vm.moveInGuide(key, -1) }
-                OptionRow("▼  Move down") { vm.moveInGuide(key, 1) }
+                OptionRow("⇅  Re-order") { vm.channelMenu = null; vm.movingChannel = key }
                 if (!isListGroup(vm.selectedGroup)) OptionRow("⊘  Hide channel") { vm.hideChannel(key); vm.channelMenu = null }
             }
         },
@@ -384,8 +401,7 @@ fun GroupOptionsDialog(vm: AppViewModel) {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Label("Category ${pos + 1} of ${all.size} · ${all.getOrNull(pos)?.count ?: 0} channels", size = 13.sp, lines = Int.MAX_VALUE, color = C.Soft)
                 OptionRow("✎  Rename") { renaming = true }
-                OptionRow("▲  Move up") { vm.moveGroup(raw, -1) }
-                OptionRow("▼  Move down") { vm.moveGroup(raw, 1) }
+                OptionRow("⇅  Re-order") { vm.groupMenu = null; vm.movingGroup = raw }
                 if (vm.isSportsGroup(raw)) OptionRow("🏆  Remove from Sports tab") { vm.removeGroupFromSports(raw) }
                 else OptionRow("🏆  Add to Sports tab") { vm.addGroupToSports(raw) }
                 OptionRow("⊘  Hide category") { vm.toggleHidden(raw); vm.groupMenu = null }
