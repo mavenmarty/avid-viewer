@@ -560,7 +560,7 @@ private fun androidx.compose.foundation.lazy.LazyListScope.sportsSettings(vm: Ap
                 }
                 Column(Modifier.weight(1f).padding(horizontal = 6.dp)) {
                     Label(c.name, size = 15.sp, color = C.Text, weight = FontWeight.SemiBold)
-                    Label("Matches: " + c.keywords.joinToString(", "), size = 12.sp)
+                    Label(if (c.groups.isNotEmpty()) "Playlist category: " + c.groups.joinToString(", ") { vm.groupName(it) } else "Matches: " + c.keywords.joinToString(", "), size = 12.sp, lines = 2)
                 }
                 TvButton("▲") { if (i > 0) vm.updateSportCats(cats.toMutableList().apply { add(i - 1, removeAt(i)) }) }
                 TvButton("▼") { if (i < cats.size - 1) vm.updateSportCats(cats.toMutableList().apply { add(i + 1, removeAt(i)) }) }
@@ -571,19 +571,41 @@ private fun androidx.compose.foundation.lazy.LazyListScope.sportsSettings(vm: Ap
     item(key = "cat-add") {
         var name by remember { mutableStateOf("") }
         var kw by remember { mutableStateOf("") }
-        SettingBlock("Add your own category", "For example, name \"Vikings\" and match \"vikings, minnesota\". Separate words with commas.") {
+        var msg by remember { mutableStateOf<String?>(null) }
+        SettingBlock("Add your own category by words", "For example, name \"Vikings\" and match \"vikings, minnesota\". Separate words with commas. Either field is enough.") {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 TvField("Name", name, modifier = Modifier.width(180.dp)) { name = it }
                 TvField("Match words", kw, modifier = Modifier.width(280.dp)) { kw = it }
                 TvButton("Add", primary = true) {
-                    val n = name.trim()
-                    if (n.isNotEmpty()) {
-                        val words = (kw.ifBlank { n }).split(',').map { it.trim().lowercase() }.filter { it.isNotEmpty() }
+                    val words = kw.ifBlank { name }.split(',').map { it.trim().lowercase() }.filter { it.isNotEmpty() }
+                    val n = name.trim().ifBlank { kw.split(',').first().trim().replaceFirstChar { it.uppercase() } }
+                    if (words.isEmpty() || n.isEmpty()) { msg = "Enter a name or some words to match." }
+                    else {
                         vm.updateSportCats(cats + com.avidviewer.tv.data.SportCat("c" + System.currentTimeMillis(), n, words, true, false))
+                        msg = "Added “$n”. It now appears on the Sports screen."
                         name = ""; kw = ""
                     }
                 }
             }
+            msg?.let { Label(it, size = 12.sp, color = C.Soft) }
+        }
+    }
+    item(key = "from-playlist") {
+        var filter by remember { mutableStateOf("") }
+        val groups = vm.groups().filter { filter.isBlank() || it.name.contains(filter, ignoreCase = true) }
+        SettingBlock("Add a category from your playlist", "Everything on that category's channels shows on the Sports screen. Tip: you can also press Menu on a category in the TV Guide.") {
+            TvField("Filter categories", filter, modifier = Modifier.width(320.dp)) { filter = it }
+            groups.take(40).forEach { g ->
+                val added = vm.isSportsGroup(g.raw)
+                Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).background(C.Surface2).padding(horizontal = 10.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Label(g.name, size = 14.sp, color = C.Text, weight = FontWeight.SemiBold, lines = 2)
+                        Label("${g.count} channels", size = 12.sp)
+                    }
+                    TvButton(if (added) "✓ In Sports" else "+ Add", selected = added) { if (added) vm.removeGroupFromSports(g.raw) else vm.addGroupToSports(g.raw) }
+                }
+            }
+            if (groups.size > 40) Label("Showing 40 of ${groups.size}. Type in the filter to narrow the list.", size = 12.sp)
         }
     }
 }

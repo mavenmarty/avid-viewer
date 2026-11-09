@@ -264,6 +264,8 @@ fun GroupOptionsDialog(vm: AppViewModel) {
                 OptionRow("✎  Rename") { renaming = true }
                 OptionRow("▲  Move up") { vm.moveGroup(raw, -1) }
                 OptionRow("▼  Move down") { vm.moveGroup(raw, 1) }
+                if (vm.isSportsGroup(raw)) OptionRow("🏆  Remove from Sports tab") { vm.removeGroupFromSports(raw) }
+                else OptionRow("🏆  Add to Sports tab") { vm.addGroupToSports(raw) }
                 OptionRow("⊘  Hide category") { vm.toggleHidden(raw); vm.groupMenu = null }
             }
         },

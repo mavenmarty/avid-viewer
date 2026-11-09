@@ -822,10 +822,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             val out = LinkedHashMap<String, SportEvent>()
             for (cat in cats) {
                 val kws = cat.keywords.map { it.lowercase() }.filter { it.isNotBlank() }
-                if (kws.isEmpty()) continue
-                fun hasKw(s: String) = kws.any { s.contains(it) }
+                if (kws.isEmpty() && cat.groups.isEmpty()) continue
+                fun hasKw(s: String) = kws.isNotEmpty() && kws.any { s.contains(it) }
                 for (c in chs) {
-                    val catChannel = hasKw(((groupsByRaw[c.group] ?: c.group) + " " + c.group + " " + (names[c.key] ?: c.name)).lowercase())
+                    val catChannel = c.group in cat.groups || hasKw(((groupsByRaw[c.group] ?: c.group) + " " + c.group + " " + (names[c.key] ?: c.name)).lowercase())
                     val progs = c.epgId?.let { g[it] } ?: emptyList()
                     if (catChannel && progs.isEmpty()) continue
                     for (p in progs) {
@@ -852,6 +852,16 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         if (sportCat != null && list.none { it.id == sportCat && it.on }) sportCat = null
         viewModelScope.launch { refreshScores(); rebuildSportEvents() }
     }
+
+    /** Adds a playlist category (e.g. "FLO Sports") to the Sports tab. */
+    fun addGroupToSports(raw: String) {
+        if (prefs.sportCats.any { raw in it.groups }) return
+        updateSportCats(prefs.sportCats + SportCat("g:$raw", groupName(raw), emptyList(), true, false, listOf(raw)))
+    }
+
+    fun removeGroupFromSports(raw: String) = updateSportCats(prefs.sportCats.filterNot { raw in it.groups && !it.builtin })
+
+    fun isSportsGroup(raw: String) = prefs.sportCats.any { raw in it.groups }
 
     fun openSportsScreen() {
         screen = Screen.SPORTS

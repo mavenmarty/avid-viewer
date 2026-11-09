@@ -4,13 +4,15 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 /** A Sports-tab category. Built-ins match by league; custom ones by the user's keywords. */
-data class SportCat(val id: String, val name: String, val keywords: List<String>, val on: Boolean, val builtin: Boolean) {
-    fun toJson(): JSONObject = JSONObject().put("id", id).put("name", name).put("kw", JSONArray(keywords)).put("on", on).put("b", builtin)
+/** [groups]: provider categories (raw names) whose channels all count as sports, e.g. "FLO Sports". */
+data class SportCat(val id: String, val name: String, val keywords: List<String>, val on: Boolean, val builtin: Boolean, val groups: List<String> = emptyList()) {
+    fun toJson(): JSONObject = JSONObject().put("id", id).put("name", name).put("kw", JSONArray(keywords)).put("on", on).put("b", builtin).put("g", JSONArray(groups))
 
     companion object {
         fun fromJson(o: JSONObject): SportCat {
             val a = o.optJSONArray("kw") ?: JSONArray()
-            return SportCat(o.getString("id"), o.getString("name"), List(a.length()) { a.getString(it) }, o.optBoolean("on", true), o.optBoolean("b", false))
+            val g = o.optJSONArray("g") ?: JSONArray()
+            return SportCat(o.getString("id"), o.getString("name"), List(a.length()) { a.getString(it) }, o.optBoolean("on", true), o.optBoolean("b", false), List(g.length()) { g.getString(it) })
         }
 
         val DEFAULTS = listOf(
