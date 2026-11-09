@@ -133,6 +133,7 @@ fun GuideScreen(vm: AppViewModel) {
             TvField("Search channels and programs", text, modifier = Modifier.width(300.dp), imeAction = androidx.compose.ui.text.input.ImeAction.Search, onSubmit = { vm.guideQuery = text.trim() }) { text = it }
             if (vm.guideQuery.isNotBlank()) TvButton("✕ Clear") { text = ""; vm.guideQuery = "" }
         }
+        if (vm.selectedGroup == FAV_GROUP && vm.guideQuery.isBlank()) LocalSuggestions(vm)
         if (list.isEmpty() && vm.selectedGroup == FAV_GROUP) {
             Label("No favorites yet. Press Menu (or hold OK) on any channel to add it — favorites from every playlist appear here.", size = 13.sp, color = C.Soft, lines = 2)
         }
@@ -241,6 +242,37 @@ fun ChannelOptionsDialog(vm: AppViewModel) {
         },
         confirmButton = { TvButton("Done", primary = true) { vm.channelMenu = null } },
     )
+}
+
+/** "Suggested near Fargo, ND": local channels from the postal code that aren't favorites yet. */
+@Composable
+private fun LocalSuggestions(vm: AppViewModel) {
+    val list = vm.suggestions()
+    if (list.isEmpty()) return
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Label("Suggested near ${vm.suggestionPlace()}", size = 13.sp, color = C.Text, weight = FontWeight.Bold)
+            Label("from your postal code · ${list.size}", size = 12.sp, modifier = Modifier.weight(1f))
+            TvButton("Hide suggestions") { vm.setShowSuggestions(false) }
+        }
+        androidx.compose.foundation.lazy.LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            items(list, key = { it.key }) { s ->
+                val c = vm.channel(s.key) ?: return@items
+                Row(
+                    Modifier.width(300.dp).height(60.dp).clip(RoundedCornerShape(10.dp)).background(C.Surface).padding(horizontal = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    ChannelBadge(vm.channelName(c), c.logo, 28.dp)
+                    Column(Modifier.weight(1f)) {
+                        Label(vm.channelName(c), size = 13.sp, color = C.Text, weight = FontWeight.SemiBold)
+                        Label(listOf(s.reason, vm.playlistName(c)).filter { it.isNotBlank() }.joinToString(" · "), size = 12.sp)
+                    }
+                    TvButton("☆ Add") { vm.toggleFavorite(s.key) }
+                    TvButton("✕") { vm.dismissSuggestion(s.key) }
+                }
+            }
+        }
+    }
 }
 
 /** Menu on a category in the left navigation: rename, move, hide. */

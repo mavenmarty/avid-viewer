@@ -639,6 +639,12 @@ private fun androidx.compose.foundation.lazy.LazyListScope.locationSettings(vm: 
         }
     }
     item { ToggleRow("Show weather", "Current conditions under the clock, refreshed every 30 minutes", p.showWeather) { vm.toggleWeather() } }
+    item { ToggleRow("Suggest local channels", "At the top of ★ Favorites: channels from your playlists that look local to your postal code. Favorites aren't suggested.", p.showSuggestions) { vm.setShowSuggestions(!p.showSuggestions) } }
+    if (p.dismissedSuggestions.isNotEmpty()) item {
+        SettingBlock("Dismissed suggestions", "${p.dismissedSuggestions.size} channel(s) you dismissed won't be suggested again.") {
+            TvButton("Show them again") { vm.restoreSuggestions() }
+        }
+    }
     item {
         SettingBlock("Temperature units", vm.weatherLine()?.let { "Now: $it" } ?: "Set a postal code to see the weather.") {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

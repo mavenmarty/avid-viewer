@@ -18,6 +18,8 @@ import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import com.avidviewer.tv.data.Channel
+import com.avidviewer.tv.data.LocalSuggest
+import com.avidviewer.tv.data.Suggestion
 import com.avidviewer.tv.data.HistoryEntry
 import com.avidviewer.tv.data.M3u
 import com.avidviewer.tv.data.Playlist
@@ -242,6 +244,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             updatePrefs { it.copy(postalCode = c, placeName = place.name, placeTz = place.timeZone, lat = place.lat, lon = place.lon) }
             postalStatus = "Found ${place.name}."
             refreshWeather()
+            refreshSuggestions()
         }
     }
 
@@ -389,7 +392,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         if (activePlaylist() != null) loadActive(refresh = false)
     }
 
-    private fun rebuildSportEventsLater() { viewModelScope.launch { rebuildSportEvents() } }
+    private fun rebuildSportEventsLater() { viewModelScope.launch { rebuildSportEvents() }; refreshSuggestions() }
 
     fun removePlaylist(id: String) {
         val wasActive = activePlaylist()?.id == id
@@ -473,8 +476,46 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             }
             ensureFavoriteData()
             busy = false
+            refreshSuggestions()
         }
     }
+
+    // ---------------- local suggestions (postal code) ----------------
+    /** Everything that looks local; favorites and dismissed channels are filtered out when shown. */
+    private var allSuggestions by mutableStateOf<List<Suggestion>>(emptyList())
+
+    /** What the Favorites category shows: local channels not yet favorited or dismissed. */
+    fun suggestions(): List<Suggestion> =
+        if (!prefs.showSuggestions) emptyList()
+        else allSuggestions.filter { it.key !in prefs.favorites && it.key !in prefs.dismissedSuggestions && channel(it.key) != null }.take(12)
+
+    fun suggestionPlace(): String = LocalSuggest.parsePlace(prefs.placeName).let { (city, _, abbr) -> if (abbr != null) "$city, $abbr" else city }
+
+    fun refreshSuggestions() {
+        val place = prefs.placeName
+        if (place.isBlank()) { allSuggestions = emptyList(); return }
+        viewModelScope.launch {
+            val data = shownPlaylists.filter { it.liveOn }.map { p -> p to dataFor(p).first }
+            allSuggestions = withContext(Dispatchers.Default) {
+                LocalSuggest.find(data, place, { raw -> groupName(raw) })
+            }
+            favDataTick++
+        }
+    }
+
+    fun dismissSuggestion(key: String) = updatePrefs { it.copy(dismissedSuggestions = it.dismissedSuggestions + key) }
+
+    fun setShowSuggestions(on: Boolean) {
+        updatePrefs { it.copy(showSuggestions = on) }
+        if (on) refreshSuggestions()
+    }
+
+    fun restoreSuggestions() {
+        updatePrefs { it.copy(dismissedSuggestions = emptySet()) }
+        refreshSuggestions()
+    }
+
+    fun dismissedSuggestionCount() = prefs.dismissedSuggestions.size
 
     private suspend fun refreshGuide(p: Playlist) {
         val url = p.guideUrl().ifBlank { withContext(Dispatchers.IO) { M3u.headerGuideUrl(p) } ?: "" }

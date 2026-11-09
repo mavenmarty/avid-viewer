@@ -99,6 +99,10 @@ data class Prefs(
     val myList: List<VodItem> = emptyList(),
     val tmdbKeyEnc: String = "",
     val myServices: List<WatchProvider> = emptyList(),
+    /** Suggest local channels from the postal code at the top of Favorites. */
+    val showSuggestions: Boolean = true,
+    /** Channels the user dismissed from the suggestions. */
+    val dismissedSuggestions: Set<String> = emptySet(),
 ) {
     fun toJson(): JSONObject {
         val o = JSONObject()
@@ -123,6 +127,8 @@ data class Prefs(
         o.put("myList", JSONArray().apply { myList.forEach { put(it.toJson()) } })
         o.put("tmdbKeyEnc", tmdbKeyEnc)
         o.put("myServices", JSONArray().apply { myServices.forEach { put(JSONObject().put("id", it.id).put("name", it.name).put("logo", it.logo ?: "")) } })
+        o.put("showSuggestions", showSuggestions)
+        o.put("dismissedSuggestions", JSONArray(dismissedSuggestions.toList()))
         return o
     }
 
@@ -158,6 +164,8 @@ data class Prefs(
                 autoUpdateCheck = o.optBoolean("autoUpdateCheck", true),
                 myList = o.optJSONArray("myList")?.let { a -> List(a.length()) { VodItem.fromJson(a.getJSONObject(it)) } } ?: emptyList(),
                 tmdbKeyEnc = o.optString("tmdbKeyEnc"),
+                showSuggestions = o.optBoolean("showSuggestions", true),
+                dismissedSuggestions = strList(o.optJSONArray("dismissedSuggestions")).toSet(),
                 myServices = o.optJSONArray("myServices")?.let { a -> List(a.length()) { a.getJSONObject(it).let { s -> WatchProvider(s.getInt("id"), s.optString("name"), s.optString("logo").ifBlank { null }) } } } ?: emptyList(),
             )
         }
