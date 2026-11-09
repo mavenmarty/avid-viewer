@@ -16,6 +16,14 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
@@ -131,22 +139,86 @@ private fun RenameDialog(title: String, current: String, onDismiss: () -> Unit, 
     )
 }
 
+/**
+ * Remote-friendly text field. Moving onto it only highlights it; pressing OK opens the
+ * on-screen keyboard. Done (or Back) closes the keyboard and leaves focus on the field.
+ */
 @Composable
-fun TvField(label: String, value: String, modifier: Modifier = Modifier, password: Boolean = false, onChange: (String) -> Unit) {
-    OutlinedTextField(
-        value = value,
-        onValueChange = onChange,
-        label = { Text(label) },
-        singleLine = true,
-        modifier = modifier.fillMaxWidth(),
-        visualTransformation = if (password) PasswordVisualTransformation() else VisualTransformation.None,
-        keyboardOptions = KeyboardOptions(keyboardType = if (password) KeyboardType.Password else KeyboardType.Uri),
-        colors = OutlinedTextFieldDefaults.colors(
-            focusedTextColor = C.Text, unfocusedTextColor = C.Text,
-            focusedBorderColor = C.Accent, unfocusedBorderColor = C.Line,
-            focusedLabelColor = C.Accent, unfocusedLabelColor = C.Muted, cursorColor = C.Accent,
-        ),
-    )
+fun TvField(
+    label: String,
+    value: String,
+    modifier: Modifier = Modifier,
+    password: Boolean = false,
+    imeAction: ImeAction = ImeAction.Done,
+    onSubmit: (() -> Unit)? = null,
+    onChange: (String) -> Unit,
+) {
+    var editing by remember { mutableStateOf(false) }
+    var wasEditing by remember { mutableStateOf(false) }
+    var hadFocus by remember { mutableStateOf(false) }
+    val fieldFocus = remember { FocusRequester() }
+    val boxFocus = remember { FocusRequester() }
+    val keyboard = LocalSoftwareKeyboardController.current
+
+    fun finish() {
+        keyboard?.hide()
+        editing = false
+    }
+
+    if (!editing) {
+        Focusable(
+            modifier = modifier.fillMaxWidth().height(56.dp).focusRequester(boxFocus),
+            color = C.Surface2,
+            focusedColor = C.Line,
+            onClick = { editing = true },
+        ) { focused ->
+            Column(Modifier.padding(horizontal = 14.dp)) {
+                Label(label, size = 12.sp, color = if (focused) C.AccentFocus else C.Muted)
+                val shown = when {
+                    value.isEmpty() -> if (focused) "Press OK to type" else ""
+                    password -> "•".repeat(value.length.coerceAtMost(24))
+                    else -> value
+                }
+                Label(shown, size = 15.sp, color = if (value.isEmpty()) C.Muted else C.Text)
+            }
+        }
+        LaunchedEffect(Unit) {
+            if (wasEditing) {
+                wasEditing = false
+                runCatching { boxFocus.requestFocus() }
+            }
+        }
+    } else {
+        OutlinedTextField(
+            value = value,
+            onValueChange = onChange,
+            label = { Text(label) },
+            singleLine = true,
+            modifier = modifier.fillMaxWidth().focusRequester(fieldFocus).onFocusChanged {
+                if (it.isFocused) hadFocus = true
+                else if (hadFocus) { hadFocus = false; editing = false }
+            },
+            visualTransformation = if (password) PasswordVisualTransformation() else VisualTransformation.None,
+            keyboardOptions = KeyboardOptions(keyboardType = if (password) KeyboardType.Password else KeyboardType.Uri, imeAction = imeAction),
+            keyboardActions = KeyboardActions(
+                onDone = { finish(); onSubmit?.invoke() },
+                onSearch = { finish(); onSubmit?.invoke() },
+                onGo = { finish(); onSubmit?.invoke() },
+                onNext = { finish(); onSubmit?.invoke() },
+            ),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedTextColor = C.Text, unfocusedTextColor = C.Text,
+                focusedBorderColor = C.Accent, unfocusedBorderColor = C.Line,
+                focusedLabelColor = C.Accent, unfocusedLabelColor = C.Muted, cursorColor = C.Accent,
+            ),
+        )
+        BackHandler { finish() }
+        LaunchedEffect(Unit) {
+            wasEditing = true
+            runCatching { fieldFocus.requestFocus() }
+            keyboard?.show()
+        }
+    }
 }
 
 // ---------------------------------------------------------------- Playlists

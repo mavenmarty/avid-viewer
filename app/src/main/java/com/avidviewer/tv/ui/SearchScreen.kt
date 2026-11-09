@@ -34,19 +34,10 @@ fun SearchScreen(vm: AppViewModel) {
     Column(Modifier.fillMaxSize().padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text("Search", color = C.Text, fontSize = 24.sp, fontWeight = FontWeight.Bold)
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            OutlinedTextField(
-                value = vm.searchQuery,
-                onValueChange = { vm.searchQuery = it },
-                label = { Text("TV stations, shows, movies or series") },
-                singleLine = true,
-                modifier = Modifier.width(420.dp),
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                keyboardActions = KeyboardActions(onSearch = { vm.search(vm.searchQuery) }),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedTextColor = C.Text, unfocusedTextColor = C.Text, focusedBorderColor = C.Accent,
-                    unfocusedBorderColor = C.Line, focusedLabelColor = C.Accent, unfocusedLabelColor = C.Muted, cursorColor = C.Accent,
-                ),
-            )
+            TvField(
+                "TV stations, shows, movies or series", vm.searchQuery, modifier = Modifier.width(420.dp),
+                imeAction = ImeAction.Search, onSubmit = { vm.search(vm.searchQuery) },
+            ) { vm.searchQuery = it }
             TvButton(if (vm.searching) "Searching…" else "Search", primary = true) { vm.search(vm.searchQuery) }
         }
         val results = vm.searchResults
