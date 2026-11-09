@@ -461,6 +461,36 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     fun favoriteChannels(): List<Channel> = prefs.favorites.mapNotNull { channel(it) }
 
+    /** Favorites from every playlist (a favorite added from search may belong to another playlist). */
+    var otherFavorites by mutableStateOf<List<Pair<Playlist, Channel>>>(emptyList()); private set
+
+    fun loadOtherFavorites() {
+        val active = activePlaylist()?.id
+        viewModelScope.launch {
+            val out = ArrayList<Pair<Playlist, Channel>>()
+            for (p in playlists) {
+                if (p.id == active || prefs.favorites.none { it.startsWith(p.id + ":") }) continue
+                val chs = dataFor(p).first.associateBy { it.key }
+                prefs.favorites.filter { it.startsWith(p.id + ":") }.mapNotNull { chs[it] }.forEach { out.add(p to it) }
+            }
+            otherFavorites = out
+        }
+    }
+
+    fun playFavoriteFrom(pid: String, key: String) {
+        viewModelScope.launch {
+            switchPlaylist(pid)
+            openFullScreen(key, PlayContext.FAVORITES)
+        }
+    }
+
+    // ---------------- My List (movies & series) ----------------
+    fun inMyList(key: String?) = key != null && prefs.myList.any { it.key == key }
+
+    fun toggleMyList(item: VodItem) = updatePrefs {
+        it.copy(myList = if (it.myList.any { x -> x.key == item.key }) it.myList.filterNot { x -> x.key == item.key } else it.myList + item)
+    }
+
     // ---------------- guide ----------------
     fun programs(c: Channel?): List<Program> = c?.epgId?.let { guide[it] } ?: emptyList()
 

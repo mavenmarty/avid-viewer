@@ -89,6 +89,7 @@ data class Prefs(
     val showWeather: Boolean = true,
     val sportCats: List<SportCat> = SportCat.DEFAULTS,
     val autoUpdateCheck: Boolean = true,
+    val myList: List<VodItem> = emptyList(),
 ) {
     fun toJson(): JSONObject {
         val o = JSONObject()
@@ -109,6 +110,7 @@ data class Prefs(
         o.put("lat", lat).put("lon", lon).put("units", units).put("showWeather", showWeather)
         o.put("sportCats", JSONArray().apply { sportCats.forEach { put(it.toJson()) } })
         o.put("autoUpdateCheck", autoUpdateCheck)
+        o.put("myList", JSONArray().apply { myList.forEach { put(it.toJson()) } })
         return o
     }
 
@@ -141,6 +143,7 @@ data class Prefs(
                 showWeather = o.optBoolean("showWeather", true),
                 sportCats = o.optJSONArray("sportCats")?.let { a -> List(a.length()) { SportCat.fromJson(a.getJSONObject(it)) } } ?: SportCat.DEFAULTS,
                 autoUpdateCheck = o.optBoolean("autoUpdateCheck", true),
+                myList = o.optJSONArray("myList")?.let { a -> List(a.length()) { VodItem.fromJson(a.getJSONObject(it)) } } ?: emptyList(),
             )
         }
     }

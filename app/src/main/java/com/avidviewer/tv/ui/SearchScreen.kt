@@ -62,6 +62,41 @@ fun SearchScreen(vm: AppViewModel) {
         }
     }
 
+    SeriesDialog(vm)
+
+}
+
+private fun androidx.compose.foundation.lazy.LazyListScope.section(vm: AppViewModel, pid: String, title: String, hits: List<Hit>) {
+    if (hits.isEmpty()) return
+    item(key = "$pid-$title") { SectionTitle("$title (${hits.size})", Modifier.padding(start = 4.dp, top = 6.dp)) }
+    items(hits, key = { "$pid-$title-${it.kind}-${it.channelKey ?: it.vod?.key}-${it.title}-${it.detail}" }) { h ->
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Focusable(Modifier.weight(1f).height(50.dp), onClick = { vm.openHit(h) }) {
+                ChannelBadge(h.title, h.logo, 32.dp)
+                Column(Modifier.padding(horizontal = 10.dp).weight(1f)) {
+                    Label(h.title, size = 14.sp, color = C.Text, weight = FontWeight.SemiBold)
+                    Label(h.detail, size = 12.sp)
+                }
+                Label(
+                    "▶ " + when (h.kind) { "channel" -> "Watch"; "program" -> "Tune in"; "series" -> "Episodes"; else -> "Play" },
+                    size = 13.sp, color = C.Accent, weight = FontWeight.Bold, modifier = Modifier.padding(end = 12.dp),
+                )
+            }
+            val key = h.channelKey
+            val item = h.vod
+            if (key != null) {
+                val fav = vm.isFavorite(key)
+                TvButton(if (fav) "★ Favorite" else "☆ Favorite", selected = fav, modifier = Modifier.width(130.dp)) { vm.toggleFavorite(key) }
+            } else if (item != null) {
+                val inList = vm.inMyList(item.key)
+                TvButton(if (inList) "✓ My List" else "+ My List", selected = inList, modifier = Modifier.width(130.dp)) { vm.toggleMyList(item) }
+            }
+        }
+    }
+}
+
+@Composable
+fun SeriesDialog(vm: AppViewModel) {
     vm.seriesOpen?.let { s ->
         AlertDialog(
             onDismissRequest = { vm.closeSeries() },
@@ -84,23 +119,4 @@ fun SearchScreen(vm: AppViewModel) {
             },
             confirmButton = { TvButton("Close") { vm.closeSeries() } },
         )
-    }
-}
-
-private fun androidx.compose.foundation.lazy.LazyListScope.section(vm: AppViewModel, pid: String, title: String, hits: List<Hit>) {
-    if (hits.isEmpty()) return
-    item(key = "$pid-$title") { SectionTitle("$title (${hits.size})", Modifier.padding(start = 4.dp, top = 6.dp)) }
-    items(hits, key = { "$pid-$title-${it.kind}-${it.channelKey ?: it.vod?.key}-${it.title}-${it.detail}" }) { h ->
-        Focusable(Modifier.fillMaxWidth().height(50.dp), onClick = { vm.openHit(h) }) {
-            ChannelBadge(h.title, h.logo, 32.dp)
-            Column(Modifier.padding(horizontal = 10.dp).weight(1f)) {
-                Label(h.title, size = 14.sp, color = C.Text, weight = FontWeight.SemiBold)
-                Label(h.detail, size = 12.sp)
-            }
-            Label(
-                when (h.kind) { "channel" -> "Watch"; "program" -> "Tune in"; "series" -> "Episodes"; else -> "Play" },
-                size = 12.sp, color = C.Accent, modifier = Modifier.padding(end = 12.dp),
-            )
-        }
-    }
-}
+    }}

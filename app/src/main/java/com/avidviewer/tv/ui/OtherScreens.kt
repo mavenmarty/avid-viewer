@@ -48,19 +48,55 @@ import androidx.compose.ui.unit.sp
 fun FavoritesScreen(vm: AppViewModel) {
     val favs = vm.favoriteChannels()
     val numbers = vm.numbers()
+    LaunchedEffect(vm.prefs.favorites) { vm.loadOtherFavorites() }
+    val other = vm.otherFavorites
+    val myList = vm.prefs.myList
     Column(Modifier.fillMaxSize().padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text("Favorites", color = C.Text, fontSize = 24.sp, fontWeight = FontWeight.Bold)
-        if (favs.isEmpty()) {
-            Label("No favorites yet. On Live TV or the TV Guide, press Menu (or hold OK) on a channel to add it.", size = 14.sp, color = C.Soft, lines = 3)
+        if (favs.isEmpty() && other.isEmpty() && myList.isEmpty()) {
+            Label("Nothing here yet. Press Menu (or hold OK) on a channel to add it, or use ☆ Favorite and + My List in Search.", size = 14.sp, color = C.Soft, lines = 3)
             return@Column
         }
-        Label("In full screen, Up/Down and CH+/CH− move through this list.", size = 12.sp)
         LazyColumn(verticalArrangement = Arrangement.spacedBy(5.dp), contentPadding = PaddingValues(bottom = 20.dp)) {
-            items(favs, key = { it.key }) { c ->
-                ChannelRow(vm, c, numbers[c.key], selected = false, onFocus = {}, onClick = { vm.openFullScreen(c.key, PlayContext.FAVORITES) })
+            if (favs.isNotEmpty()) {
+                item { SectionTitle("Channels · ${vm.activePlaylist()?.name ?: ""}", Modifier.padding(start = 4.dp, top = 4.dp)) }
+                item { Label("In full screen, Up/Down and CH+/CH− move through this list.", size = 12.sp, modifier = Modifier.padding(start = 4.dp)) }
+                items(favs, key = { it.key }) { c ->
+                    ChannelRow(vm, c, numbers[c.key], selected = false, onFocus = {}, onClick = { vm.openFullScreen(c.key, PlayContext.FAVORITES) })
+                }
+            }
+            other.groupBy { it.first }.forEach { (pl, list) ->
+                item(key = "of-" + pl.id) { SectionTitle("Channels · ${pl.name}", Modifier.padding(start = 4.dp, top = 10.dp)) }
+                items(list.map { it.second }, key = { "o-" + it.key }) { c ->
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Focusable(Modifier.weight(1f).height(50.dp), onClick = { vm.playFavoriteFrom(pl.id, c.key) }) {
+                            ChannelBadge(c.name, c.logo, 32.dp)
+                            Label(c.name, size = 14.sp, color = C.Text, weight = FontWeight.SemiBold, modifier = Modifier.padding(horizontal = 10.dp).weight(1f))
+                            Label("▶ Watch", size = 13.sp, color = C.Accent, weight = FontWeight.Bold, modifier = Modifier.padding(end = 12.dp))
+                        }
+                        TvButton("Remove") { vm.toggleFavorite(c.key) }
+                    }
+                }
+            }
+            if (myList.isNotEmpty()) {
+                item(key = "ml") { SectionTitle("My List · movies & series", Modifier.padding(start = 4.dp, top = 10.dp)) }
+                items(myList, key = { "ml-" + it.key }) { v ->
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Focusable(Modifier.weight(1f).height(50.dp), onClick = { if (v.kind == "series") vm.openSeries(v) else vm.playVod(v) }) {
+                            ChannelBadge(v.name, v.logo, 32.dp)
+                            Column(Modifier.padding(horizontal = 10.dp).weight(1f)) {
+                                Label(v.name, size = 14.sp, color = C.Text, weight = FontWeight.SemiBold)
+                                Label((if (v.kind == "series") "Series" else if (v.kind == "episode") "Episode" else "Movie") + " · " + (vm.playlists.firstOrNull { it.id == v.playlistId }?.name ?: ""), size = 12.sp)
+                            }
+                            Label(if (v.kind == "series") "▶ Episodes" else "▶ Play", size = 13.sp, color = C.Accent, weight = FontWeight.Bold, modifier = Modifier.padding(end = 12.dp))
+                        }
+                        TvButton("Remove") { vm.toggleMyList(v) }
+                    }
+                }
             }
         }
     }
+    SeriesDialog(vm)
 }
 
 // ---------------------------------------------------------------- Manage
