@@ -136,7 +136,7 @@ fun ManageScreen(vm: AppViewModel) {
             }
             LazyColumn(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(5.dp)) {
                 item { SectionTitle("Channels in ${vm.groupName(manageGroup ?: "")}", Modifier.padding(4.dp)) }
-                items(vm.channelsIn(manageGroup), key = { it.key }) { c ->
+                items(vm.channelsIn(manageGroup).distinctBy { it.key }, key = { it.key }) { c ->
                     Row(
                         Modifier.fillMaxWidth().height(46.dp).clip(RoundedCornerShape(10.dp)).background(C.Surface).padding(horizontal = 8.dp),
                         verticalAlignment = Alignment.CenterVertically,

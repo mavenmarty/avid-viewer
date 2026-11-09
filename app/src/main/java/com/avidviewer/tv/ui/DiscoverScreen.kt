@@ -80,7 +80,7 @@ fun DiscoverScreen(vm: AppViewModel) {
                 verticalArrangement = Arrangement.spacedBy(12.dp),
                 contentPadding = PaddingValues(bottom = 16.dp),
             ) {
-                items(list, key = { it.key }) { t -> TitleCard(vm, t) }
+                items(list.distinctBy { it.key }, key = { it.key }) { t -> TitleCard(vm, t) }
             }
         }
         Label("Data from TMDB · Streaming availability by JustWatch", size = 12.sp, modifier = Modifier.padding(vertical = 6.dp))

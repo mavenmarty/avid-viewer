@@ -2,6 +2,8 @@ package com.avidviewer.tv.ui
 
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -124,10 +126,18 @@ fun GuideScreen(vm: AppViewModel) {
             }
         }
         // Groups
-        Label(vm.groupName(vm.selectedGroup ?: "") + "  ·  ${list.size} channels", size = 13.sp, color = C.Soft, weight = FontWeight.Bold)
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Label(vm.groupName(vm.selectedGroup ?: "") + "  ·  ${list.size} channels", size = 13.sp, color = C.Soft, weight = FontWeight.Bold, modifier = Modifier.weight(1f))
+            var text by remember { mutableStateOf(vm.guideQuery) }
+            TvField("Search channels and programs", text, modifier = Modifier.width(300.dp), imeAction = androidx.compose.ui.text.input.ImeAction.Search, onSubmit = { vm.guideQuery = text.trim() }) { text = it }
+            if (vm.guideQuery.isNotBlank()) TvButton("✕ Clear") { text = ""; vm.guideQuery = "" }
+        }
         if (list.isEmpty() && vm.selectedGroup == FAV_GROUP) {
             Label("No favorites yet. Press Menu (or hold OK) on any channel to add it — favorites from every playlist appear here.", size = 13.sp, color = C.Soft, lines = 2)
         }
+        if (vm.guideQuery.isNotBlank()) {
+            GuideSearchResults(vm, Modifier.weight(1f))
+        } else {
         // Timeline header
         Row(Modifier.fillMaxWidth().height(18.dp)) {
             Label("Today · ${vm.zoneLabel()}", size = 12.sp, modifier = Modifier.width((CH_COL + 3).dp))
@@ -139,7 +149,7 @@ fun GuideScreen(vm: AppViewModel) {
         }
         Box(Modifier.weight(1f)) {
             LazyColumn(state = listState, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                itemsIndexed(list, key = { _, c -> c.key }) { idx, c ->
+                itemsIndexed(list, key = { i, c -> "$i-${c.key}" }) { idx, c ->
                     Row(Modifier.fillMaxWidth().height(50.dp), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
                         // Channel name: two lines normally; the cell widens to show the full name while highlighted.
                         var nameFocused by remember { mutableStateOf(false) }
@@ -196,6 +206,49 @@ fun GuideScreen(vm: AppViewModel) {
             // "Now" line
             val nowX = (CH_COL + 3) + ((vm.now - winStart) / 60000f) * DP_PER_MIN
             Box(Modifier.offset(x = nowX.dp).width(2.dp).fillMaxHeight().background(C.Accent))
+        }
+        }
+    }
+}
+
+/** TV Guide search: matching channels, then matching programs (on now or later), in this playlist and Favorites. */
+@Composable
+private fun GuideSearchResults(vm: AppViewModel, modifier: Modifier) {
+    val q = vm.guideQuery.lowercase()
+    val pool = remember(vm.channels, vm.prefs.favorites, vm.favDataTick) { (vm.channels + vm.channelsIn(FAV_GROUP)).distinctBy { it.key } }
+    val chHits = remember(q, pool) { pool.filter { vm.channelName(it).lowercase().contains(q) }.take(60) }
+    val progHits = remember(q, pool, vm.guide) {
+        val now = System.currentTimeMillis()
+        pool.flatMap { c -> vm.programs(c).filter { it.end > now && (it.title.lowercase().contains(q) || it.subtitle?.lowercase()?.contains(q) == true) }.map { c to it } }
+            .sortedBy { it.second.start }.take(80)
+    }
+    LazyColumn(modifier, verticalArrangement = Arrangement.spacedBy(5.dp)) {
+        item { SectionTitle("Channels (${chHits.size})", Modifier.padding(start = 4.dp, top = 4.dp)) }
+        if (chHits.isEmpty()) item { Label("No channels match.", size = 13.sp, modifier = Modifier.padding(start = 4.dp)) }
+        itemsIndexed(chHits, key = { i, c -> "c$i-${c.key}" }) { _, c ->
+            val now = vm.nowNext(c).first
+            Focusable(Modifier.fillMaxWidth().height(50.dp), onMenu = { vm.toggleFavorite(c.key) }, onClick = { vm.selectChannel(c.key, PlayContext.GROUP) }) {
+                Spacer(Modifier.width(8.dp))
+                ChannelBadge(vm.channelName(c), c.logo, 32.dp)
+                Column(Modifier.padding(horizontal = 10.dp).weight(1f)) {
+                    Label(vm.channelName(c) + if (vm.isFavorite(c.key)) "  ★" else "", size = 14.sp, color = C.Text, weight = FontWeight.SemiBold)
+                    Label(listOf(vm.groupName(c.group), vm.playlistName(c), now?.let { "Now: ${it.title}" } ?: "").filter { it.isNotBlank() }.joinToString(" · "), size = 12.sp)
+                }
+                Label(if (vm.isPreviewing(c.key)) "▶ Full screen" else "▶ Preview", size = 13.sp, color = C.Accent, weight = FontWeight.Bold, modifier = Modifier.padding(end = 12.dp))
+            }
+        }
+        item { SectionTitle("Programs (${progHits.size})", Modifier.padding(start = 4.dp, top = 12.dp)) }
+        if (progHits.isEmpty()) item { Label("No programs in the guide match.", size = 13.sp, modifier = Modifier.padding(start = 4.dp)) }
+        itemsIndexed(progHits, key = { i, _ -> "p$i" }) { _, (c, p) ->
+            val onNow = vm.now >= p.start
+            Focusable(Modifier.fillMaxWidth().height(50.dp), onClick = { vm.selectChannel(c.key, PlayContext.GROUP) }) {
+                Label(if (onNow) "On now" else "${vm.dayLabel(p.start)} ${vm.fmtTime(p.start)}", size = 12.sp, color = if (onNow) C.Accent else C.Soft, weight = FontWeight.Bold, modifier = Modifier.width(120.dp).padding(start = 12.dp))
+                Column(Modifier.weight(1f)) {
+                    Label((if (p.isNew) "NEW · " else "") + p.title + (p.subtitle?.let { " · $it" } ?: ""), size = 14.sp, color = C.Text, weight = FontWeight.SemiBold)
+                    Label(vm.channelName(c) + " · " + vm.fmtTime(p.start) + " – " + vm.fmtTime(p.end), size = 12.sp)
+                }
+                Label(if (onNow) "▶ Tune in" else "▶ Channel", size = 13.sp, color = C.Accent, weight = FontWeight.Bold, modifier = Modifier.padding(end = 12.dp))
+            }
         }
     }
 }

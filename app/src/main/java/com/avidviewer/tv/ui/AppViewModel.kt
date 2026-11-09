@@ -134,6 +134,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     var sportEvents by mutableStateOf<List<SportEvent>>(emptyList()); private set
     var sportCat by mutableStateOf<String?>(null) // null = All
     var settingsSection by mutableStateOf("playlists")
+    /** Search boxes on the TV Guide, Movies and Series screens (applied when OK/Search is pressed). */
+    var guideQuery by mutableStateOf("")
+    var vodQuery by mutableStateOf(mapOf("movie" to "", "series" to ""))
     var update by mutableStateOf<Updater.Release?>(null); private set
     var updateStatus by mutableStateOf<String?>(null); private set
     var updateBusy by mutableStateOf(false); private set
@@ -356,7 +359,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                     status = if (cached.isEmpty()) "Couldn't load channels: ${e.message}" else "Couldn't refresh, showing saved channels."
                 }
             }
-            val savedVod = withContext(Dispatchers.IO) { store.loadVod(p.id) }
+            val savedVod = withContext(Dispatchers.IO) { store.loadVod(p.id).distinctBy { it.key } }
             if (savedVod.isNotEmpty()) vod = savedVod
             // Re-download when asked, when nothing is saved, or when the saved list predates categories.
             val oldFormat = savedVod.isNotEmpty() && savedVod.all { it.category.isBlank() }
@@ -365,7 +368,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 val movies = withContext(Dispatchers.IO) { runCatching { XtreamVod.movies(p) } }
                 status = "Loading series…"
                 val series = withContext(Dispatchers.IO) { runCatching { XtreamVod.series(p) } }
-                val list = movies.getOrDefault(emptyList()) + series.getOrDefault(emptyList())
+                val list = (movies.getOrDefault(emptyList()) + series.getOrDefault(emptyList())).distinctBy { it.key }
                 if (list.isNotEmpty()) {
                     withContext(Dispatchers.IO) { store.saveVod(p.id, list) }
                     vod = list
@@ -405,7 +408,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    private fun applyChannels(list: List<Channel>) {
+    private fun applyChannels(raw: List<Channel>) {
+        val list = raw.distinctBy { it.key }
         channels = list
         val gs = groups()
         if (currentKey == null) currentKey = prefs.lastChannel?.takeIf { k -> list.any { it.key == k } } ?: list.firstOrNull()?.key

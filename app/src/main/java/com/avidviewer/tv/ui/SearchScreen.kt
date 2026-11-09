@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -69,7 +70,7 @@ fun SearchScreen(vm: AppViewModel) {
 private fun androidx.compose.foundation.lazy.LazyListScope.section(vm: AppViewModel, pid: String, title: String, hits: List<Hit>) {
     if (hits.isEmpty()) return
     item(key = "$pid-$title") { SectionTitle("$title (${hits.size})", Modifier.padding(start = 4.dp, top = 6.dp)) }
-    items(hits, key = { "$pid-$title-${it.kind}-${it.channelKey ?: it.vod?.key}-${it.title}-${it.detail}" }) { h ->
+    itemsIndexed(hits, key = { i, _ -> "$pid-$title-$i" }) { _, h ->
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Focusable(Modifier.weight(1f).height(50.dp), onClick = { vm.openHit(h) }) {
                 ChannelBadge(h.title, h.logo, 32.dp)

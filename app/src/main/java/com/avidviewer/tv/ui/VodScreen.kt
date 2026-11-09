@@ -20,12 +20,16 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -65,7 +69,8 @@ fun VodScreen(vm: AppViewModel, kind: String) {
     val current = vm.vodCategory[kind] ?: "All"
     val specials = listOf("All" to all.size, "Recently added" to -1, "Continue watching" to -1, "My List" to -1)
     val cats = vm.vodCategories(kind)
-    val items = vm.vodItems(kind)
+    val vq = (vm.vodQuery[kind] ?: "").trim()
+    val items = if (vq.isNotBlank()) vm.vodOf(kind).filter { it.name.contains(vq, ignoreCase = true) } else vm.vodItems(kind)
 
     Row(Modifier.fillMaxSize()) {
         LazyColumn(
@@ -87,11 +92,17 @@ fun VodScreen(vm: AppViewModel, kind: String) {
             }
         }
         Column(Modifier.weight(1f).fillMaxHeight().padding(start = 12.dp, end = 16.dp, top = 14.dp)) {
-            Label("$current  ·  ${items.size} titles", size = 14.sp, color = C.Soft, weight = FontWeight.Bold, modifier = Modifier.padding(bottom = 10.dp))
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(bottom = 10.dp)) {
+                Label(if (vq.isNotBlank()) "Results for “$vq”  ·  ${items.size} titles" else "$current  ·  ${items.size} titles", size = 14.sp, color = C.Soft, weight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                var text by remember(kind) { mutableStateOf(vq) }
+                TvField("Search ${title.lowercase()}", text, modifier = Modifier.width(280.dp), imeAction = androidx.compose.ui.text.input.ImeAction.Search,
+                    onSubmit = { vm.vodQuery = vm.vodQuery + (kind to text.trim()) }) { text = it }
+                if (vq.isNotBlank()) TvButton("✕ Clear") { text = ""; vm.vodQuery = vm.vodQuery + (kind to "") }
+            }
             if (items.isEmpty()) {
                 Label(
                     when (current) {
-                        "My List" -> "Nothing in My List yet. Open a title and choose + My List."
+                        "My List" -> if (vq.isNotBlank()) "No titles match." else "Nothing in My List yet. Open a title and choose + My List."
                         "Continue watching" -> "Titles you stop part-way through appear here."
                         else -> "No titles in this category."
                     }, size = 14.sp, color = C.Muted, lines = 2,
@@ -103,7 +114,7 @@ fun VodScreen(vm: AppViewModel, kind: String) {
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                     contentPadding = PaddingValues(bottom = 24.dp),
                 ) {
-                    items(items, key = { it.key }) { v -> Poster(vm, v) }
+                    itemsIndexed(items, key = { i, v -> "$i-${v.key}" }) { _, v -> Poster(vm, v) }
                 }
             }
         }
@@ -203,7 +214,7 @@ private fun SeasonsAndEpisodes(vm: AppViewModel) {
                 items(seasons) { s -> TvButton("Season $s", selected = s == season) { vm.detailSeason = s } }
             }
             LazyColumn(verticalArrangement = Arrangement.spacedBy(4.dp), contentPadding = PaddingValues(bottom = 20.dp)) {
-                items(eps.filter { it.season == season }, key = { it.url }) { e ->
+                items(eps.filter { it.season == season }) { e ->
                     val r = vm.resumeOf(e.key)
                     Focusable(Modifier.fillMaxWidth().height(52.dp), onClick = { vm.playDetailEpisode(e) }) {
                         Label("E${e.number}", size = 13.sp, color = C.Accent, weight = FontWeight.Bold, modifier = Modifier.width(50.dp).padding(start = 12.dp))
