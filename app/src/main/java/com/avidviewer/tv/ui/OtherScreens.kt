@@ -694,11 +694,8 @@ private fun androidx.compose.foundation.lazy.LazyListScope.displaySettings(vm: A
     item {
         SettingBlock("Time zone", "Guide times, program times and the clock use this zone. Now: ${vm.fmtTime(vm.now)} ${vm.zoneLabel()}") {
             Label(vm.timeZoneSource(), size = 12.sp, color = C.Soft)
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                ZONES.take(6).forEach { (id, label) -> TvButton(label, selected = p.timeZone == id) { vm.updatePrefs { it.copy(timeZone = id) } } }
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                ZONES.drop(6).forEach { (id, label) -> TvButton(label, selected = p.timeZone == id) { vm.updatePrefs { it.copy(timeZone = id) } } }
+            androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                ZONES.forEach { (id, label) -> TvButton(label, selected = p.timeZone == id) { vm.updatePrefs { it.copy(timeZone = id) } } }
             }
         }
     }
