@@ -76,6 +76,12 @@ class Store(private val context: Context) {
 
     fun savePrefs(p: Prefs) = writeAtomic(File(dir, "prefs.json"), p.toJson().toString())
 
+    /** When a playlist's saved "channels", "guide" or "vod" file was written; 0 if it's missing or empty. */
+    fun savedAt(kind: String, playlistId: String): Long {
+        val f = File(dataDir, "${kind}_$playlistId.json")
+        return if (f.exists() && f.length() > 2) f.lastModified() else 0L
+    }
+
     // ---- channels per playlist ----
     fun saveChannels(playlistId: String, list: List<Channel>) {
         val a = JSONArray()

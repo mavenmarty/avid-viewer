@@ -49,7 +49,6 @@ import kotlinx.coroutines.launch
 
 private const val DP_PER_MIN = 3.3f
 private const val CH_COL = 200 // channel column width (dp)
-private const val CH_COL_FOCUSED = 330 // widened while the channel name is highlighted
 private const val WINDOW_MIN = 150
 
 @Composable
@@ -172,12 +171,9 @@ fun GuideScreen(vm: AppViewModel) {
             LazyColumn(state = listState, verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 itemsIndexed(list, key = { i, c -> "$i-${c.key}" }) { idx, c ->
                     Row(Modifier.fillMaxWidth().height(50.dp), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
-                        // Channel name: two lines normally; the cell widens to show the full name while highlighted.
-                        var nameFocused by remember { mutableStateOf(false) }
-                        val colWidth by animateDpAsState(if (nameFocused) CH_COL_FOCUSED.dp else CH_COL.dp, label = "chcol")
+                        // Channel name: a fixed-width cell with up to two lines (no widening while highlighted).
                         Focusable(
-                            modifier = Modifier.width(colWidth).fillMaxHeight().focusRequester(rowFocus[idx])
-                                .onFocusChanged { nameFocused = it.hasFocus },
+                            modifier = Modifier.width(CH_COL.dp).fillMaxHeight().focusRequester(rowFocus[idx]),
                             onFocus = { focusProg = c.key to vm.nowNext(c).first },
                             onMenu = { vm.channelMenu = c.key },
                             onClick = { vm.selectChannel(c.key, PlayContext.GROUP) },
@@ -187,7 +183,7 @@ fun GuideScreen(vm: AppViewModel) {
                             Label(
                                 vm.channelName(c) + if (vm.isFavorite(c.key)) " ★" else "",
                                 size = 13.sp, color = C.Text, weight = FontWeight.SemiBold,
-                                lines = if (nameFocused) 3 else 2,
+                                lines = 2,
                                 modifier = Modifier.padding(start = 7.dp, end = 6.dp),
                             )
                         }
@@ -336,7 +332,8 @@ fun OptionRow(label: String, onClick: () -> Unit) {
 @Composable
 private fun GuideSearchResults(vm: AppViewModel, modifier: Modifier) {
     val q = vm.guideQuery.lowercase()
-    val pool = remember(vm.channels, vm.prefs.favorites, vm.favDataTick) { (vm.channels + vm.allLists().flatMap { vm.channelsIn(it.first) }).distinctBy { it.key } }
+    LaunchedEffect(Unit) { vm.loadSearchPool() }
+    val pool = remember(vm.searchPool, vm.channels, vm.favDataTick) { (vm.searchPool + vm.channels).distinctBy { it.key }.filter { it.key !in vm.prefs.hiddenChannels } }
     val chHits = remember(q, pool) { pool.filter { vm.channelName(it).lowercase().contains(q) }.take(60) }
     val progHits = remember(q, pool, vm.guide) {
         val now = System.currentTimeMillis()
@@ -348,7 +345,7 @@ private fun GuideSearchResults(vm: AppViewModel, modifier: Modifier) {
         if (chHits.isEmpty()) item { Label("No channels match.", size = 13.sp, modifier = Modifier.padding(start = 4.dp)) }
         itemsIndexed(chHits, key = { i, c -> "c$i-${c.key}" }) { _, c ->
             val now = vm.nowNext(c).first
-            Focusable(Modifier.fillMaxWidth().height(50.dp), onMenu = { vm.channelMenu = c.key }, onClick = { vm.selectChannel(c.key, PlayContext.GROUP) }) {
+            Focusable(Modifier.fillMaxWidth().height(50.dp), onMenu = { vm.channelMenu = c.key }, onClick = { vm.tuneAnywhere(c.key) }) {
                 Spacer(Modifier.width(8.dp))
                 ChannelBadge(vm.channelName(c), c.logo, 32.dp)
                 Column(Modifier.padding(horizontal = 10.dp).weight(1f)) {
@@ -362,7 +359,7 @@ private fun GuideSearchResults(vm: AppViewModel, modifier: Modifier) {
         if (progHits.isEmpty()) item { Label("No programs in the guide match.", size = 13.sp, modifier = Modifier.padding(start = 4.dp)) }
         itemsIndexed(progHits, key = { i, _ -> "p$i" }) { _, (c, p) ->
             val onNow = vm.now >= p.start
-            Focusable(Modifier.fillMaxWidth().height(50.dp), onClick = { vm.selectChannel(c.key, PlayContext.GROUP) }) {
+            Focusable(Modifier.fillMaxWidth().height(50.dp), onClick = { vm.tuneAnywhere(c.key) }) {
                 Label(if (onNow) "On now" else "${vm.dayLabel(p.start)} ${vm.fmtTime(p.start)}", size = 12.sp, color = if (onNow) C.Accent else C.Soft, weight = FontWeight.Bold, modifier = Modifier.width(120.dp).padding(start = 12.dp))
                 Column(Modifier.weight(1f)) {
                     Label((if (p.isNew) "NEW · " else "") + p.title + (p.subtitle?.let { " · $it" } ?: ""), size = 14.sp, color = C.Text, weight = FontWeight.SemiBold)

@@ -312,7 +312,7 @@ fun PlaylistsScreen(vm: AppViewModel) {
                 ) {
                     Column(Modifier.weight(1f).padding(horizontal = 12.dp)) {
                         Label(p.name, size = 15.sp, color = if (p.enabled) C.Text else C.Muted, weight = FontWeight.SemiBold)
-                        Label(playlistState(p, p.id == active), size = 12.sp, color = if (p.id == active) C.Accent else C.Muted)
+                        Label(playlistState(p, false), size = 12.sp, color = if (p.enabled) C.Accent else C.Muted)
                     }
                     if (on) Text("›", color = C.Accent, fontSize = 20.sp, modifier = Modifier.padding(end = 10.dp))
                 }
@@ -395,7 +395,7 @@ fun PlaylistsScreen(vm: AppViewModel) {
 private fun playlistState(p: com.avidviewer.tv.data.Playlist, active: Boolean): String = when {
     !p.enabled -> "Off"
     !p.liveOn && !p.vodOn -> "Nothing loaded"
-    else -> listOfNotNull(if (active) "Active" else null, if (p.liveOn) "Live" else null, if (p.vodOn) "VOD" else null).joinToString(" · ")
+    else -> listOfNotNull(if (p.liveOn) "Live TV" else null, if (p.vodOn) "Movies & series" else null).joinToString(" · ")
 }
 
 @Composable

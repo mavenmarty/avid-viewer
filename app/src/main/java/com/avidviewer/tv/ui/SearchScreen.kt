@@ -50,7 +50,7 @@ fun SearchScreen(vm: AppViewModel) {
                     item(key = "pl-" + pr.playlist.id) {
                         Row(Modifier.padding(top = 10.dp, bottom = 2.dp), verticalAlignment = Alignment.CenterVertically) {
                             Text(pr.playlist.name, color = C.Accent, fontSize = 17.sp, fontWeight = FontWeight.Bold)
-                            Label("  ${pr.total} results" + if (pr.playlist.id == vm.activePlaylist()?.id) " · active playlist" else "", size = 12.sp)
+                            Label("  ${pr.total} results", size = 12.sp)
                         }
                     }
                     if (pr.total == 0) item(key = "none-" + pr.playlist.id) { Label("No matches in this playlist.", size = 13.sp) }
