@@ -55,7 +55,7 @@ fun AppRoot(vm: AppViewModel) {
                         Screen.MOVIES -> VodScreen(vm, "movie")
                         Screen.SERIES -> VodScreen(vm, "series")
                         Screen.MANAGE -> ManageScreen(vm)
-                        Screen.PLAYLISTS -> PlaylistsScreen(vm)
+                        Screen.PLAYLISTS -> SettingsScreen(vm) // Playlists now live in Settings
                         Screen.SETTINGS -> SettingsScreen(vm)
                         Screen.PLAYER -> Unit
                     }

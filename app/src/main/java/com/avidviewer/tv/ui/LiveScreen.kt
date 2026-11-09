@@ -148,6 +148,6 @@ fun EmptyState(vm: AppViewModel, title: String, body: String) {
         Text(title, color = C.Text, fontSize = 24.sp, fontWeight = FontWeight.Bold)
         Label(body, size = 15.sp, color = C.Soft, lines = 3)
         if (vm.busy) Label(vm.status ?: "Loading…", size = 14.sp)
-        TvButton("Go to Playlists", primary = true) { vm.screen = Screen.PLAYLISTS }
+        TvButton("Add a playlist", primary = true) { vm.navSelect(Screen.PLAYLISTS) }
     }
 }

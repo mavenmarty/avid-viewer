@@ -61,6 +61,9 @@ object NavIcons {
     val Series = icon("series", "M4 8h16v12H4z M7 4h10 M10 12l5 2-5 2z")
     val Manage = icon("manage", "M4 7h10 M18 7h2 M4 17h4 M12 17h8 M16 5v4 M10 15v4")
     val Playlists = icon("playlists", "M4 6h12 M4 12h12 M4 18h8 M18 15v6 M15 18h6")
+    val Location = icon("location", "M12 21s-7-6.2-7-11.5a7 7 0 0 1 14 0C19 14.8 12 21 12 21z M12 7a2.5 2.5 0 1 0 0 5a2.5 2.5 0 1 0 0-5z")
+    val Privacy = icon("privacy", "M12 3l8 3v6c0 4.5-3.4 8.3-8 9-4.6-.7-8-4.5-8-9V6z")
+    val Storage = icon("storage", "M4 5h16v5H4z M4 14h16v5H4z M8 7.5h.01 M8 16.5h.01")
     val Settings = icon("settings", "M12 9a3 3 0 1 0 0 6a3 3 0 1 0 0-6z M12 2v3 M12 19v3 M4.2 4.2l2.1 2.1 M17.7 17.7l2.1 2.1 M2 12h3 M19 12h3 M4.2 19.8l2.1-2.1 M17.7 6.3l2.1-2.1")
 }
 
@@ -71,7 +74,6 @@ private val MENU = listOf(
     Triple(Screen.SPORTS, "Sports", NavIcons.Sports),
     Triple(Screen.MOVIES, "Movies", NavIcons.Movies),
     Triple(Screen.SERIES, "Series", NavIcons.Series),
-    Triple(Screen.PLAYLISTS, "Playlists", NavIcons.Playlists),
     Triple(Screen.SETTINGS, "Settings", NavIcons.Settings),
 )
 
@@ -132,7 +134,7 @@ fun NavRail(vm: AppViewModel) {
             vm.weatherLine()?.let { Label(it, size = 13.sp, color = C.Soft, lines = 2, modifier = Modifier.padding(start = 4.dp, top = 6.dp)) }
             vm.update?.let { rel ->
                 TvButton("Update ${rel.versionName}", primary = true, modifier = Modifier.padding(top = 8.dp)) {
-                    vm.settingsSection = "general"; vm.screen = Screen.SETTINGS; vm.navMode = NavMode.COLLAPSED
+                    vm.settingsSection = "about"; vm.screen = Screen.SETTINGS; vm.navMode = NavMode.COLLAPSED
                 }
             }
         }

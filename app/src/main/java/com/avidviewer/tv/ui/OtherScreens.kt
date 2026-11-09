@@ -112,7 +112,7 @@ fun ManageScreen(vm: AppViewModel) {
         Text("Manage channels", color = C.Text, fontSize = 18.sp, fontWeight = FontWeight.Bold)
         Label("Rename, reorder or hide groups and channels. Changes apply everywhere, including channel numbers and the TV Guide.", size = 12.sp, lines = 2)
         Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            LazyColumn(Modifier.width(360.dp).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+            LazyColumn(Modifier.width(330.dp).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(5.dp)) {
                 item { SectionTitle("Groups", Modifier.padding(4.dp)) }
                 items(groups, key = { it.raw }) { g ->
                     Row(
@@ -270,7 +270,7 @@ fun PlaylistsScreen(vm: AppViewModel) {
     val active = vm.activePlaylist()
 
     Row(Modifier.fillMaxSize().padding(20.dp), horizontalArrangement = Arrangement.spacedBy(20.dp)) {
-        Column(Modifier.width(330.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Column(Modifier.width(280.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("Playlists", color = C.Text, fontSize = 24.sp, fontWeight = FontWeight.Bold)
             Label("Bring your own provider. Avid Viewer doesn't include any channels.", size = 12.sp, lines = 2)
             if (vm.playlists.isEmpty()) Label("No playlists yet.", size = 14.sp, color = C.Soft)
@@ -330,103 +330,170 @@ private val ZONES = listOf(
     "Pacific/Honolulu" to "Hawaii", "America/Halifax" to "Atlantic",
 )
 
+private data class SettingsSection(val id: String, val title: String, val icon: androidx.compose.ui.graphics.vector.ImageVector)
+
+private val SECTIONS = listOf(
+    SettingsSection("playlists", "Playlists", NavIcons.Playlists),
+    SettingsSection("channels", "Channels", NavIcons.Manage),
+    SettingsSection("location", "Location & weather", NavIcons.Location),
+    SettingsSection("display", "Display & time", NavIcons.Guide),
+    SettingsSection("sports", "Sports tab", NavIcons.Sports),
+    SettingsSection("playback", "Playback", NavIcons.Live),
+    SettingsSection("privacy", "Privacy & analytics", NavIcons.Privacy),
+    SettingsSection("storage", "Storage", NavIcons.Storage),
+    SettingsSection("about", "Updates & about", NavIcons.Settings),
+)
+
+/** Settings: sections on the left (highlighting one shows it), options on the right. */
 @Composable
 fun SettingsScreen(vm: AppViewModel) {
     val p = vm.prefs
-    if (vm.settingsSection == "manage") {
-        Column(Modifier.fillMaxSize()) {
-            Column(Modifier.padding(start = 20.dp, top = 20.dp, end = 20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Settings", color = C.Text, fontSize = 24.sp, fontWeight = FontWeight.Bold)
-                SettingsTabs(vm)
+    val section = SECTIONS.firstOrNull { it.id == vm.settingsSection }?.id ?: "playlists"
+    Row(Modifier.fillMaxSize()) {
+        Column(Modifier.width(230.dp).fillMaxHeight().background(C.Bg).padding(10.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+            Text("Settings", color = C.Text, fontSize = 22.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 8.dp, top = 6.dp, bottom = 10.dp))
+            SECTIONS.forEach { sec ->
+                val on = sec.id == section
+                Focusable(
+                    modifier = Modifier.fillMaxWidth().height(44.dp),
+                    color = if (on) C.Surface2 else androidx.compose.ui.graphics.Color.Transparent,
+                    onFocus = { vm.settingsSection = sec.id },
+                    onClick = { vm.settingsSection = sec.id },
+                ) {
+                    androidx.compose.material3.Icon(sec.icon, contentDescription = null, tint = if (on) C.Accent else C.Muted, modifier = Modifier.padding(start = 10.dp).width(20.dp).height(20.dp))
+                    Column(Modifier.padding(start = 12.dp).weight(1f)) {
+                        Label(sec.title, size = 14.sp, color = if (on) C.Text else C.Soft, weight = if (on) FontWeight.Bold else FontWeight.Normal)
+                        sectionSummary(vm, sec.id)?.let { Label(it, size = 12.sp) }
+                    }
+                }
             }
-            ManageScreen(vm)
         }
-        return
+        Column(Modifier.weight(1f).fillMaxHeight()) {
+            when (section) {
+                "playlists" -> PlaylistsScreen(vm)
+                "channels" -> ManageScreen(vm)
+                else -> LazyColumn(
+                    Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(20.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    item { Text(SECTIONS.first { it.id == section }.title, color = C.Text, fontSize = 20.sp, fontWeight = FontWeight.Bold) }
+                    when (section) {
+                        "location" -> locationSettings(vm)
+                        "display" -> displaySettings(vm)
+                        "sports" -> sportsSettings(vm)
+                        "playback" -> item {
+                            SettingBlock("Stream format (Xtream)", "If channels won't play, try the other format. Applies after Refresh in Playlists.") {
+                                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    TvButton("MPEG-TS (.ts)", selected = p.streamFormat == "ts") { vm.updatePrefs { it.copy(streamFormat = "ts") } }
+                                    TvButton("HLS (.m3u8)", selected = p.streamFormat == "m3u8") { vm.updatePrefs { it.copy(streamFormat = "m3u8") } }
+                                }
+                            }
+                        }
+                        "privacy" -> privacySettings(vm)
+                        "storage" -> {
+                            item { ToggleRow("Clear cache on exit", "Removes stored logos and temporary video data when you leave the app. Playlists, favorites, guide and settings are kept.", p.clearCacheOnExit) { vm.updatePrefs { it.copy(clearCacheOnExit = !it.clearCacheOnExit) } } }
+                            item {
+                                var size by remember { mutableStateOf(vm.store.cacheSizeBytes()) }
+                                SettingBlock("Cache size", "${size / (1024 * 1024)} MB") {
+                                    TvButton("Clear cache now") { vm.store.clearCache(); size = vm.store.cacheSizeBytes() }
+                                }
+                            }
+                        }
+                        "about" -> {
+                            item {
+                                SettingBlock("App updates", "Installed: version ${vm.installed.second}" + (vm.update?.let { " · version ${it.versionName} available" } ?: "")) {
+                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        if (vm.update != null) TvButton(if (vm.updateBusy) "Working…" else "Download and install", primary = true) { if (!vm.updateBusy) vm.installUpdate() }
+                                        TvButton("Check now") { vm.checkForUpdate() }
+                                        TvButton(if (p.autoUpdateCheck) "Auto-check: on" else "Auto-check: off", selected = p.autoUpdateCheck) { vm.updatePrefs { it.copy(autoUpdateCheck = !it.autoUpdateCheck) } }
+                                    }
+                                    vm.updateStatus?.let { Label(it, size = 12.sp, color = C.Soft, lines = 3) }
+                                }
+                            }
+                            item { Label("Avid Viewer ${appVersion(vm)} · Bring your own provider; no channels are included.", size = 12.sp, lines = 2) }
+                        }
+                    }
+                }
+            }
+        }
     }
-    LazyColumn(
-        Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(20.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        item { Text("Settings", color = C.Text, fontSize = 24.sp, fontWeight = FontWeight.Bold) }
-        item {
+}
+
+private fun sectionSummary(vm: AppViewModel, id: String): String? = when (id) {
+    "playlists" -> "${vm.playlists.size} added"
+    "location" -> vm.prefs.postalCode.ifBlank { null }?.let { "$it · ${vm.prefs.placeName.substringBefore(',')}" } ?: "Not set"
+    "display" -> vm.zoneLabel()
+    "sports" -> "${vm.prefs.sportCats.count { it.on }} categories on"
+    "privacy" -> if (vm.prefs.historyPaused) "History paused" else "History on"
+    "about" -> vm.update?.let { "Update ${it.versionName} available" } ?: "Version ${vm.installed.second}"
+    else -> null
+}
+
+private fun androidx.compose.foundation.lazy.LazyListScope.locationSettings(vm: AppViewModel) {
+    val p = vm.prefs
+    item {
+        var code by remember(p.postalCode) { mutableStateOf(p.postalCode) }
+        SettingBlock(
+            "Postal code",
+            if (p.postalCode.isBlank()) "US ZIP or Canadian postal code. Used for weather and the Auto time zone. Only the code is sent, to Open-Meteo."
+            else "${p.postalCode} · ${p.placeName}",
+        ) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                TvField("Postal code", code, modifier = Modifier.width(220.dp)) { code = it.take(8) }
+                TvButton("Save", primary = true) { vm.setPostalCode(code) }
+            }
+            vm.postalStatus?.let { Label(it, size = 12.sp, color = C.Soft) }
+        }
+    }
+    item { ToggleRow("Show weather", "Current conditions under the clock, refreshed every 30 minutes", p.showWeather) { vm.toggleWeather() } }
+    item {
+        SettingBlock("Temperature units", vm.weatherLine()?.let { "Now: $it" } ?: "Set a postal code to see the weather.") {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                TvButton("General", selected = vm.settingsSection == "general") { vm.settingsSection = "general" }
-                TvButton("Sports tab", selected = vm.settingsSection == "sports") { vm.settingsSection = "sports" }
-                TvButton("Manage channels", selected = vm.settingsSection == "manage") { vm.settingsSection = "manage" }
+                TvButton("°F", selected = p.units == "F") { vm.setUnits("F") }
+                TvButton("°C", selected = p.units == "C") { vm.setUnits("C") }
             }
         }
-        if (vm.settingsSection == "sports") {
-            sportsSettings(vm)
-            return@LazyColumn
-        }
-        item {
-            SettingBlock("App updates", "Installed: version ${vm.installed.second}" + (vm.update?.let { " · version ${it.versionName} available" } ?: "")) {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    if (vm.update != null) TvButton(if (vm.updateBusy) "Working…" else "Download and install", primary = true) { if (!vm.updateBusy) vm.installUpdate() }
-                    TvButton("Check now") { vm.checkForUpdate() }
-                    TvButton(if (p.autoUpdateCheck) "Auto-check: on" else "Auto-check: off", selected = p.autoUpdateCheck) { vm.updatePrefs { it.copy(autoUpdateCheck = !it.autoUpdateCheck) } }
-                }
-                vm.updateStatus?.let { Label(it, size = 12.sp, color = C.Soft, lines = 3) }
+    }
+}
+
+private fun androidx.compose.foundation.lazy.LazyListScope.displaySettings(vm: AppViewModel) {
+    val p = vm.prefs
+    item { ToggleRow("Show clock", "Time and date in the menu and the full-screen info bar", p.showClock) { vm.updatePrefs { it.copy(showClock = !it.showClock) } } }
+    item {
+        SettingBlock("Time zone", "Guide times, program times and the clock use this zone. Now: ${vm.fmtTime(vm.now)} ${vm.zoneLabel()}") {
+            Label(vm.timeZoneSource(), size = 12.sp, color = C.Soft)
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                ZONES.take(6).forEach { (id, label) -> TvButton(label, selected = p.timeZone == id) { vm.updatePrefs { it.copy(timeZone = id) } } }
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                ZONES.drop(6).forEach { (id, label) -> TvButton(label, selected = p.timeZone == id) { vm.updatePrefs { it.copy(timeZone = id) } } }
             }
         }
-        item { SectionTitle("On-screen display", Modifier.padding(top = 6.dp)) }
-        item { ToggleRow("Show clock", "Time and date in the menu and the full-screen info bar", p.showClock) { vm.updatePrefs { it.copy(showClock = !it.showClock) } } }
-        item { ToggleRow("Show weather", "Current conditions for your postal code, refreshed every 30 minutes", p.showWeather) { vm.toggleWeather() } }
-        item {
-            var code by remember(p.postalCode) { mutableStateOf(p.postalCode) }
-            SettingBlock(
-                "Postal code",
-                if (p.postalCode.isBlank()) "US ZIP or Canadian postal code. Used for weather and the Auto time zone. Only the code is sent, to Open-Meteo."
-                else "${p.postalCode} · ${p.placeName}. Used for weather and the Auto time zone.",
-            ) {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    TvField("Postal code", code, modifier = Modifier.width(220.dp)) { code = it.take(8) }
-                    TvButton("Save", primary = true) { vm.setPostalCode(code) }
-                    TvButton("°F", selected = p.units == "F") { vm.setUnits("F") }
-                    TvButton("°C", selected = p.units == "C") { vm.setUnits("C") }
-                }
-                vm.postalStatus?.let { Label(it, size = 12.sp, color = C.Soft) }
-                vm.weatherLine()?.let { Label("Now: $it", size = 12.sp, color = C.Soft) }
+    }
+}
+
+/** Watch history and a viewing summary, all computed and kept on this device. */
+private fun androidx.compose.foundation.lazy.LazyListScope.privacySettings(vm: AppViewModel) {
+    val p = vm.prefs
+    item { Label("Everything here stays on this device in the app's private storage. Nothing is uploaded or backed up to the cloud.", size = 13.sp, color = C.Soft, lines = 2) }
+    item { ToggleRow("Pause watch history", "Stop recording what you watch. Existing history is kept until you clear it.", p.historyPaused) { vm.updatePrefs { it.copy(historyPaused = !it.historyPaused) } } }
+    item {
+        val week = System.currentTimeMillis() - 7L * 24 * 3600 * 1000
+        val recent = vm.history.filter { it.time >= week }
+        val hours = recent.sumOf { it.seconds } / 3600.0
+        val top = recent.groupBy { it.key }.mapValues { (_, l) -> l.sumOf { it.seconds } }.toList().sortedByDescending { it.second }.take(5)
+        SettingBlock("Your viewing, last 7 days", if (recent.isEmpty()) "No viewing recorded this week." else "%.1f hours across %d channels".format(hours, recent.map { it.key }.distinct().size)) {
+            top.forEachIndexed { i, (key, secs) ->
+                val name = vm.channel(key)?.let { vm.channelName(it) } ?: "Channel from another playlist"
+                Label("${i + 1}.  $name  ·  ${secs / 3600}h ${(secs / 60) % 60}m", size = 13.sp, color = C.Text)
             }
         }
-        item {
-            SettingBlock("Time zone", "Guide times, program times and the clock use this zone. Now: ${vm.fmtTime(vm.now)} ${vm.zoneLabel()}") {
-                Label(vm.timeZoneSource(), size = 12.sp, color = C.Soft)
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    ZONES.take(6).forEach { (id, label) -> TvButton(label, selected = p.timeZone == id) { vm.updatePrefs { it.copy(timeZone = id) } } }
-                }
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    ZONES.drop(6).forEach { (id, label) -> TvButton(label, selected = p.timeZone == id) { vm.updatePrefs { it.copy(timeZone = id) } } }
-                }
-            }
+    }
+    item {
+        SettingBlock("Watch history", if (vm.history.isEmpty()) "No watch history" else "${vm.history.size} viewing sessions from the last 90 days") {
+            TvButton("Clear watch history") { vm.clearHistory() }
         }
-        item { SectionTitle("Playback", Modifier.padding(top = 6.dp)) }
-        item {
-            SettingBlock("Stream format (Xtream)", "If channels won't play, try the other format. Applies after Refresh on the Playlists screen.") {
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    TvButton("MPEG-TS (.ts)", selected = p.streamFormat == "ts") { vm.updatePrefs { it.copy(streamFormat = "ts") } }
-                    TvButton("HLS (.m3u8)", selected = p.streamFormat == "m3u8") { vm.updatePrefs { it.copy(streamFormat = "m3u8") } }
-                }
-            }
-        }
-        item { SectionTitle("Storage", Modifier.padding(top = 6.dp)) }
-        item { ToggleRow("Clear cache on exit", "Removes stored logos and temporary video data when you leave the app. Playlists, favorites, guide and settings are kept.", p.clearCacheOnExit) { vm.updatePrefs { it.copy(clearCacheOnExit = !it.clearCacheOnExit) } } }
-        item {
-            var size by remember { mutableStateOf(vm.store.cacheSizeBytes()) }
-            SettingBlock("Cache size", "${size / (1024 * 1024)} MB") {
-                TvButton("Clear cache now") { vm.store.clearCache(); size = vm.store.cacheSizeBytes() }
-            }
-        }
-        item { SectionTitle("Privacy & data", Modifier.padding(top = 6.dp)) }
-        item { Label("Everything stays on this device in the app's private storage. Nothing is uploaded or backed up to the cloud.", size = 12.sp, lines = 2) }
-        item { ToggleRow("Pause watch history", "Stop recording what you watch. Existing history is kept until you clear it.", p.historyPaused) { vm.updatePrefs { it.copy(historyPaused = !it.historyPaused) } } }
-        item {
-            SettingBlock("Watch history", if (vm.history.isEmpty()) "No watch history" else "${vm.history.size} items from the last 90 days") {
-                TvButton("Clear watch history") { vm.clearHistory() }
-            }
-        }
-        item { Label("Avid Viewer ${appVersion(vm)}", size = 12.sp, modifier = Modifier.padding(top = 10.dp)) }
     }
 }
 
@@ -512,11 +579,3 @@ private fun androidx.compose.foundation.lazy.LazyListScope.sportsSettings(vm: Ap
     }
 }
 
-@Composable
-private fun SettingsTabs(vm: AppViewModel) {
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        TvButton("General", selected = vm.settingsSection == "general") { vm.settingsSection = "general" }
-        TvButton("Sports tab", selected = vm.settingsSection == "sports") { vm.settingsSection = "sports" }
-        TvButton("Manage channels", selected = vm.settingsSection == "manage") { vm.settingsSection = "manage" }
-    }
-}

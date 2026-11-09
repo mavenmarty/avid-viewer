@@ -58,7 +58,7 @@ fun VodScreen(vm: AppViewModel, kind: String) {
                     "No ${title.lowercase()} from ${vm.activePlaylist()?.name ?: "your playlist"} yet. If your provider offers them, choose Refresh on the Playlists screen.",
                 size = 15.sp, color = C.Soft, lines = 4,
             )
-            TvButton("Go to Playlists", primary = true) { vm.navSelect(Screen.PLAYLISTS) }
+            TvButton("Playlists", primary = true) { vm.navSelect(Screen.PLAYLISTS) }
         }
         return
     }

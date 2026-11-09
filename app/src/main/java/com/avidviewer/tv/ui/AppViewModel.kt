@@ -111,7 +111,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     var episodes by mutableStateOf<List<Episode>?>(null); private set
     var sportEvents by mutableStateOf<List<SportEvent>>(emptyList()); private set
     var sportCat by mutableStateOf<String?>(null) // null = All
-    var settingsSection by mutableStateOf("general")
+    var settingsSection by mutableStateOf("playlists")
     var update by mutableStateOf<Updater.Release?>(null); private set
     var updateStatus by mutableStateOf<String?>(null); private set
     var updateBusy by mutableStateOf(false); private set
@@ -173,7 +173,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
         Updater.onStatus = { msg -> viewModelScope.launch { updateStatus = msg; updateBusy = false } }
         if (prefs.autoUpdateCheck) checkForUpdate(quiet = true)
-        if (playlists.isEmpty()) { screen = Screen.PLAYLISTS; navMode = NavMode.COLLAPSED }
+        if (playlists.isEmpty()) { screen = Screen.SETTINGS; settingsSection = "playlists"; navMode = NavMode.COLLAPSED }
         activePlaylist()?.let { loadActive(refresh = false) }
     }
 
@@ -738,8 +738,12 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         val s = if (target == Screen.LIVE) Screen.GUIDE else target
         if (s == Screen.MOVIES || s == Screen.SERIES) closeVodDetail()
         if (s == Screen.SPORTS) openSportsScreen() else {
-            if (s == Screen.SETTINGS) settingsSection = "general"
-            if (s == Screen.MANAGE) { settingsSection = "manage"; screen = Screen.SETTINGS } else screen = s
+            when (s) {
+                Screen.SETTINGS -> { settingsSection = "playlists"; screen = s }
+                Screen.MANAGE -> { settingsSection = "channels"; screen = Screen.SETTINGS }
+                Screen.PLAYLISTS -> { settingsSection = "playlists"; screen = Screen.SETTINGS }
+                else -> screen = s
+            }
         }
         navMode = NavMode.COLLAPSED
         if (s == Screen.LIVE || s == Screen.GUIDE) {
