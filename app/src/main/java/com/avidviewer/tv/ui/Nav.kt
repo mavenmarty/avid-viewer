@@ -57,6 +57,8 @@ object NavIcons {
     val Live = icon("live", "M3 7h18v12H3z M8 3l4 4 4-4")
     val Guide = icon("guide", "M3 4h18v16H3z M3 10h18 M9 10v10")
     val Sports = icon("sports", "M8 21h8 M12 17v4 M7 4h10v5a5 5 0 0 1-10 0z M17 5h3v2a3 3 0 0 1-3 3 M7 5H4v2a3 3 0 0 0 3 3")
+    val Movies = icon("movies", "M3 4h18v16H3z M7 4v16 M17 4v16 M3 9h4 M3 15h4 M17 9h4 M17 15h4")
+    val Series = icon("series", "M4 8h16v12H4z M7 4h10 M10 12l5 2-5 2z")
     val Manage = icon("manage", "M4 7h10 M18 7h2 M4 17h4 M12 17h8 M16 5v4 M10 15v4")
     val Playlists = icon("playlists", "M4 6h12 M4 12h12 M4 18h8 M18 15v6 M15 18h6")
     val Settings = icon("settings", "M12 9a3 3 0 1 0 0 6a3 3 0 1 0 0-6z M12 2v3 M12 19v3 M4.2 4.2l2.1 2.1 M17.7 17.7l2.1 2.1 M2 12h3 M19 12h3 M4.2 19.8l2.1-2.1 M17.7 6.3l2.1-2.1")
@@ -68,6 +70,8 @@ private val MENU = listOf(
     Triple(Screen.LIVE, "Live TV", NavIcons.Live),
     Triple(Screen.GUIDE, "TV Guide", NavIcons.Guide),
     Triple(Screen.SPORTS, "Sports", NavIcons.Sports),
+    Triple(Screen.MOVIES, "Movies", NavIcons.Movies),
+    Triple(Screen.SERIES, "Series", NavIcons.Series),
     Triple(Screen.MANAGE, "Manage", NavIcons.Manage),
     Triple(Screen.PLAYLISTS, "Playlists", NavIcons.Playlists),
     Triple(Screen.SETTINGS, "Settings", NavIcons.Settings),
@@ -117,7 +121,7 @@ fun NavRail(vm: AppViewModel) {
                     )
                 }
             }
-            if (s == Screen.FAVORITES || s == Screen.SPORTS) Spacer(Modifier.height(6.dp))
+            if (s == Screen.FAVORITES || s == Screen.SERIES) Spacer(Modifier.height(6.dp))
         }
         Spacer(Modifier.weight(1f))
         if (vm.prefs.showClock) {

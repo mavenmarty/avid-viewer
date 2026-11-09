@@ -26,6 +26,7 @@ import com.avidviewer.tv.data.Program
 import com.avidviewer.tv.data.Store
 import com.avidviewer.tv.data.USER_AGENT
 import com.avidviewer.tv.data.Episode
+import com.avidviewer.tv.data.VodInfo
 import com.avidviewer.tv.data.Updater
 import com.avidviewer.tv.data.Scores
 import com.avidviewer.tv.data.SportCat
@@ -46,7 +47,7 @@ import java.util.Locale
 import java.util.TimeZone
 import java.util.UUID
 
-enum class Screen { SEARCH, FAVORITES, LIVE, GUIDE, SPORTS, MANAGE, PLAYLISTS, SETTINGS, PLAYER }
+enum class Screen { SEARCH, FAVORITES, LIVE, GUIDE, SPORTS, MOVIES, SERIES, MANAGE, PLAYLISTS, SETTINGS, PLAYER }
 
 /** Where full-screen Up/Down and Channel Up/Down move: the group the user came from, or Favorites. */
 enum class PlayContext { GROUP, FAVORITES, SPORTS }
@@ -96,6 +97,13 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     var weather by mutableStateOf<Weather?>(null); private set
     var vod by mutableStateOf<List<VodItem>>(emptyList()); private set
     var vodPlaying by mutableStateOf<VodItem?>(null); private set
+    var vodError by mutableStateOf<String?>(null); private set
+    var vodCategory by mutableStateOf(mapOf("movie" to "All", "series" to "All"))
+    var vodDetail by mutableStateOf<VodItem?>(null); private set
+    var vodInfo by mutableStateOf<VodInfo?>(null); private set
+    var detailEpisodes by mutableStateOf<List<Episode>?>(null); private set
+    var detailSeason by mutableStateOf<String?>(null)
+    private var resume: Map<String, Long> = store.loadResume()
     var searchQuery by mutableStateOf("")
     var searchResults by mutableStateOf<List<PlaylistHits>?>(null); private set
     var searching by mutableStateOf(false); private set
@@ -328,20 +336,24 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             }
             val savedVod = withContext(Dispatchers.IO) { store.loadVod(p.id) }
             if (savedVod.isNotEmpty()) vod = savedVod
-            if (p.isXtream && (refresh || savedVod.isEmpty())) {
-                status = "Loading movies and series…"
-                try {
-                    val list = withContext(Dispatchers.IO) {
-                        val movies = runCatching { XtreamVod.movies(p) }.getOrDefault(emptyList())
-                        movies + runCatching { XtreamVod.series(p) }.getOrDefault(emptyList())
-                    }
-                    if (list.isNotEmpty()) {
-                        withContext(Dispatchers.IO) { store.saveVod(p.id, list) }
-                        vod = list
-                    }
-                } catch (e: Exception) {
-                    status = "Couldn't load movies and series: ${e.message}"
+            // Re-download when asked, when nothing is saved, or when the saved list predates categories.
+            val oldFormat = savedVod.isNotEmpty() && savedVod.all { it.category.isBlank() }
+            if (p.isXtream && (refresh || savedVod.isEmpty() || oldFormat)) {
+                status = "Loading movies…"
+                val movies = withContext(Dispatchers.IO) { runCatching { XtreamVod.movies(p) } }
+                status = "Loading series…"
+                val series = withContext(Dispatchers.IO) { runCatching { XtreamVod.series(p) } }
+                val list = movies.getOrDefault(emptyList()) + series.getOrDefault(emptyList())
+                if (list.isNotEmpty()) {
+                    withContext(Dispatchers.IO) { store.saveVod(p.id, list) }
+                    vod = list
+                    otherData.remove(p.id)
                 }
+                vodError = listOfNotNull(
+                    movies.exceptionOrNull()?.let { "Movies couldn't load: ${it.message}" },
+                    series.exceptionOrNull()?.let { "Series couldn't load: ${it.message}" },
+                ).joinToString("\n").ifBlank { null }
+                status = vodError ?: "Loaded ${movies.getOrDefault(emptyList()).size} movies and ${series.getOrDefault(emptyList()).size} series."
             }
             val (savedGuide, savedAt) = withContext(Dispatchers.IO) { store.loadGuide(p.id) }
             if (savedGuide.isNotEmpty()) guide = savedGuide
@@ -530,6 +542,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun closeFullScreen() {
         osd = null
         if (vodPlaying != null) {
+            saveResumePoint()
             player.stop()
             player.clearMediaItems()
             vodPlaying = null
@@ -722,6 +735,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     // ---------------- left navigation ----------------
     fun navSelect(s: Screen) {
+        if (s == Screen.MOVIES || s == Screen.SERIES) closeVodDetail()
         if (s == Screen.SPORTS) openSportsScreen() else {
             if (s == Screen.SETTINGS) settingsSection = "general"
             screen = s
@@ -781,7 +795,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 openFullScreen(h.channelKey, PlayContext.GROUP)
             }
             "movie", "episode" -> h.vod?.let { playVod(it) }
-            "series" -> h.vod?.let { openSeries(it) }
+            "series" -> h.vod?.let { openVodDetail(it) }
         }
     }
 
@@ -805,15 +819,75 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         playVod(VodItem("${s.key}:${e.season}:${e.number}", s.playlistId, "episode", "${s.name} · S${e.season} E${e.number} · ${e.title}", s.logo, e.url))
     }
 
-    fun playVod(item: VodItem) {
+    fun playVod(item: VodItem, fromStart: Boolean = false) {
         recordWatch()
         if (screen != Screen.PLAYER) lastScreen = screen
         vodPlaying = item
         playerError = null
-        player.setMediaItem(MediaItem.fromUri(item.url))
+        player.setMediaItem(MediaItem.fromUri(item.url), if (fromStart) 0L else resumeOf(item.key))
         player.prepare()
         player.playWhenReady = true
         screen = Screen.PLAYER
+    }
+
+    // ---------------- movies & series browsing ----------------
+    fun resumeOf(key: String): Long = resume[key] ?: 0L
+
+    /** Remembers where a movie or episode was stopped (cleared when nearly finished). */
+    private fun saveResumePoint() {
+        val item = vodPlaying ?: return
+        val pos = player.currentPosition; val dur = player.duration
+        val m = resume.toMutableMap()
+        if (pos > 60_000 && (dur <= 0 || pos < dur * 0.95)) m[item.key] = pos else m.remove(item.key)
+        resume = m
+        store.saveResume(m)
+    }
+
+    fun vodOf(kind: String): List<VodItem> = vod.filter { if (kind == "series") it.kind == "series" else it.kind == "movie" || it.kind == "episode" }
+
+    fun vodCategories(kind: String): List<Pair<String, Int>> {
+        val counts = LinkedHashMap<String, Int>()
+        vodOf(kind).forEach { counts[it.category.ifBlank { "Other" }] = (counts[it.category.ifBlank { "Other" }] ?: 0) + 1 }
+        return counts.toList()
+    }
+
+    fun vodItems(kind: String): List<VodItem> {
+        val all = vodOf(kind)
+        return when (val c = vodCategory[kind] ?: "All") {
+            "All" -> all
+            "Recently added" -> all.sortedByDescending { it.added }.take(200)
+            "My List" -> prefs.myList.filter { if (kind == "series") it.kind == "series" else it.kind != "series" }
+            "Continue watching" -> all.filter { resume.containsKey(it.key) }
+            else -> all.filter { it.category.ifBlank { "Other" } == c }
+        }
+    }
+
+    fun openVodDetail(item: VodItem) {
+        screen = if (item.kind == "series") Screen.SERIES else Screen.MOVIES
+        if (navMode == NavMode.FULL || navMode == NavMode.GROUPS) navMode = NavMode.COLLAPSED
+        vodDetail = item; vodInfo = null; detailEpisodes = null; detailSeason = null
+        val p = playlists.firstOrNull { it.id == item.playlistId }
+        if (p == null || !p.isXtream) { vodInfo = VodInfo(); detailEpisodes = emptyList(); return }
+        viewModelScope.launch {
+            try {
+                if (item.kind == "series") {
+                    val (info, eps) = withContext(Dispatchers.IO) { XtreamVod.seriesInfo(p, item.seriesId ?: "") }
+                    vodInfo = info; detailEpisodes = eps; detailSeason = eps.firstOrNull()?.season
+                } else {
+                    vodInfo = withContext(Dispatchers.IO) { XtreamVod.movieInfo(p, item.streamId ?: "") }
+                }
+            } catch (e: Exception) {
+                vodInfo = VodInfo(plot = "Details aren't available right now.")
+                if (item.kind == "series") detailEpisodes = emptyList()
+            }
+        }
+    }
+
+    fun closeVodDetail() { vodDetail = null; vodInfo = null; detailEpisodes = null }
+
+    fun playDetailEpisode(e: Episode, fromStart: Boolean = false) {
+        val s = vodDetail ?: return
+        playVod(VodItem(e.key.ifBlank { "${s.key}:${e.season}:${e.number}" }, s.playlistId, "episode", "${s.name} · S${e.season} E${e.number} · ${e.title}", s.logo, e.url), fromStart)
     }
 
     fun seek(ms: Long) {
@@ -838,6 +912,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun stop() {
+        if (vodPlaying != null) saveResumePoint()
         recordWatch()
         player.stop()
     }

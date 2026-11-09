@@ -52,6 +52,8 @@ fun AppRoot(vm: AppViewModel) {
                         Screen.LIVE -> LiveScreen(vm)
                         Screen.GUIDE -> GuideScreen(vm)
                         Screen.SPORTS -> SportsScreen(vm)
+                        Screen.MOVIES -> VodScreen(vm, "movie")
+                        Screen.SERIES -> VodScreen(vm, "series")
                         Screen.MANAGE -> ManageScreen(vm)
                         Screen.PLAYLISTS -> PlaylistsScreen(vm)
                         Screen.SETTINGS -> SettingsScreen(vm)

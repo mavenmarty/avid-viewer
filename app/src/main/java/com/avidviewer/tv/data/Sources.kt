@@ -124,6 +124,7 @@ object M3u {
                                 VodItem(
                                     key = "${p.id}:v${n++}", playlistId = p.id, kind = if (isMovie) "movie" else "episode",
                                     name = pnd.first, logo = pnd.second["tvg-logo"]?.ifBlank { null }, url = url,
+                                    category = pnd.third?.ifBlank { null } ?: "Other",
                                 )
                             )
                         } else {

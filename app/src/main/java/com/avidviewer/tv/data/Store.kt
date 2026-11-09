@@ -172,6 +172,19 @@ class Store(private val context: Context) {
         writeAtomic(File(dir, "history.json"), a.toString())
     }
 
+    // ---- resume points for movies & episodes ----
+    fun loadResume(): Map<String, Long> {
+        val f = File(dir, "resume.json")
+        if (!f.exists()) return emptyMap()
+        return try {
+            val o = JSONObject(f.readText()); o.keys().asSequence().associateWith { o.getLong(it) }
+        } catch (e: Exception) {
+            emptyMap()
+        }
+    }
+
+    fun saveResume(m: Map<String, Long>) = writeAtomic(File(dir, "resume.json"), JSONObject(m).toString())
+
     fun clearCache() {
         context.cacheDir.listFiles()?.forEach { it.deleteRecursively() }
     }

@@ -82,7 +82,7 @@ fun FavoritesScreen(vm: AppViewModel) {
                 item(key = "ml") { SectionTitle("My List · movies & series", Modifier.padding(start = 4.dp, top = 10.dp)) }
                 items(myList, key = { "ml-" + it.key }) { v ->
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Focusable(Modifier.weight(1f).height(50.dp), onClick = { if (v.kind == "series") vm.openSeries(v) else vm.playVod(v) }) {
+                        Focusable(Modifier.weight(1f).height(50.dp), onClick = { if (v.kind == "series") vm.openVodDetail(v) else vm.playVod(v) }) {
                             ChannelBadge(v.name, v.logo, 32.dp)
                             Column(Modifier.padding(horizontal = 10.dp).weight(1f)) {
                                 Label(v.name, size = 14.sp, color = C.Text, weight = FontWeight.SemiBold)
