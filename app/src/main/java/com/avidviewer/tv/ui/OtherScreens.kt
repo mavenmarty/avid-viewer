@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.activity.compose.BackHandler
@@ -517,7 +518,7 @@ private data class SettingsSection(val id: String, val title: String, val icon: 
 
 private val SECTIONS = listOf(
     SettingsSection("playlists", "Playlists", NavIcons.Playlists),
-    SettingsSection("channels", "Channels", NavIcons.Manage),
+    SettingsSection("channels", "List Editor", NavIcons.Manage),
     SettingsSection("location", "Location & weather", NavIcons.Location),
     SettingsSection("display", "Display & time", NavIcons.Guide),
     SettingsSection("sports", "Sports tab", NavIcons.Sports),
@@ -555,7 +556,7 @@ fun SettingsScreen(vm: AppViewModel) {
         Column(Modifier.weight(1f).fillMaxHeight()) {
             when (section) {
                 "playlists" -> PlaylistsScreen(vm)
-                "channels" -> HiddenItems(vm)
+                "channels" -> ListEditor(vm)
                 else -> LazyColumn(
                     Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(20.dp),
@@ -613,6 +614,7 @@ fun SettingsScreen(vm: AppViewModel) {
 
 private fun sectionSummary(vm: AppViewModel, id: String): String? = when (id) {
     "playlists" -> "${vm.playlists.size} added" + (vm.playlists.count { !it.enabled }.takeIf { it > 0 }?.let { " · $it off" } ?: "")
+    "channels" -> (vm.prefs.hiddenGroups.size + vm.prefs.hiddenChannels.size).let { if (it == 0) "Nothing hidden" else "$it hidden" }
     "location" -> vm.prefs.postalCode.ifBlank { null }?.let { "$it · ${vm.prefs.placeName.substringBefore(',')}" } ?: "Not set"
     "display" -> vm.zoneLabel()
     "sports" -> "${vm.prefs.sportCats.count { it.on }} categories on"
@@ -835,31 +837,117 @@ private fun androidx.compose.foundation.lazy.LazyListScope.discoverSettings(vm: 
 }
 
 /** Settings › Channels: editing now happens in the TV Guide (Menu key); this lists what's hidden. */
+/**
+ * Settings › List Editor, left to right: playlists → their categories → the channels in the highlighted
+ * category. OK shows or hides one row; "Show all" / "Hide all" act on every row in the column
+ * (or every row matching the filter).
+ */
 @Composable
-private fun HiddenItems(vm: AppViewModel) {
-    val hiddenGroups = vm.groups(includeHidden = true).filter { it.hidden }
-    val hiddenChannels = vm.prefs.hiddenChannels.mapNotNull { vm.channel(it) }
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        item { Text("Channels", color = C.Text, fontSize = 20.sp, fontWeight = FontWeight.Bold) }
-        item {
-            SettingBlock("Edit channels and categories in the TV Guide", "Highlight a channel name or a category and press Menu (or hold OK) to rename it, move it up or down, add it to Favorites or hide it.") {}
-        }
-        item { SectionTitle("Hidden categories (${hiddenGroups.size})", Modifier.padding(top = 6.dp)) }
-        if (hiddenGroups.isEmpty()) item { Label("None", size = 13.sp) }
-        items(hiddenGroups, key = { "hg-" + it.raw }) { g ->
-            Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(C.Surface).padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) { Label(g.name, size = 14.sp, color = C.Text, weight = FontWeight.SemiBold, lines = 2); Label("${g.count} channels", size = 12.sp) }
-                TvButton("Show") { vm.toggleHidden(g.raw) }
+private fun ListEditor(vm: AppViewModel) {
+    val pls = vm.playlists
+    var pid by remember { mutableStateOf(vm.activePlaylist()?.id ?: pls.firstOrNull()?.id) }
+    var chs by remember { mutableStateOf<List<com.avidviewer.tv.data.Channel>?>(null) }
+    LaunchedEffect(pid, vm.channels) { chs = null; chs = pid?.let { vm.editorChannels(it) } ?: emptyList() }
+    val all = chs
+    var catFilter by remember(pid) { mutableStateOf("") }
+    var chFilter by remember(pid) { mutableStateOf("") }
+    var catSel by remember(pid) { mutableStateOf<String?>(null) }
+    val groups = remember(all, vm.prefs.groupOrder) { all?.let { vm.editorGroups(it) } ?: emptyList() }
+    val shownGroups = groups.filter { catFilter.isBlank() || vm.groupName(it.first).contains(catFilter, ignoreCase = true) }
+    val cat: String? = catSel?.takeIf { c -> groups.any { it.first == c } } ?: groups.firstOrNull()?.first
+    val p = pls.firstOrNull { it.id == pid }
+
+    Row(Modifier.fillMaxSize().padding(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 10.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        // 1. Playlists
+        LazyColumn(Modifier.width(180.dp).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            item { Text("List Editor", color = C.Text, fontSize = 20.sp, fontWeight = FontWeight.Bold) }
+            item { Label("Show or hide categories and channels. OK switches one; Show all / Hide all switch the whole column.", size = 12.sp, lines = 4, modifier = Modifier.padding(bottom = 4.dp)) }
+            if (pls.isEmpty()) item { Label("No playlists yet.", size = 13.sp) }
+            items(pls, key = { "le-" + it.id }) { pl ->
+                val on = pl.id == pid
+                Focusable(
+                    modifier = Modifier.fillMaxWidth().height(54.dp),
+                    color = if (on) C.Surface2 else C.Surface,
+                    onFocus = { if (pid != pl.id) pid = pl.id },
+                    onClick = { pid = pl.id },
+                ) {
+                    Column(Modifier.weight(1f).padding(horizontal = 10.dp)) {
+                        Label(pl.name, size = 14.sp, color = C.Text, weight = FontWeight.SemiBold)
+                        Label(if (!pl.enabled) "Off" else if (!pl.liveOn) "Live TV off" else "Categories ›", size = 12.sp, color = if (on) C.Accent else C.Muted)
+                    }
+                }
             }
         }
-        item { SectionTitle("Hidden channels (${hiddenChannels.size})", Modifier.padding(top = 6.dp)) }
-        if (hiddenChannels.isEmpty()) item { Label("None", size = 13.sp) }
-        items(hiddenChannels, key = { "hc-" + it.key }) { c ->
-            Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(C.Surface).padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
-                ChannelBadge(vm.channelName(c), c.logo, 30.dp)
-                Column(Modifier.weight(1f).padding(horizontal = 10.dp)) { Label(vm.channelName(c), size = 14.sp, color = C.Text, weight = FontWeight.SemiBold, lines = 2); Label(vm.groupName(c.group), size = 12.sp) }
-                TvButton("Show") { vm.showChannel(c.key) }
+        // 2. Categories of the playlist
+        Column(Modifier.width(260.dp).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            val hiddenCount = groups.count { vm.isGroupHidden(pid ?: "", it.first) }
+            Label("CATEGORIES · ${groups.size}" + if (hiddenCount > 0) " · $hiddenCount hidden" else "", size = 12.sp, weight = FontWeight.Bold)
+            TvField("Filter categories", catFilter, modifier = Modifier.fillMaxWidth()) { catFilter = it }
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                val targets = shownGroups.map { it.first }
+                val n = if (catFilter.isBlank()) "all" else "${targets.size}"
+                TvButton("Show $n") { pid?.let { vm.setGroupsHidden(it, targets, false) } }
+                TvButton("Hide $n") { pid?.let { vm.setGroupsHidden(it, targets, true) } }
+            }
+            when {
+                p == null -> Label("Choose a playlist.", size = 13.sp)
+                !p.liveOn -> Label("Live TV is off for this playlist. Turn it on in Settings › Playlists.", size = 13.sp, lines = 3)
+                all == null -> Label("Loading…", size = 13.sp)
+                groups.isEmpty() -> Label("No channels saved yet. Refresh the playlist in Settings › Playlists.", size = 13.sp, lines = 3)
+            }
+            LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                items(shownGroups, key = { "lg-" + it.first }) { (raw, count) ->
+                    val hidden = vm.isGroupHidden(pid ?: "", raw)
+                    EditorRow(
+                        title = vm.groupName(raw), sub = "$count channels", hidden = hidden, selected = raw == cat,
+                        onFocus = { catSel = raw }, onToggle = { pid?.let { vm.setGroupsHidden(it, listOf(raw), !hidden) } },
+                    )
+                }
             }
         }
+        // 3. Channels in the highlighted category
+        Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            val inCat = remember(all, cat, vm.prefs.channelOrder) { if (all != null && cat != null) vm.editorChannelsIn(all, cat) else emptyList() }
+            val shown = inCat.filter { chFilter.isBlank() || vm.channelName(it).contains(chFilter, ignoreCase = true) }
+            val hiddenCount = inCat.count { it.key in vm.prefs.hiddenChannels }
+            Label(
+                (cat?.let { vm.groupName(it).uppercase() } ?: "CHANNELS") + " · ${inCat.size}" + if (hiddenCount > 0) " · $hiddenCount hidden" else "",
+                size = 12.sp, weight = FontWeight.Bold,
+            )
+            TvField("Filter channels", chFilter, modifier = Modifier.fillMaxWidth()) { chFilter = it }
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                val keys = shown.map { it.key }
+                val n = if (chFilter.isBlank()) "all" else "${keys.size}"
+                TvButton("Show $n") { vm.setChannelsHidden(keys, false) }
+                TvButton("Hide $n") { vm.setChannelsHidden(keys, true) }
+                if (cat != null && vm.isGroupHidden(pid ?: "", cat)) Label("This category is hidden, so none of these show in the guide.", size = 12.sp, color = C.Soft, lines = 2, modifier = Modifier.weight(1f))
+            }
+            LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                itemsIndexed(shown, key = { i, c -> "lc-$i-${c.key}" }) { _, c ->
+                    val hidden = c.key in vm.prefs.hiddenChannels
+                    EditorRow(
+                        title = vm.channelName(c), sub = null, hidden = hidden, selected = false, logo = c.logo,
+                        onFocus = {}, onToggle = { vm.setChannelsHidden(listOf(c.key), !hidden) },
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun EditorRow(title: String, sub: String?, hidden: Boolean, selected: Boolean, logo: String? = null, logoName: String = title, onFocus: () -> Unit, onToggle: () -> Unit) {
+    Focusable(
+        modifier = Modifier.fillMaxWidth().height(if (sub != null) 50.dp else 44.dp),
+        color = if (selected) C.Surface2 else C.Surface,
+        onFocus = onFocus,
+        onClick = onToggle,
+    ) {
+        if (sub == null) Row(Modifier.padding(start = 8.dp)) { ChannelBadge(logoName, logo, 26.dp) }
+        Column(Modifier.weight(1f).padding(horizontal = 10.dp)) {
+            Label(title, size = 13.sp, color = if (hidden) C.Muted else C.Text, weight = FontWeight.SemiBold, lines = if (sub == null) 2 else 1)
+            if (sub != null) Label(sub, size = 12.sp)
+        }
+        Label(if (hidden) "⊘ Hidden" else "✓ Shown", size = 12.sp, color = if (hidden) C.Muted else C.Accent, weight = FontWeight.Bold, modifier = Modifier.padding(end = 10.dp))
     }
 }

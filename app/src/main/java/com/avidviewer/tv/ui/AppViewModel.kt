@@ -591,8 +591,60 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         val counts = LinkedHashMap<String, Int>()
         channels.forEach { counts[it.group] = (counts[it.group] ?: 0) + 1 }
         val ordered = prefs.groupOrder.filter { it in counts } + counts.keys.filterNot { it in prefs.groupOrder }
-        return ordered.map { GroupInfo(it, groupName(it), counts[it] ?: 0, it in prefs.hiddenGroups) }
+        val pid = activePlaylist()?.id ?: ""
+        return ordered.map { GroupInfo(it, groupName(it), counts[it] ?: 0, isGroupHidden(pid, it)) }
             .filter { includeHidden || !it.hidden }
+    }
+
+    // ---------------- hiding (List Editor) ----------------
+    /** Hidden categories are stored per playlist as "playlistId\u0001name"; a bare name (older versions) hides it everywhere. */
+    private fun hiddenId(pid: String, raw: String) = pid + "\u0001" + raw
+
+    fun isGroupHidden(pid: String, raw: String) = raw in prefs.hiddenGroups || hiddenId(pid, raw) in prefs.hiddenGroups
+
+    /** Shows or hides many categories of one playlist at once. */
+    fun setGroupsHidden(pid: String, raws: Collection<String>, hidden: Boolean) {
+        updatePrefs { p ->
+            val ids = raws.map { hiddenId(pid, it) }
+            p.copy(hiddenGroups = if (hidden) p.hiddenGroups + ids else p.hiddenGroups - ids.toSet() - raws.toSet())
+        }
+        afterHidingChanged(pid)
+    }
+
+    /** Shows or hides many channels at once. */
+    fun setChannelsHidden(keys: Collection<String>, hidden: Boolean) {
+        updatePrefs { p -> p.copy(hiddenChannels = if (hidden) p.hiddenChannels + keys else p.hiddenChannels - keys.toSet()) }
+        keys.firstOrNull()?.substringBefore(':')?.let { afterHidingChanged(it) }
+    }
+
+    private fun afterHidingChanged(pid: String) {
+        playlistGroups = playlistGroups - pid
+        if (expandedPlaylist == pid) loadPlaylistGroups(pid)
+        viewModelScope.launch { rebuildSportEvents() }
+    }
+
+    /** All channels of a playlist, hidden ones included, for the List Editor. */
+    suspend fun editorChannels(pid: String): List<Channel> {
+        val p = playlists.firstOrNull { it.id == pid } ?: return emptyList()
+        if (!p.liveOn) return emptyList()
+        if (p.id == activePlaylist()?.id) return channels
+        return otherData[p.id]?.first ?: withContext(Dispatchers.IO) { store.loadChannels(p.id) }.distinctBy { it.key }
+    }
+
+    /** Categories of [chs] in the user's order: (name, channel count). */
+    fun editorGroups(chs: List<Channel>): List<Pair<String, Int>> {
+        val counts = LinkedHashMap<String, Int>()
+        chs.forEach { counts[it.group] = (counts[it.group] ?: 0) + 1 }
+        val ordered = prefs.groupOrder.filter { it in counts } + counts.keys.filterNot { it in prefs.groupOrder }
+        return ordered.map { it to (counts[it] ?: 0) }
+    }
+
+    /** Channels of one category in the user's order, hidden ones included. */
+    fun editorChannelsIn(chs: List<Channel>, raw: String): List<Channel> {
+        val list = chs.filter { it.group == raw }
+        val order = prefs.channelOrder[raw] ?: return list
+        val byKey = list.associateBy { it.key }
+        return order.mapNotNull { byKey[it] } + list.filterNot { it.key in order }
     }
 
     fun channelsIn(group: String?): List<Channel> {
@@ -664,7 +716,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun toggleHidden(raw: String) = updatePrefs {
-        it.copy(hiddenGroups = if (raw in it.hiddenGroups) it.hiddenGroups - raw else it.hiddenGroups + raw)
+        val id = hiddenId(activePlaylist()?.id ?: "", raw)
+        it.copy(hiddenGroups = if (raw in it.hiddenGroups || id in it.hiddenGroups) it.hiddenGroups - raw - id else it.hiddenGroups + id)
     }
 
     fun isFavorite(key: String?) = key != null && key in prefs.favorites
@@ -1202,7 +1255,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             val (chs, _, _) = dataFor(p)
             val counts = LinkedHashMap<String, Int>()
             chs.forEach { counts[it.group] = (counts[it.group] ?: 0) + 1 }
-            val list = counts.filterKeys { it !in prefs.hiddenGroups }.map { (raw, n) -> GroupInfo(raw, groupName(raw), n, false) }
+            val list = counts.filterKeys { !isGroupHidden(p.id, it) }.map { (raw, n) -> GroupInfo(raw, groupName(raw), n, false) }
             playlistGroups = playlistGroups + (p.id to list)
         }
     }
