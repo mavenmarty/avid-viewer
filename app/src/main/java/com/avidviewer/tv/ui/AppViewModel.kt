@@ -1408,7 +1408,11 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     // ---------------- left navigation ----------------
+    /** Set when a screen is picked in the left menu; that screen's first item takes the highlight once. */
+    var entryFocusFor by mutableStateOf<Screen?>(null)
+
     fun navSelect(target: Screen) {
+        entryFocusFor = if (target == Screen.PLAYLISTS || target == Screen.MANAGE) Screen.SETTINGS else target
         val s = if (target == Screen.LIVE) Screen.GUIDE else target
         if (s == Screen.FAVORITES) {
             ensureFavoriteData()

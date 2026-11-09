@@ -1,5 +1,6 @@
 package com.avidviewer.tv.ui
 
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -152,3 +153,19 @@ fun initials(n: String): String =
 
 private val palette = listOf(0xFF1D4ED8, 0xFF7C3AED, 0xFF0F766E, 0xFFB91C1C, 0xFFB45309, 0xFF0E7490, 0xFF9D174D, 0xFF4D7C0F, 0xFF6D28D9, 0xFF334155)
 fun badgeColor(name: String) = Color(palette[(name.hashCode() and 0x7fffffff) % palette.size])
+
+/**
+ * Put on a screen's first item: when the screen is picked in the left menu, the highlight goes here
+ * (the top of the screen) instead of wherever the remote happened to land.
+ */
+@Composable
+fun Modifier.entryFocus(vm: AppViewModel, screen: Screen): Modifier {
+    val fr = androidx.compose.runtime.remember { androidx.compose.ui.focus.FocusRequester() }
+    androidx.compose.runtime.LaunchedEffect(vm.entryFocusFor) {
+        if (vm.entryFocusFor == screen) {
+            kotlinx.coroutines.delay(150)
+            if (runCatching { fr.requestFocus() }.isSuccess) vm.entryFocusFor = null
+        }
+    }
+    return this.then(androidx.compose.ui.Modifier.focusRequester(fr))
+}

@@ -36,7 +36,7 @@ fun SearchScreen(vm: AppViewModel) {
         Text("Search", color = C.Text, fontSize = 24.sp, fontWeight = FontWeight.Bold)
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             TvField(
-                "TV stations, shows, movies or series", vm.searchQuery, modifier = Modifier.width(420.dp),
+                "TV stations, shows, movies or series", vm.searchQuery, modifier = Modifier.width(420.dp).entryFocus(vm, Screen.SEARCH),
                 imeAction = ImeAction.Search, onSubmit = { vm.search(vm.searchQuery) },
             ) { vm.searchQuery = it }
             TvButton(if (vm.searching) "Searching…" else "Search", primary = true) { vm.search(vm.searchQuery) }

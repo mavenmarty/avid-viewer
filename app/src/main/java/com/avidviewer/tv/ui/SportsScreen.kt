@@ -93,7 +93,7 @@ fun SportsScreen(vm: AppViewModel) {
         // Categories
         Row(verticalAlignment = Alignment.CenterVertically) {
             LazyRow(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                item { TvButton("All", selected = vm.sportCat == null) { vm.sportCat = null; vm.selectedEvent = null } }
+                item { TvButton("All", selected = vm.sportCat == null, modifier = Modifier.entryFocus(vm, Screen.SPORTS)) { vm.sportCat = null; vm.selectedEvent = null } }
                 items(vm.enabledCats(), key = { it.id }) { c ->
                     TvButton(c.name, selected = vm.sportCat == c.id) { vm.sportCat = c.id; vm.selectedEvent = null }
                 }

@@ -88,7 +88,8 @@ fun VodScreen(vm: AppViewModel, kind: String) {
             items(specials + cats, key = { "c-" + it.first }) { (name, count) ->
                 val on = name == current
                 Focusable(
-                    modifier = Modifier.fillMaxWidth().height(36.dp),
+                    modifier = Modifier.fillMaxWidth().height(36.dp)
+                        .then(if (name == "All") Modifier.entryFocus(vm, if (kind == "series") Screen.SERIES else Screen.MOVIES) else Modifier),
                     color = if (on) C.Surface2 else Color.Transparent,
                     onClick = { vm.chooseVodCategory(kind, name) },
                 ) {

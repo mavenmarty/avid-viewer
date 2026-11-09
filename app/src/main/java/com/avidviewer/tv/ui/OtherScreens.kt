@@ -552,7 +552,7 @@ fun SettingsScreen(vm: AppViewModel) {
             SECTIONS.forEach { sec ->
                 val on = sec.id == section
                 Focusable(
-                    modifier = Modifier.fillMaxWidth().height(44.dp),
+                    modifier = Modifier.fillMaxWidth().height(44.dp).then(if (sec == SECTIONS.first()) Modifier.entryFocus(vm, Screen.SETTINGS) else Modifier),
                     color = if (on) C.Surface2 else androidx.compose.ui.graphics.Color.Transparent,
                     onFocus = { vm.settingsSection = sec.id },
                     onClick = { vm.settingsSection = sec.id },
