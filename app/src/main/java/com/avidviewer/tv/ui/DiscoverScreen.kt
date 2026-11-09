@@ -57,7 +57,7 @@ fun DiscoverScreen(vm: AppViewModel) {
         if (vm.tmdbKey().isBlank()) {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Label("Discover needs your free TMDB API key.", size = 16.sp, color = C.Text, weight = FontWeight.Bold)
-                Label("Enter it in Settings › Discover. It's stored encrypted on this device only.", size = 14.sp, color = C.Soft, lines = 2)
+                Label("Enter it in Settings › Discover. It's stored encrypted on this device only.", size = 14.sp, color = C.Soft, lines = Int.MAX_VALUE)
                 TvButton("Open Settings", primary = true) { vm.settingsSection = "discover"; vm.navSelect(Screen.SETTINGS); vm.settingsSection = "discover" }
             }
             return@Column

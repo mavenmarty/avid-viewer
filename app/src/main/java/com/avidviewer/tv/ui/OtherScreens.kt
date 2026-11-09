@@ -1,6 +1,9 @@
+@file:OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+
 package com.avidviewer.tv.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -55,7 +58,7 @@ fun FavoritesScreen(vm: AppViewModel) {
     Column(Modifier.fillMaxSize().padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text("Favorites", color = C.Text, fontSize = 24.sp, fontWeight = FontWeight.Bold)
         if (favs.isEmpty() && other.isEmpty() && myList.isEmpty()) {
-            Label("Nothing here yet. Press Menu (or hold OK) on a channel to add it, or use ☆ Favorite and + My List in Search.", size = 14.sp, color = C.Soft, lines = 3)
+            Label("Nothing here yet. Press Menu (or hold OK) on a channel to add it, or use ☆ Favorite and + My List in Search.", size = 14.sp, color = C.Soft, lines = Int.MAX_VALUE)
             return@Column
         }
         LazyColumn(verticalArrangement = Arrangement.spacedBy(5.dp), contentPadding = PaddingValues(bottom = 20.dp)) {
@@ -111,7 +114,7 @@ fun ManageScreen(vm: AppViewModel) {
 
     Column(Modifier.fillMaxSize().padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text("Manage channels", color = C.Text, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-        Label("Rename, reorder or hide groups and channels. Changes apply everywhere, including channel numbers and the TV Guide.", size = 12.sp, lines = 2)
+        Label("Rename, reorder or hide groups and channels. Changes apply everywhere, including channel numbers and the TV Guide.", size = 12.sp, lines = Int.MAX_VALUE)
         Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
             LazyColumn(Modifier.width(330.dp).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(5.dp)) {
                 item { SectionTitle("Groups", Modifier.padding(4.dp)) }
@@ -317,7 +320,7 @@ fun PlaylistsScreen(vm: AppViewModel) {
                     if (on) Text("›", color = C.Accent, fontSize = 20.sp, modifier = Modifier.padding(end = 10.dp))
                 }
             }
-            if (vm.playlists.isEmpty()) item { Label("No playlists yet. Avid Viewer doesn't include any channels; add your provider.", size = 12.sp, lines = 3) }
+            if (vm.playlists.isEmpty()) item { Label("No playlists yet. Avid Viewer doesn't include any channels; add your provider.", size = 12.sp, lines = Int.MAX_VALUE) }
         }
 
         // 2. Actions and switches for the chosen playlist
@@ -356,7 +359,7 @@ fun PlaylistsScreen(vm: AppViewModel) {
                 item { MiniToggle("Playlist on", if (selP.enabled) "Shown in the guide, search and Sports" else "Hidden everywhere; nothing is deleted", selP.enabled) { vm.setPlaylistEnabled(selP.id, !selP.enabled) } }
                 item { MiniToggle("Live TV & guide", if (selP.liveOn) "Channels and TV guide load" else "Live channels aren't loaded", selP.liveOn, enabled = selP.enabled) { vm.setPlaylistContent(selP.id, !selP.liveOn, selP.vodOn) } }
                 item { MiniToggle("Movies & series", if (selP.vodOn) "Movies and series load" else "Movies and series aren't loaded", selP.vodOn, enabled = selP.enabled) { vm.setPlaylistContent(selP.id, selP.liveOn, !selP.vodOn) } }
-                vm.status?.let { st -> item { Label(st, size = 12.sp, color = C.Soft, lines = 4, modifier = Modifier.padding(top = 4.dp)) } }
+                vm.status?.let { st -> item { Label(st, size = 12.sp, color = C.Soft, lines = Int.MAX_VALUE, modifier = Modifier.padding(top = 4.dp)) } }
             }
         }
 
@@ -384,7 +387,7 @@ fun PlaylistsScreen(vm: AppViewModel) {
             onDismissRequest = { confirm = null },
             containerColor = C.Surface,
             title = { Text(c.title, color = C.Text, fontWeight = FontWeight.Bold) },
-            text = { Label(c.message, size = 14.sp, color = C.Soft, lines = 6) },
+            text = { Label(c.message, size = 14.sp, color = C.Soft, lines = Int.MAX_VALUE) },
             confirmButton = { TvButton(c.yes, primary = true) { confirm = null; c.run() } },
             dismissButton = { TvButton("Cancel", modifier = Modifier.focusRequester(cancelFocus)) { confirm = null } },
         )
@@ -400,10 +403,10 @@ private fun playlistState(p: com.avidviewer.tv.data.Playlist, active: Boolean): 
 
 @Composable
 private fun MiniToggle(title: String, desc: String, on: Boolean, enabled: Boolean = true, onToggle: () -> Unit) {
-    Focusable(Modifier.fillMaxWidth().height(58.dp), onClick = { if (enabled) onToggle() }) {
-        Column(Modifier.weight(1f).padding(start = 12.dp, end = 8.dp)) {
-            Label(title, size = 14.sp, color = if (enabled) C.Text else C.Muted, weight = FontWeight.SemiBold)
-            Label(if (enabled) desc else "Turn the playlist on first", size = 12.sp, lines = 2)
+    Focusable(Modifier.fillMaxWidth().heightIn(min = 58.dp), onClick = { if (enabled) onToggle() }) {
+        Column(Modifier.weight(1f).padding(start = 12.dp, end = 8.dp, top = 8.dp, bottom = 8.dp)) {
+            Label(title, size = 14.sp, color = if (enabled) C.Text else C.Muted, weight = FontWeight.SemiBold, lines = 2)
+            Label(if (enabled) desc else "Turn the playlist on first", size = 12.sp, lines = Int.MAX_VALUE)
         }
         Label(if (on) "On" else "Off", size = 12.sp, color = if (on && enabled) C.Accent else C.Muted, weight = FontWeight.Bold, modifier = Modifier.padding(end = 6.dp))
         Row(
@@ -477,7 +480,7 @@ private fun PlaylistForm(vm: AppViewModel, existing: com.avidviewer.tv.data.Play
             item { TvField("Server (DNS), e.g. http://example.com:8080", server) { server = it } }
             item { TvField("Username", user) { user = it } }
             item { TvField(if (existing != null) "Password (leave empty to keep the current one)" else "Password", pass, password = true) { pass = it } }
-            item { Label("Live TV and the TV guide load from your login. Your password is stored encrypted on this device only.", size = 12.sp, lines = 2) }
+            item { Label("Live TV and the TV guide load from your login. Your password is stored encrypted on this device only.", size = 12.sp, lines = Int.MAX_VALUE) }
         } else {
             item { TvField("M3U playlist link", m3u) { m3u = it } }
             item { TvField("TV guide (XMLTV) link, optional", epg) { epg = it } }
@@ -502,7 +505,7 @@ private fun PlaylistForm(vm: AppViewModel, existing: com.avidviewer.tv.data.Play
                 if (onCancel != null) TvButton("Cancel") { onCancel() }
             }
         }
-        if (existing == null) vm.status?.let { st -> item { Label(st, size = 12.sp, color = C.Soft, lines = 3) } }
+        if (existing == null) vm.status?.let { st -> item { Label(st, size = 12.sp, color = C.Soft, lines = Int.MAX_VALUE) } }
     }
 }
 
@@ -534,9 +537,18 @@ private val SECTIONS = listOf(
 fun SettingsScreen(vm: AppViewModel) {
     val p = vm.prefs
     val section = SECTIONS.firstOrNull { it.id == vm.settingsSection }?.id ?: "playlists"
+    // The section list shows names while it has focus; once you move into a section it shrinks to icons,
+    // giving the page the width. Moving back left (or Back) brings the names back.
+    var compact by remember { mutableStateOf(false) }
+    val listWidth by androidx.compose.animation.core.animateDpAsState(if (compact) 64.dp else 230.dp, label = "settingsNav")
     Row(Modifier.fillMaxSize()) {
-        Column(Modifier.width(230.dp).fillMaxHeight().background(C.Bg).padding(10.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-            Text("Settings", color = C.Text, fontSize = 22.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 8.dp, top = 6.dp, bottom = 10.dp))
+        Column(
+            Modifier.width(listWidth).fillMaxHeight().background(C.Bg).padding(if (compact) 6.dp else 10.dp)
+                .onFocusChanged { if (it.hasFocus) compact = false },
+            verticalArrangement = Arrangement.spacedBy(3.dp),
+        ) {
+            if (compact) Spacer(Modifier.height(44.dp))
+            else Text("Settings", color = C.Text, fontSize = 22.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 8.dp, top = 6.dp, bottom = 10.dp))
             SECTIONS.forEach { sec ->
                 val on = sec.id == section
                 Focusable(
@@ -545,15 +557,15 @@ fun SettingsScreen(vm: AppViewModel) {
                     onFocus = { vm.settingsSection = sec.id },
                     onClick = { vm.settingsSection = sec.id },
                 ) {
-                    androidx.compose.material3.Icon(sec.icon, contentDescription = null, tint = if (on) C.Accent else C.Muted, modifier = Modifier.padding(start = 10.dp).width(20.dp).height(20.dp))
-                    Column(Modifier.padding(start = 12.dp).weight(1f)) {
+                    androidx.compose.material3.Icon(sec.icon, contentDescription = sec.title, tint = if (on) C.Accent else C.Muted, modifier = Modifier.padding(start = if (compact) 12.dp else 10.dp).width(20.dp).height(20.dp))
+                    if (!compact) Column(Modifier.padding(start = 12.dp).weight(1f)) {
                         Label(sec.title, size = 14.sp, color = if (on) C.Text else C.Soft, weight = if (on) FontWeight.Bold else FontWeight.Normal)
                         sectionSummary(vm, sec.id)?.let { Label(it, size = 12.sp) }
                     }
                 }
             }
         }
-        Column(Modifier.weight(1f).fillMaxHeight()) {
+        Column(Modifier.weight(1f).fillMaxHeight().onFocusChanged { if (it.hasFocus) compact = true }) {
             when (section) {
                 "playlists" -> PlaylistsScreen(vm)
                 "channels" -> ListEditor(vm)
@@ -578,11 +590,30 @@ fun SettingsScreen(vm: AppViewModel) {
                         }
                         "privacy" -> privacySettings(vm)
                         "storage" -> {
-                            item { ToggleRow("Clear cache on exit", "Removes stored logos and temporary video data when you leave the app. Playlists, favorites, guide and settings are kept.", p.clearCacheOnExit) { vm.updatePrefs { it.copy(clearCacheOnExit = !it.clearCacheOnExit) } } }
+                            item {
+                                Label("The cache holds copies of channel logos, posters and recently streamed video, so screens load faster. Clearing it never removes your playlists, favorites, lists, TV guide, watch history or settings.", size = 13.sp, color = C.Soft, lines = Int.MAX_VALUE)
+                            }
+                            item {
+                                ToggleRow(
+                                    "Clear cache on exit",
+                                    if (p.clearCacheOnExit) "On: every time you leave Avid Viewer, the cache is emptied. Logos and posters download again the next time you open the app, so the first screens may load more slowly."
+                                    else "Off: the cache is kept between visits, so logos and posters appear right away. Turn this on to free up storage each time you leave the app.",
+                                    p.clearCacheOnExit,
+                                ) {
+                                    vm.updatePrefs { it.copy(clearCacheOnExit = !it.clearCacheOnExit) }
+                                }
+                            }
                             item {
                                 var size by remember { mutableStateOf(vm.store.cacheSizeBytes()) }
-                                SettingBlock("Cache size", "${size / (1024 * 1024)} MB") {
-                                    TvButton("Clear cache now") { vm.store.clearCache(); size = vm.store.cacheSizeBytes() }
+                                var note by remember { mutableStateOf<String?>(null) }
+                                fun mb(b: Long) = if (b < 1024 * 1024) "${b / 1024} KB" else "${b / (1024 * 1024)} MB"
+                                SettingBlock("Cache size: ${mb(size)}", "Clear it now to free up that space. Your playlists and settings stay as they are.") {
+                                    TvButton("Clear cache now") {
+                                        val before = size
+                                        vm.store.clearCache(); size = vm.store.cacheSizeBytes()
+                                        note = "Cleared ${mb((before - size).coerceAtLeast(0))}. Logos and posters will download again as you browse."
+                                    }
+                                    note?.let { Label(it, size = 12.sp, color = C.Accent, lines = Int.MAX_VALUE) }
                                 }
                             }
                         }
@@ -597,11 +628,11 @@ fun SettingsScreen(vm: AppViewModel) {
                                     vm.updateStatus?.let { Label(it, size = 12.sp, color = C.Soft, lines = 3) }
                                 }
                             }
-                            item { Label("Avid Viewer ${appVersion(vm)} · Bring your own provider; no channels are included.", size = 12.sp, lines = 2) }
+                            item { Label("Avid Viewer ${appVersion(vm)} · Bring your own provider; no channels are included.", size = 12.sp, lines = Int.MAX_VALUE) }
                             item {
                                 SettingBlock("Credits", "This product uses the TMDB API but is not endorsed or certified by TMDB.") {
                                     Label("Streaming availability data provided by JustWatch.", size = 12.sp, color = C.Soft)
-                                    Label("Weather by Open-Meteo. Sports scores from ESPN's public scoreboard.", size = 12.sp, color = C.Soft, lines = 2)
+                                    Label("Weather by Open-Meteo. Sports scores from ESPN's public scoreboard.", size = 12.sp, color = C.Soft, lines = Int.MAX_VALUE)
                                 }
                             }
                         }
@@ -676,7 +707,7 @@ private fun androidx.compose.foundation.lazy.LazyListScope.displaySettings(vm: A
 /** Watch history and a viewing summary, all computed and kept on this device. */
 private fun androidx.compose.foundation.lazy.LazyListScope.privacySettings(vm: AppViewModel) {
     val p = vm.prefs
-    item { Label("Everything here stays on this device in the app's private storage. Nothing is uploaded or backed up to the cloud.", size = 13.sp, color = C.Soft, lines = 2) }
+    item { Label("Everything here stays on this device in the app's private storage. Nothing is uploaded or backed up to the cloud.", size = 13.sp, color = C.Soft, lines = Int.MAX_VALUE) }
     item { ToggleRow("Pause watch history", "Stop recording what you watch. Existing history is kept until you clear it.", p.historyPaused) { vm.updatePrefs { it.copy(historyPaused = !it.historyPaused) } } }
     item {
         val week = System.currentTimeMillis() - 7L * 24 * 3600 * 1000
@@ -706,10 +737,10 @@ private fun appVersion(vm: AppViewModel): String = try {
 
 @Composable
 private fun ToggleRow(title: String, desc: String, on: Boolean, onToggle: () -> Unit) {
-    Focusable(Modifier.fillMaxWidth().height(60.dp), onClick = onToggle) {
-        Column(Modifier.weight(1f).padding(horizontal = 14.dp)) {
-            Label(title, size = 15.sp, color = C.Text, weight = FontWeight.SemiBold)
-            Label(desc, size = 12.sp, lines = 2)
+    Focusable(Modifier.fillMaxWidth().heightIn(min = 60.dp), onClick = onToggle) {
+        Column(Modifier.weight(1f).padding(horizontal = 14.dp, vertical = 9.dp)) {
+            Label(title, size = 15.sp, color = C.Text, weight = FontWeight.SemiBold, lines = 2)
+            Label(desc, size = 12.sp, lines = Int.MAX_VALUE)
         }
         Label(if (on) "On" else "Off", size = 13.sp, color = if (on) C.Accent else C.Muted, weight = FontWeight.Bold, modifier = Modifier.padding(end = 8.dp))
         Row(
@@ -727,8 +758,8 @@ private fun SettingBlock(title: String, desc: String, content: @Composable () ->
         Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(C.Surface).padding(14.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Label(title, size = 15.sp, color = C.Text, weight = FontWeight.SemiBold)
-        Label(desc, size = 12.sp, lines = 2)
+        Label(title, size = 15.sp, color = C.Text, weight = FontWeight.SemiBold, lines = 2)
+        if (desc.isNotBlank()) Label(desc, size = 12.sp, lines = Int.MAX_VALUE)
         content()
     }
 }
@@ -736,13 +767,13 @@ private fun SettingBlock(title: String, desc: String, content: @Composable () ->
 // ---------------------------------------------------------------- Sports tab settings
 private fun androidx.compose.foundation.lazy.LazyListScope.sportsSettings(vm: AppViewModel) {
     item {
-        Label("Choose which categories appear on the Sports screen. Each one matches your provider's channel groups and channel names, plus guide listings that mention it. The order here is the order of the filter buttons.", size = 12.sp, lines = 3)
+        Label("Choose which categories appear on the Sports screen. Each one matches your provider's channel groups and channel names, plus guide listings that mention it. The order here is the order of the filter buttons.", size = 12.sp, lines = Int.MAX_VALUE)
     }
     val cats = vm.prefs.sportCats
     cats.forEachIndexed { i, c ->
         item(key = "cat-" + c.id) {
             Row(
-                Modifier.fillMaxWidth().height(54.dp).clip(RoundedCornerShape(10.dp)).background(C.Surface).padding(horizontal = 8.dp),
+                Modifier.fillMaxWidth().heightIn(min = 54.dp).clip(RoundedCornerShape(10.dp)).background(C.Surface).padding(horizontal = 8.dp, vertical = 6.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
             ) {
@@ -750,12 +781,22 @@ private fun androidx.compose.foundation.lazy.LazyListScope.sportsSettings(vm: Ap
                     vm.updateSportCats(cats.mapIndexed { j, x -> if (j == i) x.copy(on = !x.on) else x })
                 }
                 Column(Modifier.weight(1f).padding(horizontal = 6.dp)) {
-                    Label(c.name, size = 15.sp, color = C.Text, weight = FontWeight.SemiBold)
-                    Label(if (c.groups.isNotEmpty()) "Playlist category: " + c.groups.joinToString(", ") { vm.groupName(it) } else "Matches: " + c.keywords.joinToString(", "), size = 12.sp, lines = 2)
+                    Label(c.name + if (c.builtin) "  · built-in" else "", size = 15.sp, color = C.Text, weight = FontWeight.SemiBold, lines = 2)
+                    Label(if (c.groups.isNotEmpty()) "Playlist category: " + c.groups.joinToString(", ") { vm.groupName(it) } else "Matches: " + c.keywords.joinToString(", "), size = 12.sp, lines = Int.MAX_VALUE)
                 }
                 TvButton("▲") { if (i > 0) vm.updateSportCats(cats.toMutableList().apply { add(i - 1, removeAt(i)) }) }
                 TvButton("▼") { if (i < cats.size - 1) vm.updateSportCats(cats.toMutableList().apply { add(i + 1, removeAt(i)) }) }
-                if (!c.builtin) TvButton("Remove") { vm.updateSportCats(cats.filterIndexed { j, _ -> j != i }) }
+                TvButton("Remove") { vm.updateSportCats(cats.filterIndexed { j, _ -> j != i }) }
+            }
+        }
+    }
+    // Built-in categories can be removed; bring any of them back here.
+    val missing = com.avidviewer.tv.data.SportCat.DEFAULTS.filter { d -> cats.none { it.id == d.id } }
+    if (missing.isNotEmpty()) item(key = "cat-restore") {
+        SettingBlock("Removed built-in categories", missing.joinToString(", ") { it.name }) {
+            androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                missing.forEach { d -> TvButton("+ " + d.name) { vm.updateSportCats(vm.prefs.sportCats + d) } }
+                if (missing.size > 1) TvButton("Restore all") { vm.updateSportCats(vm.prefs.sportCats + missing) }
             }
         }
     }
@@ -796,7 +837,7 @@ private fun androidx.compose.foundation.lazy.LazyListScope.sportsSettings(vm: Ap
                     TvButton(if (added) "✓ In Sports" else "+ Add", selected = added) { if (added) vm.removeGroupFromSports(g.raw) else vm.addGroupToSports(g.raw) }
                 }
             }
-            if (groups.size > 40) Label("Showing 40 of ${groups.size}. Type in the filter to narrow the list.", size = 12.sp)
+            if (groups.size > 40) Label("Showing 40 of ${groups.size}. Type in the filter to narrow the list.", size = 12.sp, lines = Int.MAX_VALUE)
         }
     }
 }
@@ -823,8 +864,8 @@ private fun androidx.compose.foundation.lazy.LazyListScope.discoverSettings(vm: 
             LaunchedEffect(Unit) { if (vm.availableServices.isEmpty()) vm.loadServices() }
             SettingBlock("My streaming services", "Pick the services you subscribe to. Discover can then show only titles you can watch now. Region: ${vm.region()}") {
                 if (vm.availableServices.isEmpty()) Label("Loading services…", size = 12.sp)
-                vm.availableServices.chunked(5).forEach { row ->
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    vm.availableServices.let { row ->
                         row.forEach { s ->
                             val on = p.myServices.any { it.id == s.id }
                             TvButton((if (on) "✓ " else "") + s.name, selected = on) { vm.toggleService(s) }
@@ -857,27 +898,18 @@ private fun ListEditor(vm: AppViewModel) {
     val cat: String? = catSel?.takeIf { c -> groups.any { it.first == c } } ?: groups.firstOrNull()?.first
     val p = pls.firstOrNull { it.id == pid }
 
-    Row(Modifier.fillMaxSize().padding(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 10.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        // 1. Playlists
-        LazyColumn(Modifier.width(180.dp).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            item { Text("List Editor", color = C.Text, fontSize = 20.sp, fontWeight = FontWeight.Bold) }
-            item { Label("Show or hide categories and channels. OK switches one; Show all / Hide all switch the whole column.", size = 12.sp, lines = 4, modifier = Modifier.padding(bottom = 4.dp)) }
-            if (pls.isEmpty()) item { Label("No playlists yet.", size = 13.sp) }
-            items(pls, key = { "le-" + it.id }) { pl ->
-                val on = pl.id == pid
-                Focusable(
-                    modifier = Modifier.fillMaxWidth().height(54.dp),
-                    color = if (on) C.Surface2 else C.Surface,
-                    onFocus = { if (pid != pl.id) pid = pl.id },
-                    onClick = { pid = pl.id },
-                ) {
-                    Column(Modifier.weight(1f).padding(horizontal = 10.dp)) {
-                        Label(pl.name, size = 14.sp, color = C.Text, weight = FontWeight.SemiBold)
-                        Label(if (!pl.enabled) "Off" else if (!pl.liveOn) "Live TV off" else "Categories ›", size = 12.sp, color = if (on) C.Accent else C.Muted)
-                    }
-                }
-            }
-        }
+    Column(Modifier.fillMaxSize().padding(start = 16.dp, top = 14.dp, end = 16.dp, bottom = 10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+      Text("List Editor", color = C.Text, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+      Label("Choose a playlist, then show or hide its categories and channels. OK switches one row; Show all / Hide all switch every row in that column, or only the rows matching the filter.", size = 12.sp, lines = Int.MAX_VALUE)
+      // 1. Playlists, as buttons across the top so the lists below get the full width
+      if (pls.isEmpty()) Label("No playlists yet. Add one in Settings › Playlists.", size = 13.sp, lines = Int.MAX_VALUE)
+      androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+          pls.forEach { pl ->
+              val note = if (!pl.enabled) " (off)" else if (!pl.liveOn) " (live TV off)" else ""
+              TvButton(pl.name + note, selected = pl.id == pid) { pid = pl.id }
+          }
+      }
+      Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         // 2. Categories of the playlist
         Column(Modifier.width(260.dp).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             val hiddenCount = groups.count { vm.isGroupHidden(pid ?: "", it.first) }
@@ -891,9 +923,9 @@ private fun ListEditor(vm: AppViewModel) {
             }
             when {
                 p == null -> Label("Choose a playlist.", size = 13.sp)
-                !p.liveOn -> Label("Live TV is off for this playlist. Turn it on in Settings › Playlists.", size = 13.sp, lines = 3)
+                !p.liveOn -> Label("Live TV is off for this playlist. Turn it on in Settings › Playlists.", size = 13.sp, lines = Int.MAX_VALUE)
                 all == null -> Label("Loading…", size = 13.sp)
-                groups.isEmpty() -> Label("No channels saved yet. Refresh the playlist in Settings › Playlists.", size = 13.sp, lines = 3)
+                groups.isEmpty() -> Label("No channels saved yet. Refresh the playlist in Settings › Playlists.", size = 13.sp, lines = Int.MAX_VALUE)
             }
             LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 items(shownGroups, key = { "lg-" + it.first }) { (raw, count) ->
@@ -920,7 +952,7 @@ private fun ListEditor(vm: AppViewModel) {
                 val n = if (chFilter.isBlank()) "all" else "${keys.size}"
                 TvButton("Show $n") { vm.setChannelsHidden(keys, false) }
                 TvButton("Hide $n") { vm.setChannelsHidden(keys, true) }
-                if (cat != null && vm.isGroupHidden(pid ?: "", cat)) Label("This category is hidden, so none of these show in the guide.", size = 12.sp, color = C.Soft, lines = 2, modifier = Modifier.weight(1f))
+                if (cat != null && vm.isGroupHidden(pid ?: "", cat)) Label("This category is hidden, so none of these show in the guide.", size = 12.sp, color = C.Soft, lines = Int.MAX_VALUE, modifier = Modifier.weight(1f))
             }
             LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 itemsIndexed(shown, key = { i, c -> "lc-$i-${c.key}" }) { _, c ->
@@ -933,21 +965,22 @@ private fun ListEditor(vm: AppViewModel) {
             }
         }
     }
+    }
 }
 
 @Composable
 private fun EditorRow(title: String, sub: String?, hidden: Boolean, selected: Boolean, logo: String? = null, logoName: String = title, onFocus: () -> Unit, onToggle: () -> Unit) {
     Focusable(
-        modifier = Modifier.fillMaxWidth().height(if (sub != null) 50.dp else 44.dp),
+        modifier = Modifier.fillMaxWidth().heightIn(min = if (sub != null) 50.dp else 46.dp),
         color = if (selected) C.Surface2 else C.Surface,
         onFocus = onFocus,
         onClick = onToggle,
     ) {
         if (sub == null) Row(Modifier.padding(start = 8.dp)) { ChannelBadge(logoName, logo, 26.dp) }
-        Column(Modifier.weight(1f).padding(horizontal = 10.dp)) {
-            Label(title, size = 13.sp, color = if (hidden) C.Muted else C.Text, weight = FontWeight.SemiBold, lines = if (sub == null) 2 else 1)
+        Column(Modifier.weight(1f).padding(horizontal = 10.dp, vertical = 5.dp)) {
+            Label(title, size = 13.sp, color = if (hidden) C.Muted else C.Text, weight = FontWeight.SemiBold, lines = 3)
             if (sub != null) Label(sub, size = 12.sp)
         }
-        Label(if (hidden) "⊘ Hidden" else "✓ Shown", size = 12.sp, color = if (hidden) C.Muted else C.Accent, weight = FontWeight.Bold, modifier = Modifier.padding(end = 10.dp))
+        Label(if (hidden) "Hidden" else "Shown", size = 12.sp, color = if (hidden) C.Muted else C.Accent, weight = FontWeight.Bold, modifier = Modifier.padding(end = 10.dp))
     }
 }

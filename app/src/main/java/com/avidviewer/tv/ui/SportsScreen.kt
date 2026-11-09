@@ -74,7 +74,7 @@ fun SportsScreen(vm: AppViewModel) {
             Column(Modifier.weight(1f).fillMaxHeight().clip(RoundedCornerShape(10.dp)).background(C.Surface).padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 if (selected == null) {
                     Label("No events found", size = 17.sp, color = C.Text, weight = FontWeight.Bold)
-                    Label("Events come from your TV guide on channels and groups that match your Sports categories. Change them in Settings › Sports tab.", size = 12.sp, lines = 3)
+                    Label("Events come from your TV guide on channels and groups that match your Sports categories. Change them in Settings › Sports tab.", size = 12.sp, lines = Int.MAX_VALUE)
                 } else {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         LeagueTag(selected.catId, vm.catName(selected.catId))
@@ -160,7 +160,7 @@ private fun EventCard(vm: AppViewModel, e: SportEvent, st: EvState, isSelected: 
                 }
                 Label(e.title, size = 14.sp, color = C.Text, weight = FontWeight.Bold, lines = 2)
                 e.score?.takeIf { st != EvState.UP }?.let { Label(scoreLine(it), size = 16.sp, color = C.Text, weight = FontWeight.Bold) }
-                Label("${vm.fmtTime(e.start)} – ${vm.fmtTime(e.end)} ${vm.zoneLabel()}", size = 12.sp)
+                Label("${vm.fmtTime(e.start)} – ${vm.fmtTime(e.end)} ${vm.zoneLabel()}", size = 12.sp, lines = Int.MAX_VALUE)
             }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(5.dp), verticalAlignment = Alignment.CenterVertically) {

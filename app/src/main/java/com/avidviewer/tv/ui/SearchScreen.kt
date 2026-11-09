@@ -43,7 +43,7 @@ fun SearchScreen(vm: AppViewModel) {
         }
         val results = vm.searchResults
         when {
-            results == null -> Label("Searches every playlist: channel names, TV guide listings (now and upcoming), movies and series.", size = 13.sp, lines = 2)
+            results == null -> Label("Searches every playlist: channel names, TV guide listings (now and upcoming), movies and series.", size = 13.sp, lines = Int.MAX_VALUE)
             results.all { it.total == 0 } -> Label("Nothing found for “${vm.searchQuery.trim()}”.", size = 15.sp, color = C.Soft)
             else -> LazyColumn(verticalArrangement = Arrangement.spacedBy(5.dp), contentPadding = PaddingValues(bottom = 24.dp)) {
                 results.forEach { pr ->

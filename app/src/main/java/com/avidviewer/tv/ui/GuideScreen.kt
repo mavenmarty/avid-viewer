@@ -139,7 +139,7 @@ fun GuideScreen(vm: AppViewModel) {
                 Label(listOfNotNull(fc?.let { vm.channelName(it) }, fc?.let { vm.playlistName(it) }?.ifBlank { null }, fp?.let { "${vm.fmtTime(it.start)} – ${vm.fmtTime(it.end)}" }).joinToString(" · "), size = 12.sp)
                 Label(fp?.title ?: "No guide information", size = 18.sp, color = C.Text, weight = FontWeight.Bold)
                 Label(listOfNotNull(fp?.subtitle?.let { "“$it”" }, if (fp?.isNew == true) "New" else null).joinToString(" · "), size = 13.sp, color = C.Soft)
-                Label("OK: preview · OK again: full screen · CH+/CH−: page · Menu: options", size = 12.sp)
+                Label("OK: preview · OK again: full screen · CH+/CH−: page · Menu: options", size = 12.sp, lines = Int.MAX_VALUE)
             }
         }
         // Groups
@@ -151,9 +151,9 @@ fun GuideScreen(vm: AppViewModel) {
         }
         if (vm.selectedGroup == FAV_GROUP && vm.guideQuery.isBlank()) LocalSuggestions(vm)
         if (list.isEmpty() && vm.selectedGroup == FAV_GROUP) {
-            Label("No favorites yet. Press Menu (or hold OK) on any channel and choose Add to List — favorites from every playlist appear here.", size = 13.sp, color = C.Soft, lines = 2)
+            Label("No favorites yet. Press Menu (or hold OK) on any channel and choose Add to List — favorites from every playlist appear here.", size = 13.sp, color = C.Soft, lines = Int.MAX_VALUE)
         } else if (list.isEmpty() && isListGroup(vm.selectedGroup)) {
-            Label("This list is empty. Press Menu (or hold OK) on any channel and choose Add to List. Channels from every playlist can go in one list.", size = 13.sp, color = C.Soft, lines = 2)
+            Label("This list is empty. Press Menu (or hold OK) on any channel and choose Add to List. Channels from every playlist can go in one list.", size = 13.sp, color = C.Soft, lines = Int.MAX_VALUE)
         }
         if (vm.guideQuery.isNotBlank()) {
             GuideSearchResults(vm, Modifier.weight(1f))
@@ -308,7 +308,7 @@ fun GroupOptionsDialog(vm: AppViewModel) {
         title = { Text(vm.groupName(raw), color = C.Text, fontWeight = FontWeight.Bold) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Label("Category ${pos + 1} of ${all.size} · ${all.getOrNull(pos)?.count ?: 0} channels", size = 13.sp, color = C.Soft)
+                Label("Category ${pos + 1} of ${all.size} · ${all.getOrNull(pos)?.count ?: 0} channels", size = 13.sp, lines = Int.MAX_VALUE, color = C.Soft)
                 OptionRow("✎  Rename") { renaming = true }
                 OptionRow("▲  Move up") { vm.moveGroup(raw, -1) }
                 OptionRow("▼  Move down") { vm.moveGroup(raw, 1) }

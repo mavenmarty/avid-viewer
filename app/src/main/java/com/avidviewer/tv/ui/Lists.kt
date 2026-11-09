@@ -87,7 +87,7 @@ fun ListOptionsDialog(vm: AppViewModel) {
             onDismissRequest = { deleting = false },
             containerColor = C.Surface,
             title = { Text("Delete “${lst.name}”?", color = C.Text, fontWeight = FontWeight.Bold) },
-            text = { Label("The list is removed. Its ${lst.keys.size} channel(s) stay in your playlists. This can't be undone.", size = 14.sp, color = C.Soft, lines = 4) },
+            text = { Label("The list is removed. Its ${lst.keys.size} channel(s) stay in your playlists. This can't be undone.", size = 14.sp, color = C.Soft, lines = Int.MAX_VALUE) },
             confirmButton = { TvButton("Delete", primary = true) { vm.deleteList(group); deleting = false; vm.listMenu = null } },
             dismissButton = { TvButton("Cancel", modifier = Modifier.focusRequester(cancel)) { deleting = false } },
         )

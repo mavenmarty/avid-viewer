@@ -137,7 +137,7 @@ private fun PreviewPane(vm: AppViewModel, modifier: Modifier) {
                 TvButton("Watch", primary = true) { vm.openFullScreen(c.key, PlayContext.GROUP) }
                 TvButton(if (vm.isFavorite(c.key)) "★ Saved" else "☆ Favorite") { vm.toggleFavorite(c.key) }
             }
-            Label("OK on a channel: preview · OK again: full screen · Menu or hold OK: favorite", size = 12.sp, lines = 2)
+            Label("OK on a channel: preview · OK again: full screen · Menu or hold OK: favorite", size = 12.sp, lines = Int.MAX_VALUE)
         }
     }
 }
@@ -147,7 +147,7 @@ fun EmptyState(vm: AppViewModel, title: String, body: String) {
     Column(Modifier.fillMaxSize().padding(40.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text(title, color = C.Text, fontSize = 24.sp, fontWeight = FontWeight.Bold)
         Label(body, size = 15.sp, color = C.Soft, lines = 3)
-        if (vm.busy) Label(vm.status ?: "Loading…", size = 14.sp)
+        if (vm.busy) Label(vm.status ?: "Loading…", size = 14.sp, lines = Int.MAX_VALUE)
         TvButton("Add a playlist", primary = true) { vm.navSelect(Screen.PLAYLISTS) }
     }
 }

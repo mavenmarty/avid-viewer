@@ -76,7 +76,7 @@ fun AppRoot(vm: AppViewModel) {
                 title = { Text("Update available", color = C.Text, fontWeight = FontWeight.Bold) },
                 text = {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Label("Avid Viewer ${rel.versionName} is ready to install. You have ${vm.installed.second}.", size = 14.sp, color = C.Soft, lines = 2)
+                        Label("Avid Viewer ${rel.versionName} is ready to install. You have ${vm.installed.second}.", size = 14.sp, color = C.Soft, lines = Int.MAX_VALUE)
                         Label("Your playlists, favorites and settings are kept.", size = 13.sp, lines = 2)
                         vm.updateStatus?.let { Label(it, size = 13.sp, color = C.Accent, lines = 3) }
                     }
