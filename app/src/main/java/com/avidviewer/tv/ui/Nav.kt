@@ -67,7 +67,6 @@ object NavIcons {
 private val MENU = listOf(
     Triple(Screen.SEARCH, "Search", NavIcons.Search),
     Triple(Screen.FAVORITES, "Favorites", NavIcons.Favorites),
-    Triple(Screen.LIVE, "Live TV", NavIcons.Live),
     Triple(Screen.GUIDE, "TV Guide", NavIcons.Guide),
     Triple(Screen.SPORTS, "Sports", NavIcons.Sports),
     Triple(Screen.MOVIES, "Movies", NavIcons.Movies),

@@ -1,6 +1,8 @@
 package com.avidviewer.tv.ui
 
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.background
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -42,7 +44,9 @@ import com.avidviewer.tv.data.Program
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-private const val DP_PER_MIN = 4.0f
+private const val DP_PER_MIN = 3.3f
+private const val CH_COL = 200 // channel column width (dp)
+private const val CH_COL_FOCUSED = 330 // widened while the channel name is highlighted
 private const val WINDOW_MIN = 150
 
 @Composable
@@ -122,7 +126,7 @@ fun GuideScreen(vm: AppViewModel) {
         Label(vm.groupName(vm.selectedGroup ?: "") + "  ·  ${list.size} channels", size = 13.sp, color = C.Soft, weight = FontWeight.Bold)
         // Timeline header
         Row(Modifier.fillMaxWidth().height(18.dp)) {
-            Label("Today · ${vm.zoneLabel()}", size = 12.sp, modifier = Modifier.width(150.dp))
+            Label("Today · ${vm.zoneLabel()}", size = 12.sp, modifier = Modifier.width((CH_COL + 3).dp))
             Box(Modifier.weight(1f)) {
                 for (i in 0 until WINDOW_MIN / 30) {
                     Label(vm.fmtTime(winStart + i * half), size = 12.sp, modifier = Modifier.offset(x = (i * 30 * DP_PER_MIN).dp))
@@ -132,16 +136,25 @@ fun GuideScreen(vm: AppViewModel) {
         Box(Modifier.weight(1f)) {
             LazyColumn(state = listState, verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 itemsIndexed(list, key = { _, c -> c.key }) { idx, c ->
-                    Row(Modifier.fillMaxWidth().height(44.dp), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+                    Row(Modifier.fillMaxWidth().height(50.dp), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+                        // Channel name: two lines normally; the cell widens to show the full name while highlighted.
+                        var nameFocused by remember { mutableStateOf(false) }
+                        val colWidth by animateDpAsState(if (nameFocused) CH_COL_FOCUSED.dp else CH_COL.dp, label = "chcol")
                         Focusable(
-                            modifier = Modifier.width(146.dp).fillMaxHeight().focusRequester(rowFocus[idx]),
+                            modifier = Modifier.width(colWidth).fillMaxHeight().focusRequester(rowFocus[idx])
+                                .onFocusChanged { nameFocused = it.hasFocus },
                             onFocus = { focusProg = c.key to vm.nowNext(c).first },
                             onMenu = { vm.toggleFavorite(c.key) },
                             onClick = { vm.selectChannel(c.key, PlayContext.GROUP) },
                         ) {
-                            Label("${numbers[c.key] ?: ""}", size = 12.sp, modifier = Modifier.width(26.dp).padding(start = 6.dp))
-                            ChannelBadge(vm.channelName(c), c.logo, 26.dp)
-                            Label(vm.channelName(c), size = 12.sp, color = C.Text, weight = FontWeight.SemiBold, modifier = Modifier.padding(start = 6.dp, end = 4.dp))
+                            Label("${numbers[c.key] ?: ""}", size = 12.sp, modifier = Modifier.width(30.dp).padding(start = 6.dp))
+                            ChannelBadge(vm.channelName(c), c.logo, 28.dp)
+                            Label(
+                                vm.channelName(c) + if (vm.isFavorite(c.key)) " ★" else "",
+                                size = 13.sp, color = C.Text, weight = FontWeight.SemiBold,
+                                lines = if (nameFocused) 3 else 2,
+                                modifier = Modifier.padding(start = 7.dp, end = 6.dp),
+                            )
                         }
                         val progs = vm.programs(c).filter { it.end > winStart && it.start < winEnd }
                         if (progs.isEmpty()) {
@@ -177,7 +190,7 @@ fun GuideScreen(vm: AppViewModel) {
                 }
             }
             // "Now" line
-            val nowX = 150f + ((vm.now - winStart) / 60000f) * DP_PER_MIN
+            val nowX = (CH_COL + 3) + ((vm.now - winStart) / 60000f) * DP_PER_MIN
             Box(Modifier.offset(x = nowX.dp).width(2.dp).fillMaxHeight().background(C.Accent))
         }
     }

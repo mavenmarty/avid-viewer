@@ -49,7 +49,7 @@ fun AppRoot(vm: AppViewModel) {
                     when (vm.screen) {
                         Screen.SEARCH -> SearchScreen(vm)
                         Screen.FAVORITES -> FavoritesScreen(vm)
-                        Screen.LIVE -> LiveScreen(vm)
+                        Screen.LIVE -> GuideScreen(vm) // Live TV was folded into the TV Guide
                         Screen.GUIDE -> GuideScreen(vm)
                         Screen.SPORTS -> SportsScreen(vm)
                         Screen.MOVIES -> VodScreen(vm, "movie")

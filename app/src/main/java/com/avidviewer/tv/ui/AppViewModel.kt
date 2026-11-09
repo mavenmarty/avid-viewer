@@ -734,7 +734,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     // ---------------- left navigation ----------------
-    fun navSelect(s: Screen) {
+    fun navSelect(target: Screen) {
+        val s = if (target == Screen.LIVE) Screen.GUIDE else target
         if (s == Screen.MOVIES || s == Screen.SERIES) closeVodDetail()
         if (s == Screen.SPORTS) openSportsScreen() else {
             if (s == Screen.SETTINGS) settingsSection = "general"
