@@ -50,6 +50,9 @@ import kotlinx.coroutines.launch
 private const val DP_PER_MIN = 3.3f
 private const val CH_COL = 200 // channel column width (dp)
 private const val WINDOW_MIN = 150
+/** How far ahead the guide can scroll. */
+private const val AHEAD_MIN = 12 * 60
+private const val HALF_MS = 30 * 60 * 1000L
 
 @Composable
 fun GuideScreen(vm: AppViewModel) {
@@ -60,10 +63,20 @@ fun GuideScreen(vm: AppViewModel) {
     @Suppress("UNUSED_VARIABLE") val favTick = vm.favDataTick // redraw when other playlists' favorites load
     val list = vm.channelsIn(vm.selectedGroup)
     val numbers = vm.numbers()
-    val half = 30 * 60 * 1000L
-    val winStart = (vm.now / half) * half
+    val half = HALF_MS
+    // The visible 2.5-hour window starts at the current half hour plus [slots] × 30 minutes (up to 12 hours ahead).
+    val base = (vm.now / half) * half
+    val maxSlots = (AHEAD_MIN - WINDOW_MIN) / 30 + 1
+    var slots by remember { mutableStateOf(0) }
+    slots = slots.coerceIn(0, maxSlots)
+    val winStart = base + slots * half
     val winEnd = winStart + WINDOW_MIN * 60 * 1000L
     var focusProg by remember { mutableStateOf<Pair<String, Program?>?>(null) }
+    // The time the highlight is on. Up/Down lands on the program airing at this time in the next row,
+    // whatever the run times are; it only changes when you move left or right.
+    var anchor by remember { mutableStateOf(vm.now) }
+    val progFocus = remember(list.size, vm.selectedGroup) { List(list.size) { FocusRequester() } }
+    var pendingProg by remember { mutableStateOf<Int?>(null) }
     val listState = remember(vm.selectedGroup) {
         val (g, i, o) = vm.guideScroll
         if (g == vm.selectedGroup) androidx.compose.foundation.lazy.LazyListState(i, o) else androidx.compose.foundation.lazy.LazyListState()
@@ -100,6 +113,36 @@ fun GuideScreen(vm: AppViewModel) {
         delay(60)
         runCatching { rowFocus[i].requestFocus() }
         pendingFocus = null
+    }
+    LaunchedEffect(pendingProg, slots) {
+        val i = pendingProg ?: return@LaunchedEffect
+        delay(40)
+        runCatching { progFocus[i].requestFocus() }
+        pendingProg = null
+    }
+
+    /** Up/Down from a program: go to the program airing at [anchor] in the row above or below. */
+    fun moveRow(from: Int, dir: Int): Boolean {
+        val target = from + dir
+        if (target !in list.indices) return false
+        val visible = listState.layoutInfo.visibleItemsInfo.map { it.index }
+        scope.launch {
+            if (target !in visible || target == visible.lastOrNull() || target == visible.firstOrNull()) {
+                listState.scrollToItem((if (dir > 0) target - (visible.size - 2).coerceAtLeast(0) else target).coerceAtLeast(0))
+            }
+            pendingProg = target
+        }
+        return true
+    }
+
+    /** Right on the last program in view (or Left on the first) scrolls the window by whole half hours. */
+    fun shiftTo(time: Long, row: Int, forward: Boolean) {
+        val need = if (forward) ((time + half - (base + WINDOW_MIN * 60 * 1000L)) + half - 1) / half else (time - base) / half
+        val n = need.toInt().coerceIn(0, maxSlots)
+        if (n == slots) return
+        slots = n
+        anchor = time
+        pendingProg = row
     }
 
     // Channel Up / Channel Down (and Page Up / Page Down) move a full page; Up/Down still move one row.
@@ -160,7 +203,7 @@ fun GuideScreen(vm: AppViewModel) {
         } else {
         // Timeline header
         Row(Modifier.fillMaxWidth().height(18.dp)) {
-            Label("Today · ${vm.zoneLabel()}", size = 12.sp, modifier = Modifier.width((CH_COL + 3).dp))
+            Label(vm.dayLabel(winStart) + " · ${vm.zoneLabel()}" + if (slots > 0) "  ◀" else "", size = 12.sp, modifier = Modifier.width((CH_COL + 3).dp))
             Box(Modifier.weight(1f)) {
                 for (i in 0 until WINDOW_MIN / 30) {
                     Label(vm.fmtTime(winStart + i * half), size = 12.sp, modifier = Modifier.offset(x = (i * 30 * DP_PER_MIN).dp))
@@ -190,22 +233,51 @@ fun GuideScreen(vm: AppViewModel) {
                         val progs = vm.programs(c).filter { it.end > winStart && it.start < winEnd }
                         if (progs.isEmpty()) {
                             Focusable(
-                                modifier = Modifier.width((WINDOW_MIN * DP_PER_MIN).dp).fillMaxHeight(),
+                                modifier = Modifier.width((WINDOW_MIN * DP_PER_MIN).dp).fillMaxHeight().focusRequester(progFocus[idx])
+                                    .onPreviewKeyEvent { e ->
+                                        if (e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                                        when (e.key) {
+                                            Key.DirectionUp -> moveRow(idx, -1)
+                                            Key.DirectionDown -> moveRow(idx, 1)
+                                            else -> false
+                                        }
+                                    },
                                 color = C.Surface.copy(alpha = 0.6f),
                                 onFocus = { focusProg = c.key to null },
                                 onClick = { vm.selectChannel(c.key, PlayContext.GROUP) },
                             ) { Label("No guide information", size = 12.sp, modifier = Modifier.padding(horizontal = 10.dp)) }
                         } else {
                             var cursor = winStart
-                            progs.forEach { p ->
+                            // The program at the remembered time (or the nearest one) takes Up/Down focus for this row.
+                            val at = anchor.coerceIn(winStart, winEnd - 1)
+                            val target = progs.firstOrNull { at >= it.start && at < it.end }
+                                ?: progs.firstOrNull { it.start >= at } ?: progs.last()
+                            progs.forEachIndexed { pi, p ->
                                 val a = maxOf(p.start, winStart); val b = minOf(p.end, winEnd)
                                 if (a > cursor) Box(Modifier.width((((a - cursor) / 60000f * DP_PER_MIN).dp - 3.dp).coerceAtLeast(0.dp)))
                                 val isNow = vm.now >= p.start && vm.now < p.end
                                 Focusable(
-                                    modifier = Modifier.width(((((b - a) / 60000f) * DP_PER_MIN).dp - 3.dp).coerceAtLeast(4.dp)).fillMaxHeight(),
+                                    modifier = Modifier.width(((((b - a) / 60000f) * DP_PER_MIN).dp - 3.dp).coerceAtLeast(4.dp)).fillMaxHeight()
+                                        .then(if (p === target) Modifier.focusRequester(progFocus[idx]) else Modifier)
+                                        .onPreviewKeyEvent { e ->
+                                            if (e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                                            when (e.key) {
+                                                Key.DirectionUp -> moveRow(idx, -1)
+                                                Key.DirectionDown -> moveRow(idx, 1)
+                                                // Last program in view: scroll the guide forward to the next program.
+                                                Key.DirectionRight -> if (pi == progs.lastIndex && slots < maxSlots) { shiftTo(maxOf(p.end, winEnd - 60_000L), idx, true); true } else false
+                                                // First program in view: scroll back (at the start, Left goes to the channel name).
+                                                Key.DirectionLeft -> if (pi == 0 && slots > 0) { shiftTo(minOf(p.start, winStart) - 60_000L, idx, false); true } else false
+                                                else -> false
+                                            }
+                                        },
                                     color = if (isNow) C.Surface2 else C.Surface,
                                     focusedColor = C.Line,
-                                    onFocus = { focusProg = c.key to p },
+                                    onFocus = {
+                                        focusProg = c.key to p
+                                        // Keep the remembered time if it falls in this program; otherwise it moves here.
+                                        if (anchor < maxOf(p.start, winStart) || anchor >= minOf(p.end, winEnd)) anchor = maxOf(p.start, winStart)
+                                    },
                                     onMenu = { vm.channelMenu = c.key },
                                     onClick = { vm.selectChannel(c.key, PlayContext.GROUP) },
                                 ) {
@@ -221,8 +293,10 @@ fun GuideScreen(vm: AppViewModel) {
                 }
             }
             // "Now" line
-            val nowX = (CH_COL + 3) + ((vm.now - winStart) / 60000f) * DP_PER_MIN
-            Box(Modifier.offset(x = nowX.dp).width(2.dp).fillMaxHeight().background(C.Accent))
+            if (vm.now in winStart until winEnd) {
+                val nowX = (CH_COL + 3) + ((vm.now - winStart) / 60000f) * DP_PER_MIN
+                Box(Modifier.offset(x = nowX.dp).width(2.dp).fillMaxHeight().background(C.Accent))
+            }
         }
         }
     }
