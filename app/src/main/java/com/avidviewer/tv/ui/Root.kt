@@ -48,6 +48,7 @@ fun AppRoot(vm: AppViewModel) {
                 Box(Modifier.fillMaxHeight().weight(1f)) {
                     when (vm.screen) {
                         Screen.SEARCH -> SearchScreen(vm)
+                        Screen.DISCOVER -> DiscoverScreen(vm)
                         Screen.FAVORITES -> FavoritesScreen(vm)
                         Screen.LIVE -> GuideScreen(vm) // Live TV was folded into the TV Guide
                         Screen.GUIDE -> GuideScreen(vm)

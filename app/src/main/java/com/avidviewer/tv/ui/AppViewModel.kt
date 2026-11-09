@@ -26,6 +26,11 @@ import com.avidviewer.tv.data.Program
 import com.avidviewer.tv.data.Store
 import com.avidviewer.tv.data.USER_AGENT
 import com.avidviewer.tv.data.Episode
+import com.avidviewer.tv.data.Crypto
+import com.avidviewer.tv.data.Tmdb
+import com.avidviewer.tv.data.Title
+import com.avidviewer.tv.data.WatchProvider
+import com.avidviewer.tv.data.WhereToWatch
 import com.avidviewer.tv.data.VodInfo
 import com.avidviewer.tv.data.Updater
 import com.avidviewer.tv.data.Scores
@@ -47,7 +52,7 @@ import java.util.Locale
 import java.util.TimeZone
 import java.util.UUID
 
-enum class Screen { SEARCH, FAVORITES, LIVE, GUIDE, SPORTS, MOVIES, SERIES, MANAGE, PLAYLISTS, SETTINGS, PLAYER }
+enum class Screen { SEARCH, DISCOVER, FAVORITES, LIVE, GUIDE, SPORTS, MOVIES, SERIES, MANAGE, PLAYLISTS, SETTINGS, PLAYER }
 
 /** Where full-screen Up/Down and Channel Up/Down move: the group the user came from, or Favorites. */
 enum class PlayContext { GROUP, FAVORITES, SPORTS }
@@ -98,6 +103,20 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     var vod by mutableStateOf<List<VodItem>>(emptyList()); private set
     var vodPlaying by mutableStateOf<VodItem?>(null); private set
     var vodError by mutableStateOf<String?>(null); private set
+    // New & Recommended (TMDB)
+    var discoverTab by mutableStateOf("new")
+    var onlyMyServices by mutableStateOf(false)
+    var discoverLists by mutableStateOf<Map<String, List<Title>>>(emptyMap()); private set
+    var discoverLoading by mutableStateOf(false); private set
+    var discoverError by mutableStateOf<String?>(null); private set
+    var discoverNote by mutableStateOf<String?>(null); private set
+    var discoverDetail by mutableStateOf<Title?>(null)
+    var whereCache by mutableStateOf<Map<String, WhereToWatch>>(emptyMap()); private set
+    var availableServices by mutableStateOf<List<WatchProvider>>(emptyList()); private set
+    var tmdbStatus by mutableStateOf<String?>(null); private set
+    private var discoverLoadedAt = HashMap<String, Long>()
+    private var vodIndexFor: List<VodItem>? = null
+    private var vodIndex: Map<String, VodItem> = emptyMap()
     var vodCategory by mutableStateOf(mapOf("movie" to "All", "series" to "All"))
     var vodDetail by mutableStateOf<VodItem?>(null); private set
     var vodInfo by mutableStateOf<VodInfo?>(null); private set
@@ -560,6 +579,133 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    // ---------------- New & Recommended (TMDB) ----------------
+    fun tmdbKey(): String = if (prefs.tmdbKeyEnc.isBlank()) "" else Crypto.decrypt(prefs.tmdbKeyEnc)
+
+    /** Country for release dates and streaming services, from the postal code (US by default). */
+    fun region(): String = if (Regex("^[A-Za-z]\\d").containsMatchIn(prefs.postalCode)) "CA" else "US"
+
+    fun setTmdbKey(key: String) {
+        val k = key.trim()
+        viewModelScope.launch {
+            if (k.isEmpty()) { updatePrefs { it.copy(tmdbKeyEnc = "") }; tmdbStatus = "Key removed."; return@launch }
+            tmdbStatus = "Checking the key…"
+            val ok = runCatching { withContext(Dispatchers.IO) { Tmdb.trending(k) } }
+            ok.onSuccess {
+                updatePrefs { p -> p.copy(tmdbKeyEnc = Crypto.encrypt(k)) }
+                tmdbStatus = "Key saved. New & Recommended is ready."
+                discoverLists = emptyMap(); discoverLoadedAt.clear()
+                loadServices()
+            }.onFailure { tmdbStatus = "That key didn't work: ${it.message}" }
+        }
+    }
+
+    fun loadServices() {
+        val key = tmdbKey(); if (key.isBlank()) return
+        viewModelScope.launch {
+            runCatching { withContext(Dispatchers.IO) { Tmdb.services(key, region()) } }.onSuccess { availableServices = it }
+        }
+    }
+
+    fun toggleService(s: WatchProvider) {
+        updatePrefs { p -> p.copy(myServices = if (p.myServices.any { it.id == s.id }) p.myServices.filterNot { it.id == s.id } else p.myServices + s) }
+        discoverLoadedAt.remove("new")
+    }
+
+    fun openDiscover() {
+        screen = Screen.DISCOVER
+        loadDiscover(discoverTab)
+    }
+
+    fun setDiscoverTab(t: String) {
+        discoverTab = t
+        loadDiscover(t)
+    }
+
+    fun loadDiscover(tab: String, force: Boolean = false) {
+        val key = tmdbKey()
+        if (key.isBlank()) { discoverError = null; return }
+        val fresh = System.currentTimeMillis() - (discoverLoadedAt[tab] ?: 0L) < 6 * 3600 * 1000L
+        if (!force && fresh && discoverLists[tab] != null) return
+        viewModelScope.launch {
+            discoverLoading = true; discoverError = null; discoverNote = null
+            val region = region(); val services = prefs.myServices.map { it.id }
+            val res = runCatching {
+                withContext(Dispatchers.IO) {
+                    when (tab) {
+                        "new" -> {
+                            val m = Tmdb.newMovies(key, region, services); val s = Tmdb.newShows(key, region, services)
+                            (m.zip(s).flatMap { listOf(it.first, it.second) } + m.drop(s.size) + s.drop(m.size))
+                        }
+                        "trending" -> Tmdb.trending(key)
+                        "theaters" -> Tmdb.inTheaters(key, region)
+                        else -> forYou(key)
+                    }
+                }
+            }
+            res.onSuccess { list ->
+                discoverLists = discoverLists + (tab to list.distinctBy { it.key })
+                discoverLoadedAt[tab] = System.currentTimeMillis()
+                fetchWhere(list.take(36))
+            }.onFailure { discoverError = it.message }
+            discoverLoading = false
+        }
+    }
+
+    /** Blends what you watch here (My List, titles you started) with trending titles in the same genres. */
+    private fun forYou(key: String): List<Title> {
+        val seeds = (prefs.myList + vod.filter { resumeOf(it.key) > 0 }).distinctBy { it.key }.take(6)
+        val trending = Tmdb.trending(key)
+        if (seeds.isEmpty()) {
+            discoverNote = "Add titles to My List or start watching movies and series, and these picks will follow your taste. Showing what's trending for now."
+            return trending
+        }
+        val found = seeds.mapNotNull { v -> runCatching { Tmdb.find(key, v.name, if (v.kind == "series") "tv" else "movie") }.getOrNull() }
+        val score = HashMap<String, Pair<Title, Double>>()
+        found.forEach { seed ->
+            runCatching { Tmdb.recommendations(key, seed) }.getOrDefault(emptyList()).forEachIndexed { i, t ->
+                val prev = score[t.key]
+                score[t.key] = t to ((prev?.second ?: 0.0) + 2.0 - i * 0.05)
+            }
+        }
+        val likedGenres = found.flatMap { it.genres }.groupingBy { it }.eachCount()
+        trending.forEach { t ->
+            val g = t.genres.sumOf { likedGenres[it] ?: 0 }
+            if (g > 0) { val prev = score[t.key]; score[t.key] = t to ((prev?.second ?: 0.0) + 0.5 * g) }
+        }
+        val seedKeys = found.map { it.key }.toSet()
+        discoverNote = "Based on " + seeds.take(3).joinToString(", ") { Tmdb.cleanName(it.name) } + (if (seeds.size > 3) " and more" else "") + ", plus what's trending."
+        return score.values.filter { it.first.key !in seedKeys }.sortedByDescending { it.second }.map { it.first }.take(60)
+    }
+
+    private fun fetchWhere(list: List<Title>) {
+        val key = tmdbKey(); val region = region()
+        viewModelScope.launch {
+            for (t in list) {
+                if (whereCache.containsKey(t.key)) continue
+                runCatching { withContext(Dispatchers.IO) { Tmdb.whereToWatch(key, t, region) } }.onSuccess { whereCache = whereCache + (t.key to it) }
+            }
+        }
+    }
+
+    fun openTitle(t: Title) {
+        discoverDetail = t
+        if (!whereCache.containsKey(t.key)) fetchWhere(listOf(t))
+    }
+
+    /** The same title in the user's own provider catalog, if there is one. */
+    fun matchVod(t: Title): VodItem? {
+        if (vodIndexFor !== vod) {
+            vodIndex = HashMap<String, VodItem>().apply {
+                vod.forEach { v -> putIfAbsent((if (v.kind == "series") "tv|" else "movie|") + Tmdb.normalize(v.name), v) }
+            }
+            vodIndexFor = vod
+        }
+        return vodIndex[t.type + "|" + Tmdb.normalize(t.name)]
+    }
+
+    fun playMatched(v: VodItem) { if (v.kind == "series") openVodDetail(v) else playVod(v) }
+
     // ---------------- app updates ----------------
     fun checkForUpdate(quiet: Boolean = false) {
         viewModelScope.launch {
@@ -736,6 +882,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     // ---------------- left navigation ----------------
     fun navSelect(target: Screen) {
         val s = if (target == Screen.LIVE) Screen.GUIDE else target
+        if (s == Screen.DISCOVER) { openDiscover(); navMode = NavMode.COLLAPSED; return }
         if (s == Screen.MOVIES || s == Screen.SERIES) closeVodDetail()
         if (s == Screen.SPORTS) openSportsScreen() else {
             when (s) {

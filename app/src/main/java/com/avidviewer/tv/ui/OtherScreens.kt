@@ -338,6 +338,7 @@ private val SECTIONS = listOf(
     SettingsSection("location", "Location & weather", NavIcons.Location),
     SettingsSection("display", "Display & time", NavIcons.Guide),
     SettingsSection("sports", "Sports tab", NavIcons.Sports),
+    SettingsSection("discover", "New & Recommended", NavIcons.Discover),
     SettingsSection("playback", "Playback", NavIcons.Live),
     SettingsSection("privacy", "Privacy & analytics", NavIcons.Privacy),
     SettingsSection("storage", "Storage", NavIcons.Storage),
@@ -382,6 +383,7 @@ fun SettingsScreen(vm: AppViewModel) {
                         "location" -> locationSettings(vm)
                         "display" -> displaySettings(vm)
                         "sports" -> sportsSettings(vm)
+                        "discover" -> discoverSettings(vm)
                         "playback" -> item {
                             SettingBlock("Stream format (Xtream)", "If channels won't play, try the other format. Applies after Refresh in Playlists.") {
                                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -412,6 +414,12 @@ fun SettingsScreen(vm: AppViewModel) {
                                 }
                             }
                             item { Label("Avid Viewer ${appVersion(vm)} · Bring your own provider; no channels are included.", size = 12.sp, lines = 2) }
+                            item {
+                                SettingBlock("Credits", "This product uses the TMDB API but is not endorsed or certified by TMDB.") {
+                                    Label("Streaming availability data provided by JustWatch.", size = 12.sp, color = C.Soft)
+                                    Label("Weather by Open-Meteo. Sports scores from ESPN's public scoreboard.", size = 12.sp, color = C.Soft, lines = 2)
+                                }
+                            }
                         }
                     }
                 }
@@ -425,6 +433,7 @@ private fun sectionSummary(vm: AppViewModel, id: String): String? = when (id) {
     "location" -> vm.prefs.postalCode.ifBlank { null }?.let { "$it · ${vm.prefs.placeName.substringBefore(',')}" } ?: "Not set"
     "display" -> vm.zoneLabel()
     "sports" -> "${vm.prefs.sportCats.count { it.on }} categories on"
+    "discover" -> if (vm.prefs.tmdbKeyEnc.isBlank()) "Needs TMDB key" else "${vm.prefs.myServices.size} services"
     "privacy" -> if (vm.prefs.historyPaused) "History paused" else "History on"
     "about" -> vm.update?.let { "Update ${it.versionName} available" } ?: "Version ${vm.installed.second}"
     else -> null
@@ -579,3 +588,37 @@ private fun androidx.compose.foundation.lazy.LazyListScope.sportsSettings(vm: Ap
     }
 }
 
+
+private fun androidx.compose.foundation.lazy.LazyListScope.discoverSettings(vm: AppViewModel) {
+    val p = vm.prefs
+    item {
+        var key by remember { mutableStateOf("") }
+        SettingBlock(
+            "TMDB API key",
+            if (p.tmdbKeyEnc.isBlank()) "Free from themoviedb.org (Settings › API). Stored encrypted on this device only." else "Saved (encrypted on this device). Enter a new key to replace it.",
+        ) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                TvField("API key", key, modifier = Modifier.width(360.dp), password = p.tmdbKeyEnc.isNotBlank() && key.isEmpty()) { key = it.trim() }
+                TvButton("Save", primary = true) { vm.setTmdbKey(key); key = "" }
+                if (p.tmdbKeyEnc.isNotBlank()) TvButton("Remove") { vm.setTmdbKey("") }
+            }
+            vm.tmdbStatus?.let { Label(it, size = 12.sp, color = C.Soft, lines = 2) }
+        }
+    }
+    if (p.tmdbKeyEnc.isNotBlank()) {
+        item {
+            LaunchedEffect(Unit) { if (vm.availableServices.isEmpty()) vm.loadServices() }
+            SettingBlock("My streaming services", "Pick the services you subscribe to. New & Recommended can then show only titles you can watch now. Region: ${vm.region()}") {
+                if (vm.availableServices.isEmpty()) Label("Loading services…", size = 12.sp)
+                vm.availableServices.chunked(5).forEach { row ->
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        row.forEach { s ->
+                            val on = p.myServices.any { it.id == s.id }
+                            TvButton((if (on) "✓ " else "") + s.name, selected = on) { vm.toggleService(s) }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

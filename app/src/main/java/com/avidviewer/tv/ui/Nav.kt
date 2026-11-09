@@ -57,6 +57,7 @@ object NavIcons {
     val Live = icon("live", "M3 7h18v12H3z M8 3l4 4 4-4")
     val Guide = icon("guide", "M3 4h18v16H3z M3 10h18 M9 10v10")
     val Sports = icon("sports", "M8 21h8 M12 17v4 M7 4h10v5a5 5 0 0 1-10 0z M17 5h3v2a3 3 0 0 1-3 3 M7 5H4v2a3 3 0 0 0 3 3")
+    val Discover = icon("discover", "M12 3l1.8 4.7 4.7 1.8-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8z M19 15l.8 2.2 2.2.8-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z")
     val Movies = icon("movies", "M3 4h18v16H3z M7 4v16 M17 4v16 M3 9h4 M3 15h4 M17 9h4 M17 15h4")
     val Series = icon("series", "M4 8h16v12H4z M7 4h10 M10 12l5 2-5 2z")
     val Manage = icon("manage", "M4 7h10 M18 7h2 M4 17h4 M12 17h8 M16 5v4 M10 15v4")
@@ -69,6 +70,7 @@ object NavIcons {
 
 private val MENU = listOf(
     Triple(Screen.SEARCH, "Search", NavIcons.Search),
+    Triple(Screen.DISCOVER, "New & Recommended", NavIcons.Discover),
     Triple(Screen.FAVORITES, "Favorites", NavIcons.Favorites),
     Triple(Screen.GUIDE, "TV Guide", NavIcons.Guide),
     Triple(Screen.SPORTS, "Sports", NavIcons.Sports),

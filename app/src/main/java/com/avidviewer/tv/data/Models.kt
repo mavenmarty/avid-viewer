@@ -90,6 +90,8 @@ data class Prefs(
     val sportCats: List<SportCat> = SportCat.DEFAULTS,
     val autoUpdateCheck: Boolean = true,
     val myList: List<VodItem> = emptyList(),
+    val tmdbKeyEnc: String = "",
+    val myServices: List<WatchProvider> = emptyList(),
 ) {
     fun toJson(): JSONObject {
         val o = JSONObject()
@@ -111,6 +113,8 @@ data class Prefs(
         o.put("sportCats", JSONArray().apply { sportCats.forEach { put(it.toJson()) } })
         o.put("autoUpdateCheck", autoUpdateCheck)
         o.put("myList", JSONArray().apply { myList.forEach { put(it.toJson()) } })
+        o.put("tmdbKeyEnc", tmdbKeyEnc)
+        o.put("myServices", JSONArray().apply { myServices.forEach { put(JSONObject().put("id", it.id).put("name", it.name).put("logo", it.logo ?: "")) } })
         return o
     }
 
@@ -144,6 +148,8 @@ data class Prefs(
                 sportCats = o.optJSONArray("sportCats")?.let { a -> List(a.length()) { SportCat.fromJson(a.getJSONObject(it)) } } ?: SportCat.DEFAULTS,
                 autoUpdateCheck = o.optBoolean("autoUpdateCheck", true),
                 myList = o.optJSONArray("myList")?.let { a -> List(a.length()) { VodItem.fromJson(a.getJSONObject(it)) } } ?: emptyList(),
+                tmdbKeyEnc = o.optString("tmdbKeyEnc"),
+                myServices = o.optJSONArray("myServices")?.let { a -> List(a.length()) { a.getJSONObject(it).let { s -> WatchProvider(s.getInt("id"), s.optString("name"), s.optString("logo").ifBlank { null }) } } } ?: emptyList(),
             )
         }
     }
