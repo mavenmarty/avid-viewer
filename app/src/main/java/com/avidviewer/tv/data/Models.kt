@@ -103,6 +103,8 @@ data class Prefs(
     val showSuggestions: Boolean = true,
     /** Channels the user dismissed from the suggestions. */
     val dismissedSuggestions: Set<String> = emptySet(),
+    /** The user's own channel lists, shown after Favorites. */
+    val lists: List<ChannelList> = emptyList(),
 ) {
     fun toJson(): JSONObject {
         val o = JSONObject()
@@ -127,6 +129,7 @@ data class Prefs(
         o.put("myList", JSONArray().apply { myList.forEach { put(it.toJson()) } })
         o.put("tmdbKeyEnc", tmdbKeyEnc)
         o.put("myServices", JSONArray().apply { myServices.forEach { put(JSONObject().put("id", it.id).put("name", it.name).put("logo", it.logo ?: "")) } })
+        o.put("lists", JSONArray().apply { lists.forEach { put(it.toJson()) } })
         o.put("showSuggestions", showSuggestions)
         o.put("dismissedSuggestions", JSONArray(dismissedSuggestions.toList()))
         return o
@@ -164,11 +167,24 @@ data class Prefs(
                 autoUpdateCheck = o.optBoolean("autoUpdateCheck", true),
                 myList = o.optJSONArray("myList")?.let { a -> List(a.length()) { VodItem.fromJson(a.getJSONObject(it)) } } ?: emptyList(),
                 tmdbKeyEnc = o.optString("tmdbKeyEnc"),
+                lists = o.optJSONArray("lists")?.let { a -> List(a.length()) { ChannelList.fromJson(a.getJSONObject(it)) } } ?: emptyList(),
                 showSuggestions = o.optBoolean("showSuggestions", true),
                 dismissedSuggestions = strList(o.optJSONArray("dismissedSuggestions")).toSet(),
                 myServices = o.optJSONArray("myServices")?.let { a -> List(a.length()) { a.getJSONObject(it).let { s -> WatchProvider(s.getInt("id"), s.optString("name"), s.optString("logo").ifBlank { null }) } } } ?: emptyList(),
             )
         }
+    }
+}
+
+/** A channel collection the user made, like Favorites. [keys] can come from any playlist. */
+data class ChannelList(val id: String, val name: String, val keys: List<String> = emptyList()) {
+    fun toJson(): JSONObject = JSONObject().put("id", id).put("name", name).put("keys", JSONArray(keys))
+
+    companion object {
+        fun fromJson(o: JSONObject) = ChannelList(
+            o.getString("id"), o.optString("name"),
+            o.optJSONArray("keys")?.let { a -> List(a.length()) { a.getString(it) } } ?: emptyList(),
+        )
     }
 }
 

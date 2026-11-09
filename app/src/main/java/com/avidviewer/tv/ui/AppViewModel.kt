@@ -18,6 +18,7 @@ import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import com.avidviewer.tv.data.Channel
+import com.avidviewer.tv.data.ChannelList
 import com.avidviewer.tv.data.LocalSuggest
 import com.avidviewer.tv.data.Suggestion
 import com.avidviewer.tv.data.HistoryEntry
@@ -68,6 +69,11 @@ enum class NavMode { FULL, COLLAPSED, GROUPS }
 
 /** The combined Favorites category shown first in the TV Guide. */
 const val FAV_GROUP = "\u2605favorites"
+/** Group id prefix for the user's own channel lists: LIST_PREFIX + list id. */
+const val LIST_PREFIX = "\u2605list:"
+
+/** True for Favorites and the user's own lists (collections of channels from any playlist). */
+fun isListGroup(g: String?) = g != null && (g == FAV_GROUP || g.startsWith(LIST_PREFIX))
 
 data class GroupInfo(val raw: String, val name: String, val count: Int, val hidden: Boolean)
 
@@ -487,7 +493,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** What the Favorites category shows: local channels not yet favorited or dismissed. */
     fun suggestions(): List<Suggestion> =
         if (!prefs.showSuggestions) emptyList()
-        else allSuggestions.filter { it.key !in prefs.favorites && it.key !in prefs.dismissedSuggestions && channel(it.key) != null }.take(12)
+        else allSuggestions.filter { !inAnyList(it.key) && it.key !in prefs.dismissedSuggestions && channel(it.key) != null }.take(12)
 
     fun suggestionPlace(): String = LocalSuggest.parsePlace(prefs.placeName).let { (city, _, abbr) -> if (abbr != null) "$city, $abbr" else city }
 
@@ -560,7 +566,11 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     // ---------------- groups & channels ----------------
-    fun groupName(raw: String) = if (raw == FAV_GROUP) "★ Favorites" else prefs.groupNames[raw] ?: raw
+    fun groupName(raw: String) = when {
+        raw == FAV_GROUP -> "★ Favorites"
+        raw.startsWith(LIST_PREFIX) -> "☰ " + (userList(raw)?.name ?: "List")
+        else -> prefs.groupNames[raw] ?: raw
+    }
     fun channelName(c: Channel) = prefs.channelNames[c.key] ?: c.name
 
     fun groups(includeHidden: Boolean = false): List<GroupInfo> {
@@ -573,7 +583,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     fun channelsIn(group: String?): List<Channel> {
         if (group == null) return emptyList()
-        if (group == FAV_GROUP) return prefs.favorites.mapNotNull { channel(it) }
+        if (isListGroup(group)) return listKeys(group).mapNotNull { channel(it) }
         val list = channels.filter { it.group == group && it.key !in prefs.hiddenChannels }
         val order = prefs.channelOrder[group] ?: return list
         val byKey = list.associateBy { it.key }
@@ -597,7 +607,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** Loads channels and guides of other playlists that hold favorites. */
     fun ensureFavoriteData() {
         val active = activePlaylist()?.id
-        val pids = prefs.favorites.map { it.substringBefore(':') }.distinct().filter { it != active && !otherData.containsKey(it) }
+        val pids = (prefs.favorites + prefs.lists.flatMap { it.keys }).map { it.substringBefore(':') }.distinct().filter { it != active && !otherData.containsKey(it) }
         if (pids.isEmpty()) return
         viewModelScope.launch {
             pids.forEach { pid -> shownPlaylists.firstOrNull { it.id == pid }?.let { dataFor(it) } }
@@ -657,7 +667,71 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** Moves a channel within the category being shown (Favorites has its own order). */
-    fun moveInGuide(key: String, dir: Int) = if (selectedGroup == FAV_GROUP) moveFavorite(key, dir) else moveChannel(key, dir)
+    fun moveInGuide(key: String, dir: Int) = when {
+        selectedGroup == FAV_GROUP -> moveFavorite(key, dir)
+        selectedGroup?.startsWith(LIST_PREFIX) == true -> moveInList(selectedGroup!!, key, dir)
+        else -> moveChannel(key, dir)
+    }
+
+    // ---------------- channel lists (Favorites + the user's own) ----------------
+    fun userList(group: String): ChannelList? = prefs.lists.firstOrNull { LIST_PREFIX + it.id == group }
+
+    fun listKeys(group: String): List<String> = if (group == FAV_GROUP) prefs.favorites else userList(group)?.keys ?: emptyList()
+
+    /** Every list as (group id, name), Favorites first. */
+    fun allLists(): List<Pair<String, String>> = listOf(FAV_GROUP to "★ Favorites") + prefs.lists.map { (LIST_PREFIX + it.id) to it.name }
+
+    fun inList(group: String, key: String) = key in listKeys(group)
+
+    fun inAnyList(key: String) = key in prefs.favorites || prefs.lists.any { key in it.keys }
+
+    /** Names of the lists a channel is in, e.g. "Favorites, Kids". */
+    fun listsFor(key: String): String = allLists().filter { inList(it.first, key) }.joinToString(", ") { it.second.removePrefix("★ ") }
+
+    /** The channel whose "Add to List" picker is open. */
+    var listPickerKey by mutableStateOf<String?>(null)
+    /** The list whose Menu-key options are open. */
+    var listMenu by mutableStateOf<String?>(null)
+
+    fun toggleInList(group: String, key: String) {
+        if (group == FAV_GROUP) return toggleFavorite(key)
+        viewModelScope.launch { ensureFavoriteData() }
+        updatePrefs { p -> p.copy(lists = p.lists.map { if (LIST_PREFIX + it.id == group) it.copy(keys = if (key in it.keys) it.keys - key else it.keys + key) else it }) }
+    }
+
+    /** Makes a new list, optionally starting with one channel. Returns its group id. */
+    fun createList(name: String, firstKey: String? = null): String {
+        val id = UUID.randomUUID().toString().take(8)
+        val n = name.trim().ifBlank { "My list ${prefs.lists.size + 1}" }
+        updatePrefs { it.copy(lists = it.lists + ChannelList(id, n, listOfNotNull(firstKey))) }
+        if (firstKey != null) viewModelScope.launch { ensureFavoriteData() }
+        return LIST_PREFIX + id
+    }
+
+    fun renameList(group: String, name: String) {
+        if (name.isBlank()) return
+        updatePrefs { p -> p.copy(lists = p.lists.map { if (LIST_PREFIX + it.id == group) it.copy(name = name.trim()) else it }) }
+    }
+
+    fun deleteList(group: String) {
+        updatePrefs { p -> p.copy(lists = p.lists.filterNot { LIST_PREFIX + it.id == group }) }
+        if (selectedGroup == group) { selectedGroup = FAV_GROUP; guideFocusTick++ }
+    }
+
+    fun moveList(group: String, dir: Int) {
+        val l = prefs.lists.toMutableList(); val i = l.indexOfFirst { LIST_PREFIX + it.id == group }; val j = i + dir
+        if (i < 0 || j !in l.indices) return
+        l[i] = l[j].also { l[j] = l[i] }
+        updatePrefs { it.copy(lists = l) }
+    }
+
+    private fun moveInList(group: String, key: String, dir: Int) {
+        val lst = userList(group) ?: return
+        val l = lst.keys.toMutableList(); val i = l.indexOf(key); val j = i + dir
+        if (i < 0 || j !in l.indices) return
+        l[i] = l[j].also { l[j] = l[i] }
+        updatePrefs { p -> p.copy(lists = p.lists.map { if (it.id == lst.id) it.copy(keys = l) else it }) }
+    }
 
     fun hideChannel(key: String) = updatePrefs { it.copy(hiddenChannels = it.hiddenChannels + key) }
     fun showChannel(key: String) = updatePrefs { it.copy(hiddenChannels = it.hiddenChannels - key) }
@@ -733,7 +807,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         val c = channel(key) ?: return
         playContext = ctx
         if (ctx == PlayContext.SPORTS) sportsPlayCat = sportCat
-        if (ctx == PlayContext.GROUP && selectedGroup != FAV_GROUP) selectedGroup = c.group
+        if (ctx == PlayContext.GROUP && !isListGroup(selectedGroup)) selectedGroup = c.group
         if (screen != Screen.PLAYER) lastScreen = screen
         if (currentKey != key || player.mediaItemCount == 0 || playerError != null) start(c)
         screen = Screen.PLAYER
@@ -752,7 +826,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
         if (playContext == PlayContext.GROUP) {
             // Back from live TV: the guide, on this channel's category, with the channel focused.
-            if (selectedGroup != FAV_GROUP) channel(currentKey)?.let { selectedGroup = it.group }
+            if (!isListGroup(selectedGroup)) channel(currentKey)?.let { selectedGroup = it.group }
             screen = Screen.GUIDE
             navMode = NavMode.GROUPS
             guideFocusTick++

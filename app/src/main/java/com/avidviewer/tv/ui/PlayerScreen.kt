@@ -52,7 +52,7 @@ fun PlayerScreen(vm: AppViewModel) {
     var showInfo by remember { mutableStateOf(true) }
     var infoTick by remember { mutableIntStateOf(0) }
 
-    LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
+    LaunchedEffect(vm.listPickerKey) { if (vm.listPickerKey == null) runCatching { focus.requestFocus() } }
     LaunchedEffect(infoTick) {
         showInfo = true
         delay(5000)
@@ -80,7 +80,7 @@ fun PlayerScreen(vm: AppViewModel) {
                     Key.DirectionUp, Key.ChannelUp -> { vm.step(-1); infoTick++; true }
                     Key.DirectionDown, Key.ChannelDown -> { vm.step(1); infoTick++; true }
                     Key.DirectionCenter, Key.Enter, Key.NumPadEnter, Key.DirectionLeft, Key.DirectionRight, Key.Info -> { infoTick++; true }
-                    Key.Menu -> { vm.toggleFavorite(vm.currentKey); infoTick++; true }
+                    Key.Menu -> { vm.listPickerKey = vm.currentKey; infoTick++; true }
                     else -> false
                 }
             }

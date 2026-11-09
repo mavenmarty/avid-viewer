@@ -116,7 +116,7 @@ fun GuideScreen(vm: AppViewModel) {
     ) {
         // Preview window + details of the focused show
         Row(Modifier.fillMaxWidth().height(130.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Box(Modifier.width(231.dp).fillMaxHeight().clip(RoundedCornerShape(10.dp))) { VideoSurface(vm, Modifier.fillMaxSize()) }
+            PreviewWindow(vm, Modifier.width(231.dp).fillMaxHeight(), onOpen = { vm.openFullScreen(vm.currentKey, PlayContext.GROUP) })
             val fc = vm.channel(focusProg?.first ?: vm.currentKey)
             val fp = focusProg?.second ?: vm.nowNext(fc).first
             Column(Modifier.weight(1f).fillMaxHeight().clip(RoundedCornerShape(10.dp)).background(C.Surface).padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -135,7 +135,9 @@ fun GuideScreen(vm: AppViewModel) {
         }
         if (vm.selectedGroup == FAV_GROUP && vm.guideQuery.isBlank()) LocalSuggestions(vm)
         if (list.isEmpty() && vm.selectedGroup == FAV_GROUP) {
-            Label("No favorites yet. Press Menu (or hold OK) on any channel to add it — favorites from every playlist appear here.", size = 13.sp, color = C.Soft, lines = 2)
+            Label("No favorites yet. Press Menu (or hold OK) on any channel and choose Add to List — favorites from every playlist appear here.", size = 13.sp, color = C.Soft, lines = 2)
+        } else if (list.isEmpty() && isListGroup(vm.selectedGroup)) {
+            Label("This list is empty. Press Menu (or hold OK) on any channel and choose Add to List. Channels from every playlist can go in one list.", size = 13.sp, color = C.Soft, lines = 2)
         }
         if (vm.guideQuery.isNotBlank()) {
             GuideSearchResults(vm, Modifier.weight(1f))
@@ -225,7 +227,7 @@ fun ChannelOptionsDialog(vm: AppViewModel) {
     }
     val list = vm.channelsIn(vm.selectedGroup)
     val pos = list.indexOfFirst { it.key == key }
-    val fav = vm.isFavorite(key)
+    val inLists = vm.listsFor(key)
     androidx.compose.material3.AlertDialog(
         onDismissRequest = { vm.channelMenu = null },
         containerColor = C.Surface,
@@ -233,11 +235,12 @@ fun ChannelOptionsDialog(vm: AppViewModel) {
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Label(listOf(vm.groupName(vm.selectedGroup ?: c.group), if (pos >= 0) "${pos + 1} of ${list.size}" else "", vm.playlistName(c)).filter { it.isNotBlank() }.joinToString(" · "), size = 13.sp, color = C.Soft, lines = 2)
-                OptionRow(if (fav) "★  Remove from Favorites" else "☆  Add to Favorites") { vm.toggleFavorite(key) }
+                OptionRow("＋  Add to List…" + if (inLists.isNotBlank()) "   (in $inLists)" else "") { vm.listPickerKey = key }
+                if (isListGroup(vm.selectedGroup)) OptionRow("−  Remove from ${vm.groupName(vm.selectedGroup!!).removePrefix("★ ").removePrefix("☰ ")}") { vm.toggleInList(vm.selectedGroup!!, key); vm.channelMenu = null }
                 OptionRow("✎  Rename") { renaming = true }
                 OptionRow("▲  Move up") { vm.moveInGuide(key, -1) }
                 OptionRow("▼  Move down") { vm.moveInGuide(key, 1) }
-                if (vm.selectedGroup != FAV_GROUP) OptionRow("⊘  Hide channel") { vm.hideChannel(key); vm.channelMenu = null }
+                if (!isListGroup(vm.selectedGroup)) OptionRow("⊘  Hide channel") { vm.hideChannel(key); vm.channelMenu = null }
             }
         },
         confirmButton = { TvButton("Done", primary = true) { vm.channelMenu = null } },
@@ -267,7 +270,7 @@ private fun LocalSuggestions(vm: AppViewModel) {
                         Label(vm.channelName(c), size = 13.sp, color = C.Text, weight = FontWeight.SemiBold)
                         Label(listOf(s.reason, vm.playlistName(c)).filter { it.isNotBlank() }.joinToString(" · "), size = 12.sp)
                     }
-                    TvButton("☆ Add") { vm.toggleFavorite(s.key) }
+                    TvButton("＋ Add to List") { vm.listPickerKey = s.key }
                     TvButton("✕") { vm.dismissSuggestion(s.key) }
                 }
             }
@@ -306,7 +309,7 @@ fun GroupOptionsDialog(vm: AppViewModel) {
 }
 
 @Composable
-private fun OptionRow(label: String, onClick: () -> Unit) {
+fun OptionRow(label: String, onClick: () -> Unit) {
     Focusable(Modifier.fillMaxWidth().height(44.dp), color = C.Surface2, focusedColor = C.Line, onClick = onClick) {
         Label(label, size = 15.sp, color = C.Text, weight = FontWeight.SemiBold, modifier = Modifier.padding(horizontal = 14.dp))
     }
@@ -316,7 +319,7 @@ private fun OptionRow(label: String, onClick: () -> Unit) {
 @Composable
 private fun GuideSearchResults(vm: AppViewModel, modifier: Modifier) {
     val q = vm.guideQuery.lowercase()
-    val pool = remember(vm.channels, vm.prefs.favorites, vm.favDataTick) { (vm.channels + vm.channelsIn(FAV_GROUP)).distinctBy { it.key } }
+    val pool = remember(vm.channels, vm.prefs.favorites, vm.favDataTick) { (vm.channels + vm.allLists().flatMap { vm.channelsIn(it.first) }).distinctBy { it.key } }
     val chHits = remember(q, pool) { pool.filter { vm.channelName(it).lowercase().contains(q) }.take(60) }
     val progHits = remember(q, pool, vm.guide) {
         val now = System.currentTimeMillis()

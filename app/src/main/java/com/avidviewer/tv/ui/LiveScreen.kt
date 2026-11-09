@@ -83,7 +83,7 @@ fun ChannelRow(vm: AppViewModel, c: Channel, num: Int?, selected: Boolean, modif
         modifier = modifier.fillMaxWidth().height(56.dp),
         color = if (selected) C.Surface2 else C.Surface,
         onFocus = onFocus,
-        onMenu = { vm.toggleFavorite(c.key) },
+        onMenu = { vm.listPickerKey = c.key },
         onClick = onClick,
     ) {
         Label("${num ?: ""}", size = 12.sp, modifier = Modifier.width(34.dp).padding(start = 8.dp))

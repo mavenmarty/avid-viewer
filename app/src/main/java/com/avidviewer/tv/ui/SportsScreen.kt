@@ -57,8 +57,11 @@ fun SportsScreen(vm: AppViewModel) {
     Column(Modifier.fillMaxSize().padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         // Preview window + selected event
         Row(Modifier.fillMaxWidth().height(130.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Box(Modifier.width(231.dp).fillMaxHeight().clip(RoundedCornerShape(10.dp))) {
-                VideoSurface(vm, Modifier.fillMaxSize())
+            PreviewWindow(vm, Modifier.width(231.dp).fillMaxHeight(), onOpen = {
+                // Full screen on what the preview is showing; otherwise the selected event's channel.
+                val key = vm.currentKey?.takeIf { vm.isPreviewing(it) } ?: selected?.channelKeys?.firstOrNull()
+                vm.openFullScreen(key, PlayContext.SPORTS)
+            }) {
                 if (selected != null) {
                     val st = state(selected)
                     Text(

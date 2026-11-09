@@ -86,8 +86,8 @@ private fun androidx.compose.foundation.lazy.LazyListScope.section(vm: AppViewMo
             val key = h.channelKey
             val item = h.vod
             if (key != null) {
-                val fav = vm.isFavorite(key)
-                TvButton(if (fav) "★ Favorite" else "☆ Favorite", selected = fav, modifier = Modifier.width(130.dp)) { vm.toggleFavorite(key) }
+                val listed = vm.inAnyList(key)
+                TvButton(if (listed) "✓ In a list" else "+ Add to List", selected = listed, modifier = Modifier.width(130.dp)) { vm.listPickerKey = key }
             } else if (item != null) {
                 val inList = vm.inMyList(item.key)
                 TvButton(if (inList) "✓ My List" else "+ My List", selected = inList, modifier = Modifier.width(130.dp)) { vm.toggleMyList(item) }

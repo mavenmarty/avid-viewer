@@ -65,6 +65,8 @@ fun AppRoot(vm: AppViewModel) {
         }
         ChannelOptionsDialog(vm)
         GroupOptionsDialog(vm)
+        ListPickerDialog(vm)
+        ListOptionsDialog(vm)
         // New version found: ask before updating (never interrupts full-screen viewing).
         val rel = vm.update
         if (rel != null && !vm.updatePromptDismissed && vm.screen != Screen.PLAYER) {
@@ -93,6 +95,37 @@ fun AppRoot(vm: AppViewModel) {
 }
 
 /** Video surface for the shared player. Several screens can show it; only one at a time is on screen. */
+/**
+ * A preview window the remote can move onto: it shows a focus ring and an "OK · Full screen" hint,
+ * and OK opens what's playing full screen. [overlay] draws on top (e.g. a LIVE tag).
+ */
+@Composable
+fun PreviewWindow(
+    vm: AppViewModel,
+    modifier: Modifier = Modifier,
+    onOpen: () -> Unit,
+    overlay: @Composable androidx.compose.foundation.layout.BoxScope.() -> Unit = {},
+) {
+    Focusable(
+        modifier = modifier,
+        shape = androidx.compose.foundation.shape.RoundedCornerShape(10.dp),
+        color = Color.Black,
+        focusedColor = Color.Black,
+        onClick = onOpen,
+    ) { focused ->
+        androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier.fillMaxSize().padding(if (focused) 3.dp else 0.dp)) {
+            VideoSurface(vm, Modifier.fillMaxSize())
+            overlay()
+            if (focused) Text(
+                "OK · Full screen",
+                color = C.OnAccent, fontSize = 12.sp, fontWeight = FontWeight.Bold,
+                modifier = Modifier.align(androidx.compose.ui.Alignment.BottomCenter).padding(6.dp)
+                    .clip(androidx.compose.foundation.shape.RoundedCornerShape(12.dp)).background(C.AccentFocus).padding(horizontal = 10.dp, vertical = 3.dp),
+            )
+        }
+    }
+}
+
 @OptIn(UnstableApi::class)
 @Composable
 fun VideoSurface(vm: AppViewModel, modifier: Modifier = Modifier, fit: Boolean = true) {

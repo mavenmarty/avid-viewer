@@ -169,6 +169,21 @@ fun PlaylistTree(vm: AppViewModel) {
                 }
             }
         }
+        items(vm.prefs.lists, key = { "tl-" + it.id }) { l ->
+            val g = LIST_PREFIX + l.id
+            Focusable(
+                modifier = Modifier.fillMaxWidth().height(44.dp),
+                color = C.Surface,
+                onMenu = { vm.listMenu = g },
+                onClick = { vm.ensureFavoriteData(); vm.chooseGroup(active ?: "", g) },
+            ) {
+                Text("☰", color = C.Accent, fontSize = 14.sp, modifier = Modifier.padding(start = 10.dp, end = 8.dp))
+                Column(Modifier.weight(1f)) {
+                    Label(l.name, size = 14.sp, color = C.Text, weight = FontWeight.SemiBold)
+                    Label("${l.keys.size} channels · your list", size = 12.sp)
+                }
+            }
+        }
         item { SectionTitle("Playlists", Modifier.padding(start = 6.dp, top = 10.dp, bottom = 6.dp)) }
         if (vm.shownPlaylists.isEmpty()) item { Label(if (vm.playlists.isEmpty()) "No playlists yet. Add one in Settings › Playlists." else "All playlists are turned off. Turn one on in Settings › Playlists.", size = 13.sp, lines = 3) }
         vm.shownPlaylists.forEach { p ->
@@ -230,6 +245,27 @@ fun GroupNav(vm: AppViewModel) {
                 Label("${vm.prefs.favorites.size}", size = 12.sp, modifier = Modifier.padding(end = 10.dp))
             }
         }
+        items(vm.prefs.lists, key = { "list-" + it.id }) { l ->
+            val g = LIST_PREFIX + l.id
+            val on = vm.selectedGroup == g
+            Focusable(
+                modifier = Modifier.fillMaxWidth().height(38.dp),
+                color = if (on) C.Surface2 else Color.Transparent,
+                onMenu = { vm.listMenu = g },
+                onClick = { vm.ensureFavoriteData(); vm.chooseGroup(vm.activePlaylist()?.id ?: "", g) },
+            ) {
+                Label((if (on) "▶ " else "") + "☰ " + l.name, size = 14.sp, color = if (on) C.Text else C.Accent, weight = FontWeight.SemiBold, modifier = Modifier.padding(start = 10.dp).weight(1f))
+                Label("${l.keys.size}", size = 12.sp, modifier = Modifier.padding(end = 10.dp))
+            }
+        }
+        item(key = "newlist") {
+            var naming by remember { mutableStateOf(false) }
+            if (naming) NewListDialog(vm) { naming = false }
+            Focusable(Modifier.fillMaxWidth().height(34.dp), color = Color.Transparent, onClick = { naming = true }) {
+                Label("＋ New list", size = 13.sp, color = C.Muted, modifier = Modifier.padding(start = 10.dp))
+            }
+        }
+        item { Spacer(Modifier.height(6.dp)) }
         items(groups, key = { it.raw }) { g ->
             val on = g.raw == vm.selectedGroup
             Focusable(
