@@ -163,7 +163,7 @@ fun ManageScreen(vm: AppViewModel) {
 }
 
 @Composable
-private fun RenameDialog(title: String, current: String, onDismiss: () -> Unit, onSave: (String) -> Unit) {
+fun RenameDialog(title: String, current: String, onDismiss: () -> Unit, onSave: (String) -> Unit) {
     var text by remember { mutableStateOf(current) }
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -372,7 +372,7 @@ fun SettingsScreen(vm: AppViewModel) {
         Column(Modifier.weight(1f).fillMaxHeight()) {
             when (section) {
                 "playlists" -> PlaylistsScreen(vm)
-                "channels" -> ManageScreen(vm)
+                "channels" -> HiddenItems(vm)
                 else -> LazyColumn(
                     Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(20.dp),
@@ -618,6 +618,36 @@ private fun androidx.compose.foundation.lazy.LazyListScope.discoverSettings(vm: 
                         }
                     }
                 }
+            }
+        }
+    }
+}
+
+/** Settings › Channels: editing now happens in the TV Guide (Menu key); this lists what's hidden. */
+@Composable
+private fun HiddenItems(vm: AppViewModel) {
+    val hiddenGroups = vm.groups(includeHidden = true).filter { it.hidden }
+    val hiddenChannels = vm.prefs.hiddenChannels.mapNotNull { vm.channel(it) }
+    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        item { Text("Channels", color = C.Text, fontSize = 20.sp, fontWeight = FontWeight.Bold) }
+        item {
+            SettingBlock("Edit channels and categories in the TV Guide", "Highlight a channel name or a category and press Menu (or hold OK) to rename it, move it up or down, add it to Favorites or hide it.") {}
+        }
+        item { SectionTitle("Hidden categories (${hiddenGroups.size})", Modifier.padding(top = 6.dp)) }
+        if (hiddenGroups.isEmpty()) item { Label("None", size = 13.sp) }
+        items(hiddenGroups, key = { "hg-" + it.raw }) { g ->
+            Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(C.Surface).padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) { Label(g.name, size = 14.sp, color = C.Text, weight = FontWeight.SemiBold, lines = 2); Label("${g.count} channels", size = 12.sp) }
+                TvButton("Show") { vm.toggleHidden(g.raw) }
+            }
+        }
+        item { SectionTitle("Hidden channels (${hiddenChannels.size})", Modifier.padding(top = 6.dp)) }
+        if (hiddenChannels.isEmpty()) item { Label("None", size = 13.sp) }
+        items(hiddenChannels, key = { "hc-" + it.key }) { c ->
+            Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(C.Surface).padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                ChannelBadge(vm.channelName(c), c.logo, 30.dp)
+                Column(Modifier.weight(1f).padding(horizontal = 10.dp)) { Label(vm.channelName(c), size = 14.sp, color = C.Text, weight = FontWeight.SemiBold, lines = 2); Label(vm.groupName(c.group), size = 12.sp) }
+                TvButton("Show") { vm.showChannel(c.key) }
             }
         }
     }

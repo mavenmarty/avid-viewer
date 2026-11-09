@@ -235,6 +235,7 @@ fun GroupNav(vm: AppViewModel) {
             Focusable(
                 modifier = Modifier.fillMaxWidth().height(38.dp),
                 color = if (on) C.Surface2 else Color.Transparent,
+                onMenu = { vm.groupMenu = g.raw },
                 onClick = { vm.chooseGroup(vm.activePlaylist()?.id ?: "", g.raw) },
             ) {
                 Label((if (on) "▶ " else "") + g.name, size = 14.sp, color = if (on) C.Text else C.Soft, weight = if (on) FontWeight.Bold else FontWeight.Normal, modifier = Modifier.padding(start = 10.dp).weight(1f))

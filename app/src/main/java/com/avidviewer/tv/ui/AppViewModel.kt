@@ -446,7 +446,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun channelsIn(group: String?): List<Channel> {
         if (group == null) return emptyList()
         if (group == FAV_GROUP) return prefs.favorites.mapNotNull { channel(it) }
-        val list = channels.filter { it.group == group }
+        val list = channels.filter { it.group == group && it.key !in prefs.hiddenChannels }
         val order = prefs.channelOrder[group] ?: return list
         val byKey = list.associateBy { it.key }
         return order.mapNotNull { byKey[it] } + list.filterNot { it.key in order }
@@ -514,6 +514,23 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun isFavorite(key: String?) = key != null && key in prefs.favorites
+
+    // ---------------- TV Guide options menus (Menu key) ----------------
+    var channelMenu by mutableStateOf<String?>(null)
+    var groupMenu by mutableStateOf<String?>(null)
+
+    fun moveFavorite(key: String, dir: Int) {
+        val l = prefs.favorites.toMutableList(); val i = l.indexOf(key); val j = i + dir
+        if (i < 0 || j !in l.indices) return
+        l[i] = l[j].also { l[j] = l[i] }
+        updatePrefs { it.copy(favorites = l) }
+    }
+
+    /** Moves a channel within the category being shown (Favorites has its own order). */
+    fun moveInGuide(key: String, dir: Int) = if (selectedGroup == FAV_GROUP) moveFavorite(key, dir) else moveChannel(key, dir)
+
+    fun hideChannel(key: String) = updatePrefs { it.copy(hiddenChannels = it.hiddenChannels + key) }
+    fun showChannel(key: String) = updatePrefs { it.copy(hiddenChannels = it.hiddenChannels - key) }
 
     fun toggleFavorite(key: String?) {
         key ?: return

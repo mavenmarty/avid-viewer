@@ -74,6 +74,7 @@ data class Prefs(
     val groupOrder: List<String> = emptyList(),
     val channelOrder: Map<String, List<String>> = emptyMap(),
     val hiddenGroups: Set<String> = emptySet(),
+    val hiddenChannels: Set<String> = emptySet(),
     val showClock: Boolean = true,
     val timeZone: String = "auto",
     val streamFormat: String = "ts", // "ts" or "m3u8" for Xtream
@@ -102,6 +103,7 @@ data class Prefs(
         o.put("groupOrder", JSONArray(groupOrder))
         o.put("channelOrder", JSONObject().apply { channelOrder.forEach { (g, l) -> put(g, JSONArray(l)) } })
         o.put("hiddenGroups", JSONArray(hiddenGroups.toList()))
+        o.put("hiddenChannels", JSONArray(hiddenChannels.toList()))
         o.put("showClock", showClock)
         o.put("timeZone", timeZone)
         o.put("streamFormat", streamFormat)
@@ -132,6 +134,7 @@ data class Prefs(
                 groupOrder = strList(o.optJSONArray("groupOrder")),
                 channelOrder = if (co == null) emptyMap() else co.keys().asSequence().associateWith { strList(co.getJSONArray(it)) },
                 hiddenGroups = strList(o.optJSONArray("hiddenGroups")).toSet(),
+                hiddenChannels = strList(o.optJSONArray("hiddenChannels")).toSet(),
                 showClock = o.optBoolean("showClock", true),
                 timeZone = o.optString("timeZone", "auto"),
                 streamFormat = o.optString("streamFormat", "ts"),

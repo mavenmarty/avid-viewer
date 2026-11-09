@@ -2,6 +2,7 @@ package com.avidviewer.tv.ui
 
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.background
+import androidx.compose.material3.Text
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.focus.onFocusChanged
@@ -122,7 +123,7 @@ fun GuideScreen(vm: AppViewModel) {
                 Label(listOfNotNull(fc?.let { vm.channelName(it) }, fc?.let { vm.playlistName(it) }?.ifBlank { null }, fp?.let { "${vm.fmtTime(it.start)} – ${vm.fmtTime(it.end)}" }).joinToString(" · "), size = 12.sp)
                 Label(fp?.title ?: "No guide information", size = 18.sp, color = C.Text, weight = FontWeight.Bold)
                 Label(listOfNotNull(fp?.subtitle?.let { "“$it”" }, if (fp?.isNew == true) "New" else null).joinToString(" · "), size = 13.sp, color = C.Soft)
-                Label("OK: preview · OK again: full screen · CH+/CH−: page · Menu: favorite", size = 12.sp)
+                Label("OK: preview · OK again: full screen · CH+/CH−: page · Menu: options", size = 12.sp)
             }
         }
         // Groups
@@ -158,7 +159,7 @@ fun GuideScreen(vm: AppViewModel) {
                             modifier = Modifier.width(colWidth).fillMaxHeight().focusRequester(rowFocus[idx])
                                 .onFocusChanged { nameFocused = it.hasFocus },
                             onFocus = { focusProg = c.key to vm.nowNext(c).first },
-                            onMenu = { vm.toggleFavorite(c.key) },
+                            onMenu = { vm.channelMenu = c.key },
                             onClick = { vm.selectChannel(c.key, PlayContext.GROUP) },
                         ) {
                             Label("${numbers[c.key] ?: ""}", size = 12.sp, modifier = Modifier.width(30.dp).padding(start = 6.dp))
@@ -189,7 +190,7 @@ fun GuideScreen(vm: AppViewModel) {
                                     color = if (isNow) C.Surface2 else C.Surface,
                                     focusedColor = C.Line,
                                     onFocus = { focusProg = c.key to p },
-                                    onMenu = { vm.toggleFavorite(c.key) },
+                                    onMenu = { vm.channelMenu = c.key },
                                     onClick = { vm.selectChannel(c.key, PlayContext.GROUP) },
                                 ) {
                                     Column(Modifier.padding(horizontal = 8.dp)) {
@@ -211,6 +212,72 @@ fun GuideScreen(vm: AppViewModel) {
     }
 }
 
+/** Menu on a channel: favorite, rename, move, hide. Stays open so Move can be pressed repeatedly. */
+@Composable
+fun ChannelOptionsDialog(vm: AppViewModel) {
+    val key = vm.channelMenu ?: return
+    val c = vm.channel(key) ?: run { vm.channelMenu = null; return }
+    var renaming by remember(key) { mutableStateOf(false) }
+    if (renaming) {
+        RenameDialog("Rename channel", vm.channelName(c), onDismiss = { renaming = false }) { vm.renameChannel(key, it); renaming = false }
+        return
+    }
+    val list = vm.channelsIn(vm.selectedGroup)
+    val pos = list.indexOfFirst { it.key == key }
+    val fav = vm.isFavorite(key)
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = { vm.channelMenu = null },
+        containerColor = C.Surface,
+        title = { Text(vm.channelName(c), color = C.Text, fontWeight = FontWeight.Bold) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Label(listOf(vm.groupName(vm.selectedGroup ?: c.group), if (pos >= 0) "${pos + 1} of ${list.size}" else "", vm.playlistName(c)).filter { it.isNotBlank() }.joinToString(" · "), size = 13.sp, color = C.Soft, lines = 2)
+                OptionRow(if (fav) "★  Remove from Favorites" else "☆  Add to Favorites") { vm.toggleFavorite(key) }
+                OptionRow("✎  Rename") { renaming = true }
+                OptionRow("▲  Move up") { vm.moveInGuide(key, -1) }
+                OptionRow("▼  Move down") { vm.moveInGuide(key, 1) }
+                if (vm.selectedGroup != FAV_GROUP) OptionRow("⊘  Hide channel") { vm.hideChannel(key); vm.channelMenu = null }
+            }
+        },
+        confirmButton = { TvButton("Done", primary = true) { vm.channelMenu = null } },
+    )
+}
+
+/** Menu on a category in the left navigation: rename, move, hide. */
+@Composable
+fun GroupOptionsDialog(vm: AppViewModel) {
+    val raw = vm.groupMenu ?: return
+    var renaming by remember(raw) { mutableStateOf(false) }
+    if (renaming) {
+        RenameDialog("Rename category", vm.groupName(raw), onDismiss = { renaming = false }) { vm.renameGroup(raw, it); renaming = false }
+        return
+    }
+    val all = vm.groups(includeHidden = true)
+    val pos = all.indexOfFirst { it.raw == raw }
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = { vm.groupMenu = null },
+        containerColor = C.Surface,
+        title = { Text(vm.groupName(raw), color = C.Text, fontWeight = FontWeight.Bold) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Label("Category ${pos + 1} of ${all.size} · ${all.getOrNull(pos)?.count ?: 0} channels", size = 13.sp, color = C.Soft)
+                OptionRow("✎  Rename") { renaming = true }
+                OptionRow("▲  Move up") { vm.moveGroup(raw, -1) }
+                OptionRow("▼  Move down") { vm.moveGroup(raw, 1) }
+                OptionRow("⊘  Hide category") { vm.toggleHidden(raw); vm.groupMenu = null }
+            }
+        },
+        confirmButton = { TvButton("Done", primary = true) { vm.groupMenu = null } },
+    )
+}
+
+@Composable
+private fun OptionRow(label: String, onClick: () -> Unit) {
+    Focusable(Modifier.fillMaxWidth().height(44.dp), color = C.Surface2, focusedColor = C.Line, onClick = onClick) {
+        Label(label, size = 15.sp, color = C.Text, weight = FontWeight.SemiBold, modifier = Modifier.padding(horizontal = 14.dp))
+    }
+}
+
 /** TV Guide search: matching channels, then matching programs (on now or later), in this playlist and Favorites. */
 @Composable
 private fun GuideSearchResults(vm: AppViewModel, modifier: Modifier) {
@@ -227,7 +294,7 @@ private fun GuideSearchResults(vm: AppViewModel, modifier: Modifier) {
         if (chHits.isEmpty()) item { Label("No channels match.", size = 13.sp, modifier = Modifier.padding(start = 4.dp)) }
         itemsIndexed(chHits, key = { i, c -> "c$i-${c.key}" }) { _, c ->
             val now = vm.nowNext(c).first
-            Focusable(Modifier.fillMaxWidth().height(50.dp), onMenu = { vm.toggleFavorite(c.key) }, onClick = { vm.selectChannel(c.key, PlayContext.GROUP) }) {
+            Focusable(Modifier.fillMaxWidth().height(50.dp), onMenu = { vm.channelMenu = c.key }, onClick = { vm.selectChannel(c.key, PlayContext.GROUP) }) {
                 Spacer(Modifier.width(8.dp))
                 ChannelBadge(vm.channelName(c), c.logo, 32.dp)
                 Column(Modifier.padding(horizontal = 10.dp).weight(1f)) {

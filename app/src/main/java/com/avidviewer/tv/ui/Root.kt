@@ -63,6 +63,8 @@ fun AppRoot(vm: AppViewModel) {
                 }
             }
         }
+        ChannelOptionsDialog(vm)
+        GroupOptionsDialog(vm)
         // New version found: ask before updating (never interrupts full-screen viewing).
         val rel = vm.update
         if (rel != null && !vm.updatePromptDismissed && vm.screen != Screen.PLAYER) {
