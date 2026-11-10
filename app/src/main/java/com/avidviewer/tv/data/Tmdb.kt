@@ -130,11 +130,17 @@ object Tmdb {
     }
 
     /** Strips provider decorations like "EN - ", "[4K]", "(2024)" so names can be compared. */
-    fun cleanName(s: String): String = s
-        .replace(Regex("^\\s*[A-Z]{2,3}\\s*[-:|]\\s*"), "")
-        .replace(Regex("\\[[^]]*]|\\([^)]*\\)"), " ")
-        .replace(Regex("(?i)\\b(4k|uhd|fhd|hd|sd|hevc|multi|sub|dub)\\b"), " ")
-        .replace(Regex("\\s+"), " ").trim()
+    private val PREFIX = Regex("^\\s*[A-Z]{2,3}\\s*[-:|]\\s*")
+    private val BRACKETS = Regex("\\[[^]]*]|\\([^)]*\\)")
+    private val QUALITY = Regex("(?i)\\b(4k|uhd|fhd|hd|sd|hevc|multi|sub|dub)\\b")
+    private val SPACES = Regex("\\s+")
+    private val NON_ALNUM = Regex("[^a-z0-9]")
 
-    fun normalize(s: String): String = cleanName(s).lowercase().replace(Regex("[^a-z0-9]"), "")
+    fun cleanName(s: String): String = s
+        .replace(PREFIX, "")
+        .replace(BRACKETS, " ")
+        .replace(QUALITY, " ")
+        .replace(SPACES, " ").trim()
+
+    fun normalize(s: String): String = cleanName(s).lowercase().replace(NON_ALNUM, "")
 }
