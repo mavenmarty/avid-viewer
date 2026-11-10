@@ -143,6 +143,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     private var vodIndexFor: List<VodItem>? = null
     private var vodIndex: Map<String, VodItem> = emptyMap()
     var vodCategory by mutableStateOf(mapOf("movie" to "All", "series" to "All"))
+    /** The player is actually playing right now (false while buffering or paused); screens redraw when it changes. */
+    var playing by mutableStateOf(false); private set
+    /** The viewer paused (as opposed to buffering). The full-screen bar stays up only while paused. */
+    var paused by mutableStateOf(false); private set
     var vodDetail by mutableStateOf<VodItem?>(null); private set
     var vodInfo by mutableStateOf<VodInfo?>(null); private set
     var detailEpisodes by mutableStateOf<List<Episode>?>(null); private set
@@ -368,11 +372,13 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     init {
         if (prefs.clearCacheOnExit) store.clearCache() // catches exits Android didn't report
         player.addListener(object : Player.Listener {
+            override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) { paused = !playWhenReady }
             override fun onPlayerError(error: PlaybackException) {
                 playerError = "Can't play this channel (${error.errorCodeName}). Try another channel, or switch Stream format in Settings."
             }
 
             override fun onIsPlayingChanged(isPlaying: Boolean) {
+                playing = isPlaying
                 if (isPlaying) playerError = null
             }
         })

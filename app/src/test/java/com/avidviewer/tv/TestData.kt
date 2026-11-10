@@ -37,6 +37,8 @@ object TestData {
                 channels.add(Channel("$P1:c$gi-$i", name, g, null, "$dead/s$gi-$i.ts", "epg$gi-$i"))
             }
         }
+        // A long category, to test scrolling far down and coming back.
+        for (i in 1..80) channels.add(Channel("$P1:big$i", "BIG Channel $i with a fairly long provider name", "BIG", null, "$dead/big$i.ts", "epgbig$i"))
         store.saveChannels(P1, channels)
         store.saveChannels(P2, (1..8).map { Channel("$P2:f$it", "Free News $it", "Free News", null, "$dead/f$it.ts", null) })
 
