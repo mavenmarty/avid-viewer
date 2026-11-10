@@ -774,10 +774,10 @@ private fun QrCode(text: String, modifier: Modifier = Modifier) {
                 mapOf(com.google.zxing.EncodeHintType.MARGIN to 2, com.google.zxing.EncodeHintType.CHARACTER_SET to "UTF-8"))
         }.getOrNull()
     } ?: return
-    androidx.compose.foundation.Canvas(modifier.clip(RoundedCornerShape(6.dp)).background(Color.White)) {
+    androidx.compose.foundation.Canvas(modifier.clip(RoundedCornerShape(6.dp)).background(androidx.compose.ui.graphics.Color.White)) {
         val cell = size.minDimension / matrix.width
         for (y in 0 until matrix.height) for (x in 0 until matrix.width) {
-            if (matrix.get(x, y)) drawRect(Color.Black, topLeft = androidx.compose.ui.geometry.Offset(x * cell, y * cell), size = androidx.compose.ui.geometry.Size(cell + 0.5f, cell + 0.5f))
+            if (matrix.get(x, y)) drawRect(androidx.compose.ui.graphics.Color.Black, topLeft = androidx.compose.ui.geometry.Offset(x * cell, y * cell), size = androidx.compose.ui.geometry.Size(cell + 0.5f, cell + 0.5f))
         }
     }
 }
