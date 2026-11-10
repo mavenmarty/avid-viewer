@@ -162,19 +162,21 @@ fun badgeColor(name: String) = Color(palette[(name.hashCode() and 0x7fffffff) % 
 @Composable
 fun Modifier.entryFocus(vm: AppViewModel, screen: Screen): Modifier {
     val fr = androidx.compose.runtime.remember { androidx.compose.ui.focus.FocusRequester() }
+    var focused by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
     androidx.compose.runtime.LaunchedEffect(vm.entryFocusFor) {
-        if (vm.entryFocusFor == screen) {
-            // Retry for up to 2 s (on a slow device the item may not be ready at once), but stop as soon
-            // as the viewer presses a button: the highlight is theirs from then on.
-            val started = android.os.SystemClock.uptimeMillis()
-            for (attempt in 0 until 20) {
-                kotlinx.coroutines.delay(if (attempt == 0) 150 else 100)
-                if (vm.lastKeyAt > started) { vm.entryFocusFor = null; break }
-                if (runCatching { fr.requestFocus() }.isSuccess) { vm.entryFocusFor = null; break }
-            }
+        if (vm.entryFocusFor != screen) return@LaunchedEffect
+        // Try on each screen refresh for up to ~2 s (on a slow device the item may not be ready at once),
+        // and stop as soon as the viewer presses a button: the highlight is theirs from then on.
+        val started = android.os.SystemClock.uptimeMillis()
+        for (frame in 0 until 120) {
+            androidx.compose.runtime.withFrameNanos { }
+            if (vm.lastKeyAt > started) break
+            if (focused) break
+            runCatching { fr.requestFocus() }
         }
+        if (vm.entryFocusFor == screen) vm.entryFocusFor = null
     }
-    return this.then(androidx.compose.ui.Modifier.focusRequester(fr))
+    return this.then(androidx.compose.ui.Modifier.focusRequester(fr)).then(androidx.compose.ui.Modifier.onFocusChanged { focused = it.isFocused })
 }
 
 /**

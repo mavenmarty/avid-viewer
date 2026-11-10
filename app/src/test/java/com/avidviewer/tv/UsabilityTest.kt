@@ -148,6 +148,15 @@ class UsabilityTest {
     // ---------------------------------------------------------------- remote navigation
 
     @Test
+    fun pickingAScreenHighlightsItsFirstItem() {
+        go(Screen.SETTINGS)
+        waitFor("Settings › Playlists to take the highlight (focus: ${focused()})") { focused().contains("Playlists") }
+        go(Screen.MOVIES)
+        waitFor("movies to load") { vm.vodOf("movie").isNotEmpty() }
+        waitFor("Movies › All to take the highlight (focus: ${focused()})") { focused().startsWith("▶ All") || focused().startsWith("All") }
+    }
+
+    @Test
     fun dpadMovesThroughTheGuideAndBackLeavesCategories() {
         rule.runOnIdle { vm.chooseGroup(TestData.P1, "NEWS") }
         settle()
