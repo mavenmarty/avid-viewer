@@ -117,7 +117,7 @@ class UsabilityTest {
         val threads = Thread.getAllStackTraces().filter { (t, _) -> t.name.startsWith("DefaultDispatcher") || t.name == "main" || t.name.contains("Test worker") }
             .entries.joinToString("\n\n") { (t, st) -> t.name + " (" + t.state + ")\n  " + st.take(14).joinToString("\n  ") }
         throw AssertionError(
-            "Timed out waiting for: $what\n" +
+            "Timed out waiting for: $what\nfocus now: ${focused()} · screen=${vm.screen} nav=${vm.navMode} group=${vm.selectedGroup}\n" +
                 "status=${vm.status} vodError=${vm.vodError} vodLoading=${vm.vodLoading} vod=${vm.vod.size} " +
                 "vodPlaylists=${vm.vodPlaylists.map { it.id }} searching=${vm.searching} results=${vm.searchResults?.size}\n\n$threads",
         )
@@ -414,8 +414,13 @@ class UsabilityTest {
             // Back to the series page, then season 2.
             press(listOf(Key.Back))
             waitFor("back on the series page") { vm.screen == Screen.SERIES && vm.vodDetail != null }
-            rule.onAllNodesWithText("Season 2").onFirst().performClick()
-            settle()
+            // With the remote: Down to the season buttons, Right to Season 2, OK.
+            tries = 0
+            while (!focused().contains("Season 1") && tries < 6) { press(listOf(Key.DirectionDown)); tries++ }
+            assertTrue("couldn't reach the season buttons (focus: ${focused()})", focused().contains("Season 1"))
+            press(listOf(Key.DirectionRight))
+            assertTrue("Right didn't reach Season 2 (focus: ${focused()})", focused().contains("Season 2"))
+            press(listOf(Key.DirectionCenter))
             tries = 0
             while (!focused().contains("Season Two Opener") && tries < 10) { press(listOf(Key.DirectionDown)); tries++ }
             assertTrue("couldn't reach a season 2 episode (focus: ${focused()})", focused().contains("Season Two Opener"))
