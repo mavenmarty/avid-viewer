@@ -364,30 +364,41 @@ class UsabilityTest {
     }
 
     /** A tiny Xtream Codes provider on this machine: a login, and a series with two seasons of episodes. */
-    private fun fakeProvider(): com.sun.net.httpserver.HttpServer {
-        val server = com.sun.net.httpserver.HttpServer.create(java.net.InetSocketAddress("127.0.0.1", 0), 0)
-        server.createContext("/") { ex ->
-            val q = ex.requestURI.rawQuery ?: ""
-            val body = when {
-                ex.requestURI.path.contains("xmltv") -> "<tv></tv>"
-                q.contains("action=get_series_info") -> """{"info":{"name":"Test Show","plot":"A show for testing."},"episodes":{
-                    "1":[{"id":"101","episode_num":1,"title":"Pilot","container_extension":"mp4","info":{"duration":"00:42:00"}},
-                         {"id":"102","episode_num":2,"title":"Second","container_extension":"mp4","info":{}}],
-                    "2":[{"id":"201","episode_num":1,"title":"Season Two Opener","container_extension":"mkv","info":{}}]}}"""
-                q.contains("action=") -> "[]"
-                else -> """{"user_info":{"auth":1,"status":"Active"},"server_info":{}}"""
-            }.toByteArray()
-            ex.sendResponseHeaders(200, body.size.toLong()); ex.responseBody.use { it.write(body) }
-        }
-        server.start()
-        return server
+    private class FakeProvider : AutoCloseable {
+        private val socket = java.net.ServerSocket(0, 50, java.net.InetAddress.getByName("127.0.0.1"))
+        val port get() = socket.localPort
+        private val thread = Thread {
+            while (!socket.isClosed) {
+                val c = runCatching { socket.accept() }.getOrNull() ?: break
+                runCatching {
+                    c.use { conn ->
+                        val reader = conn.getInputStream().bufferedReader()
+                        val requestLine = reader.readLine() ?: return@use
+                        while (true) { val l = reader.readLine() ?: break; if (l.isEmpty()) break }
+                        val target = requestLine.split(" ").getOrElse(1) { "/" }
+                        val body = when {
+                            target.contains("xmltv") -> "<tv></tv>"
+                            target.contains("action=get_series_info") -> """{"info":{"name":"Test Show","plot":"A show for testing."},"episodes":{
+                                "1":[{"id":"101","episode_num":1,"title":"Pilot","container_extension":"mp4","info":{"duration":"00:42:00"}},
+                                     {"id":"102","episode_num":2,"title":"Second","container_extension":"mp4","info":{}}],
+                                "2":[{"id":"201","episode_num":1,"title":"Season Two Opener","container_extension":"mkv","info":{}}]}}"""
+                            target.contains("action=") -> "[]"
+                            else -> """{"user_info":{"auth":1,"status":"Active"},"server_info":{}}"""
+                        }.toByteArray()
+                        val out = conn.getOutputStream()
+                        out.write("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: ${body.size}\r\nConnection: close\r\n\r\n".toByteArray())
+                        out.write(body); out.flush()
+                    }
+                }
+            }
+        }.apply { isDaemon = true; start() }
+        override fun close() { runCatching { socket.close() } }
     }
 
     @Test
     fun seriesEpisodeCanBeReachedWithTheRemoteAndPlays() {
-        val server = fakeProvider()
-        try {
-            rule.runOnIdle { vm.addPlaylist("Fake provider", "xtream", "http://127.0.0.1:${server.address.port}", "u", "", "", "", liveOn = false, vodOn = true) }
+        FakeProvider().use { server ->
+            rule.runOnIdle { vm.addPlaylist("Fake provider", "xtream", "http://127.0.0.1:${server.port}", "u", "", "", "", liveOn = false, vodOn = true) }
             waitFor("the provider to be added (status=${vm.status})") { vm.playlists.any { it.name == "Fake provider" } }
             val pid = vm.playlists.first { it.name == "Fake provider" }.id
             go(Screen.SERIES)
@@ -408,7 +419,7 @@ class UsabilityTest {
             tries = 0
             while (!focused().contains("Season Two Opener") && tries < 10) { press(listOf(Key.DirectionDown)); tries++ }
             assertTrue("couldn't reach a season 2 episode (focus: ${focused()})", focused().contains("Season Two Opener"))
-        } finally { server.stop(0) }
+        }
     }
 
     @Test
