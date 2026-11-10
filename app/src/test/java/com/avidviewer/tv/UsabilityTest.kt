@@ -160,7 +160,7 @@ class UsabilityTest {
     fun dpadMovesThroughTheGuideAndBackLeavesCategories() {
         rule.runOnIdle { vm.chooseGroup(TestData.P1, "NEWS") }
         settle()
-        rule.onAllNodesWithText("NEWS Channel 1 with", substring = true).onFirst().requestFocus()
+        rule.onAllNodes(androidx.compose.ui.test.hasText("NEWS Channel 1 with", substring = true) and androidx.compose.ui.test.hasClickAction()).onFirst().requestFocus()
         press(listOf(Key.DirectionDown, Key.DirectionDown, Key.DirectionRight, Key.DirectionRight, Key.DirectionLeft, Key.DirectionUp))
         assertEquals(NavMode.GROUPS, vm.navMode)
         press(listOf(Key.Back))
@@ -173,7 +173,7 @@ class UsabilityTest {
         settle()
         val first = vm.channelsIn("KIDS").first().key
         // As a viewer would: highlight the channel name, press Menu, choose Re-order.
-        rule.onAllNodesWithText("KIDS Channel 1 with", substring = true).onFirst().requestFocus()
+        rule.onAllNodes(androidx.compose.ui.test.hasText("KIDS Channel 1 with", substring = true) and androidx.compose.ui.test.hasClickAction()).onFirst().requestFocus()
         settle()
         press(listOf(Key.Menu))
         waitFor("channel options to open") { rule.onAllNodesWithText("Re-order", substring = true).fetchSemanticsNodes().isNotEmpty() }
@@ -414,9 +414,11 @@ class UsabilityTest {
             // Back to the series page, then season 2.
             press(listOf(Key.Back))
             waitFor("back on the series page") { vm.screen == Screen.SERIES && vm.vodDetail != null }
-            // With the remote: Down to the season buttons, Right to Season 2, OK.
+            // The highlight comes back on the episode that was playing.
+            waitFor("back on the episode that played (focus: ${focused()})") { focused().contains("Pilot") }
+            // With the remote: Up to the season buttons, Right to Season 2, OK.
             tries = 0
-            while (!focused().contains("Season 1") && tries < 6) { press(listOf(Key.DirectionDown)); tries++ }
+            while (!focused().contains("Season 1") && tries < 6) { press(listOf(Key.DirectionUp)); tries++ }
             assertTrue("couldn't reach the season buttons (focus: ${focused()}, trail=${vm.focusTrail.toList().takeLast(12)})", focused().contains("Season 1"))
             press(listOf(Key.DirectionRight))
             assertTrue("Right didn't reach Season 2 (focus: ${focused()})", focused().contains("Season 2"))

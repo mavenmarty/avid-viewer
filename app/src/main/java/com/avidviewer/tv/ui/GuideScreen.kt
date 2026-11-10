@@ -165,10 +165,9 @@ fun GuideScreen(vm: AppViewModel) {
 
     /** Puts the highlight on a channel name row, scrolling it into view (used for wrap-around). */
     fun wrapTo(i: Int) {
-        scope.launch {
-            listState.scrollToItem(if (i == 0) 0 else (i - (listState.layoutInfo.visibleItemsInfo.size - 2)).coerceAtLeast(0))
-            pendingFocus = i
-        }
+        val target = if (i == 0) 0 else (i - (listState.layoutInfo.visibleItemsInfo.size - 2)).coerceAtLeast(0)
+        scope.launch { listState.scrollToItem(target) }
+        pendingFocus = i
     }
 
     /** Up/Down from a program: go to the program airing at [anchor] in the row above or below. */
