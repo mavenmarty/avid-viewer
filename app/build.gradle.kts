@@ -52,7 +52,16 @@ android {
     testOptions {
         unitTests {
             isIncludeAndroidResources = true
-            all { it.maxHeapSize = "3g" }
+            all {
+                it.maxHeapSize = "3g"
+                // Print the full reason for any failure in the build log.
+                it.testLogging {
+                    events("failed", "skipped")
+                    exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
+                    showStackTraces = true
+                    showCauses = true
+                }
+            }
         }
     }
 }
