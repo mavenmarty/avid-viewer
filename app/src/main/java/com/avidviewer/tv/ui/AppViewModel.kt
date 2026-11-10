@@ -176,6 +176,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     var update by mutableStateOf<Updater.Release?>(null); private set
     var updateStatus by mutableStateOf<String?>(null); private set
     var updateBusy by mutableStateOf(false); private set
+    /** The downloaded update, when the installer needs a second way in ("Open installer"). */
+    var updateFile by mutableStateOf<java.io.File?>(null); private set
+    private var installAnswered = false
     var updatePromptDismissed by mutableStateOf(false)
     val installed: Pair<Long, String> = runCatching { Updater.installedVersion(app) }.getOrDefault(0L to "")
     var selectedEvent by mutableStateOf<String?>(null)
@@ -415,7 +418,13 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 delay(30 * 60 * 1000L) // every 30 minutes
             }
         }
-        Updater.onStatus = { msg -> viewModelScope.launch { updateStatus = msg; updateBusy = false } }
+        Updater.onStatus = { msg ->
+            viewModelScope.launch {
+                installAnswered = true
+                updateBusy = false
+                updateStatus = if (msg == Updater.NO_CONFIRM) "The installer screen didn't open. Choose Open installer to finish." else msg
+            }
+        }
         if (prefs.autoUpdateCheck) checkForUpdate(quiet = true)
         if (activePlaylist() == null) { screen = Screen.SETTINGS; settingsSection = "playlists"; navMode = NavMode.COLLAPSED }
         activePlaylist()?.let { loadActive(refresh = false) }
@@ -1470,6 +1479,13 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /** Second way to install: Android's own install screen for the downloaded file. */
+    fun openInstaller() {
+        val f = updateFile?.takeIf { it.exists() } ?: run { updateStatus = "Download the update again first."; updateFile = null; return }
+        val ok = Updater.openInstaller(getApplication(), f)
+        updateStatus = if (ok) "Follow the steps on the install screen." else "Couldn't open the install screen on this device."
+    }
+
     fun installUpdate() {
         val rel = update ?: return
         val ctx = getApplication<Application>()
@@ -1480,13 +1496,29 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
         viewModelScope.launch {
             updateBusy = true
+            updateFile = null
             try {
-                val file = withContext(Dispatchers.IO) { Updater.download(ctx, rel.apkUrl) { pct -> viewModelScope.launch { updateStatus = "Downloading ${rel.versionName}… $pct%" } } }
-                updateStatus = "Installing…"
+                var downloading = true
+                val file = withContext(Dispatchers.IO) {
+                    Updater.download(ctx, rel.apkUrl, rel.size) { pct, note ->
+                        viewModelScope.launch { if (downloading) updateStatus = "Downloading ${rel.versionName}… $pct%" + (note?.let { " · $it" } ?: "") }
+                    }
+                }
+                downloading = false
+                updateFile = file
+                updateStatus = "Installing ${rel.versionName}…"
+                installAnswered = false
                 withContext(Dispatchers.IO) { Updater.install(ctx, file) }
+                // Some Fire TVs never answer the installer request: after a while, offer the system install screen.
+                delay(25_000)
+                if (!installAnswered) {
+                    updateBusy = false
+                    updateStatus = "The installer hasn't responded. Choose Open installer to finish the update."
+                }
             } catch (e: Exception) {
                 updateStatus = "Update failed: ${e.message}"
                 updateBusy = false
+                if (updateFile != null) updateStatus += " You can also choose Open installer."
             }
         }
     }
