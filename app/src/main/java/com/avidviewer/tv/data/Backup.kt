@@ -26,11 +26,11 @@ object Backup {
         val playlists: List<Playlist>,
         val prefs: Prefs,
         val tmdbKey: String,
-        val smbPassword: String = "",
         val history: List<HistoryEntry>,
         val resume: Map<String, Long>,
         val created: Long,
         val appVersion: String,
+        val smbPassword: String = "",
     )
 
     class WrongPin : Exception("That PIN doesn't open this backup.")
