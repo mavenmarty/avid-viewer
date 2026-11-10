@@ -76,6 +76,8 @@ fun GuideScreen(vm: AppViewModel) {
     var focusProg by remember { mutableStateOf<Pair<String, Program?>?>(null) }
     /** Which channel name cell has the highlight (-1 = none). */
     var focusedRow by remember { mutableStateOf(-1) }
+    /** The channel (by key) whose name cell has the highlight; survives rows being replaced. */
+    var focusedKey by remember { mutableStateOf<String?>(null) }
     val wrapFocus = androidx.compose.ui.platform.LocalFocusManager.current
 
     // The time the highlight is on. Up/Down lands on the program airing at this time in the next row,
@@ -120,10 +122,15 @@ fun GuideScreen(vm: AppViewModel) {
         // Keep asking each frame (up to ~2 s) until that channel really has the highlight: on a slow
         // device the row may not be ready at once. A button press in the meantime wins.
         val started = android.os.SystemClock.uptimeMillis()
+        val want = list.getOrNull(i)?.key
+        var held = 0
         for (frame in 0 until 120) {
             androidx.compose.runtime.withFrameNanos { }
-            if (vm.lastKeyAt > started || focusedRow == i) break
-            runCatching { rowFocus[i].requestFocus() }
+            if (vm.lastKeyAt > started) break
+            // Done once the highlight has stayed there for a few frames (something else may grab it right after).
+            if (focusedKey == want) { if (++held >= 12) break; continue }
+            held = 0
+            runCatching { rowFocus.getOrNull(i)?.requestFocus() }
         }
         pendingFocus = null
     }
@@ -274,7 +281,7 @@ fun GuideScreen(vm: AppViewModel) {
                                 .then(if (isMoving) Modifier.border(2.dp, C.AccentFocus, RoundedCornerShape(8.dp)) else Modifier)
                                 .onFocusChanged {
                                     if (isMoving) movingFocused = it.isFocused
-                                    if (it.isFocused) focusedRow = idx else if (focusedRow == idx) focusedRow = -1
+                                    if (it.isFocused) { focusedRow = idx; focusedKey = c.key } else if (focusedKey == c.key) { focusedRow = -1; focusedKey = null }
                                 }
                                 .onPreviewKeyEvent { e ->
                                     if (isMoving) reorderKeys(e, onMove = { vm.moveChannelBy(c.key, it) }, onTop = { vm.moveChannelTo(c.key, 0) },

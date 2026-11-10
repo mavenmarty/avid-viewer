@@ -205,6 +205,7 @@ private fun VodDetail(vm: AppViewModel, v: VodItem) {
     val playFocus = remember { FocusRequester() }
     val episodeFocus = remember { FocusRequester() }
     var inside by remember { mutableStateOf(false) }
+    var onEpisode by remember { mutableStateOf(false) }
     val isSeries = v.kind == "series"
     // Opening the page, coming back from the player, or episodes arriving: put the highlight
     // on the episode that was playing, else the main button. Retried per frame until it lands,
@@ -212,14 +213,17 @@ private fun VodDetail(vm: AppViewModel, v: VodItem) {
     LaunchedEffect(v.key, vm.screen, vm.detailEpisodes != null) {
         if (vm.screen == Screen.PLAYER) return@LaunchedEffect
         val started = System.currentTimeMillis()
+        var held = 0
         for (frame in 0 until 120) {
             androidx.compose.runtime.withFrameNanos { }
             if (vm.lastKeyAt > started) break
             val ep = vm.lastEpisode
-            val wantEpisode = isSeries && ep != null && vm.detailEpisodes?.any { it.key == ep.key && it.season == ep.season } == true
-            if (wantEpisode && frame < 60) { if (runCatching { episodeFocus.requestFocus() }.isSuccess && inside && frame > 2) break }
-            else if (inside && frame > 2) break
-            else runCatching { playFocus.requestFocus() }
+            val wantEpisode = isSeries && frame < 60 && ep != null && vm.detailEpisodes?.any { it.key == ep.key && it.season == ep.season } == true
+            val ok = if (wantEpisode) onEpisode else inside
+            // Done once the highlight has stayed for a few frames (the menu may grab it right after).
+            if (ok) { if (++held >= 12) break; continue }
+            held = 0
+            if (wantEpisode) runCatching { episodeFocus.requestFocus() } else runCatching { playFocus.requestFocus() }
         }
     }
     Row(Modifier.fillMaxSize().padding(24.dp).onFocusChanged { inside = it.hasFocus }, horizontalArrangement = Arrangement.spacedBy(24.dp)) {
@@ -256,13 +260,13 @@ private fun VodDetail(vm: AppViewModel, v: VodItem) {
             info?.plot?.takeIf { it.isNotBlank() }?.let { Label(it, size = 14.sp, color = C.Text, lines = if (isSeries) 3 else 7) }
             info?.cast?.takeIf { it.isNotBlank() }?.let { Label("Cast: $it", size = 13.sp, lines = 2) }
             info?.director?.takeIf { it.isNotBlank() }?.let { Label("Director: $it", size = 13.sp) }
-            if (isSeries) SeasonsAndEpisodes(vm, episodeFocus)
+            if (isSeries) SeasonsAndEpisodes(vm, episodeFocus) { onEpisode = it }
         }
     }
 }
 
 @Composable
-private fun SeasonsAndEpisodes(vm: AppViewModel, episodeFocus: FocusRequester) {
+private fun SeasonsAndEpisodes(vm: AppViewModel, episodeFocus: FocusRequester, onLastFocused: (Boolean) -> Unit) {
     val eps = vm.detailEpisodes
     when {
         eps == null -> Label("Loading episodes…", size = 13.sp)
@@ -278,7 +282,7 @@ private fun SeasonsAndEpisodes(vm: AppViewModel, episodeFocus: FocusRequester) {
                     val r = vm.resumeOf(e.key)
                     val last = vm.lastEpisode
                     val isLast = last != null && last.key == e.key && last.season == e.season && last.number == e.number
-                    Focusable(Modifier.fillMaxWidth().height(52.dp).then(if (isLast) Modifier.focusRequester(episodeFocus) else Modifier), onClick = { vm.playDetailEpisode(e) }) {
+                    Focusable(Modifier.fillMaxWidth().height(52.dp).then(if (isLast) Modifier.focusRequester(episodeFocus).onFocusChanged { onLastFocused(it.isFocused) } else Modifier), onClick = { vm.playDetailEpisode(e) }) {
                         Label("E${e.number}", size = 13.sp, color = C.Accent, weight = FontWeight.Bold, modifier = Modifier.width(50.dp).padding(start = 12.dp))
                         Column(Modifier.weight(1f)) {
                             Label(e.title, size = 14.sp, color = C.Text, weight = FontWeight.SemiBold)
