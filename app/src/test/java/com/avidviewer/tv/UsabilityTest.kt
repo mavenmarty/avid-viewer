@@ -10,6 +10,8 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.isRoot
+import androidx.compose.ui.test.onLast
 import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performKeyInput
@@ -51,13 +53,39 @@ class UsabilityTest {
         TestData.seed(app)
         vm = AppViewModel(app)
         rule.setContent { AppRoot(vm) }
-        rule.waitUntil(15_000) { vm.channels.isNotEmpty() }
-        rule.waitForIdle()
+        waitFor("channels to load") { vm.channels.isNotEmpty() }
     }
 
-    private fun press(keys: List<Key>) = keys.forEach { k -> rule.onRoot().performKeyInput { pressKey(k) }; rule.waitForIdle() }
+    /** Lets the app's short pauses (e.g. putting the highlight back after a move) run, then settles. */
+    private fun settle(ms: Long = 250) {
+        settle()
+        org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idleFor(java.time.Duration.ofMillis(ms))
+        settle()
+    }
 
-    private fun go(s: Screen) { rule.runOnIdle { vm.navSelect(s) }; rule.waitForIdle() }
+    /** Sends a key to the top-most window (a dialog when one is open). */
+    private fun key(k: Key) = rule.onAllNodes(isRoot()).onLast().performKeyInput { pressKey(k) }
+
+    private fun press(keys: List<Key>) = keys.forEach { k -> key(k); settle() }
+
+    /** Like waitUntil, but on timeout says what the app was doing (and where its worker threads were stuck). */
+    private fun waitFor(what: String, ms: Long = 15_000, cond: () -> Boolean) {
+        val end = System.currentTimeMillis() + ms
+        while (System.currentTimeMillis() < end) {
+            settle(100)
+            if (cond()) return
+            Thread.sleep(50)
+        }
+        val threads = Thread.getAllStackTraces().filter { (t, _) -> t.name.startsWith("DefaultDispatcher") || t.name == "main" || t.name.contains("Test worker") }
+            .entries.joinToString("\n\n") { (t, st) -> t.name + " (" + t.state + ")\n  " + st.take(14).joinToString("\n  ") }
+        throw AssertionError(
+            "Timed out waiting for: $what\n" +
+                "status=${vm.status} vodError=${vm.vodError} vodLoading=${vm.vodLoading} vod=${vm.vod.size} " +
+                "vodPlaylists=${vm.vodPlaylists.map { it.id }} searching=${vm.searching} results=${vm.searchResults?.size}\n\n$threads",
+        )
+    }
+
+    private fun go(s: Screen) { rule.runOnIdle { vm.navSelect(s) }; settle() }
 
     // ---------------------------------------------------------------- opening every screen
 
@@ -66,7 +94,7 @@ class UsabilityTest {
         listOf(Screen.GUIDE, Screen.SEARCH, Screen.DISCOVER, Screen.SPORTS, Screen.MOVIES, Screen.SERIES, Screen.SETTINGS).forEach { go(it) }
         listOf("playlists", "channels", "location", "display", "sports", "discover", "playback", "privacy", "storage", "about").forEach { sec ->
             rule.runOnIdle { vm.navSelect(Screen.SETTINGS); vm.settingsSection = sec }
-            rule.waitForIdle()
+            settle()
         }
         go(Screen.GUIDE)
         assertEquals(Screen.GUIDE, vm.screen)
@@ -76,7 +104,7 @@ class UsabilityTest {
     fun guideShowsChannelsFromSavedPlaylist() {
         go(Screen.GUIDE)
         rule.runOnIdle { vm.chooseGroup(TestData.P1, "US| LOCALS") }
-        rule.waitUntil(5_000) { rule.onAllNodesWithText("US: WDAY ABC 1 Fargo HD", substring = true).fetchSemanticsNodes().isNotEmpty() }
+        waitFor("Fargo channel row") { rule.onAllNodesWithText("US: WDAY ABC 1 Fargo HD", substring = true).fetchSemanticsNodes().isNotEmpty() }
     }
 
     // ---------------------------------------------------------------- remote navigation
@@ -84,7 +112,7 @@ class UsabilityTest {
     @Test
     fun dpadMovesThroughTheGuideAndBackLeavesCategories() {
         rule.runOnIdle { vm.chooseGroup(TestData.P1, "NEWS") }
-        rule.waitForIdle()
+        settle()
         rule.onAllNodesWithText("NEWS Channel 1 with", substring = true).onFirst().requestFocus()
         press(listOf(Key.DirectionDown, Key.DirectionDown, Key.DirectionRight, Key.DirectionRight, Key.DirectionLeft, Key.DirectionUp))
         assertEquals(NavMode.GROUPS, vm.navMode)
@@ -96,10 +124,10 @@ class UsabilityTest {
     @Test
     fun menuReorderMovesTheChannelAndBackOnlyEndsReordering() {
         rule.runOnIdle { vm.chooseGroup(TestData.P1, "KIDS") }
-        rule.waitForIdle()
+        settle()
         val first = vm.channelsIn("KIDS").first().key
         rule.runOnIdle { vm.movingChannel = first }
-        rule.waitForIdle()
+        settle()
         press(listOf(Key.DirectionDown, Key.DirectionDown))
         assertEquals(2, vm.channelsIn("KIDS").indexOfFirst { it.key == first })
         press(listOf(Key.DirectionRight)) // to the bottom
@@ -115,9 +143,9 @@ class UsabilityTest {
     @Test
     fun categoryReorderJumpsToTopAndBottom() {
         rule.runOnIdle { vm.chooseGroup(TestData.P1, "NEWS") }
-        rule.waitForIdle()
+        settle()
         rule.runOnIdle { vm.movingGroup = "KIDS" }
-        rule.waitForIdle()
+        settle()
         press(listOf(Key.DirectionLeft))
         assertEquals("KIDS", vm.groups().first().raw)
         press(listOf(Key.DirectionRight))
@@ -129,15 +157,15 @@ class UsabilityTest {
     @Test
     fun movieCategoryReorderAndRename() {
         go(Screen.MOVIES)
-        rule.waitUntil(10_000) { vm.vodOf("movie").isNotEmpty() }
+        waitFor("movies to load") { vm.vodOf("movie").isNotEmpty() }
         rule.runOnIdle { vm.vodMovingCat = "movie" to "Action" }
-        rule.waitForIdle()
+        settle()
         press(listOf(Key.DirectionLeft))
         assertEquals("Action", vm.vodCategories("movie").first().first)
         press(listOf(Key.Back))
         assertNull(vm.vodMovingCat)
         rule.runOnIdle { vm.renameVodCat("movie", "Action", "Action & Adventure") }
-        rule.waitForIdle()
+        settle()
         assertTrue(rule.onAllNodesWithText("Action & Adventure", substring = true).fetchSemanticsNodes().isNotEmpty())
     }
 
@@ -146,35 +174,36 @@ class UsabilityTest {
     @Test
     fun listEditorHidesAndShowsMovieCategoriesInBulk() {
         rule.runOnIdle { vm.navSelect(Screen.SETTINGS); vm.settingsSection = "channels" }
-        rule.waitForIdle()
+        settle()
         rule.onNodeWithTag("le-tab-MOVIES").performClick()
-        rule.waitUntil(10_000) { vm.vodAll("movie").isNotEmpty() }
-        rule.waitForIdle()
+        waitFor("movies to load in the List Editor") { vm.vodAll("movie").isNotEmpty() }
+        settle()
         rule.onNodeWithTag("le-cats-hide").performClick()
-        rule.waitForIdle()
+        settle()
         assertTrue(vm.vodOf("movie").isEmpty())
         rule.onNodeWithTag("le-cats-show").performClick()
-        rule.waitForIdle()
+        settle()
         assertEquals(1140, vm.vodOf("movie").size)
     }
 
     @Test
     fun listEditorHidesLiveCategoriesPerPlaylist() {
         rule.runOnIdle { vm.navSelect(Screen.SETTINGS); vm.settingsSection = "channels" }
-        rule.waitForIdle()
+        settle()
         rule.onNodeWithTag("le-tab-LIVE").performClick()
-        rule.waitUntil(10_000) { rule.onAllNodesWithText("NEWS", substring = false).fetchSemanticsNodes().isNotEmpty() }
+        waitFor("live categories in the List Editor") { rule.onAllNodesWithText("NEWS", substring = false).fetchSemanticsNodes().isNotEmpty() }
         rule.onNodeWithTag("le-cats-hide").performClick()
-        rule.waitForIdle()
+        settle()
         assertTrue(vm.groups().isEmpty())
         rule.onNodeWithTag("le-cats-show").performClick()
-        rule.waitForIdle()
+        settle()
         assertEquals(6, vm.groups().size)
     }
 
     @Test
     fun hiddenTitleLeavesMoviesAndSearch() {
-        rule.waitUntil(10_000) { vm.vod.isNotEmpty() || run { vm.ensureVod(); false } }
+        rule.runOnIdle { vm.ensureVod() }
+        waitFor("movies to load for hiding") { vm.vod.isNotEmpty() }
         val t = vm.vodAll("movie").first { it.category == "Drama" }
         rule.runOnIdle { vm.setVodTitlesHidden(listOf(t.key), true) }
         assertTrue(vm.vodOf("movie").none { it.key == t.key })
@@ -186,8 +215,8 @@ class UsabilityTest {
     fun globalSearchFindsChannelsProgramsAndMoviesWithoutCrashing() {
         go(Screen.SEARCH)
         rule.runOnIdle { vm.search("Drama") }
-        rule.waitUntil(15_000) { vm.searchResults != null && !vm.searching }
-        rule.waitForIdle()
+        waitFor("search results") { vm.searchResults != null && !vm.searching }
+        settle()
         val total = vm.searchResults!!.sumOf { it.total }
         assertTrue("search found nothing", total > 0)
     }
@@ -196,7 +225,7 @@ class UsabilityTest {
     fun guideSearchCoversAllPlaylists() {
         go(Screen.GUIDE)
         rule.runOnIdle { vm.chooseGroup(TestData.P1, "NEWS"); vm.guideQuery = "Free News" }
-        rule.waitUntil(10_000) { rule.onAllNodesWithText("Free News 1", substring = true).fetchSemanticsNodes().isNotEmpty() }
+        waitFor("guide search results from the second playlist") { rule.onAllNodesWithText("Free News 1", substring = true).fetchSemanticsNodes().isNotEmpty() }
     }
 
     // ---------------------------------------------------------------- favorites and lists
@@ -204,7 +233,7 @@ class UsabilityTest {
     @Test
     fun favoritesAndCustomListsShowInTheGuide() {
         rule.runOnIdle { vm.chooseGroup(TestData.P1, FAV_GROUP) }
-        rule.waitForIdle()
+        settle()
         assertEquals(2, vm.channelsIn(FAV_GROUP).size)
         rule.runOnIdle { vm.setListHidden(vm.allLists()[1].first, true) }
         assertTrue(vm.shownLists.isEmpty())
@@ -240,10 +269,10 @@ class UsabilityTest {
             var r = rnd.nextInt(weights.sum()); var k = 0
             while (r >= weights[k]) { r -= weights[k]; k++ }
             if (keys[k] == Key.Back) rule.runOnIdle { if (vm.screen == Screen.PLAYER) vm.closeFullScreen() else vm.navBack() }
-            else rule.onRoot().performKeyInput { pressKey(keys[k]) }
-            if (i % 10 == 0) rule.waitForIdle()
+            else key(keys[k])
+            if (i % 10 == 0) settle()
             if (vm.screen == Screen.PLAYER && rnd.nextInt(4) == 0) rule.runOnIdle { vm.closeFullScreen() }
         }
-        rule.waitForIdle()
+        settle()
     }
 }

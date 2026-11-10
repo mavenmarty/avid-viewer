@@ -62,7 +62,7 @@ fun GuideScreen(vm: AppViewModel) {
         return
     }
     @Suppress("UNUSED_VARIABLE") val favTick = vm.favDataTick // redraw when other playlists' favorites load
-    val list = vm.channelsIn(vm.selectedGroup)
+    val list = vm.channelsIn(vm.selectedGroup).distinctBy { it.key }
     val numbers = vm.numbers()
     val half = HALF_MS
     // The visible 2.5-hour window starts at the current half hour plus [slots] × 30 minutes (up to 12 hours ahead).
@@ -222,7 +222,8 @@ fun GuideScreen(vm: AppViewModel) {
         }
         Box(Modifier.weight(1f)) {
             LazyColumn(state = listState, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                itemsIndexed(list, key = { i, c -> "$i-${c.key}" }) { idx, c ->
+                // Keyed by channel so a row keeps its highlight while it moves (re-order) or the list changes.
+                itemsIndexed(list, key = { _, c -> c.key }) { idx, c ->
                     Row(Modifier.fillMaxWidth().height(50.dp), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
                         // Channel name: a fixed-width cell with up to two lines (no widening while highlighted).
                         val isMoving = c.key == vm.movingChannel
