@@ -96,9 +96,11 @@ class UsabilityTest {
 
     /** The decor view of a dialog, if one is showing on top of the app. */
     private fun topWindowView(): android.view.View? {
-        val views = org.robolectric.shadows.ShadowWindowManagerGlobal.getWindowManagerGlobal()
-            .let { wmg -> runCatching { wmg.javaClass.getDeclaredField("mViews").apply { isAccessible = true }.get(wmg) as List<*> }.getOrNull() }
-            ?.filterIsInstance<android.view.View>().orEmpty()
+        val views: List<android.view.View> = runCatching {
+            val cls = Class.forName("android.view.WindowManagerGlobal")
+            val wmg = cls.getMethod("getInstance").invoke(null)
+            (cls.getDeclaredField("mViews").apply { isAccessible = true }.get(wmg) as List<*>).filterIsInstance<android.view.View>()
+        }.getOrDefault(emptyList())
         return views.lastOrNull()?.takeIf { it !== rule.activity.window.decorView }
     }
 
