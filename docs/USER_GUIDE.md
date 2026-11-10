@@ -31,6 +31,8 @@ Your password is stored encrypted on the device (Android Keystore) and is never 
 - **Menu** (or **hold OK**) opens options for the highlighted item.
 - **Back** goes up one level. Pressing Back on the full menu while on the TV Guide exits the app.
 - **Channel Up / Channel Down** (or Page Up / Page Down) move a page at a time in the TV Guide and change channels in full screen.
+- **Lists wrap around.** In channel and category lists, a single press past the last item goes to the first, and the reverse. Holding a button stops at the end, so a fast scroll doesn't fly past.
+- If a press ever finds nothing highlighted, the app puts the highlight back.
 
 ## 2. Main menu
 
@@ -58,9 +60,12 @@ The TV Guide is the home screen for live TV. It has three levels, and Back walks
 - Below it is a **timeline grid**: two-line channel names on the left, programs across a 2.5-hour window, with a line marking "now".
 - **Left/Right** move between programs. Going past the last program in view scrolls the guide forward by half hours, up to **12 hours ahead**. Left on the first program scrolls back, and at the start it moves to the channel name.
 - **Up/Down** move one channel and land on the program airing at the same time, so the highlighted time stays put as you move between rows.
+- **Up on the first channel** moves to the preview window; **Up again** jumps to the last channel. **Down on the last channel** goes back to the first.
 - **CH+/CH−** (Page Up/Down) move a full page and wrap around at the ends.
 - **OK** on a channel or program starts it in the preview. **OK again**, or OK on the preview window, opens it full screen.
-- Choosing a new category starts at the top. Coming back to the same category keeps your place.
+- Choosing a new category starts at the top, with its first channel highlighted. Coming back to the same category keeps your place.
+- **Back from full screen** returns to the channel you were watching, even far down a long category.
+- In the category list, **Up on ‹ Menu** jumps to the last category, and **Down on the last category** returns to ‹ Menu.
 
 ### Search in the guide
 
@@ -108,8 +113,9 @@ While you're moving it, the item has a blue outline. A category shows its positi
 ### Movies and episodes
 
 - **Left / Rewind**: back 10 seconds. **Right / Fast-forward**: ahead 30 seconds.
-- **OK / Play-Pause**: pause or resume. The progress bar stays up while paused.
+- **OK / Play-Pause**: pause or resume.
 - **Up, Down or Info**: show the progress bar.
+- The progress bar appears when playback starts or you press a button, and hides 5 seconds after the last press. It shows "Loading…" while the video starts, and stays up while paused ("Paused · …").
 - Stopping part-way saves your place for **Resume**.
 
 ## 5. Search
@@ -144,7 +150,8 @@ The Sports screen finds games and events in your TV guide.
 
 - **Left side**: Playlists, then categories: **All**, **Recently added**, **Continue watching**, **My List**, and your provider's categories.
 - **Right side**: posters for the chosen category, with a search box (**Search movies** / **Search series**).
-- **OK on a poster** opens its page: plot, cast, director, **▶ Play**, or **▶ Resume from [time]** and **Start over**, plus **+ My List**. Series pages list episodes by **Season**, with resume points.
+- **OK on a poster** opens its page: plot, cast, director, **▶ Play**, or **▶ Resume from [time]** and **Start over**, plus **+ My List**. Series pages list episodes by **Season**, with resume points. From the page's buttons, **Down** goes to the season buttons, then to the episodes; **Up** from the first episode goes back to the seasons. After you watch an episode and press **Back**, that episode is highlighted.
+- **Category list wraps around**: Up on **All** jumps to the last category, and Down on the last returns to All.
 - **Menu on a category**: **Rename**, **Re-order** or **Hide** it. Hidden categories come back in Settings › List Editor.
 - If you have more than one playlist, movies and series from all of them are merged.
 
@@ -300,19 +307,23 @@ Every public release since 1.0.35, newest first. Releases are published on GitHu
 
 ### 1.0.80 — November 10, 2026, 9:39 AM CT (current)
 
+**Release notes**
+
+- **Lists wrap around:** Down on the last channel or category jumps to the top; Up on the first jumps to the bottom. Holding a button stops at the end. In the TV Guide, Up on the first channel still goes to the preview window first.
+- **Series episodes fixed:** you can move from the episodes back up to the season buttons, and after watching, the highlight returns to the episode you watched.
+- **TV Guide keeps your place:** Back from full screen returns to the channel you were watching, even far down a long category. Choosing a category reliably highlights its first channel.
+- **Navigation lock-ups fixed:** holding an arrow on a slow device (such as a Fire TV Stick) no longer piles up moves and freezes the screen. If a press ever finds nothing highlighted, the app puts the highlight back.
+- **Full-screen bar for movies and episodes** hides again a few seconds after you press a button; it stays up only while paused.
+
 **Change log**
 
-- Tests reproducing reported bugs (series episodes, back from full screen, wrap, holding); full-screen bar hides once playing
-- Tests: hand-made fake provider server
-- Tests: remote-only season flow; timeouts report focus
-- Wrap-around in category lists, episode focus after playback, held-key throttle and focus rescue
-- Fix build
-- Guide and series page: keep asking for the highlight until it sticks
-- Guide waits for its channels before placing the highlight; focus diagnostics for tests
-- test diag fix
-- Focus rescue only for keys that went nowhere; guide focus no longer waits on scrolling
-- Wrap jump no longer waits on scrolling; tests target channel rows and the returned-to episode
-- Guide: Up from the first channel reaches the preview, Up again wraps; series: Up from the first episode reaches the seasons
+- Wrap-around in channel and category lists (a fresh press only; holding stops at the ends)
+- Series: Up from the first episode reaches the seasons; Back from the player highlights the episode that played
+- TV Guide: Up from the first channel reaches the preview, Up again wraps
+- TV Guide and series page: keep placing the highlight until it lands (fixes Back from full screen and newly chosen categories)
+- Held-key throttle (late or bunched repeats are dropped) and focus rescue when a key reaches nothing
+- Full-screen bar for movies and episodes hides once playing
+- New usability tests for each reported bug (series episodes by remote, Back from full screen, wrap-around, holding buttons on every screen), with a fake provider server
 
 ### 1.0.67 — November 9, 2026, 8:35 PM CT
 
