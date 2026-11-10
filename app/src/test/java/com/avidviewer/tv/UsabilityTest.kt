@@ -58,9 +58,9 @@ class UsabilityTest {
 
     /** Lets the app's short pauses (e.g. putting the highlight back after a move) run, then settles. */
     private fun settle(ms: Long = 250) {
-        settle()
+        rule.waitForIdle()
         org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idleFor(java.time.Duration.ofMillis(ms))
-        settle()
+        rule.waitForIdle()
     }
 
     /** Sends a key to the top-most window (a dialog when one is open). */
