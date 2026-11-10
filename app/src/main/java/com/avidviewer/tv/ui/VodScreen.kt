@@ -224,6 +224,7 @@ private fun VodDetail(vm: AppViewModel, v: VodItem) {
             if (ok) { if (++held >= 12) break; continue }
             held = 0
             if (wantEpisode) runCatching { episodeFocus.requestFocus() } else runCatching { playFocus.requestFocus() }
+            if (frame % 20 == 0) vm.trail("vod f$frame ep=$wantEpisode in=$inside onEp=$onEpisode")
         }
     }
     Row(Modifier.fillMaxSize().padding(24.dp).onFocusChanged { inside = it.hasFocus }, horizontalArrangement = Arrangement.spacedBy(24.dp)) {

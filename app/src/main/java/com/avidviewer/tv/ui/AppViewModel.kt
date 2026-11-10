@@ -153,6 +153,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     var detailSeason by mutableStateOf<String?>(null)
     /** Whether anything on screen has the highlight; a remote key with nothing highlighted asks for it back. */
     var anyFocus = false
+    /** Recent focus-placement steps, for test diagnostics. */
+    val focusTrail = java.util.concurrent.ConcurrentLinkedDeque<String>()
+    fun trail(s: String) { focusTrail.add(s); while (focusTrail.size > 40) focusTrail.pollFirst() }
     var focusRescue by mutableStateOf(0)
     /** The episode last started from a series page, so Back from the player lands on it again. */
     var lastEpisode: Episode? = null

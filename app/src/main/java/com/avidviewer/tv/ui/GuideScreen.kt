@@ -98,8 +98,9 @@ fun GuideScreen(vm: AppViewModel) {
     var pendingFocus by remember { mutableStateOf<Int?>(null) }
 
     // Scroll to and focus the current channel (at startup and when returning from full screen).
-    LaunchedEffect(vm.guideFocusTick) {
+    LaunchedEffect(vm.guideFocusTick, list.isNotEmpty()) {
         val mode = vm.guideFocusMode
+        vm.trail("tick${vm.guideFocusTick} $mode n=${list.size} nav=${vm.navMode}")
         if (list.isEmpty() || vm.navMode != NavMode.GROUPS) return@LaunchedEffect
         delay(150)
         // Only now is the request used up (if the screen was rebuilt during the pause, the new one uses it).
@@ -123,6 +124,7 @@ fun GuideScreen(vm: AppViewModel) {
         // device the row may not be ready at once. A button press in the meantime wins.
         val started = android.os.SystemClock.uptimeMillis()
         val want = list.getOrNull(i)?.key
+        vm.trail("want $i")
         var held = 0
         for (frame in 0 until 120) {
             androidx.compose.runtime.withFrameNanos { }
@@ -130,8 +132,10 @@ fun GuideScreen(vm: AppViewModel) {
             // Done once the highlight has stayed there for a few frames (something else may grab it right after).
             if (focusedKey == want) { if (++held >= 12) break; continue }
             held = 0
-            runCatching { rowFocus.getOrNull(i)?.requestFocus() }
+            val r = runCatching { rowFocus.getOrNull(i)?.requestFocus() }
+            if (frame % 20 == 0) vm.trail("f$frame fk=$focusedKey ${r.exceptionOrNull()?.javaClass?.simpleName ?: "ok"}")
         }
+        vm.trail("end fk=$focusedKey")
         pendingFocus = null
     }
     // Re-ordering a channel: keep it on screen and highlighted as it moves.
