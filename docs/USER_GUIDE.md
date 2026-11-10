@@ -2,7 +2,7 @@
 
 <!-- The version below and the Release notes section are updated automatically after each published build
      (.github/workflows/user-guide.yml). Feature descriptions are written by hand. -->
-This guide covers **Avid Viewer 1.0.67**, the current public release. Avid Viewer is an IPTV player for Android TV and Fire TV. You bring your own provider (an Xtream Codes login or an M3U link); the app doesn't include any channels.
+This guide covers **Avid Viewer 1.0.80**, the current public release. Avid Viewer is an IPTV player for Android TV and Fire TV. You bring your own provider (an Xtream Codes login or an M3U link); the app doesn't include any channels.
 
 **Contents:** [Getting started](#1-getting-started) · [Main menu](#2-main-menu) · [TV Guide](#3-tv-guide) · [Full-screen playback](#4-full-screen-playback) · [Search](#5-search) · [Discover](#6-discover) · [Sports](#7-sports) · [Movies and Series](#8-movies-and-series) · [Settings](#9-settings) · [Privacy](#10-privacy) · [Troubleshooting](#11-troubleshooting) · [Release notes](#release-notes)
 
@@ -298,7 +298,23 @@ Every public release since 1.0.35, newest first. Releases are published on GitHu
 
 <!-- new-releases: entries for new builds are added automatically below this line -->
 
-### 1.0.67 — November 9, 2026, 8:35 PM CT (current)
+### 1.0.80 — November 10, 2026, 9:39 AM CT (current)
+
+**Change log**
+
+- Tests reproducing reported bugs (series episodes, back from full screen, wrap, holding); full-screen bar hides once playing
+- Tests: hand-made fake provider server
+- Tests: remote-only season flow; timeouts report focus
+- Wrap-around in category lists, episode focus after playback, held-key throttle and focus rescue
+- Fix build
+- Guide and series page: keep asking for the highlight until it sticks
+- Guide waits for its channels before placing the highlight; focus diagnostics for tests
+- test diag fix
+- Focus rescue only for keys that went nowhere; guide focus no longer waits on scrolling
+- Wrap jump no longer waits on scrolling; tests target channel rows and the returned-to episode
+- Guide: Up from the first channel reaches the preview, Up again wraps; series: Up from the first episode reaches the seasons
+
+### 1.0.67 — November 9, 2026, 8:35 PM CT
 
 **Release notes**
 
