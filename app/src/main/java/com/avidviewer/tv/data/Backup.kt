@@ -26,6 +26,7 @@ object Backup {
         val playlists: List<Playlist>,
         val prefs: Prefs,
         val tmdbKey: String,
+        val smbPassword: String = "",
         val history: List<HistoryEntry>,
         val resume: Map<String, Long>,
         val created: Long,
@@ -48,8 +49,9 @@ object Backup {
                     )
                 }
             })
-            .put("prefs", c.prefs.copy(tmdbKeyEnc = "").toJson())
+            .put("prefs", c.prefs.copy(tmdbKeyEnc = "", smbPassEnc = "").toJson())
             .put("tmdbKey", c.tmdbKey)
+            .put("smbPassword", c.smbPassword)
             .put("history", JSONArray().apply { c.history.forEach { put(JSONObject().put("k", it.key).put("t", it.time).put("s", it.seconds)) } })
             .put("resume", JSONObject(c.resume))
         val salt = ByteArray(16).also { SecureRandom().nextBytes(it) }
@@ -97,7 +99,7 @@ object Backup {
         val history = List(hist.length()) { val h = hist.getJSONObject(it); HistoryEntry(h.getString("k"), h.optLong("t"), h.optLong("s")) }
         val r = b.optJSONObject("resume")
         val resume = r?.keys()?.asSequence()?.associateWith { r.optLong(it) } ?: emptyMap()
-        return Contents(playlists, Prefs.fromJson(b.getJSONObject("prefs")), b.optString("tmdbKey"), history, resume, b.optLong("created"), b.optString("appVersion"))
+        return Contents(playlists, Prefs.fromJson(b.getJSONObject("prefs")), b.optString("tmdbKey"), history, resume, b.optLong("created"), b.optString("appVersion"), smbPassword = b.optString("smbPassword"))
     }
 
     /** SHA-256 where the device has it (Android 8+), SHA-1 on older devices; the file records which. */

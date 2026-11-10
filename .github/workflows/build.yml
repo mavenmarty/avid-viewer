@@ -11,6 +11,15 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+    # A real Samba server for the network-share backup test (user test / test, share "backups").
+    services:
+      samba:
+        image: dperson/samba
+        ports:
+          - 1445:445
+        env:
+          USER: "test;test"
+          SHARE: "backups;/share;yes;no;no;test"
     steps:
       - uses: actions/checkout@v5
 
@@ -39,6 +48,8 @@ jobs:
           gradle-version: "8.11.1"
 
       - name: Usability tests (remote navigation + crash hunting)
+        env:
+          SMB_TEST_ADDRESS: "\\\\127.0.0.1:1445\\backups\\AvidViewer"
         run: gradle --no-daemon testDebugUnitTest
 
       - name: Save test report

@@ -206,7 +206,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     var pendingRestore by mutableStateOf<String?>(null); private set
     var pendingRestoreInfo by mutableStateOf(""); private set
 
-    fun backUp(pin: String) {
+    fun backUp(pin: String, toShare: Boolean = false) {
         if (pin.length < 4) { backupStatus = "Choose a PIN of at least 4 digits."; return }
         viewModelScope.launch {
             backupBusy = true
@@ -217,10 +217,18 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             val text = runCatching {
                 withContext(Dispatchers.Default) {
                     com.avidviewer.tv.data.Backup.write(
-                        com.avidviewer.tv.data.Backup.Contents(playlists, prefs, tmdbKey(), history, resume, System.currentTimeMillis(), installed.second), pin,
+                        com.avidviewer.tv.data.Backup.Contents(playlists, prefs, tmdbKey(), history, resume, System.currentTimeMillis(), installed.second, smbPassword()), pin,
                     )
                 }
             }.getOrElse { backupBusy = false; backupStatus = "Couldn't make the backup: ${it.message}"; return@launch }
+            if (toShare) {
+                backupStatus = "Saving to ${prefs.smbAddress}…"
+                backupStatus = runCatching { withContext(Dispatchers.IO) { com.avidviewer.tv.data.Smb.write(smbTarget(), name, text) } }
+                    .fold({ "Saved $name to ${smbTarget().display}. Keep your PIN somewhere safe: the backup can't be opened without it." },
+                        { com.avidviewer.tv.data.Smb.explain(it) })
+                backupBusy = false
+                return@launch
+            }
             suspend fun save() {
                 backupStatus = runCatching { withContext(Dispatchers.IO) { com.avidviewer.tv.data.BackupFiles.save(app, name, text) } }
                     .fold({ "Saved to $it. It stays there if the app is deleted. Keep your PIN somewhere safe: the backup can't be opened without it." },
@@ -233,6 +241,47 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                     viewModelScope.launch { if (ok) save() else { backupBusy = false; backupStatus = "Avid Viewer needs permission to save to the Download folder. Choose Back up again and allow it." } }
                 }
             } else save()
+        }
+    }
+
+    // ---- SAMBA share ----
+    var smbStatus by mutableStateOf<String?>(null); private set
+    var shareBackups by mutableStateOf<List<Pair<String, Long>>>(emptyList()); private set
+
+    fun smbPassword(): String = if (prefs.smbPassEnc.isBlank()) "" else Crypto.decrypt(prefs.smbPassEnc)
+
+    fun smbTarget() = com.avidviewer.tv.data.Smb.target(prefs.smbAddress, prefs.smbUser, smbPassword())
+
+    val smbReady get() = prefs.smbAddress.isNotBlank()
+
+    /** Saves the share details and checks them (connects, makes the folder if needed, counts backups). */
+    fun saveShare(address: String, user: String, password: String?) {
+        updatePrefs {
+            it.copy(smbAddress = address.trim(), smbUser = user.trim(),
+                smbPassEnc = when { password == null -> it.smbPassEnc; password.isEmpty() -> ""; else -> Crypto.encrypt(password) })
+        }
+        if (address.isBlank()) { smbStatus = "Share removed."; shareBackups = emptyList(); return }
+        viewModelScope.launch {
+            smbStatus = "Connecting to ${address.trim()}…"
+            smbStatus = runCatching { withContext(Dispatchers.IO) { com.avidviewer.tv.data.Smb.test(smbTarget()) } }
+                .fold({ n -> "Connected to ${smbTarget().display}. " + if (n == 0) "No backups there yet." else "$n backup(s) there." },
+                    { com.avidviewer.tv.data.Smb.explain(it) })
+        }
+    }
+
+    fun listShareBackups() {
+        viewModelScope.launch {
+            smbStatus = "Looking for backups on ${prefs.smbAddress}…"
+            runCatching { withContext(Dispatchers.IO) { com.avidviewer.tv.data.Smb.list(smbTarget()) } }
+                .onSuccess { shareBackups = it; smbStatus = if (it.isEmpty()) "No backups on the share yet." else null }
+                .onFailure { shareBackups = emptyList(); smbStatus = com.avidviewer.tv.data.Smb.explain(it) }
+        }
+    }
+
+    fun chooseShareBackup(name: String) {
+        viewModelScope.launch {
+            runCatching { withContext(Dispatchers.IO) { com.avidviewer.tv.data.Smb.read(smbTarget(), name) } }
+                .onSuccess { offerRestore(it) }.onFailure { smbStatus = com.avidviewer.tv.data.Smb.explain(it) }
         }
     }
 
@@ -292,7 +341,12 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             playlists = c.playlists
             history = c.history
             resume = c.resume
-            updatePrefs { c.prefs.copy(tmdbKeyEnc = if (c.tmdbKey.isBlank()) "" else Crypto.encrypt(c.tmdbKey)) }
+            updatePrefs {
+                c.prefs.copy(
+                    tmdbKeyEnc = if (c.tmdbKey.isBlank()) "" else Crypto.encrypt(c.tmdbKey),
+                    smbPassEnc = if (c.smbPassword.isBlank()) "" else Crypto.encrypt(c.smbPassword),
+                )
+            }
             otherLive.clear(); otherVod.clear(); playlistGroups = emptyMap()
             vod = emptyList(); vodLoadedFor = null
             pendingRestore = null

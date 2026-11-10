@@ -1088,13 +1088,51 @@ private fun BackupBlock(vm: AppViewModel) {
             }
         }
     }
+    ShareBlock(vm)
     if (making) BackupPinDialog(vm) { making = false }
     if (vm.pendingRestore != null) RestorePinDialog(vm)
 }
 
+/** Backups on a SAMBA / Windows network share (a folder on a PC or NAS). */
+@Composable
+private fun ShareBlock(vm: AppViewModel) {
+    var address by remember { mutableStateOf(vm.prefs.smbAddress) }
+    var user by remember { mutableStateOf(vm.prefs.smbUser) }
+    var password by remember { mutableStateOf("") }
+    var making by remember { mutableStateOf(false) }
+    Spacer(Modifier.height(8.dp))
+    SettingBlock(
+        "Network share (SAMBA)",
+        "Keep backups in a shared folder on your PC or NAS, so a reinstalled app or a new TV can restore without a file manager or USB drive. " +
+            "Enter the share like \\\\192.168.1.20\\Backups\\AvidViewer (the folder is made if it's missing). Leave the user name empty for a guest share.",
+    ) {
+        TvField("Share address, e.g. \\\\NAS\\Backups\\AvidViewer", address, modifier = Modifier.fillMaxWidth()) { address = it }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            TvField("User name (or DOMAIN\\user)", user, modifier = Modifier.weight(1f)) { user = it }
+            TvField(if (vm.prefs.smbPassEnc.isNotBlank()) "Password (leave empty to keep)" else "Password", password, password = true, modifier = Modifier.weight(1f)) { password = it }
+        }
+        androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            TvButton("Save and test", modifier = Modifier.testTag("smb-save")) { vm.saveShare(address, user, password.ifEmpty { null }); password = "" }
+            if (vm.smbReady) {
+                TvButton("Back up to the share", primary = true, modifier = Modifier.testTag("smb-backup")) { if (!vm.backupBusy) making = true }
+                TvButton("Restore from the share", modifier = Modifier.testTag("smb-restore")) { vm.listShareBackups() }
+            }
+        }
+        vm.smbStatus?.let { Label(it, size = 12.sp, color = C.Soft, lines = Int.MAX_VALUE) }
+        if (vm.shareBackups.isNotEmpty()) {
+            Label("Backups on the share — choose one:", size = 12.sp, lines = Int.MAX_VALUE)
+            vm.shareBackups.take(8).forEach { (name, modified) ->
+                val date = java.text.SimpleDateFormat("MMM d, yyyy h:mm a", java.util.Locale.getDefault()).format(modified)
+                TvButton("$name  ·  $date") { vm.chooseShareBackup(name) }
+            }
+        }
+    }
+    if (making) BackupPinDialog(vm, toShare = true) { making = false }
+}
+
 /** Choose a PIN for a new backup (entered twice). */
 @Composable
-private fun BackupPinDialog(vm: AppViewModel, close: () -> Unit) {
+private fun BackupPinDialog(vm: AppViewModel, toShare: Boolean = false, close: () -> Unit) {
     var pin by remember { mutableStateOf("") }
     var again by remember { mutableStateOf("") }
     var problem by remember { mutableStateOf<String?>(null) }
@@ -1117,7 +1155,7 @@ private fun BackupPinDialog(vm: AppViewModel, close: () -> Unit) {
                     pin != again -> "The two PINs don't match."
                     else -> null
                 }
-                if (problem == null) { vm.backUp(pin); close() }
+                if (problem == null) { vm.backUp(pin, toShare); close() }
             }
         },
         dismissButton = { TvButton("Cancel") { close() } },

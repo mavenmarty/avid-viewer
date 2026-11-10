@@ -48,12 +48,19 @@ android {
     buildFeatures {
         compose = true
     }
+    packaging {
+        resources {
+            // smbj's encryption library ships duplicate license/manifest files
+            excludes += setOf("META-INF/versions/9/OSGI-INF/MANIFEST.MF", "META-INF/DEPENDENCIES", "META-INF/LICENSE*", "META-INF/NOTICE*", "META-INF/INDEX.LIST")
+        }
+    }
     // Usability tests run the real screens on the JVM (Robolectric), so no emulator is needed.
     testOptions {
         unitTests {
             isIncludeAndroidResources = true
             all {
                 it.maxHeapSize = "3g"
+                System.getenv("SMB_TEST_ADDRESS")?.let { v -> it.environment("SMB_TEST_ADDRESS", v) }
                 // Print the full reason for any failure in the build log.
                 it.testLogging {
                     events("failed", "skipped")
@@ -84,6 +91,8 @@ dependencies {
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("io.coil-kt:coil-compose:2.7.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
+    // SAMBA / Windows network shares (SMB 2 and 3) for backups
+    implementation("com.hierynomus:smbj:0.13.0")
 
     // Usability tests (remote-control navigation and crash hunting)
     testImplementation(composeBom)

@@ -98,6 +98,10 @@ data class Prefs(
     val autoUpdateCheck: Boolean = true,
     val myList: List<VodItem> = emptyList(),
     val tmdbKeyEnc: String = "",
+    /** SAMBA backup share: address like \\server\share\folder, user, password (encrypted on this device). */
+    val smbAddress: String = "",
+    val smbUser: String = "",
+    val smbPassEnc: String = "",
     val myServices: List<WatchProvider> = emptyList(),
     /** Suggest local channels from the postal code at the top of Favorites. */
     val showSuggestions: Boolean = true,
@@ -138,6 +142,7 @@ data class Prefs(
         o.put("autoUpdateCheck", autoUpdateCheck)
         o.put("myList", JSONArray().apply { myList.forEach { put(it.toJson()) } })
         o.put("tmdbKeyEnc", tmdbKeyEnc)
+        o.put("smbAddress", smbAddress).put("smbUser", smbUser).put("smbPassEnc", smbPassEnc)
         o.put("myServices", JSONArray().apply { myServices.forEach { put(JSONObject().put("id", it.id).put("name", it.name).put("logo", it.logo ?: "")) } })
         vodPlaylist?.let { o.put("vodPlaylist", it) }
         o.put("vodHiddenCats", JSONArray(vodHiddenCats.toList()))
@@ -182,6 +187,7 @@ data class Prefs(
                 autoUpdateCheck = o.optBoolean("autoUpdateCheck", true),
                 myList = o.optJSONArray("myList")?.let { a -> List(a.length()) { VodItem.fromJson(a.getJSONObject(it)) } } ?: emptyList(),
                 tmdbKeyEnc = o.optString("tmdbKeyEnc"),
+                smbAddress = o.optString("smbAddress"), smbUser = o.optString("smbUser"), smbPassEnc = o.optString("smbPassEnc"),
                 vodPlaylist = o.optString("vodPlaylist").ifBlank { null },
                 vodHiddenCats = strList(o.optJSONArray("vodHiddenCats")).toSet(),
                 vodHiddenTitles = strList(o.optJSONArray("vodHiddenTitles")).toSet(),
