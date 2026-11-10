@@ -1,5 +1,7 @@
 package com.avidviewer.tv.ui
 
+import androidx.compose.ui.focus.FocusRequester
+import kotlinx.coroutines.launch
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -196,6 +198,8 @@ fun holdSteps(e: androidx.compose.ui.input.key.KeyEvent): Int {
 
 /** Root-level handler: when an arrow key is held, move focus several items per repeat. */
 @Composable
+private var lastHeldMove = 0L
+
 fun Modifier.holdToAccelerate(): Modifier {
     val fm = androidx.compose.ui.platform.LocalFocusManager.current
     return this.then(androidx.compose.ui.Modifier.onKeyEvent { e ->
@@ -207,11 +211,21 @@ fun Modifier.holdToAccelerate(): Modifier {
             Key.DirectionRight -> androidx.compose.ui.focus.FocusDirection.Right
             else -> return@onKeyEvent false
         }
+        val repeatCount = e.nativeKeyEvent.repeatCount
+        if (repeatCount > 0) {
+            // Remote repeats can arrive faster than a slow device lays out new rows. Drop
+            // repeats that are already stale or that come too close together, so a held button
+            // never builds a backlog that freezes the screen.
+            val now = android.os.SystemClock.uptimeMillis()
+            val at = e.nativeKeyEvent.eventTime
+            if (now - at > 120 || (at - lastHeldMove in 0 until 45)) return@onKeyEvent true
+            lastHeldMove = at
+        }
         val n = holdSteps(e)
         if (n <= 1) return@onKeyEvent false // normal one-step move
-        var moved = false
-        repeat(n) { if (fm.moveFocus(dir)) moved = true else return@repeat }
-        moved
+        var moved = 0
+        while (moved < n && fm.moveFocus(dir)) moved++
+        moved > 0
     })
 }
 
@@ -234,4 +248,45 @@ fun reorderKeys(
         else -> {}
     } else if (e.type == KeyEventType.KeyUp && done) onDone()
     return true
+}
+
+/** Asks for the highlight for a few frames (a row may still be coming on screen after a scroll). */
+suspend fun FocusRequester.requestSoon(frames: Int = 30) {
+    for (frame in 0 until frames) {
+        androidx.compose.runtime.withFrameNanos { }
+        if (runCatching { requestFocus() }.isSuccess && frame > 1) break
+    }
+}
+
+/**
+ * Wrap-around for a list: Down on its last item goes to its first, Up on its first goes to its last.
+ * Only on a fresh press, so holding a button still stops at the ends.
+ */
+class ListWrap(private val state: androidx.compose.foundation.lazy.LazyListState, private val scope: kotlinx.coroutines.CoroutineScope) {
+    val first = FocusRequester()
+    val last = FocusRequester()
+    fun toFirst() { scope.launch { state.scrollToItem(0); first.requestSoon() } }
+    fun toLast() { scope.launch { state.scrollToItem((state.layoutInfo.totalItemsCount - 1).coerceAtLeast(0)); last.requestSoon() } }
+}
+
+@Composable
+fun rememberListWrap(state: androidx.compose.foundation.lazy.LazyListState): ListWrap {
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    return androidx.compose.runtime.remember(state) { ListWrap(state, scope) }
+}
+
+/** Put on a list's first and/or last item (before the item's own focus handling). */
+fun Modifier.wrapEnds(wrap: ListWrap, isFirst: Boolean, isLast: Boolean): Modifier {
+    if (!isFirst && !isLast) return this
+    return this
+        .then(if (isFirst) Modifier.focusRequester(wrap.first) else Modifier)
+        .then(if (isLast) Modifier.focusRequester(wrap.last) else Modifier)
+        .onPreviewKeyEvent { e ->
+            if (e.type != KeyEventType.KeyDown || e.nativeKeyEvent.repeatCount != 0) return@onPreviewKeyEvent false
+            when {
+                e.key == Key.DirectionUp && isFirst && !isLast -> { wrap.toLast(); true }
+                e.key == Key.DirectionDown && isLast && !isFirst -> { wrap.toFirst(); true }
+                else -> false
+            }
+        }
 }

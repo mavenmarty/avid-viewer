@@ -1,5 +1,6 @@
 package com.avidviewer.tv.ui
 
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.onPreviewKeyEvent
@@ -42,9 +43,19 @@ import androidx.media3.ui.PlayerView
 fun AppRoot(vm: AppViewModel) {
     Box(
         Modifier.fillMaxSize().background(C.Bg)
+            .onFocusChanged { vm.anyFocus = it.hasFocus }
             .onPreviewKeyEvent { if (it.type == KeyEventType.KeyDown) vm.lastKeyAt = android.os.SystemClock.uptimeMillis(); false }
             .holdToAccelerate(),
     ) {
+        val rescueFm = androidx.compose.ui.platform.LocalFocusManager.current
+        LaunchedEffect(vm.focusRescue) {
+            if (vm.focusRescue == 0) return@LaunchedEffect
+            for (frame in 0 until 10) {
+                if (vm.anyFocus) break
+                if (!rescueFm.moveFocus(androidx.compose.ui.focus.FocusDirection.Enter)) rescueFm.moveFocus(androidx.compose.ui.focus.FocusDirection.Down)
+                androidx.compose.runtime.withFrameNanos { }
+            }
+        }
         if (vm.screen == Screen.PLAYER) {
             PlayerScreen(vm)
         } else {

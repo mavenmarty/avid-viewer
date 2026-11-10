@@ -151,6 +151,11 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     var vodInfo by mutableStateOf<VodInfo?>(null); private set
     var detailEpisodes by mutableStateOf<List<Episode>?>(null); private set
     var detailSeason by mutableStateOf<String?>(null)
+    /** Whether anything on screen has the highlight; a remote key with nothing highlighted asks for it back. */
+    var anyFocus = false
+    var focusRescue by mutableStateOf(0)
+    /** The episode last started from a series page, so Back from the player lands on it again. */
+    var lastEpisode: Episode? = null
     private var resume: Map<String, Long> = store.loadResume()
     var searchQuery by mutableStateOf("")
     var searchResults by mutableStateOf<List<PlaylistHits>?>(null); private set
@@ -1864,6 +1869,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     fun playDetailEpisode(e: Episode, fromStart: Boolean = false) {
         val s = vodDetail ?: return
+        lastEpisode = e
         playVod(VodItem(e.key.ifBlank { "${s.key}:${e.season}:${e.number}" }, s.playlistId, "episode", "${s.name} · S${e.season} E${e.number} · ${e.title}", s.logo, e.url), fromStart)
     }
 

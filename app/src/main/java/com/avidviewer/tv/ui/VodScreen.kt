@@ -82,9 +82,13 @@ fun VodScreen(vm: AppViewModel, kind: String) {
     val vq = (vm.vodQuery[kind] ?: "").trim()
     val items = if (vq.isNotBlank()) vm.vodOf(kind).filter { it.name.contains(vq, ignoreCase = true) } else vm.vodItems(kind)
 
+    val catState = androidx.compose.foundation.lazy.rememberLazyListState()
+    val catWrap = rememberListWrap(catState)
+    val allCats = specials + cats
     Row(Modifier.fillMaxSize()) {
         LazyColumn(
             Modifier.width(220.dp).fillMaxHeight().background(C.Bg),
+            state = catState,
             contentPadding = PaddingValues(10.dp),
             verticalArrangement = Arrangement.spacedBy(3.dp),
         ) {
@@ -100,6 +104,7 @@ fun VodScreen(vm: AppViewModel, kind: String) {
                 }
                 Focusable(
                     modifier = Modifier.fillMaxWidth().heightIn(min = 36.dp).focusRequester(fr).onFocusChanged { hasFocus = it.isFocused }
+                        .then(if (!isMoving) Modifier.wrapEnds(catWrap, isFirst = name == allCats.first().first, isLast = name == allCats.last().first) else Modifier)
                         .then(if (name == "All") Modifier.entryFocus(vm, if (kind == "series") Screen.SERIES else Screen.MOVIES) else Modifier)
                         .then(if (isMoving) Modifier.border(2.dp, C.AccentFocus, androidx.compose.foundation.shape.RoundedCornerShape(8.dp)) else Modifier)
                         .onPreviewKeyEvent { e ->
@@ -198,12 +203,26 @@ private fun VodDetail(vm: AppViewModel, v: VodItem) {
     BackHandler { vm.closeVodDetail() }
     val info = vm.vodInfo
     val playFocus = remember { FocusRequester() }
-    LaunchedEffect(v.key) {
-        delay(120)
-        runCatching { playFocus.requestFocus() }
-    }
+    val episodeFocus = remember { FocusRequester() }
+    var inside by remember { mutableStateOf(false) }
     val isSeries = v.kind == "series"
-    Row(Modifier.fillMaxSize().padding(24.dp), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
+    // Opening the page, coming back from the player, or episodes arriving: put the highlight
+    // on the episode that was playing, else the main button. Retried per frame until it lands,
+    // and dropped as soon as the user presses a key.
+    LaunchedEffect(v.key, vm.screen, vm.detailEpisodes != null) {
+        if (vm.screen == Screen.PLAYER) return@LaunchedEffect
+        val started = System.currentTimeMillis()
+        for (frame in 0 until 120) {
+            androidx.compose.runtime.withFrameNanos { }
+            if (vm.lastKeyAt > started) break
+            val ep = vm.lastEpisode
+            val wantEpisode = isSeries && ep != null && vm.detailEpisodes?.any { it.key == ep.key && it.season == ep.season } == true
+            if (wantEpisode && frame < 60) { if (runCatching { episodeFocus.requestFocus() }.isSuccess && inside && frame > 2) break }
+            else if (inside && frame > 2) break
+            else runCatching { playFocus.requestFocus() }
+        }
+    }
+    Row(Modifier.fillMaxSize().padding(24.dp).onFocusChanged { inside = it.hasFocus }, horizontalArrangement = Arrangement.spacedBy(24.dp)) {
         Box(Modifier.width(200.dp).aspectRatio(2f / 3f).clip(RoundedCornerShape(10.dp)).background(badgeColor(v.name))) {
             Text(v.name, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold, modifier = Modifier.align(Alignment.BottomStart).padding(10.dp))
             val img = v.logo ?: info?.image
@@ -237,13 +256,13 @@ private fun VodDetail(vm: AppViewModel, v: VodItem) {
             info?.plot?.takeIf { it.isNotBlank() }?.let { Label(it, size = 14.sp, color = C.Text, lines = if (isSeries) 3 else 7) }
             info?.cast?.takeIf { it.isNotBlank() }?.let { Label("Cast: $it", size = 13.sp, lines = 2) }
             info?.director?.takeIf { it.isNotBlank() }?.let { Label("Director: $it", size = 13.sp) }
-            if (isSeries) SeasonsAndEpisodes(vm)
+            if (isSeries) SeasonsAndEpisodes(vm, episodeFocus)
         }
     }
 }
 
 @Composable
-private fun SeasonsAndEpisodes(vm: AppViewModel) {
+private fun SeasonsAndEpisodes(vm: AppViewModel, episodeFocus: FocusRequester) {
     val eps = vm.detailEpisodes
     when {
         eps == null -> Label("Loading episodes…", size = 13.sp)
@@ -257,7 +276,9 @@ private fun SeasonsAndEpisodes(vm: AppViewModel) {
             LazyColumn(verticalArrangement = Arrangement.spacedBy(4.dp), contentPadding = PaddingValues(bottom = 20.dp)) {
                 items(eps.filter { it.season == season }) { e ->
                     val r = vm.resumeOf(e.key)
-                    Focusable(Modifier.fillMaxWidth().height(52.dp), onClick = { vm.playDetailEpisode(e) }) {
+                    val last = vm.lastEpisode
+                    val isLast = last != null && last.key == e.key && last.season == e.season && last.number == e.number
+                    Focusable(Modifier.fillMaxWidth().height(52.dp).then(if (isLast) Modifier.focusRequester(episodeFocus) else Modifier), onClick = { vm.playDetailEpisode(e) }) {
                         Label("E${e.number}", size = 13.sp, color = C.Accent, weight = FontWeight.Bold, modifier = Modifier.width(50.dp).padding(start = 12.dp))
                         Column(Modifier.weight(1f)) {
                             Label(e.title, size = 14.sp, color = C.Text, weight = FontWeight.SemiBold)
