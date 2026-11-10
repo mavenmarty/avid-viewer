@@ -163,8 +163,13 @@ class UsabilityTest {
         rule.runOnIdle { vm.chooseGroup(TestData.P1, "KIDS") }
         settle()
         val first = vm.channelsIn("KIDS").first().key
-        rule.runOnIdle { vm.movingChannel = first }
+        // As a viewer would: highlight the channel name, press Menu, choose Re-order.
+        rule.onAllNodesWithText("KIDS Channel 1 with", substring = true).onFirst().requestFocus()
         settle()
+        press(listOf(Key.Menu))
+        waitFor("channel options to open") { rule.onAllNodesWithText("Re-order", substring = true).fetchSemanticsNodes().isNotEmpty() }
+        rule.onAllNodesWithText("Re-order", substring = true).onFirst().performClick()
+        waitFor("re-order mode with the channel highlighted (focus: ${focused()})") { vm.movingChannel == first && focused().contains("⇅") }
         press(listOf(Key.DirectionDown))
         assertEquals("after 1st Down, focus on: " + focused(), 1, vm.channelsIn("KIDS").indexOfFirst { it.key == first })
         press(listOf(Key.DirectionDown))
@@ -183,8 +188,13 @@ class UsabilityTest {
     fun categoryReorderJumpsToTopAndBottom() {
         rule.runOnIdle { vm.chooseGroup(TestData.P1, "NEWS") }
         settle()
-        rule.runOnIdle { vm.movingGroup = "KIDS" }
+        // Highlight the category in the left list, press Menu, choose Re-order.
+        rule.onNode(androidx.compose.ui.test.hasText("KIDS") and androidx.compose.ui.test.hasClickAction()).requestFocus()
         settle()
+        press(listOf(Key.Menu))
+        waitFor("category options to open") { rule.onAllNodesWithText("Re-order", substring = true).fetchSemanticsNodes().isNotEmpty() }
+        rule.onAllNodesWithText("Re-order", substring = true).onFirst().performClick()
+        waitFor("re-order mode with the category highlighted (focus: ${focused()})") { vm.movingGroup == "KIDS" && focused().contains("⇅") }
         press(listOf(Key.DirectionLeft))
         assertEquals("focus on: " + focused(), "KIDS", vm.groups().first().raw)
         press(listOf(Key.DirectionRight))
@@ -197,9 +207,13 @@ class UsabilityTest {
     fun movieCategoryReorderAndRename() {
         go(Screen.MOVIES)
         waitFor("movies to load") { vm.vodOf("movie").isNotEmpty() }
-        waitFor("the first category to take the highlight") { vm.entryFocusFor == null }
-        rule.runOnIdle { vm.vodMovingCat = "movie" to "Action" }
+        waitFor("the first category to take the highlight (focus: ${focused()})") { vm.entryFocusFor == null }
+        rule.onNode(androidx.compose.ui.test.hasText("Action") and androidx.compose.ui.test.hasClickAction()).requestFocus()
         settle()
+        press(listOf(Key.Menu))
+        waitFor("movie category options to open") { rule.onAllNodesWithText("Re-order", substring = true).fetchSemanticsNodes().isNotEmpty() }
+        rule.onAllNodesWithText("Re-order", substring = true).onFirst().performClick()
+        waitFor("re-order mode on Action (focus: ${focused()})") { vm.vodMovingCat == ("movie" to "Action") && focused().contains("⇅") }
         press(listOf(Key.DirectionLeft))
         assertEquals("focus on: " + focused(), "Action", vm.vodCategories("movie").first().first)
         press(listOf(Key.Back))
@@ -222,7 +236,11 @@ class UsabilityTest {
         settle()
         assertTrue(vm.vodOf("movie").isEmpty())
         val shows = rule.onAllNodes(androidx.compose.ui.test.hasTestTag("le-cats-show")).fetchSemanticsNodes()
-        if (shows.isEmpty()) throw AssertionError("Show-all button gone after Hide all. Screen now:\n" + rule.onAllNodes(isRoot()).onLast().printToString(maxDepth = 6))
+        if (shows.isEmpty()) {
+            val texts = rule.onAllNodes(androidx.compose.ui.test.hasText("", substring = true), useUnmergedTree = true).fetchSemanticsNodes()
+                .flatMap { n -> n.config.getOrNull(androidx.compose.ui.semantics.SemanticsProperties.Text).orEmpty().map { it.text } }
+            throw AssertionError("Show-all button gone after Hide all. screen=${vm.screen} section=${vm.settingsSection}. Text on screen:\n" + texts.joinToString(" | ").take(3000))
+        }
         rule.onNodeWithTag("le-cats-show").performClick()
         settle()
         assertEquals(1140, vm.vodOf("movie").size)

@@ -164,8 +164,11 @@ fun Modifier.entryFocus(vm: AppViewModel, screen: Screen): Modifier {
     val fr = androidx.compose.runtime.remember { androidx.compose.ui.focus.FocusRequester() }
     androidx.compose.runtime.LaunchedEffect(vm.entryFocusFor) {
         if (vm.entryFocusFor == screen) {
-            kotlinx.coroutines.delay(150)
-            if (runCatching { fr.requestFocus() }.isSuccess) vm.entryFocusFor = null
+            // Retry for up to 2 s: on a slow device the item may not be ready on the first try.
+            for (attempt in 0 until 20) {
+                kotlinx.coroutines.delay(if (attempt == 0) 150 else 100)
+                if (runCatching { fr.requestFocus() }.isSuccess) { vm.entryFocusFor = null; break }
+            }
         }
     }
     return this.then(androidx.compose.ui.Modifier.focusRequester(fr))
