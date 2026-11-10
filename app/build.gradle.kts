@@ -93,6 +93,7 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
     // SAMBA / Windows network shares (SMB 2 and 3) for backups
     implementation("com.hierynomus:smbj:0.13.0")
+    implementation("com.google.zxing:core:3.5.3") // QR code for "Report a bug"
 
     // Usability tests (remote-control navigation and crash hunting)
     testImplementation(composeBom)

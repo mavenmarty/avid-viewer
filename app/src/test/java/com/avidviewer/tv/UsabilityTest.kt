@@ -1,5 +1,6 @@
 package com.avidviewer.tv
 
+import androidx.compose.ui.test.onAllNodesWithTag
 import android.app.Application
 import android.view.KeyEvent as AndroidKeyEvent
 import androidx.compose.ui.input.key.Key
@@ -347,6 +348,23 @@ class UsabilityTest {
         rule.onNodeWithTag("backup-now").performClick()
         settle()
         assertTrue(rule.onAllNodesWithText("Choose a PIN for this backup").fetchSemanticsNodes().isNotEmpty())
+    }
+
+    @Test
+    fun reportABugShowsTheAddressDetailsAndQrCode() {
+        go(Screen.SETTINGS)
+        rule.runOnIdle { vm.settingsSection = "about" }
+        settle()
+        assertTrue(rule.onAllNodesWithText("Report a bug").fetchSemanticsNodes().isNotEmpty())
+        assertTrue(rule.onAllNodesWithText("bugs@avidviewer.app").fetchSemanticsNodes().isNotEmpty())
+        assertTrue(rule.onAllNodesWithText("App version:", substring = true).fetchSemanticsNodes().isNotEmpty())
+        assertTrue(rule.onAllNodesWithText("Device:", substring = true).fetchSemanticsNodes().isNotEmpty())
+        assertTrue(rule.onAllNodesWithTag("bug-qr").fetchSemanticsNodes().isNotEmpty())
+        // The email link carries the details but nothing about the user's playlists.
+        val link = android.net.Uri.decode(com.avidviewer.tv.data.BugReport.mailto("1.0.test", "java.lang.IllegalStateException: boom\n at x.y(Z.kt:1)"))
+        assertTrue(link, link.startsWith("mailto:bugs@avidviewer.app?subject="))
+        assertTrue(link, link.contains("App version: 1.0.test") && link.contains("Last crash: java.lang.IllegalStateException: boom"))
+        vm.playlists.forEach { p -> assertTrue("leaks ${p.name}", !link.contains(p.name) && (p.server.isBlank() || !link.contains(p.server))) }
     }
 
     // ---------------------------------------------------------------- reported bugs (Nov 10)

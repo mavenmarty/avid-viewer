@@ -2,6 +2,7 @@
 
 package com.avidviewer.tv.ui
 
+import androidx.compose.foundation.layout.size
 import androidx.compose.ui.platform.testTag
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.heightIn
@@ -627,6 +628,7 @@ fun SettingsScreen(vm: AppViewModel) {
                                     }
                                 }
                             }
+                            item { BugReportBlock(vm) }
                             item { BackupBlock(vm) }
                             item {
                                 SettingBlock("App updates", "Installed: version ${vm.installed.second}" + (vm.update?.let { " · version ${it.versionName} available" } ?: "")) {
@@ -731,6 +733,51 @@ private fun androidx.compose.foundation.lazy.LazyListScope.privacySettings(vm: A
     item {
         SettingBlock("Watch history", if (vm.history.isEmpty()) "No watch history" else "${vm.history.size} viewing sessions from the last 90 days") {
             TvButton("Clear watch history") { vm.clearHistory() }
+        }
+    }
+}
+
+@Composable
+private fun BugReportBlock(vm: AppViewModel) {
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    val version = appVersion(vm)
+    val crash = vm.lastCrash
+    val details = remember(version, crash) { com.avidviewer.tv.data.BugReport.details(version, crash) }
+    val link = remember(version, crash) { com.avidviewer.tv.data.BugReport.mailto(version, crash) }
+    val canEmail = remember { com.avidviewer.tv.data.BugReport.canEmail(ctx) }
+    SettingBlock(
+        "Report a bug",
+        "Something not working? Email ${com.avidviewer.tv.data.BugReport.ADDRESS}. Say what happened and the steps that lead to it, and include the details below." +
+            if (crash != null) " If the app closed unexpectedly, a photo of the crash report above helps too." else "",
+    ) {
+        Row(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
+            QrCode(link, Modifier.size(132.dp).testTag("bug-qr"))
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Label(com.avidviewer.tv.data.BugReport.ADDRESS, size = 16.sp, color = C.Accent, weight = FontWeight.Bold)
+                Label("Scan with your phone's camera to start the email with these details filled in.", size = 12.sp, color = C.Soft, lines = Int.MAX_VALUE)
+                details.forEach { (k, v) -> Label("$k: $v", size = 12.sp, color = C.Text, lines = Int.MAX_VALUE) }
+                Label("No playlists, logins or provider addresses are included.", size = 11.sp, color = C.Muted, lines = Int.MAX_VALUE)
+                if (canEmail) TvButton("Open email app", modifier = Modifier.testTag("bug-email")) {
+                    runCatching { ctx.startActivity(com.avidviewer.tv.data.BugReport.emailIntent(version, crash)) }
+                }
+            }
+        }
+    }
+}
+
+/** A QR code drawn from its modules (white background so phones can read it on a dark screen). */
+@Composable
+private fun QrCode(text: String, modifier: Modifier = Modifier) {
+    val matrix = remember(text) {
+        runCatching {
+            com.google.zxing.qrcode.QRCodeWriter().encode(text, com.google.zxing.BarcodeFormat.QR_CODE, 0, 0,
+                mapOf(com.google.zxing.EncodeHintType.MARGIN to 2, com.google.zxing.EncodeHintType.CHARACTER_SET to "UTF-8"))
+        }.getOrNull()
+    } ?: return
+    androidx.compose.foundation.Canvas(modifier.clip(RoundedCornerShape(6.dp)).background(Color.White)) {
+        val cell = size.minDimension / matrix.width
+        for (y in 0 until matrix.height) for (x in 0 until matrix.width) {
+            if (matrix.get(x, y)) drawRect(Color.Black, topLeft = androidx.compose.ui.geometry.Offset(x * cell, y * cell), size = androidx.compose.ui.geometry.Size(cell + 0.5f, cell + 0.5f))
         }
     }
 }
