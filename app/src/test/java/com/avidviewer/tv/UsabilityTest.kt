@@ -12,6 +12,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.isRoot
 import androidx.compose.ui.test.onLast
+import androidx.compose.ui.test.printToString
 import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performKeyInput
@@ -60,8 +61,19 @@ class UsabilityTest {
     private fun settle(ms: Long = 250) {
         rule.waitForIdle()
         org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idleFor(java.time.Duration.ofMillis(ms))
+        // Some of the app's short pauses run on a real-time timer, so give them real time too.
+        Thread.sleep(90)
+        rule.waitForIdle()
+        org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idleFor(java.time.Duration.ofMillis(ms))
         rule.waitForIdle()
     }
+
+    /** The text of whatever has the remote's highlight (for failure messages). */
+    private fun focused(): String = runCatching {
+        rule.onAllNodes(androidx.compose.ui.test.isFocused()).fetchSemanticsNodes().joinToString(" / ") { n ->
+            n.config.getOrNull(androidx.compose.ui.semantics.SemanticsProperties.Text)?.joinToString(" ") { it.text } ?: "(no text)"
+        }.ifBlank { "(nothing focused)" }
+    }.getOrDefault("(unknown)")
 
     /** Sends a key to the top-most window (a dialog when one is open). */
     private fun key(k: Key) = rule.onAllNodes(isRoot()).onLast().performKeyInput { pressKey(k) }
@@ -128,8 +140,10 @@ class UsabilityTest {
         val first = vm.channelsIn("KIDS").first().key
         rule.runOnIdle { vm.movingChannel = first }
         settle()
-        press(listOf(Key.DirectionDown, Key.DirectionDown))
-        assertEquals(2, vm.channelsIn("KIDS").indexOfFirst { it.key == first })
+        press(listOf(Key.DirectionDown))
+        assertEquals("after 1st Down, focus on: " + focused(), 1, vm.channelsIn("KIDS").indexOfFirst { it.key == first })
+        press(listOf(Key.DirectionDown))
+        assertEquals("after 2nd Down, focus on: " + focused(), 2, vm.channelsIn("KIDS").indexOfFirst { it.key == first })
         press(listOf(Key.DirectionRight)) // to the bottom
         assertEquals(vm.channelsIn("KIDS").size - 1, vm.channelsIn("KIDS").indexOfFirst { it.key == first })
         press(listOf(Key.DirectionLeft)) // to the top
@@ -147,7 +161,7 @@ class UsabilityTest {
         rule.runOnIdle { vm.movingGroup = "KIDS" }
         settle()
         press(listOf(Key.DirectionLeft))
-        assertEquals("KIDS", vm.groups().first().raw)
+        assertEquals("focus on: " + focused(), "KIDS", vm.groups().first().raw)
         press(listOf(Key.DirectionRight))
         assertEquals("KIDS", vm.groups().last().raw)
         press(listOf(Key.DirectionCenter))
@@ -161,7 +175,7 @@ class UsabilityTest {
         rule.runOnIdle { vm.vodMovingCat = "movie" to "Action" }
         settle()
         press(listOf(Key.DirectionLeft))
-        assertEquals("Action", vm.vodCategories("movie").first().first)
+        assertEquals("focus on: " + focused(), "Action", vm.vodCategories("movie").first().first)
         press(listOf(Key.Back))
         assertNull(vm.vodMovingCat)
         rule.runOnIdle { vm.renameVodCat("movie", "Action", "Action & Adventure") }
@@ -181,6 +195,8 @@ class UsabilityTest {
         rule.onNodeWithTag("le-cats-hide").performClick()
         settle()
         assertTrue(vm.vodOf("movie").isEmpty())
+        val shows = rule.onAllNodes(androidx.compose.ui.test.hasTestTag("le-cats-show")).fetchSemanticsNodes()
+        if (shows.isEmpty()) throw AssertionError("Show-all button gone after Hide all. Screen now:\n" + rule.onAllNodes(isRoot()).onLast().printToString(maxDepth = 6))
         rule.onNodeWithTag("le-cats-show").performClick()
         settle()
         assertEquals(1140, vm.vodOf("movie").size)
@@ -264,7 +280,8 @@ class UsabilityTest {
         val weights = listOf(5, 5, 4, 4, 2, 1, 1)
         val screens = listOf(Screen.GUIDE, Screen.MOVIES, Screen.SETTINGS, Screen.SPORTS, Screen.SERIES, Screen.SEARCH, Screen.DISCOVER)
         val rnd = Random(20261109)
-        for (i in 0 until 600) {
+        val recent = ArrayDeque<String>()
+        for (i in 0 until 600) try {
             if (i % 60 == 0) go(screens[(i / 60) % screens.size])
             var r = rnd.nextInt(weights.sum()); var k = 0
             while (r >= weights[k]) { r -= weights[k]; k++ }
@@ -272,6 +289,12 @@ class UsabilityTest {
             else key(keys[k])
             if (i % 10 == 0) settle()
             if (vm.screen == Screen.PLAYER && rnd.nextInt(4) == 0) rule.runOnIdle { vm.closeFullScreen() }
+            recent.addLast(keys[k].toString()); if (recent.size > 12) recent.removeFirst()
+        } catch (e: Throwable) {
+            throw AssertionError(
+                "Random press #$i failed on screen=${vm.screen} section=${vm.settingsSection} nav=${vm.navMode} " +
+                    "group=${vm.selectedGroup} focus=${focused()} last keys=$recent", e,
+            )
         }
         settle()
     }
