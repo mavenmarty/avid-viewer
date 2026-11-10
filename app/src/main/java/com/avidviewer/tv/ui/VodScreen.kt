@@ -1,5 +1,6 @@
 package com.avidviewer.tv.ui
 
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.foundation.layout.heightIn
@@ -275,15 +276,17 @@ private fun SeasonsAndEpisodes(vm: AppViewModel, episodeFocus: FocusRequester, o
         else -> {
             val seasons = eps.map { it.season }.distinct()
             val season = vm.detailSeason ?: seasons.first()
+            val seasonFr = remember { FocusRequester() }
             LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                items(seasons) { s -> TvButton("Season $s", selected = s == season) { vm.detailSeason = s } }
+                items(seasons) { s -> TvButton("Season $s", selected = s == season, modifier = if (s == season) Modifier.focusRequester(seasonFr) else Modifier) { vm.detailSeason = s } }
             }
             LazyColumn(verticalArrangement = Arrangement.spacedBy(4.dp), contentPadding = PaddingValues(bottom = 20.dp)) {
-                items(eps.filter { it.season == season }) { e ->
+                val shown = eps.filter { it.season == season }
+                items(shown) { e ->
                     val r = vm.resumeOf(e.key)
                     val last = vm.lastEpisode
                     val isLast = last != null && last.key == e.key && last.season == e.season && last.number == e.number
-                    Focusable(Modifier.fillMaxWidth().height(52.dp).then(if (isLast) Modifier.focusRequester(episodeFocus).onFocusChanged { onLastFocused(it.isFocused) } else Modifier), onClick = { vm.playDetailEpisode(e) }) {
+                    Focusable(Modifier.fillMaxWidth().height(52.dp).then(if (e == shown.first()) Modifier.focusProperties { up = seasonFr } else Modifier).then(if (isLast) Modifier.focusRequester(episodeFocus).onFocusChanged { onLastFocused(it.isFocused) } else Modifier), onClick = { vm.playDetailEpisode(e) }) {
                         Label("E${e.number}", size = 13.sp, color = C.Accent, weight = FontWeight.Bold, modifier = Modifier.width(50.dp).padding(start = 12.dp))
                         Column(Modifier.weight(1f)) {
                             Label(e.title, size = 14.sp, color = C.Text, weight = FontWeight.SemiBold)

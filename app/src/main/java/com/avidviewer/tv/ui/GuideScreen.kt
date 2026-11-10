@@ -1,5 +1,6 @@
 package com.avidviewer.tv.ui
 
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.background
@@ -78,7 +79,7 @@ fun GuideScreen(vm: AppViewModel) {
     var focusedRow by remember { mutableStateOf(-1) }
     /** The channel (by key) whose name cell has the highlight; survives rows being replaced. */
     var focusedKey by remember { mutableStateOf<String?>(null) }
-    val wrapFocus = androidx.compose.ui.platform.LocalFocusManager.current
+    val previewFr = remember { FocusRequester() }
 
     // The time the highlight is on. Up/Down lands on the program airing at this time in the next row,
     // whatever the run times are; it only changes when you move left or right.
@@ -230,15 +231,13 @@ fun GuideScreen(vm: AppViewModel) {
     ) {
         // Preview window + details of the focused show. Up from the top of the screen wraps to the last channel.
         Row(
-            Modifier.fillMaxWidth().height(130.dp).onKeyEvent { e ->
-                if (e.type == KeyEventType.KeyDown && e.key == Key.DirectionUp && e.nativeKeyEvent.repeatCount == 0 && list.isNotEmpty()) {
-                    if (!wrapFocus.moveFocus(androidx.compose.ui.focus.FocusDirection.Up)) wrapTo(list.lastIndex)
-                    true
-                } else false
-            },
+            Modifier.fillMaxWidth().height(130.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            PreviewWindow(vm, Modifier.width(231.dp).fillMaxHeight(), onOpen = { vm.openFullScreen(vm.currentKey, PlayContext.GROUP) })
+            PreviewWindow(vm, Modifier.width(231.dp).fillMaxHeight().focusRequester(previewFr).onPreviewKeyEvent { e ->
+                // Up from the preview (the top of the screen) wraps to the last channel; a fresh press only.
+                if (e.type == KeyEventType.KeyDown && e.key == Key.DirectionUp && e.nativeKeyEvent.repeatCount == 0 && list.size > 1) { wrapTo(list.lastIndex); true } else false
+            }, onOpen = { vm.openFullScreen(vm.currentKey, PlayContext.GROUP) })
             val fc = vm.channel(focusProg?.first ?: vm.currentKey)
             val fp = focusProg?.second ?: vm.nowNext(fc).first
             Column(Modifier.weight(1f).fillMaxHeight().clip(RoundedCornerShape(10.dp)).background(C.Surface).padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -282,6 +281,7 @@ fun GuideScreen(vm: AppViewModel) {
                         val isMoving = c.key == vm.movingChannel
                         Focusable(
                             modifier = Modifier.width(CH_COL.dp).fillMaxHeight().focusRequester(rowFocus[idx])
+                                .then(if (idx == 0) Modifier.focusProperties { up = previewFr } else Modifier)
                                 .then(if (isMoving) Modifier.border(2.dp, C.AccentFocus, RoundedCornerShape(8.dp)) else Modifier)
                                 .onFocusChanged {
                                     if (isMoving) movingFocused = it.isFocused
