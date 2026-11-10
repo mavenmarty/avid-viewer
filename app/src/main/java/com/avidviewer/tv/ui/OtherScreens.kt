@@ -634,6 +634,7 @@ fun SettingsScreen(vm: AppViewModel) {
                                 SettingBlock("App updates", "Installed: version ${vm.installed.second}" + (vm.update?.let { " · version ${it.versionName} available" } ?: "")) {
                                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                         if (vm.update != null) TvButton(if (vm.updateBusy) "Working…" else "Download and install", primary = true) { if (!vm.updateBusy) vm.installUpdate() }
+                                        if (vm.updateFile != null && !vm.updateBusy) TvButton("Open installer", modifier = Modifier.testTag("update-open-installer")) { vm.openInstaller() }
                                         TvButton("Check now") { vm.checkForUpdate() }
                                         TvButton(if (p.autoUpdateCheck) "Auto-check: on" else "Auto-check: off", selected = p.autoUpdateCheck) { vm.updatePrefs { it.copy(autoUpdateCheck = !it.autoUpdateCheck) } }
                                     }

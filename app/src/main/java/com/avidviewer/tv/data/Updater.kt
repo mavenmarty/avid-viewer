@@ -11,12 +11,15 @@ import okhttp3.Request
 import org.json.JSONObject
 import java.io.File
 import java.io.IOException
+import java.util.concurrent.TimeUnit
 
 /** Checks GitHub Releases for a newer Avid Viewer and installs it with Android's package installer. */
 object Updater {
     const val REPO = "mavenmarty/avid-viewer"
 
-    data class Release(val versionCode: Long, val versionName: String, val apkUrl: String, val notes: String)
+    data class Release(val versionCode: Long, val versionName: String, val apkUrl: String, val notes: String, val size: Long = -1L)
+
+    const val NO_CONFIRM = "The installer screen didn't open."
 
     /** Receives installer results so the UI can show them. */
     var onStatus: ((String) -> Unit)? = null
@@ -32,39 +35,100 @@ object Updater {
         val code = tag.substringAfterLast('.').toLongOrNull() ?: return null
         val assets = o.optJSONArray("assets") ?: return null
         var url: String? = null
+        var size = -1L
         for (i in 0 until assets.length()) {
             val a = assets.getJSONObject(i)
-            if (a.optString("name").endsWith(".apk", true)) { url = a.optString("browser_download_url"); break }
+            if (a.optString("name").endsWith(".apk", true)) { url = a.optString("browser_download_url"); size = a.optLong("size", -1L); break }
         }
-        return Release(code, tag.removePrefix("v"), url ?: return null, o.optString("body"))
+        return Release(code, tag.removePrefix("v"), url ?: return null, o.optString("body"), size)
     }
 
-    fun download(ctx: Context, url: String, progress: (Int) -> Unit): File {
+    /** No data for this long means the connection has stalled: pick up where it stopped. */
+    private const val STALL_SECONDS = 15L
+    private const val ATTEMPTS = 8
+
+    /**
+     * Downloads the update. A connection that stalls (common on Fire TV Wi-Fi, often near the end)
+     * is dropped after [STALL_SECONDS] and resumed from the last byte received, up to [ATTEMPTS] times.
+     * The finished file is checked (size, and that Android can read it as this app) before installing.
+     */
+    fun download(ctx: Context, url: String, expectedSize: Long = -1L, checkApk: Boolean = true, progress: (pct: Int, note: String?) -> Unit): File {
         val dir = File(ctx.cacheDir, "updates").apply { mkdirs() }
         val out = File(dir, "AvidViewer-update.apk")
-        val req = Request.Builder().url(url).header("User-Agent", USER_AGENT).build()
-        Net.client.newCall(req).execute().use { resp ->
-            if (!resp.isSuccessful) throw IOException("Download failed (${resp.code})")
-            val body = resp.body ?: throw IOException("Empty download")
-            val total = body.contentLength()
-            body.byteStream().use { input ->
-                out.outputStream().use { os ->
-                    val buf = ByteArray(64 * 1024)
-                    var done = 0L; var last = -1
-                    while (true) {
-                        val n = input.read(buf)
-                        if (n < 0) break
-                        os.write(buf, 0, n); done += n
-                        if (total > 0) {
-                            val pct = (done * 100 / total).toInt()
-                            if (pct != last) { last = pct; progress(pct) }
+        out.delete()
+        val client = Net.client.newBuilder().readTimeout(STALL_SECONDS, TimeUnit.SECONDS).build()
+        var total = expectedSize
+        var lastPct = -1
+        var failure: IOException? = null
+        for (attempt in 1..ATTEMPTS) {
+            val have = if (out.exists()) out.length() else 0L
+            if (total > 0 && have >= total) break
+            val req = Request.Builder().url(url).header("User-Agent", USER_AGENT)
+                .header("Accept-Encoding", "identity")
+                .apply { if (have > 0) header("Range", "bytes=$have-") }
+                .build()
+            try {
+                client.newCall(req).execute().use { resp ->
+                    if (!resp.isSuccessful) throw IOException("Download failed (${resp.code})")
+                    val body = resp.body ?: throw IOException("Empty download")
+                    // 206 = the server is continuing from where we stopped; 200 = it sent the whole file again.
+                    val append = have > 0 && resp.code == 206
+                    if (!append && have > 0) out.delete()
+                    val start = if (append) have else 0L
+                    if (total <= 0) total = resp.header("Content-Range")?.substringAfterLast('/')?.toLongOrNull()
+                        ?: body.contentLength().takeIf { it > 0 }?.plus(start) ?: -1L
+                    body.byteStream().use { input ->
+                        java.io.FileOutputStream(out, append).use { os ->
+                            val buf = ByteArray(64 * 1024)
+                            var done = start
+                            while (true) {
+                                val n = input.read(buf)
+                                if (n < 0) break
+                                os.write(buf, 0, n); done += n
+                                if (total > 0) {
+                                    val pct = (done * 100 / total).toInt().coerceIn(0, 100)
+                                    if (pct != lastPct) { lastPct = pct; progress(pct, null) }
+                                }
+                            }
                         }
                     }
                 }
+                if (total <= 0 || out.length() >= total) { failure = null; break }
+                failure = IOException("The connection closed early")
+            } catch (e: IOException) {
+                failure = e
+            }
+            if (attempt < ATTEMPTS) {
+                progress(lastPct.coerceAtLeast(0), "connection slow, resuming (try ${attempt + 1} of $ATTEMPTS)")
+                Thread.sleep(1500L * attempt)
             }
         }
+        failure?.let { out.delete(); throw IOException("Download didn't finish: ${it.message ?: it.javaClass.simpleName}. Check the connection and try again.") }
+        if (total > 0 && out.length() != total) { out.delete(); throw IOException("Download incomplete (${out.length()} of $total bytes). Try again.") }
+        if (checkApk) verify(ctx, out)
         return out
     }
+
+    /** The file must be a readable APK of this same app, or Android's installer stops part-way. */
+    fun verify(ctx: Context, apk: File) {
+        @Suppress("DEPRECATION")
+        val info = runCatching { ctx.packageManager.getPackageArchiveInfo(apk.path, 0) }.getOrNull()
+        if (info == null || info.packageName != ctx.packageName) {
+            apk.delete()
+            throw IOException("The downloaded update was damaged. Try again.")
+        }
+    }
+
+    /** Fallback when the installer session gets no answer: Android's own install screen. */
+    fun openInstaller(ctx: Context, apk: File): Boolean = runCatching {
+        val uri = androidx.core.content.FileProvider.getUriForFile(ctx, ctx.packageName + ".updates", apk)
+        @Suppress("DEPRECATION")
+        val i = Intent(Intent.ACTION_INSTALL_PACKAGE).setData(uri)
+            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
+            .putExtra(Intent.EXTRA_NOT_UNKNOWN_SOURCE, true)
+        ctx.startActivity(i)
+        true
+    }.getOrDefault(false)
 
     /** True when Android lets this app install updates (Fire TV: Developer options › Install unknown apps). */
     fun canInstall(ctx: Context): Boolean =
@@ -98,8 +162,8 @@ class UpdateReceiver : BroadcastReceiver() {
                 val confirm: Intent? = if (Build.VERSION.SDK_INT >= 33) intent.getParcelableExtra(Intent.EXTRA_INTENT, Intent::class.java)
                 else intent.getParcelableExtra(Intent.EXTRA_INTENT)
                 confirm?.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                if (confirm != null) context.startActivity(confirm)
-                Updater.onStatus?.invoke("Confirm the update on screen.")
+                val shown = confirm != null && runCatching { context.startActivity(confirm) }.isSuccess
+                Updater.onStatus?.invoke(if (shown) "Confirm the update on screen." else Updater.NO_CONFIRM)
             }
             PackageInstaller.STATUS_SUCCESS -> Updater.onStatus?.invoke("Update installed.")
             else -> Updater.onStatus?.invoke("Update didn't install: " + (intent.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE) ?: "unknown error"))
