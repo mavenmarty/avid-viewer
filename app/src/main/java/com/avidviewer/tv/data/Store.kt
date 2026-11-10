@@ -23,6 +23,49 @@ class Store(private val context: Context) {
         }
     }
 
+    /**
+     * Writes a big list one item at a time. Building the whole file as one string first needs
+     * several times the file's size in memory, which a Fire TV Stick can't spare for a large catalog.
+     */
+    private fun <T> writeArrayAtomic(f: File, list: List<T>, toJson: (T) -> JSONObject) {
+        val tmp = File(f.parentFile, f.name + ".tmp")
+        tmp.bufferedWriter(Charsets.UTF_8, 64 * 1024).use { w ->
+            w.write("[")
+            list.forEachIndexed { i, item -> if (i > 0) w.write(","); w.write(toJson(item).toString()) }
+            w.write("]")
+        }
+        if (!tmp.renameTo(f)) { f.delete(); if (!tmp.renameTo(f)) { tmp.copyTo(f, overwrite = true); tmp.delete() } }
+    }
+
+    /** Reads a big list one item at a time (same file format as before), so memory stays small. */
+    private fun <T> readArray(f: File, fromJson: (JSONObject) -> T): List<T> {
+        if (!f.exists()) return emptyList()
+        return try {
+            android.util.JsonReader(f.bufferedReader(Charsets.UTF_8, 64 * 1024)).use { r ->
+                val out = ArrayList<T>()
+                r.beginArray()
+                while (r.hasNext()) {
+                    val o = readJsonValue(r)
+                    if (o is JSONObject) runCatching { fromJson(o) }.getOrNull()?.let { out.add(it) }
+                }
+                r.endArray()
+                out
+            }
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
+    private fun readJsonValue(r: android.util.JsonReader): Any? = when (r.peek()) {
+        android.util.JsonToken.BEGIN_OBJECT -> JSONObject().also { o -> r.beginObject(); while (r.hasNext()) { val n = r.nextName(); o.put(n, readJsonValue(r) ?: JSONObject.NULL) }; r.endObject() }
+        android.util.JsonToken.BEGIN_ARRAY -> JSONArray().also { a -> r.beginArray(); while (r.hasNext()) a.put(readJsonValue(r) ?: JSONObject.NULL); r.endArray() }
+        android.util.JsonToken.STRING -> r.nextString()
+        android.util.JsonToken.NUMBER -> r.nextString().let { s -> s.toLongOrNull() ?: s.toDoubleOrNull() ?: s }
+        android.util.JsonToken.BOOLEAN -> r.nextBoolean()
+        android.util.JsonToken.NULL -> { r.nextNull(); null }
+        else -> { r.skipValue(); null }
+    }
+
     // ---- playlists (passwords encrypted) ----
     fun loadPlaylists(): List<Playlist> {
         val f = File(dir, "playlists.json")
@@ -84,21 +127,10 @@ class Store(private val context: Context) {
 
     // ---- channels per playlist ----
     fun saveChannels(playlistId: String, list: List<Channel>) {
-        val a = JSONArray()
-        list.forEach { a.put(it.toJson()) }
-        writeAtomic(File(dataDir, "channels_$playlistId.json"), a.toString())
+        writeArrayAtomic(File(dataDir, "channels_$playlistId.json"), list) { it.toJson() }
     }
 
-    fun loadChannels(playlistId: String): List<Channel> {
-        val f = File(dataDir, "channels_$playlistId.json")
-        if (!f.exists()) return emptyList()
-        return try {
-            val a = JSONArray(f.readText())
-            List(a.length()) { Channel.fromJson(a.getJSONObject(it)) }
-        } catch (e: Exception) {
-            emptyList()
-        }
-    }
+    fun loadChannels(playlistId: String): List<Channel> = readArray(File(dataDir, "channels_$playlistId.json")) { Channel.fromJson(it) }
 
     // ---- guide per playlist ----
     fun saveGuide(playlistId: String, guide: Map<String, List<Program>>) {
@@ -136,21 +168,10 @@ class Store(private val context: Context) {
 
     // ---- movies & series per playlist ----
     fun saveVod(playlistId: String, list: List<VodItem>) {
-        val a = JSONArray()
-        list.forEach { a.put(it.toJson()) }
-        writeAtomic(File(dataDir, "vod_$playlistId.json"), a.toString())
+        writeArrayAtomic(File(dataDir, "vod_$playlistId.json"), list) { it.toJson() }
     }
 
-    fun loadVod(playlistId: String): List<VodItem> {
-        val f = File(dataDir, "vod_$playlistId.json")
-        if (!f.exists()) return emptyList()
-        return try {
-            val a = JSONArray(f.readText())
-            List(a.length()) { VodItem.fromJson(a.getJSONObject(it)) }
-        } catch (e: Exception) {
-            emptyList()
-        }
-    }
+    fun loadVod(playlistId: String): List<VodItem> = readArray(File(dataDir, "vod_$playlistId.json")) { VodItem.fromJson(it) }
 
     fun deletePlaylistData(playlistId: String) {
         File(dataDir, "vod_$playlistId.json").delete()

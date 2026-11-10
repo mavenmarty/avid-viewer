@@ -141,7 +141,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     var tmdbStatus by mutableStateOf<String?>(null); private set
     private var discoverLoadedAt = HashMap<String, Long>()
     private var vodIndexFor: List<VodItem>? = null
-    private var vodIndex: Map<String, VodItem> = emptyMap()
+    /** Provider titles by normalized name, for Discover's "On your provider" badge. Built in the background. */
+    private var vodIndex by mutableStateOf<Map<String, VodItem>>(emptyMap())
+    private var vodIndexJob: kotlinx.coroutines.Job? = null
     var vodCategory by mutableStateOf(mapOf("movie" to "All", "series" to "All"))
     /** The player is actually playing right now (false while buffering or paused); screens redraw when it changes. */
     var playing by mutableStateOf(false); private set
@@ -1429,11 +1431,23 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     /** The same title in the user's own provider catalog, if there is one. */
     fun matchVod(t: Title): VodItem? {
-        if (vodIndexFor !== vod) {
-            vodIndex = HashMap<String, VodItem>().apply {
-                vod.forEach { v -> putIfAbsent((if (v.kind == "series") "tv|" else "movie|") + Tmdb.normalize(v.name), v) }
+        val current = vod
+        if (vodIndexFor !== current) {
+            // Building this for a big catalog takes seconds on a Fire TV Stick: never on the screen's thread.
+            vodIndexFor = current
+            vodIndexJob?.cancel()
+            vodIndexJob = viewModelScope.launch {
+                val built = withContext(Dispatchers.Default) {
+                    HashMap<String, VodItem>(current.size * 2).apply {
+                        var n = 0
+                        for (v in current) {
+                            if (++n % 2000 == 0) kotlinx.coroutines.yield()
+                            putIfAbsent((if (v.kind == "series") "tv|" else "movie|") + Tmdb.normalize(v.name), v)
+                        }
+                    }
+                }
+                vodIndex = built
             }
-            vodIndexFor = vod
         }
         return vodIndex[t.type + "|" + Tmdb.normalize(t.name)]
     }
