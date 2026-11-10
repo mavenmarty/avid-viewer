@@ -197,9 +197,9 @@ fun holdSteps(e: androidx.compose.ui.input.key.KeyEvent): Int {
 }
 
 /** Root-level handler: when an arrow key is held, move focus several items per repeat. */
-@Composable
 private var lastHeldMove = 0L
 
+@Composable
 fun Modifier.holdToAccelerate(): Modifier {
     val fm = androidx.compose.ui.platform.LocalFocusManager.current
     return this.then(androidx.compose.ui.Modifier.onKeyEvent { e ->

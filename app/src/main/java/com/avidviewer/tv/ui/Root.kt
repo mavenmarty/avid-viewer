@@ -52,7 +52,7 @@ fun AppRoot(vm: AppViewModel) {
             if (vm.focusRescue == 0) return@LaunchedEffect
             for (frame in 0 until 10) {
                 if (vm.anyFocus) break
-                if (!rescueFm.moveFocus(androidx.compose.ui.focus.FocusDirection.Enter)) rescueFm.moveFocus(androidx.compose.ui.focus.FocusDirection.Down)
+                if (!rescueFm.moveFocus(androidx.compose.ui.focus.FocusDirection.Down)) rescueFm.moveFocus(androidx.compose.ui.focus.FocusDirection.Next)
                 androidx.compose.runtime.withFrameNanos { }
             }
         }
