@@ -4,8 +4,9 @@ import android.app.Application
 import android.view.KeyEvent as AndroidKeyEvent
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEvent
+import androidx.compose.ui.input.key.nativeKeyCode
 import androidx.compose.ui.test.ExperimentalTestApi
-import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -46,7 +47,7 @@ import kotlin.random.Random
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], qualifiers = "w960dp-h540dp-land-xhdpi", application = Application::class)
 class UsabilityTest {
-    @get:Rule val rule = createComposeRule()
+    @get:Rule val rule = createAndroidComposeRule<androidx.activity.ComponentActivity>()
     private lateinit var vm: AppViewModel
 
     @Before
@@ -55,6 +56,7 @@ class UsabilityTest {
         TestData.seed(app)
         vm = AppViewModel(app)
         rule.setContent { AppRoot(vm) }
+        rule.runOnUiThread { rule.activity.window.decorView.requestFocus() }
         waitFor("channels to load") { vm.channels.isNotEmpty() }
     }
 
@@ -76,8 +78,29 @@ class UsabilityTest {
         }.ifBlank { "(nothing focused)" }
     }.getOrDefault("(unknown)")
 
-    /** Sends a key to the top-most window (a dialog when one is open). */
-    private fun key(k: Key) = rule.onAllNodes(isRoot()).onLast().performKeyInput { pressKey(k) }
+    /**
+     * Presses a remote button the way the Fire TV does: a key down and key up delivered to the app's
+     * window (or to an open dialog's window), so the app's own key handling and Back all run for real.
+     */
+    private fun key(k: Key) {
+        val code = k.nativeKeyCode
+        rule.runOnUiThread {
+            val t = android.os.SystemClock.uptimeMillis()
+            val down = AndroidKeyEvent(t, t, AndroidKeyEvent.ACTION_DOWN, code, 0)
+            val up = AndroidKeyEvent(t, t + 40, AndroidKeyEvent.ACTION_UP, code, 0)
+            val target = topWindowView()
+            if (target != null) { target.dispatchKeyEvent(down); target.dispatchKeyEvent(up) }
+            else { rule.activity.dispatchKeyEvent(down); rule.activity.dispatchKeyEvent(up) }
+        }
+    }
+
+    /** The decor view of a dialog, if one is showing on top of the app. */
+    private fun topWindowView(): android.view.View? {
+        val views = org.robolectric.shadows.ShadowWindowManagerGlobal.getWindowManagerGlobal()
+            .let { wmg -> runCatching { wmg.javaClass.getDeclaredField("mViews").apply { isAccessible = true }.get(wmg) as List<*> }.getOrNull() }
+            ?.filterIsInstance<android.view.View>().orEmpty()
+        return views.lastOrNull()?.takeIf { it !== rule.activity.window.decorView }
+    }
 
     private fun press(keys: List<Key>) = keys.forEach { k -> key(k); settle() }
 
@@ -129,9 +152,8 @@ class UsabilityTest {
         rule.onAllNodesWithText("NEWS Channel 1 with", substring = true).onFirst().requestFocus()
         press(listOf(Key.DirectionDown, Key.DirectionDown, Key.DirectionRight, Key.DirectionRight, Key.DirectionLeft, Key.DirectionUp))
         assertEquals(NavMode.GROUPS, vm.navMode)
-        // Back (handled by the system's back dispatcher in the app) leaves the category list.
-        rule.runOnIdle { vm.navBack() }
-        assertNotEquals(NavMode.GROUPS, vm.navMode)
+        press(listOf(Key.Back))
+        assertNotEquals("Back should leave the category list", NavMode.GROUPS, vm.navMode)
     }
 
     @Test
@@ -173,6 +195,7 @@ class UsabilityTest {
     fun movieCategoryReorderAndRename() {
         go(Screen.MOVIES)
         waitFor("movies to load") { vm.vodOf("movie").isNotEmpty() }
+        waitFor("the first category to take the highlight") { vm.entryFocusFor == null }
         rule.runOnIdle { vm.vodMovingCat = "movie" to "Action" }
         settle()
         press(listOf(Key.DirectionLeft))
@@ -276,7 +299,6 @@ class UsabilityTest {
      */
     @Test
     fun randomRemotePressesNeverCrash() {
-        // Back is the system back action in the app, so it's simulated by calling what it calls.
         val keys = listOf(Key.DirectionUp, Key.DirectionDown, Key.DirectionLeft, Key.DirectionRight, Key.DirectionCenter, Key.Back, Key.Menu)
         val weights = listOf(5, 5, 4, 4, 2, 1, 1)
         val screens = listOf(Screen.GUIDE, Screen.MOVIES, Screen.SETTINGS, Screen.SPORTS, Screen.SERIES, Screen.SEARCH, Screen.DISCOVER)
@@ -286,8 +308,7 @@ class UsabilityTest {
             if (i % 60 == 0) go(screens[(i / 60) % screens.size])
             var r = rnd.nextInt(weights.sum()); var k = 0
             while (r >= weights[k]) { r -= weights[k]; k++ }
-            if (keys[k] == Key.Back) rule.runOnIdle { if (vm.screen == Screen.PLAYER) vm.closeFullScreen() else vm.navBack() }
-            else key(keys[k])
+            key(keys[k])
             if (i % 10 == 0) settle()
             if (vm.screen == Screen.PLAYER && rnd.nextInt(4) == 0) rule.runOnIdle { vm.closeFullScreen() }
             recent.addLast(keys[k].toString()); if (recent.size > 12) recent.removeFirst()
