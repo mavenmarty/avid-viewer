@@ -627,6 +627,7 @@ fun SettingsScreen(vm: AppViewModel) {
                                     }
                                 }
                             }
+                            item { BackupBlock(vm) }
                             item {
                                 SettingBlock("App updates", "Installed: version ${vm.installed.second}" + (vm.update?.let { " · version ${it.versionName} available" } ?: "")) {
                                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -1063,4 +1064,89 @@ private fun EditorRow(title: String, sub: String?, hidden: Boolean, selected: Bo
         }
         Label(if (hidden) "Hidden" else "Shown", size = 12.sp, color = if (hidden) C.Muted else C.Accent, weight = FontWeight.Bold, modifier = Modifier.padding(end = 10.dp))
     }
+}
+
+/** Settings › Updates & about › Backup & restore. */
+@Composable
+private fun BackupBlock(vm: AppViewModel) {
+    var making by remember { mutableStateOf(false) }
+    SettingBlock(
+        "Backup & restore",
+        "Save your playlists (with their logins), favorites, lists, names, order, hidden items, Sports categories, location and settings to a file in this device's Download folder. " +
+            "It stays there if Avid Viewer is deleted, so after reinstalling you can restore everything here. Channels, guides and movies download again on their own.",
+    ) {
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            TvButton(if (vm.backupBusy) "Working…" else "Back up now", primary = true, modifier = Modifier.testTag("backup-now")) { if (!vm.backupBusy) making = true }
+            TvButton("Restore from a backup", modifier = Modifier.testTag("backup-restore")) { if (!vm.backupBusy) vm.startRestore() }
+        }
+        vm.backupStatus?.let { Label(it, size = 12.sp, color = C.Soft, lines = Int.MAX_VALUE) }
+        if (vm.foundBackups.isNotEmpty()) {
+            Label("Backups found in the Download folder — choose one:", size = 12.sp, lines = Int.MAX_VALUE)
+            vm.foundBackups.take(6).forEach { f ->
+                val date = java.text.SimpleDateFormat("MMM d, yyyy h:mm a", java.util.Locale.getDefault()).format(f.modified)
+                TvButton("${f.name}  ·  $date") { vm.chooseFoundBackup(f) }
+            }
+        }
+    }
+    if (making) BackupPinDialog(vm) { making = false }
+    if (vm.pendingRestore != null) RestorePinDialog(vm)
+}
+
+/** Choose a PIN for a new backup (entered twice). */
+@Composable
+private fun BackupPinDialog(vm: AppViewModel, close: () -> Unit) {
+    var pin by remember { mutableStateOf("") }
+    var again by remember { mutableStateOf("") }
+    var problem by remember { mutableStateOf<String?>(null) }
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = close,
+        containerColor = C.Surface,
+        title = { Text("Choose a PIN for this backup", color = C.Text, fontWeight = FontWeight.Bold) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Label("The backup holds your provider logins, so it's locked with a PIN. You'll need the same PIN to restore it, and it can't be recovered if forgotten.", size = 13.sp, color = C.Soft, lines = Int.MAX_VALUE)
+                TvField("PIN (4 or more digits)", pin, password = true, modifier = Modifier.fillMaxWidth()) { pin = it.filter { c -> c.isDigit() }.take(12) }
+                TvField("Enter the PIN again", again, password = true, modifier = Modifier.fillMaxWidth()) { again = it.filter { c -> c.isDigit() }.take(12) }
+                problem?.let { Label(it, size = 12.sp, color = C.AccentFocus, lines = Int.MAX_VALUE) }
+            }
+        },
+        confirmButton = {
+            TvButton("Save backup", primary = true) {
+                problem = when {
+                    pin.length < 4 -> "Use at least 4 digits."
+                    pin != again -> "The two PINs don't match."
+                    else -> null
+                }
+                if (problem == null) { vm.backUp(pin); close() }
+            }
+        },
+        dismissButton = { TvButton("Cancel") { close() } },
+    )
+}
+
+/** Enter the backup's PIN and confirm replacing what's on this device. */
+@Composable
+private fun RestorePinDialog(vm: AppViewModel) {
+    var pin by remember { mutableStateOf("") }
+    var wrong by remember { mutableStateOf<String?>(null) }
+    val cancel = remember { FocusRequester() }
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = { vm.cancelRestore() },
+        containerColor = C.Surface,
+        title = { Text("Restore this backup?", color = C.Text, fontWeight = FontWeight.Bold) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Label(vm.pendingRestoreInfo, size = 13.sp, color = C.Text, lines = Int.MAX_VALUE)
+                Label("Restoring replaces the playlists and settings on this device with the ones in the backup. This can't be undone.", size = 13.sp, color = C.Soft, lines = Int.MAX_VALUE)
+                TvField("Backup PIN", pin, password = true, modifier = Modifier.fillMaxWidth()) { pin = it.filter { c -> c.isDigit() }.take(12) }
+                wrong?.let { Label(it, size = 12.sp, color = C.AccentFocus, lines = Int.MAX_VALUE) }
+            }
+        },
+        confirmButton = {
+            TvButton(if (vm.backupBusy) "Restoring…" else "Restore", primary = true) {
+                if (!vm.backupBusy) vm.restore(pin) { ok -> if (!ok) wrong = vm.backupStatus ?: "That PIN doesn't open this backup." }
+            }
+        },
+        dismissButton = { TvButton("Cancel", modifier = Modifier.focusRequester(cancel)) { vm.cancelRestore() } },
+    )
 }

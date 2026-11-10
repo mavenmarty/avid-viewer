@@ -190,6 +190,121 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     private var watchStart = 0L
     private var watchKey: String? = null
 
+    // ---------------- backup & restore ----------------
+    /** What only the screen can do (ask for storage permission, open the file picker); set by MainActivity. */
+    interface BackupHost {
+        fun requestStorage(write: Boolean, then: (Boolean) -> Unit)
+        fun canPick(): Boolean
+        /** Opens the file picker; gives the chosen file's text, or null (cancelled or no picker). */
+        fun pickFile(then: (String?) -> Unit)
+    }
+    var backupHost: BackupHost? = null
+    var backupStatus by mutableStateOf<String?>(null); private set
+    var backupBusy by mutableStateOf(false); private set
+    var foundBackups by mutableStateOf<List<com.avidviewer.tv.data.BackupFiles.Found>>(emptyList()); private set
+    /** A backup file chosen for restoring, waiting for its PIN. */
+    var pendingRestore by mutableStateOf<String?>(null); private set
+    var pendingRestoreInfo by mutableStateOf(""); private set
+
+    fun backUp(pin: String) {
+        if (pin.length < 4) { backupStatus = "Choose a PIN of at least 4 digits."; return }
+        viewModelScope.launch {
+            backupBusy = true
+            backupStatus = "Making the backup…"
+            val app = getApplication<Application>()
+            val stamp = SimpleDateFormat("yyyy-MM-dd_HHmm", Locale.US).format(System.currentTimeMillis())
+            val name = "AvidViewer-backup-$stamp.${com.avidviewer.tv.data.Backup.EXTENSION}"
+            val text = runCatching {
+                withContext(Dispatchers.Default) {
+                    com.avidviewer.tv.data.Backup.write(
+                        com.avidviewer.tv.data.Backup.Contents(playlists, prefs, tmdbKey(), history, resume, System.currentTimeMillis(), installed.second), pin,
+                    )
+                }
+            }.getOrElse { backupBusy = false; backupStatus = "Couldn't make the backup: ${it.message}"; return@launch }
+            suspend fun save() {
+                backupStatus = runCatching { withContext(Dispatchers.IO) { com.avidviewer.tv.data.BackupFiles.save(app, name, text) } }
+                    .fold({ "Saved to $it. It stays there if the app is deleted. Keep your PIN somewhere safe: the backup can't be opened without it." },
+                        { "Couldn't save the backup: ${it.message}" })
+                backupBusy = false
+            }
+            val host = backupHost
+            if (com.avidviewer.tv.data.BackupFiles.needsWritePermission() && host != null) {
+                host.requestStorage(true) { ok ->
+                    viewModelScope.launch { if (ok) save() else { backupBusy = false; backupStatus = "Avid Viewer needs permission to save to the Download folder. Choose Back up again and allow it." } }
+                }
+            } else save()
+        }
+    }
+
+    /** Restore: the file picker if the device has one, otherwise backups found in the Download folder. */
+    fun startRestore() {
+        backupStatus = null
+        val host = backupHost
+        if (host != null && host.canPick()) host.pickFile { text -> if (text != null) offerRestore(text) else scanForBackups() }
+        else scanForBackups()
+    }
+
+    fun scanForBackups() {
+        val app = getApplication<Application>()
+        val run = {
+            viewModelScope.launch {
+                foundBackups = withContext(Dispatchers.IO) { com.avidviewer.tv.data.BackupFiles.findInDownloads(app) }
+                if (foundBackups.isEmpty()) backupStatus =
+                    "No backup found in the Download folder. If the file is on this device, a file manager app (for example X-plore) lets you pick it: install one, then choose Restore again."
+            }
+        }
+        val host = backupHost
+        if (android.os.Build.VERSION.SDK_INT <= 32 && host != null) host.requestStorage(false) { run() } else run()
+    }
+
+    fun chooseFoundBackup(f: com.avidviewer.tv.data.BackupFiles.Found) {
+        viewModelScope.launch {
+            runCatching { withContext(Dispatchers.IO) { f.read() } }.onSuccess { offerRestore(it) }.onFailure { backupStatus = "Couldn't open ${f.name}: ${it.message}" }
+        }
+    }
+
+    internal fun offerRestore(text: String) {
+        runCatching { com.avidviewer.tv.data.Backup.peek(text) }.onSuccess { (created, ver, names) ->
+            pendingRestore = text
+            pendingRestoreInfo = "Made " + SimpleDateFormat("MMM d, yyyy h:mm a", Locale.getDefault()).format(created) +
+                (if (ver.isNotBlank()) " with version $ver" else "") +
+                " · " + (if (names.isEmpty()) "no playlists" else names.joinToString(", "))
+        }.onFailure { backupStatus = it.message ?: "That file isn't an Avid Viewer backup." }
+    }
+
+    fun cancelRestore() { pendingRestore = null }
+
+    /** Replaces playlists and settings with the backup's, then downloads channels and guides again. */
+    fun restore(pin: String, done: (Boolean) -> Unit) {
+        val text = pendingRestore ?: return
+        viewModelScope.launch {
+            backupBusy = true
+            val c = try {
+                withContext(Dispatchers.Default) { com.avidviewer.tv.data.Backup.read(text, pin) }
+            } catch (e: Exception) {
+                backupBusy = false; backupStatus = e.message; done(false); return@launch
+            }
+            withContext(Dispatchers.IO) {
+                store.savePlaylists(c.playlists)
+                store.saveHistory(c.history)
+                store.saveResume(c.resume)
+            }
+            playlists = c.playlists
+            history = c.history
+            resume = c.resume
+            updatePrefs { c.prefs.copy(tmdbKeyEnc = if (c.tmdbKey.isBlank()) "" else Crypto.encrypt(c.tmdbKey)) }
+            otherLive.clear(); otherVod.clear(); playlistGroups = emptyMap()
+            vod = emptyList(); vodLoadedFor = null
+            pendingRestore = null
+            backupBusy = false
+            backupStatus = "Restored ${c.playlists.size} playlist(s) and your settings. Channels and guides are downloading again now."
+            done(true)
+            reloadAfterActiveChange()
+            if (prefs.postalCode.isNotBlank()) refreshWeather()
+            syncAllPlaylists(force = false)
+        }
+    }
+
     /** Details of the last crash, if the app closed unexpectedly (shown once at start and in Settings › About). */
     var lastCrash by mutableStateOf(com.avidviewer.tv.data.CrashLog.read(app)); private set
     var crashNoticeSeen by mutableStateOf(false)

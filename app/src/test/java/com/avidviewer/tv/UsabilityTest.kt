@@ -315,6 +315,40 @@ class UsabilityTest {
         assertTrue(vm.shownLists.isEmpty())
     }
 
+    // ---------------------------------------------------------------- backup & restore
+
+    @Test
+    fun backupRestoresEverythingAndRefusesTheWrongPin() {
+        val before = vm.prefs
+        val text = com.avidviewer.tv.data.Backup.write(
+            com.avidviewer.tv.data.Backup.Contents(vm.playlists, vm.prefs, "", vm.history, emptyMap(), System.currentTimeMillis(), "test"), "2468",
+        )
+        // Wrong PIN: refused, nothing changes.
+        try { com.avidviewer.tv.data.Backup.read(text, "1111"); throw AssertionError("wrong PIN was accepted") }
+        catch (e: com.avidviewer.tv.data.Backup.WrongPin) { }
+        // Change things, then restore through the Settings flow.
+        rule.runOnIdle { vm.updatePrefs { it.copy(favorites = emptyList(), lists = emptyList()) } }
+        rule.runOnIdle { vm.offerRestore(text) }
+        assertTrue(vm.pendingRestoreInfo.contains("My provider"))
+        var ok = false
+        rule.runOnIdle { vm.restore("2468") { ok = it } }
+        waitFor("the restore to finish") { ok }
+        assertEquals(before.favorites, vm.prefs.favorites)
+        assertEquals(before.lists, vm.prefs.lists)
+        assertEquals(listOf(TestData.P1, TestData.P2), vm.playlists.map { it.id })
+    }
+
+    @Test
+    fun backupSectionOpensWithoutCrashing() {
+        go(Screen.SETTINGS)
+        rule.runOnIdle { vm.settingsSection = "about" }
+        settle()
+        assertTrue(rule.onAllNodesWithText("Backup & restore").fetchSemanticsNodes().isNotEmpty())
+        rule.onNodeWithTag("backup-now").performClick()
+        settle()
+        assertTrue(rule.onAllNodesWithText("Choose a PIN for this backup").fetchSemanticsNodes().isNotEmpty())
+    }
+
     // ---------------------------------------------------------------- hold to accelerate
 
     @Test
