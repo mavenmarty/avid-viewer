@@ -55,7 +55,7 @@ class UsabilityTest {
         rule.waitForIdle()
     }
 
-    private fun press(vararg keys: Key) = keys.forEach { k -> rule.onRoot().performKeyInput { pressKey(k) }; rule.waitForIdle() }
+    private fun press(keys: List<Key>) = keys.forEach { k -> rule.onRoot().performKeyInput { pressKey(k) }; rule.waitForIdle() }
 
     private fun go(s: Screen) { rule.runOnIdle { vm.navSelect(s) }; rule.waitForIdle() }
 
@@ -86,7 +86,7 @@ class UsabilityTest {
         rule.runOnIdle { vm.chooseGroup(TestData.P1, "NEWS") }
         rule.waitForIdle()
         rule.onAllNodesWithText("NEWS Channel 1 with", substring = true).onFirst().requestFocus()
-        press(Key.DirectionDown, Key.DirectionDown, Key.DirectionRight, Key.DirectionRight, Key.DirectionLeft, Key.DirectionUp)
+        press(listOf(Key.DirectionDown, Key.DirectionDown, Key.DirectionRight, Key.DirectionRight, Key.DirectionLeft, Key.DirectionUp))
         assertEquals(NavMode.GROUPS, vm.navMode)
         // Back (handled by the system's back dispatcher in the app) leaves the category list.
         rule.runOnIdle { vm.navBack() }
@@ -100,13 +100,13 @@ class UsabilityTest {
         val first = vm.channelsIn("KIDS").first().key
         rule.runOnIdle { vm.movingChannel = first }
         rule.waitForIdle()
-        press(Key.DirectionDown, Key.DirectionDown)
+        press(listOf(Key.DirectionDown, Key.DirectionDown))
         assertEquals(2, vm.channelsIn("KIDS").indexOfFirst { it.key == first })
-        press(Key.DirectionRight) // to the bottom
+        press(listOf(Key.DirectionRight)) // to the bottom
         assertEquals(vm.channelsIn("KIDS").size - 1, vm.channelsIn("KIDS").indexOfFirst { it.key == first })
-        press(Key.DirectionLeft) // to the top
+        press(listOf(Key.DirectionLeft)) // to the top
         assertEquals(0, vm.channelsIn("KIDS").indexOfFirst { it.key == first })
-        press(Key.Back)
+        press(listOf(Key.Back))
         assertNull(vm.movingChannel)
         assertEquals(Screen.GUIDE, vm.screen)
         assertEquals(NavMode.GROUPS, vm.navMode) // Back ended re-ordering only
@@ -118,11 +118,11 @@ class UsabilityTest {
         rule.waitForIdle()
         rule.runOnIdle { vm.movingGroup = "KIDS" }
         rule.waitForIdle()
-        press(Key.DirectionLeft)
+        press(listOf(Key.DirectionLeft))
         assertEquals("KIDS", vm.groups().first().raw)
-        press(Key.DirectionRight)
+        press(listOf(Key.DirectionRight))
         assertEquals("KIDS", vm.groups().last().raw)
-        press(Key.DirectionCenter)
+        press(listOf(Key.DirectionCenter))
         assertNull(vm.movingGroup)
     }
 
@@ -132,9 +132,9 @@ class UsabilityTest {
         rule.waitUntil(10_000) { vm.vodOf("movie").isNotEmpty() }
         rule.runOnIdle { vm.vodMovingCat = "movie" to "Action" }
         rule.waitForIdle()
-        press(Key.DirectionLeft)
+        press(listOf(Key.DirectionLeft))
         assertEquals("Action", vm.vodCategories("movie").first().first)
-        press(Key.Back)
+        press(listOf(Key.Back))
         assertNull(vm.vodMovingCat)
         rule.runOnIdle { vm.renameVodCat("movie", "Action", "Action & Adventure") }
         rule.waitForIdle()
