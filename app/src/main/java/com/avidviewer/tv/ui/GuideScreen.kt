@@ -117,12 +117,17 @@ fun GuideScreen(vm: AppViewModel) {
     }
     // Re-ordering a channel: keep it on screen and highlighted as it moves.
     val movingIdx = list.indexOfFirst { it.key == vm.movingChannel }
+    var movingFocused by remember { mutableStateOf(false) }
     LaunchedEffect(vm.movingChannel, movingIdx) {
         if (movingIdx < 0) return@LaunchedEffect
         val vis = listState.layoutInfo.visibleItemsInfo.map { it.index }
         if (vis.isEmpty() || movingIdx <= vis.first() || movingIdx >= vis.last()) listState.scrollToItem((movingIdx - 2).coerceAtLeast(0))
-        delay(40)
-        runCatching { rowFocus[movingIdx].requestFocus() }
+        // A big jump (to the top or bottom) can drop the highlight; keep asking until the channel has it.
+        for (attempt in 0 until 15) {
+            delay(30)
+            if (movingFocused) break
+            runCatching { rowFocus[movingIdx].requestFocus() }
+        }
     }
     LaunchedEffect(pendingProg, slots) {
         val i = pendingProg ?: return@LaunchedEffect
@@ -230,6 +235,7 @@ fun GuideScreen(vm: AppViewModel) {
                         Focusable(
                             modifier = Modifier.width(CH_COL.dp).fillMaxHeight().focusRequester(rowFocus[idx])
                                 .then(if (isMoving) Modifier.border(2.dp, C.AccentFocus, RoundedCornerShape(8.dp)) else Modifier)
+                                .onFocusChanged { if (isMoving) movingFocused = it.isFocused }
                                 .onPreviewKeyEvent { e ->
                                     if (!isMoving) false
                                     else reorderKeys(e, onMove = { vm.moveChannelBy(c.key, it) }, onTop = { vm.moveChannelTo(c.key, 0) },

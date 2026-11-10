@@ -1,5 +1,6 @@
 package com.avidviewer.tv.ui
 
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.border
@@ -93,9 +94,12 @@ fun VodScreen(vm: AppViewModel, kind: String) {
                 val special = specials.any { it.first == name }
                 val isMoving = vm.vodMovingCat == (kind to name)
                 val fr = remember { androidx.compose.ui.focus.FocusRequester() }
-                LaunchedEffect(isMoving, cats.indexOfFirst { it.first == name }) { if (isMoving) { delay(50); runCatching { fr.requestFocus() } } }
+                var hasFocus by remember { mutableStateOf(false) }
+                LaunchedEffect(isMoving, cats.indexOfFirst { it.first == name }) {
+                    if (isMoving) for (attempt in 0 until 15) { delay(30); if (hasFocus) break; runCatching { fr.requestFocus() } }
+                }
                 Focusable(
-                    modifier = Modifier.fillMaxWidth().heightIn(min = 36.dp).focusRequester(fr)
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 36.dp).focusRequester(fr).onFocusChanged { hasFocus = it.isFocused }
                         .then(if (name == "All") Modifier.entryFocus(vm, if (kind == "series") Screen.SERIES else Screen.MOVIES) else Modifier)
                         .then(if (isMoving) Modifier.border(2.dp, C.AccentFocus, androidx.compose.foundation.shape.RoundedCornerShape(8.dp)) else Modifier)
                         .onPreviewKeyEvent { e ->

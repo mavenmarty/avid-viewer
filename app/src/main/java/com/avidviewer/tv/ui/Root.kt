@@ -1,5 +1,8 @@
 package com.avidviewer.tv.ui
 
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.foundation.border
 import androidx.activity.compose.BackHandler
 import androidx.annotation.OptIn
@@ -37,7 +40,11 @@ import androidx.media3.ui.PlayerView
 
 @Composable
 fun AppRoot(vm: AppViewModel) {
-    Box(Modifier.fillMaxSize().background(C.Bg).holdToAccelerate()) {
+    Box(
+        Modifier.fillMaxSize().background(C.Bg)
+            .onPreviewKeyEvent { if (it.type == KeyEventType.KeyDown) vm.lastKeyAt = android.os.SystemClock.uptimeMillis(); false }
+            .holdToAccelerate(),
+    ) {
         if (vm.screen == Screen.PLAYER) {
             PlayerScreen(vm)
         } else {

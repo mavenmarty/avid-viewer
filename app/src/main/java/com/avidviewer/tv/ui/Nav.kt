@@ -290,9 +290,12 @@ fun GroupNav(vm: AppViewModel) {
             val on = g.raw == vm.selectedGroup
             val isMoving = g.raw == moving
             val fr = remember { FocusRequester() }
-            LaunchedEffect(isMoving) { if (isMoving) { kotlinx.coroutines.delay(60); runCatching { fr.requestFocus() } } }
+            var hasFocus by remember { mutableStateOf(false) }
+            LaunchedEffect(isMoving, groups.indexOf(g)) {
+                if (isMoving) for (attempt in 0 until 15) { kotlinx.coroutines.delay(30); if (hasFocus) break; runCatching { fr.requestFocus() } }
+            }
             Focusable(
-                modifier = Modifier.fillMaxWidth().height(38.dp).focusRequester(fr)
+                modifier = Modifier.fillMaxWidth().height(38.dp).focusRequester(fr).onFocusChanged { hasFocus = it.isFocused }
                     .then(if (isMoving) Modifier.border(2.dp, C.AccentFocus, androidx.compose.foundation.shape.RoundedCornerShape(8.dp)) else Modifier)
                     .onPreviewKeyEvent { e ->
                         if (!isMoving) return@onPreviewKeyEvent false

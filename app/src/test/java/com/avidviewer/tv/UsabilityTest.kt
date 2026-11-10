@@ -174,9 +174,12 @@ class UsabilityTest {
         assertEquals("after 1st Down, focus on: " + focused(), 1, vm.channelsIn("KIDS").indexOfFirst { it.key == first })
         press(listOf(Key.DirectionDown))
         assertEquals("after 2nd Down, focus on: " + focused(), 2, vm.channelsIn("KIDS").indexOfFirst { it.key == first })
+        waitFor("highlight back on the moving channel") { focused().contains("⇅") }
         press(listOf(Key.DirectionRight)) // to the bottom
+        waitFor("highlight on the channel after jumping to the bottom (focus: ${focused()})") { focused().contains("⇅") }
         assertEquals(vm.channelsIn("KIDS").size - 1, vm.channelsIn("KIDS").indexOfFirst { it.key == first })
         press(listOf(Key.DirectionLeft)) // to the top
+        waitFor("highlight on the channel after jumping to the top") { focused().contains("⇅") }
         assertEquals(0, vm.channelsIn("KIDS").indexOfFirst { it.key == first })
         press(listOf(Key.Back))
         assertNull(vm.movingChannel)
@@ -207,7 +210,7 @@ class UsabilityTest {
     fun movieCategoryReorderAndRename() {
         go(Screen.MOVIES)
         waitFor("movies to load") { vm.vodOf("movie").isNotEmpty() }
-        waitFor("the first category to take the highlight (focus: ${focused()})") { vm.entryFocusFor == null }
+        waitFor("the first category to take the highlight (focus: ${focused()}, entryFocusFor=${vm.entryFocusFor}, All rows=${rule.onAllNodesWithText("All").fetchSemanticsNodes().size}, screen=${vm.screen}, detail=${vm.vodDetail?.name})") { vm.entryFocusFor == null }
         rule.onNode(androidx.compose.ui.test.hasText("Action") and androidx.compose.ui.test.hasClickAction()).requestFocus()
         settle()
         press(listOf(Key.Menu))
@@ -227,7 +230,9 @@ class UsabilityTest {
 
     @Test
     fun listEditorHidesAndShowsMovieCategoriesInBulk() {
-        rule.runOnIdle { vm.navSelect(Screen.SETTINGS); vm.settingsSection = "channels" }
+        go(Screen.SETTINGS)
+        waitFor("Settings' first section to take the highlight") { vm.entryFocusFor == null }
+        rule.runOnIdle { vm.settingsSection = "channels" }
         settle()
         rule.onNodeWithTag("le-tab-MOVIES").performClick()
         waitFor("movies to load in the List Editor") { vm.vodAll("movie").isNotEmpty() }
@@ -248,7 +253,9 @@ class UsabilityTest {
 
     @Test
     fun listEditorHidesLiveCategoriesPerPlaylist() {
-        rule.runOnIdle { vm.navSelect(Screen.SETTINGS); vm.settingsSection = "channels" }
+        go(Screen.SETTINGS)
+        waitFor("Settings' first section to take the highlight") { vm.entryFocusFor == null }
+        rule.runOnIdle { vm.settingsSection = "channels" }
         settle()
         rule.onNodeWithTag("le-tab-LIVE").performClick()
         waitFor("live categories in the List Editor") { rule.onAllNodesWithText("NEWS", substring = false).fetchSemanticsNodes().isNotEmpty() }
