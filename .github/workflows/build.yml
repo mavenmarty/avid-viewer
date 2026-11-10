@@ -2,7 +2,7 @@ name: Build APK
 
 on:
   push:
-    branches: [main, next]
+    branches: [main, next, ci-check]
   workflow_dispatch:
 
 permissions:
@@ -38,7 +38,19 @@ jobs:
         with:
           gradle-version: "8.11.1"
 
+      - name: Usability tests (remote navigation + crash hunting)
+        run: gradle --no-daemon testDebugUnitTest
+
+      - name: Save test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: usability-test-report-${{ github.run_number }}
+          path: app/build/reports/tests/testDebugUnitTest
+          if-no-files-found: ignore
+
       - name: Build release APK
+        if: github.ref != 'refs/heads/ci-check'
         env:
           SIGNING_KEYSTORE_PATH: ${{ steps.key.outputs.keystore }}
           SIGNING_STORE_PASSWORD: ${{ secrets.SIGNING_PASSWORD }}
@@ -49,9 +61,11 @@ jobs:
         run: gradle --no-daemon assembleRelease
 
       - name: Rename APK
+        if: github.ref != 'refs/heads/ci-check'
         run: cp app/build/outputs/apk/release/app-release.apk AvidViewer.apk
 
       - uses: actions/upload-artifact@v4
+        if: github.ref != 'refs/heads/ci-check'
         with:
           name: AvidViewer-1.0.${{ github.run_number }}
           path: AvidViewer.apk

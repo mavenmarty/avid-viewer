@@ -190,6 +190,12 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     private var watchStart = 0L
     private var watchKey: String? = null
 
+    /** Details of the last crash, if the app closed unexpectedly (shown once at start and in Settings › About). */
+    var lastCrash by mutableStateOf(com.avidviewer.tv.data.CrashLog.read(app)); private set
+    var crashNoticeSeen by mutableStateOf(false)
+
+    fun clearCrash() { com.avidviewer.tv.data.CrashLog.clear(getApplication()); lastCrash = null }
+
     init {
         if (prefs.clearCacheOnExit) store.clearCache() // catches exits Android didn't report
         player.addListener(object : Player.Listener {
@@ -1410,7 +1416,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                             }
                         }
                     }
-                    val vodHits = v.filter { it.name.lowercase().contains(needle) }
+                    val vodHits = v.filter { !isVodHidden(it) && it.name.lowercase().contains(needle) }
                     PlaylistHits(
                         playlist = p,
                         stations = stations,
@@ -1510,7 +1516,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** Back walks up the navigation: categories → playlists → full menu → TV Guide. Returns false to let the app exit. */
-    fun navBack(): Boolean = if (movingGroup != null || movingChannel != null) { movingGroup = null; movingChannel = null; true } else when (navMode) {
+    fun navBack(): Boolean = if (movingGroup != null || movingChannel != null || vodMovingCat != null) { movingGroup = null; movingChannel = null; vodMovingCat = null; true } else when (navMode) {
         NavMode.GROUPS -> {
             navMode = NavMode.COLLAPSED
             expandedPlaylist = activePlaylist()?.id
@@ -1578,13 +1584,72 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         store.saveResume(m)
     }
 
-    fun vodOf(kind: String): List<VodItem> = vod.filter { if (kind == "series") it.kind == "series" else it.kind == "movie" || it.kind == "episode" }
+    /** Every movie (or series) of the switched-on playlists, hidden ones included. */
+    fun vodAll(kind: String): List<VodItem> = vod.filter { if (kind == "series") it.kind == "series" else it.kind == "movie" || it.kind == "episode" }
+
+    /** "movie" or "series": the editor's name for a VOD kind. */
+    fun vodKindKey(kind: String) = if (kind == "series") "series" else "movie"
+
+    fun vodCatKey(kind: String, pid: String, cat: String) = vodKindKey(kind) + "|" + pid + "|" + cat
+
+    fun isVodCatHidden(kind: String, pid: String, cat: String) = vodCatKey(kind, pid, cat) in prefs.vodHiddenCats
+
+    fun isVodHidden(v: VodItem) = v.key in prefs.vodHiddenTitles || isVodCatHidden(v.kind, v.playlistId, v.category.ifBlank { "Other" })
+
+    /** What the Movies / Series screens show: hidden titles and categories left out. */
+    fun vodOf(kind: String): List<VodItem> = vodAll(kind).filter { !isVodHidden(it) }
+
+    fun vodCatName(kind: String, cat: String) = prefs.vodCatNames[vodKindKey(kind) + "|" + cat] ?: cat
+
+    /** Orders category names by the user's order (new ones keep the provider's order, after). */
+    fun orderVodCats(kind: String, names: List<String>): List<String> {
+        val ord = prefs.vodCatOrder[vodKindKey(kind)] ?: return names
+        return ord.filter { it in names } + names.filterNot { it in ord }
+    }
 
     fun vodCategories(kind: String): List<Pair<String, Int>> {
         val counts = LinkedHashMap<String, Int>()
         vodOf(kind).forEach { counts[it.category.ifBlank { "Other" }] = (counts[it.category.ifBlank { "Other" }] ?: 0) + 1 }
-        return counts.toList()
+        return orderVodCats(kind, counts.keys.toList()).map { it to (counts[it] ?: 0) }
     }
+
+    // ---- Movies / Series category Menu: rename, re-order, hide ----
+    var vodCatMenu by mutableStateOf<Pair<String, String>?>(null)   // kind to category
+    var vodMovingCat by mutableStateOf<Pair<String, String>?>(null)
+
+    fun renameVodCat(kind: String, cat: String, name: String) = updatePrefs {
+        val k = vodKindKey(kind) + "|" + cat
+        it.copy(vodCatNames = if (name.isBlank() || name == cat) it.vodCatNames - k else it.vodCatNames + (k to name.trim()))
+    }
+
+    fun moveVodCatTo(kind: String, cat: String, index: Int) {
+        val names = vodCategories(kind).map { it.first }.toMutableList()
+        if (!names.remove(cat)) return
+        names.add(index.coerceIn(0, names.size), cat)
+        val k = vodKindKey(kind)
+        val old = prefs.vodCatOrder[k] ?: emptyList()
+        updatePrefs { it.copy(vodCatOrder = it.vodCatOrder + (k to (names + old.filterNot { n -> n in names }))) }
+    }
+
+    fun moveVodCatBy(kind: String, cat: String, delta: Int) {
+        val i = vodCategories(kind).indexOfFirst { it.first == cat }
+        if (i >= 0) moveVodCatTo(kind, cat, i + delta)
+    }
+
+    /** Hides a category everywhere it appears (in every playlist that has it). */
+    fun hideVodCatEverywhere(kind: String, cat: String) {
+        val keys = vodAll(kind).filter { it.category.ifBlank { "Other" } == cat }.map { vodCatKey(kind, it.playlistId, cat) }.toSet()
+        updatePrefs { it.copy(vodHiddenCats = it.vodHiddenCats + keys) }
+        if (vodCategory[kind] == cat) vodCategory = vodCategory + (kind to "All")
+    }
+
+    /** List Editor: show or hide many movie/series categories (keys from [vodCatKey]). */
+    fun setVodCatsHidden(keys: Collection<String>, hidden: Boolean) =
+        updatePrefs { it.copy(vodHiddenCats = if (hidden) it.vodHiddenCats + keys else it.vodHiddenCats - keys.toSet()) }
+
+    /** List Editor: show or hide many movies/series. */
+    fun setVodTitlesHidden(keys: Collection<String>, hidden: Boolean) =
+        updatePrefs { it.copy(vodHiddenTitles = if (hidden) it.vodHiddenTitles + keys else it.vodHiddenTitles - keys.toSet()) }
 
     fun vodItems(kind: String): List<VodItem> {
         val all = vodOf(kind)

@@ -107,6 +107,14 @@ data class Prefs(
     val lists: List<ChannelList> = emptyList(),
     /** Playlist that Movies, Series and Discover use (it must have movies & series switched on). */
     val vodPlaylist: String? = null,
+    /** Hidden movie/series categories, per playlist: "movie|playlistId|Category" or "series|…". */
+    val vodHiddenCats: Set<String> = emptySet(),
+    /** Hidden individual movies/series (VodItem.key). */
+    val vodHiddenTitles: Set<String> = emptySet(),
+    /** Renamed movie/series categories: "movie|Category" → new name. */
+    val vodCatNames: Map<String, String> = emptyMap(),
+    /** Order of movie/series categories: "movie" or "series" → category names in order. */
+    val vodCatOrder: Map<String, List<String>> = emptyMap(),
 ) {
     fun toJson(): JSONObject {
         val o = JSONObject()
@@ -132,6 +140,10 @@ data class Prefs(
         o.put("tmdbKeyEnc", tmdbKeyEnc)
         o.put("myServices", JSONArray().apply { myServices.forEach { put(JSONObject().put("id", it.id).put("name", it.name).put("logo", it.logo ?: "")) } })
         vodPlaylist?.let { o.put("vodPlaylist", it) }
+        o.put("vodHiddenCats", JSONArray(vodHiddenCats.toList()))
+        o.put("vodHiddenTitles", JSONArray(vodHiddenTitles.toList()))
+        o.put("vodCatNames", JSONObject(vodCatNames))
+        o.put("vodCatOrder", JSONObject().apply { vodCatOrder.forEach { (k, l) -> put(k, JSONArray(l)) } })
         o.put("lists", JSONArray().apply { lists.forEach { put(it.toJson()) } })
         o.put("showSuggestions", showSuggestions)
         o.put("dismissedSuggestions", JSONArray(dismissedSuggestions.toList()))
@@ -171,6 +183,10 @@ data class Prefs(
                 myList = o.optJSONArray("myList")?.let { a -> List(a.length()) { VodItem.fromJson(a.getJSONObject(it)) } } ?: emptyList(),
                 tmdbKeyEnc = o.optString("tmdbKeyEnc"),
                 vodPlaylist = o.optString("vodPlaylist").ifBlank { null },
+                vodHiddenCats = strList(o.optJSONArray("vodHiddenCats")).toSet(),
+                vodHiddenTitles = strList(o.optJSONArray("vodHiddenTitles")).toSet(),
+                vodCatNames = strMap(o.optJSONObject("vodCatNames")),
+                vodCatOrder = o.optJSONObject("vodCatOrder")?.let { vo -> vo.keys().asSequence().associateWith { strList(vo.getJSONArray(it)) } } ?: emptyMap(),
                 lists = o.optJSONArray("lists")?.let { a -> List(a.length()) { ChannelList.fromJson(a.getJSONObject(it)) } } ?: emptyList(),
                 showSuggestions = o.optBoolean("showSuggestions", true),
                 dismissedSuggestions = strList(o.optJSONArray("dismissedSuggestions")).toSet(),

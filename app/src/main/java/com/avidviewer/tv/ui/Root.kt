@@ -69,6 +69,18 @@ fun AppRoot(vm: AppViewModel) {
         ListPickerDialog(vm)
         ReorderHelp(vm)
         ListOptionsDialog(vm)
+        VodCategoryOptionsDialog(vm)
+        // The app closed unexpectedly last time: say so once (details stay in Settings › About).
+        if (vm.lastCrash != null && !vm.crashNoticeSeen && vm.screen != Screen.PLAYER) {
+            androidx.compose.material3.AlertDialog(
+                onDismissRequest = { vm.crashNoticeSeen = true },
+                containerColor = C.Surface,
+                title = { Text("Avid Viewer closed unexpectedly", color = C.Text, fontWeight = FontWeight.Bold) },
+                text = { Label("Sorry about that. The details were saved on this device in Settings › Updates & about, so the problem can be found and fixed. Nothing was sent anywhere.", size = 14.sp, color = C.Soft, lines = Int.MAX_VALUE) },
+                confirmButton = { TvButton("OK", primary = true) { vm.crashNoticeSeen = true } },
+                dismissButton = { TvButton("See details") { vm.crashNoticeSeen = true; vm.navSelect(Screen.SETTINGS); vm.settingsSection = "about" } },
+            )
+        }
         // New version found: ask before updating (never interrupts full-screen viewing).
         val rel = vm.update
         if (rel != null && !vm.updatePromptDismissed && vm.screen != Screen.PLAYER) {
@@ -153,6 +165,7 @@ fun VideoSurface(vm: AppViewModel, modifier: Modifier = Modifier, fit: Boolean =
 private fun androidx.compose.foundation.layout.BoxScope.ReorderHelp(vm: AppViewModel) {
     val what = vm.movingGroup?.let { "category “${vm.groupName(it)}”" }
         ?: vm.movingChannel?.let { k -> vm.channel(k)?.let { "channel “${vm.channelName(it)}”" } }
+        ?: vm.vodMovingCat?.let { (k, c) -> "category “${vm.vodCatName(k, c)}”" }
         ?: return
     androidx.compose.foundation.layout.Column(
         Modifier.align(androidx.compose.ui.Alignment.BottomCenter).padding(bottom = 18.dp)

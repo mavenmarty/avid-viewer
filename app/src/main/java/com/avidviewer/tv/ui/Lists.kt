@@ -120,3 +120,31 @@ fun NewListDialog(vm: AppViewModel, onDone: () -> Unit) {
         vm.chooseGroup(vm.activePlaylist()?.id ?: "", g)
     }
 }
+
+/** Menu key on a Movies or Series category: rename, re-order in place, hide. */
+@Composable
+fun VodCategoryOptionsDialog(vm: AppViewModel) {
+    val (kind, cat) = vm.vodCatMenu ?: return
+    var renaming by remember(kind, cat) { mutableStateOf(false) }
+    if (renaming) {
+        RenameDialog("Rename category", vm.vodCatName(kind, cat), onDismiss = { renaming = false }) { vm.renameVodCat(kind, cat, it); renaming = false }
+        return
+    }
+    val cats = vm.vodCategories(kind)
+    val pos = cats.indexOfFirst { it.first == cat }
+    AlertDialog(
+        onDismissRequest = { vm.vodCatMenu = null },
+        containerColor = C.Surface,
+        title = { Text(vm.vodCatName(kind, cat), color = C.Text, fontWeight = FontWeight.Bold) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Label((if (kind == "series") "Series" else "Movies") + " category ${pos + 1} of ${cats.size} · ${cats.getOrNull(pos)?.second ?: 0} titles", size = 13.sp, color = C.Soft, lines = Int.MAX_VALUE)
+                OptionRow("✎  Rename") { renaming = true }
+                OptionRow("⇅  Re-order") { vm.vodCatMenu = null; vm.vodMovingCat = kind to cat }
+                OptionRow("⊘  Hide category") { vm.hideVodCatEverywhere(kind, cat); vm.vodCatMenu = null }
+                Label("Hidden categories come back in Settings › List Editor.", size = 12.sp, lines = Int.MAX_VALUE)
+            }
+        },
+        confirmButton = { TvButton("Done", primary = true) { vm.vodCatMenu = null } },
+    )
+}

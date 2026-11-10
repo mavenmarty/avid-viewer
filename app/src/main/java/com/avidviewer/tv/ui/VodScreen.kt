@@ -1,5 +1,8 @@
 package com.avidviewer.tv.ui
 
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.border
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -87,20 +90,34 @@ fun VodScreen(vm: AppViewModel, kind: String) {
             item { Text(title, color = C.Text, fontSize = 20.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 8.dp, bottom = 8.dp)) }
             items(specials + cats, key = { "c-" + it.first }) { (name, count) ->
                 val on = name == current
+                val special = specials.any { it.first == name }
+                val isMoving = vm.vodMovingCat == (kind to name)
+                val fr = remember { androidx.compose.ui.focus.FocusRequester() }
+                LaunchedEffect(isMoving, cats.indexOfFirst { it.first == name }) { if (isMoving) { delay(50); runCatching { fr.requestFocus() } } }
                 Focusable(
-                    modifier = Modifier.fillMaxWidth().height(36.dp)
-                        .then(if (name == "All") Modifier.entryFocus(vm, if (kind == "series") Screen.SERIES else Screen.MOVIES) else Modifier),
-                    color = if (on) C.Surface2 else Color.Transparent,
-                    onClick = { vm.chooseVodCategory(kind, name) },
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 36.dp).focusRequester(fr)
+                        .then(if (name == "All") Modifier.entryFocus(vm, if (kind == "series") Screen.SERIES else Screen.MOVIES) else Modifier)
+                        .then(if (isMoving) Modifier.border(2.dp, C.AccentFocus, androidx.compose.foundation.shape.RoundedCornerShape(8.dp)) else Modifier)
+                        .onPreviewKeyEvent { e ->
+                            if (!isMoving) false
+                            else reorderKeys(e, onMove = { vm.moveVodCatBy(kind, name, it) }, onTop = { vm.moveVodCatTo(kind, name, 0) },
+                                onBottom = { vm.moveVodCatTo(kind, name, Int.MAX_VALUE) }, onDone = { vm.vodMovingCat = null })
+                        },
+                    color = if (on || isMoving) C.Surface2 else Color.Transparent,
+                    onMenu = if (special) null else ({ if (!isMoving) vm.vodCatMenu = kind to name }),
+                    onClick = { if (isMoving) vm.vodMovingCat = null else vm.chooseVodCategory(kind, name) },
                 ) {
-                    Label((if (on) "▶ " else "") + name, size = 13.sp, color = if (on) C.Text else C.Soft, weight = if (on) FontWeight.Bold else FontWeight.Normal, modifier = Modifier.padding(start = 10.dp).weight(1f))
-                    if (count >= 0) Label("$count", size = 12.sp, modifier = Modifier.padding(end = 10.dp))
+                    val shown = if (special) name else vm.vodCatName(kind, name)
+                    Label((if (isMoving) "⇅ " else if (on) "▶ " else "") + shown, size = 13.sp, color = if (on || isMoving) C.Text else C.Soft, weight = if (on || isMoving) FontWeight.Bold else FontWeight.Normal, lines = 2, modifier = Modifier.padding(start = 10.dp, top = 4.dp, bottom = 4.dp).weight(1f))
+                    if (isMoving) Label("${cats.indexOfFirst { it.first == name } + 1}/${cats.size}", size = 12.sp, color = C.Accent, modifier = Modifier.padding(end = 10.dp))
+                    else if (count >= 0) Label("$count", size = 12.sp, modifier = Modifier.padding(end = 10.dp))
                 }
             }
+            item { Label("Menu on a category: rename, re-order, hide", size = 11.sp, lines = Int.MAX_VALUE, modifier = Modifier.padding(start = 10.dp, top = 8.dp)) }
         }
         Column(Modifier.weight(1f).fillMaxHeight().padding(start = 12.dp, end = 16.dp, top = 14.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(bottom = 10.dp)) {
-                Label(if (vq.isNotBlank()) "Results for “$vq”  ·  ${items.size} titles" else "$current  ·  ${items.size} titles", size = 14.sp, color = C.Soft, weight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                Label(if (vq.isNotBlank()) "Results for “$vq”  ·  ${items.size} titles" else "${vm.vodCatName(kind, current)}  ·  ${items.size} titles", size = 14.sp, color = C.Soft, weight = FontWeight.Bold, modifier = Modifier.weight(1f))
                 var text by remember(kind) { mutableStateOf(vq) }
                 TvField("Search ${title.lowercase()}", text, modifier = Modifier.width(280.dp), imeAction = androidx.compose.ui.text.input.ImeAction.Search,
                     onSubmit = { vm.vodQuery = vm.vodQuery + (kind to text.trim()) }) { text = it }

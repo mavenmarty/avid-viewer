@@ -2,6 +2,7 @@
 
 package com.avidviewer.tv.ui
 
+import androidx.compose.ui.platform.testTag
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.Arrangement
@@ -618,6 +619,14 @@ fun SettingsScreen(vm: AppViewModel) {
                             }
                         }
                         "about" -> {
+                            vm.lastCrash?.let { crash ->
+                                item {
+                                    SettingBlock("Last crash", "The app closed unexpectedly. These details stay on this device; share a photo of them to help fix the problem.") {
+                                        Label(crash.lines().take(14).joinToString("\n"), size = 11.sp, color = C.Soft, lines = Int.MAX_VALUE)
+                                        TvButton("Clear crash report") { vm.clearCrash() }
+                                    }
+                                }
+                            }
                             item {
                                 SettingBlock("App updates", "Installed: version ${vm.installed.second}" + (vm.update?.let { " · version ${it.versionName} available" } ?: "")) {
                                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -875,156 +884,167 @@ private fun androidx.compose.foundation.lazy.LazyListScope.discoverSettings(vm: 
 }
 
 /** Settings › Channels: editing now happens in the TV Guide (Menu key); this lists what's hidden. */
+/** Which part of Settings › List Editor is showing. */
+private enum class LeTab(val title: String) { LIVE("Live TV"), MOVIES("Movies"), SERIES("Series"), LISTS("☰ My lists") }
+
+/** One category in the List Editor: a live category of a playlist, or a movie/series category of a playlist. */
+private data class LeCat(val key: String, val pid: String, val raw: String, val name: String, val count: Int)
+
 /**
- * Settings › List Editor, left to right: playlists → their categories → the channels in the highlighted
- * category. OK shows or hides one row; "Show all" / "Hide all" act on every row in the column
- * (or every row matching the filter).
+ * Settings › List Editor (layout "A"): only showing and hiding, one at a time or in bulk.
+ * Tabs: Live TV · Movies · Series · My lists. Categories from every playlist are grouped under the
+ * playlist's name; highlighting one lists its channels or titles on the right. Rename, re-order and
+ * Add to List live on the Menu key where the item is (TV Guide, Movies, Series).
  */
 @Composable
 private fun ListEditor(vm: AppViewModel) {
-    val pls = vm.playlists
-    var pid by remember { mutableStateOf(vm.activePlaylist()?.id ?: pls.firstOrNull()?.id) }
-    var chs by remember { mutableStateOf<List<com.avidviewer.tv.data.Channel>?>(null) }
-    LaunchedEffect(pid, vm.channels) { chs = null; chs = pid?.let { vm.editorChannels(it) } ?: emptyList() }
-    val all = chs
-    var catFilter by remember(pid) { mutableStateOf("") }
-    var chFilter by remember(pid) { mutableStateOf("") }
-    var catSel by remember(pid) { mutableStateOf<String?>(null) }
-    val groups = remember(all, vm.prefs.groupOrder) { all?.let { vm.editorGroups(it) } ?: emptyList() }
-    val shownGroups = groups.filter { catFilter.isBlank() || vm.groupName(it.first).contains(catFilter, ignoreCase = true) }
-    val cat: String? = catSel?.takeIf { c -> groups.any { it.first == c } } ?: groups.firstOrNull()?.first
-    val p = pls.firstOrNull { it.id == pid }
-
+    var tab by remember { mutableStateOf(LeTab.LIVE) }
     Column(Modifier.fillMaxSize().padding(start = 16.dp, top = 14.dp, end = 16.dp, bottom = 10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-      Text("List Editor", color = C.Text, fontSize = 20.sp, fontWeight = FontWeight.Bold)
-      Label("Choose a playlist, then show or hide its categories and channels. OK switches one row; Show all / Hide all switch every row in that column, or only the rows matching the filter.", size = 12.sp, lines = Int.MAX_VALUE)
-      // 1. Playlists, as buttons across the top so the lists below get the full width
-      if (pls.isEmpty()) Label("No playlists yet. Add one in Settings › Playlists.", size = 13.sp, lines = Int.MAX_VALUE)
-      androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-          pls.forEach { pl ->
-              val note = if (!pl.enabled) " (off)" else if (!pl.liveOn) " (live TV off)" else ""
-              TvButton(pl.name + note, selected = pl.id == pid) { pid = pl.id }
-          }
-          TvButton("☰ My lists (${vm.prefs.lists.size})", selected = pid == LISTS_TAB) { pid = LISTS_TAB }
-      }
-      if (pid == LISTS_TAB) MyListsPane(vm, Modifier.weight(1f).fillMaxWidth())
-      else Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        // 2. Categories of the playlist
-        Column(Modifier.width(260.dp).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            val hiddenCount = groups.count { vm.isGroupHidden(pid ?: "", it.first) }
-            Label("CATEGORIES · ${groups.size}" + if (hiddenCount > 0) " · $hiddenCount hidden" else "", size = 12.sp, weight = FontWeight.Bold)
-            TvField("Filter categories", catFilter, modifier = Modifier.fillMaxWidth()) { catFilter = it }
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                val targets = shownGroups.map { it.first }
-                val n = if (catFilter.isBlank()) "all" else "${targets.size}"
-                TvButton("Show $n") { pid?.let { vm.setGroupsHidden(it, targets, false) } }
-                TvButton("Hide $n") { pid?.let { vm.setGroupsHidden(it, targets, true) } }
-            }
-            when {
-                p == null -> Label("Choose a playlist.", size = 13.sp)
-                !p.liveOn -> Label("Live TV is off for this playlist. Turn it on in Settings › Playlists.", size = 13.sp, lines = Int.MAX_VALUE)
-                all == null -> Label("Loading…", size = 13.sp)
-                groups.isEmpty() -> Label("No channels saved yet. Refresh the playlist in Settings › Playlists.", size = 13.sp, lines = Int.MAX_VALUE)
-            }
-            LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                items(shownGroups, key = { "lg-" + it.first }) { (raw, count) ->
-                    val hidden = vm.isGroupHidden(pid ?: "", raw)
-                    EditorRow(
-                        title = vm.groupName(raw), sub = "$count channels", hidden = hidden, selected = raw == cat,
-                        onFocus = { catSel = raw }, onToggle = { pid?.let { vm.setGroupsHidden(it, listOf(raw), !hidden) } },
-                    )
-                }
+        Text("List Editor", color = C.Text, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+        Label(
+            "Show or hide categories, channels, movies and series — one at a time with OK, or many at once with the filter and Show all / Hide all. " +
+                "To rename, re-order or add to a list, press Menu on the item itself in the TV Guide, Movies or Series.",
+            size = 12.sp, lines = Int.MAX_VALUE,
+        )
+        androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            LeTab.values().forEach { t ->
+                val label = if (t == LeTab.LISTS) "${t.title} (${vm.prefs.lists.size})" else t.title
+                TvButton(label, selected = tab == t, modifier = Modifier.testTag("le-tab-" + t.name)) { tab = t }
             }
         }
-        // 3. Channels in the highlighted category
-        Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            val inCat = remember(all, cat, vm.prefs.channelOrder) { if (all != null && cat != null) vm.editorChannelsIn(all, cat) else emptyList() }
-            val shown = inCat.filter { chFilter.isBlank() || vm.channelName(it).contains(chFilter, ignoreCase = true) }
-            val hiddenCount = inCat.count { it.key in vm.prefs.hiddenChannels }
-            Label(
-                (cat?.let { vm.groupName(it).uppercase() } ?: "CHANNELS") + " · ${inCat.size}" + if (hiddenCount > 0) " · $hiddenCount hidden" else "",
-                size = 12.sp, weight = FontWeight.Bold,
-            )
-            TvField("Filter channels", chFilter, modifier = Modifier.fillMaxWidth()) { chFilter = it }
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-                val keys = shown.map { it.key }
-                val n = if (chFilter.isBlank()) "all" else "${keys.size}"
-                TvButton("Show $n") { vm.setChannelsHidden(keys, false) }
-                TvButton("Hide $n") { vm.setChannelsHidden(keys, true) }
-                if (cat != null && vm.isGroupHidden(pid ?: "", cat)) Label("This category is hidden, so none of these show in the guide.", size = 12.sp, color = C.Soft, lines = Int.MAX_VALUE, modifier = Modifier.weight(1f))
-            }
-            LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                itemsIndexed(shown, key = { i, c -> "lc-$i-${c.key}" }) { _, c ->
-                    val hidden = c.key in vm.prefs.hiddenChannels
-                    EditorRow(
-                        title = vm.channelName(c), sub = null, hidden = hidden, selected = false, logo = c.logo,
-                        onFocus = {}, onToggle = { vm.setChannelsHidden(listOf(c.key), !hidden) },
-                    )
-                }
-            }
+        when (tab) {
+            LeTab.LISTS -> MyListsPane(vm, Modifier.weight(1f).fillMaxWidth())
+            else -> EditorColumns(vm, tab, Modifier.weight(1f).fillMaxWidth())
         }
-    }
     }
 }
 
-private const val LISTS_TAB = "__lists__"
+@Composable
+private fun EditorColumns(vm: AppViewModel, tab: LeTab, modifier: Modifier) {
+    val live = tab == LeTab.LIVE
+    val kind = if (tab == LeTab.SERIES) "series" else "movie"
+    // Live channels of every playlist (hidden ones included), loaded once per visit.
+    var liveData by remember { mutableStateOf<Map<String, List<com.avidviewer.tv.data.Channel>>>(emptyMap()) }
+    LaunchedEffect(live, vm.playlists, vm.channels) {
+        if (live) liveData = vm.playlists.filter { it.liveOn }.associate { it.id to vm.editorChannels(it.id) }
+        else vm.ensureVod()
+    }
+    val vodAll = if (live) emptyList() else vm.vodAll(kind)
+    // Sections: one per playlist, with its categories.
+    val sections: List<Pair<com.avidviewer.tv.data.Playlist, List<LeCat>>> = vm.playlists.map { p ->
+        p to if (live) {
+            liveData[p.id]?.let { chs -> vm.editorGroups(chs).map { (raw, n) -> LeCat("L|${p.id}|$raw", p.id, raw, vm.groupName(raw), n) } } ?: emptyList()
+        } else {
+            val counts = LinkedHashMap<String, Int>()
+            vodAll.filter { it.playlistId == p.id }.forEach { val c = it.category.ifBlank { "Other" }; counts[c] = (counts[c] ?: 0) + 1 }
+            vm.orderVodCats(kind, counts.keys.toList()).map { LeCat(vm.vodCatKey(kind, p.id, it), p.id, it, vm.vodCatName(kind, it), counts[it] ?: 0) }
+        }
+    }
+    fun hidden(c: LeCat) = if (live) vm.isGroupHidden(c.pid, c.raw) else c.key in vm.prefs.vodHiddenCats
+    fun setHidden(cs: List<LeCat>, h: Boolean) {
+        if (live) cs.groupBy { it.pid }.forEach { (pid, l) -> vm.setGroupsHidden(pid, l.map { it.raw }, h) }
+        else vm.setVodCatsHidden(cs.map { it.key }, h)
+    }
+    var catQ by remember(tab) { mutableStateOf("") }
+    var itemQ by remember(tab) { mutableStateOf("") }
+    var selKey by remember(tab) { mutableStateOf<String?>(null) }
+    val filtered = sections.map { (p, l) -> p to l.filter { catQ.isBlank() || it.name.contains(catQ, ignoreCase = true) } }
+    val allShown = filtered.flatMap { it.second }
+    val sel = allShown.firstOrNull { it.key == selKey } ?: allShown.firstOrNull()
 
-/** List Editor › My lists: show, hide, rename, reorder or remove the lists you made. */
+    Row(modifier, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        // Categories, grouped by playlist
+        Column(Modifier.width(320.dp).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            val hidCount = allShown.count { hidden(it) }
+            Label("CATEGORIES · ${allShown.size}" + if (hidCount > 0) " · $hidCount hidden" else "", size = 12.sp, weight = FontWeight.Bold)
+            TvField("Filter categories", catQ, modifier = Modifier.fillMaxWidth()) { catQ = it }
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                val n = if (catQ.isBlank()) "all" else "${allShown.size}"
+                TvButton("Show $n", modifier = Modifier.testTag("le-cats-show")) { setHidden(allShown, false) }
+                TvButton("Hide $n", modifier = Modifier.testTag("le-cats-hide")) { setHidden(allShown, true) }
+            }
+            if (!live && vm.vodLoading && vodAll.isEmpty()) Label("Loading movies and series…", size = 13.sp)
+            LazyColumn(Modifier.weight(1f).testTag("le-cats"), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                filtered.forEach { (p, cats) ->
+                    item(key = "h-" + p.id) {
+                        val off = when {
+                            !p.enabled -> " · playlist is off"
+                            live && !p.liveOn -> " · live TV is off"
+                            !live && !p.vodOn -> " · movies & series are off"
+                            cats.isEmpty() -> if (catQ.isBlank()) " · nothing saved yet" else " · no matches"
+                            else -> ""
+                        }
+                        Label(p.name.uppercase() + off, size = 11.sp, weight = FontWeight.Bold, lines = 2, modifier = Modifier.padding(start = 4.dp, top = 8.dp, bottom = 2.dp))
+                    }
+                    items(cats, key = { "c-" + it.key }) { c ->
+                        val h = hidden(c)
+                        EditorRow(
+                            title = c.name, sub = "${c.count} " + if (live) "channels" else "titles", hidden = h, selected = c.key == sel?.key,
+                            onFocus = { selKey = c.key; itemQ = "" }, onToggle = { setHidden(listOf(c), !h) },
+                        )
+                    }
+                }
+            }
+        }
+        // What's in the highlighted category
+        Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            if (sel == null) {
+                Label("Choose a category on the left.", size = 13.sp)
+                return@Column
+            }
+            val chs = if (live) vm.editorChannelsIn(liveData[sel.pid] ?: emptyList(), sel.raw) else emptyList()
+            val titles = if (live) emptyList() else vodAll.filter { it.playlistId == sel.pid && it.category.ifBlank { "Other" } == sel.raw }
+            val total = if (live) chs.size else titles.size
+            val hiddenN = if (live) chs.count { it.key in vm.prefs.hiddenChannels } else titles.count { it.key in vm.prefs.vodHiddenTitles }
+            Label(sel.name.uppercase() + " · $total" + (if (hiddenN > 0) " · $hiddenN hidden" else ""), size = 12.sp, weight = FontWeight.Bold, lines = 2)
+            TvField(if (live) "Filter channels" else "Filter titles", itemQ, modifier = Modifier.fillMaxWidth()) { itemQ = it }
+            val shownChs = chs.filter { itemQ.isBlank() || vm.channelName(it).contains(itemQ, ignoreCase = true) }
+            val shownTitles = titles.filter { itemQ.isBlank() || it.name.contains(itemQ, ignoreCase = true) }
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                val n = if (itemQ.isBlank()) "all" else "${if (live) shownChs.size else shownTitles.size}"
+                TvButton("Show $n", modifier = Modifier.testTag("le-items-show")) {
+                    if (live) vm.setChannelsHidden(shownChs.map { it.key }, false) else vm.setVodTitlesHidden(shownTitles.map { it.key }, false)
+                }
+                TvButton("Hide $n", modifier = Modifier.testTag("le-items-hide")) {
+                    if (live) vm.setChannelsHidden(shownChs.map { it.key }, true) else vm.setVodTitlesHidden(shownTitles.map { it.key }, true)
+                }
+                if (hidden(sel)) Label("This category is hidden, so none of these show.", size = 12.sp, color = C.Soft, lines = 2, modifier = Modifier.weight(1f))
+            }
+            LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                if (live) itemsIndexed(shownChs, key = { i, c -> "lc-$i-${c.key}" }) { _, c ->
+                    val h = c.key in vm.prefs.hiddenChannels
+                    EditorRow(title = vm.channelName(c), sub = null, hidden = h, selected = false, logo = c.logo, onFocus = {}, onToggle = { vm.setChannelsHidden(listOf(c.key), !h) })
+                } else itemsIndexed(shownTitles, key = { i, v -> "lv-$i-${v.key}" }) { _, v ->
+                    val h = v.key in vm.prefs.vodHiddenTitles
+                    EditorRow(title = v.name, sub = null, hidden = h, selected = false, logo = v.logo, onFocus = {}, onToggle = { vm.setVodTitlesHidden(listOf(v.key), !h) })
+                }
+            }
+        }
+    }
+}
+
+/** List Editor › My lists: show or hide the lists you made. Rename, re-order and delete are on Menu in the TV Guide. */
 @Composable
 private fun MyListsPane(vm: AppViewModel, modifier: Modifier) {
-    var renaming by remember { mutableStateOf<String?>(null) }
-    var removing by remember { mutableStateOf<String?>(null) }
-    var naming by remember { mutableStateOf(false) }
     val lists = vm.prefs.lists
     LazyColumn(modifier, verticalArrangement = Arrangement.spacedBy(6.dp)) {
         item {
-            Label("★ Favorites is always first and can't be removed. Hidden lists keep their channels but don't appear in the TV Guide; show them again any time.", size = 12.sp, lines = Int.MAX_VALUE)
+            Label("Hidden lists keep their channels but don't appear in the TV Guide. To rename, re-order or delete a list, press Menu on it in the TV Guide's category list. ★ Favorites is always shown.", size = 12.sp, lines = Int.MAX_VALUE)
         }
-        item {
-            Row(Modifier.fillMaxWidth().heightIn(min = 52.dp).clip(RoundedCornerShape(10.dp)).background(C.Surface).padding(horizontal = 12.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Label("★ Favorites", size = 14.sp, color = C.Text, weight = FontWeight.SemiBold)
-                    Label("${vm.prefs.favorites.size} channels", size = 12.sp)
-                }
-                Label("Always shown", size = 12.sp, color = C.Accent, weight = FontWeight.Bold)
+        if (lists.isNotEmpty()) item {
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                TvButton("Show all") { lists.forEach { vm.setListHidden(LIST_PREFIX + it.id, false) } }
+                TvButton("Hide all") { lists.forEach { vm.setListHidden(LIST_PREFIX + it.id, true) } }
             }
         }
-        if (lists.isEmpty()) item { Label("You haven't made any lists yet.", size = 13.sp, lines = Int.MAX_VALUE) }
-        itemsIndexed(lists, key = { _, l -> "ml-" + l.id }) { i, l ->
-            val g = LIST_PREFIX + l.id
-            Row(
-                Modifier.fillMaxWidth().heightIn(min = 56.dp).clip(RoundedCornerShape(10.dp)).background(C.Surface).padding(horizontal = 8.dp, vertical = 6.dp),
-                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
-                TvButton(if (l.hidden) "Hidden" else "Shown", selected = !l.hidden) { vm.setListHidden(g, !l.hidden) }
-                Column(Modifier.weight(1f).padding(horizontal = 6.dp)) {
-                    Label(l.name, size = 14.sp, color = if (l.hidden) C.Muted else C.Text, weight = FontWeight.SemiBold, lines = 2)
-                    Label("${l.keys.size} channels" + if (l.hidden) " · not in the TV Guide" else "", size = 12.sp)
-                }
-                TvButton("✎ Rename") { renaming = g }
-                TvButton("▲") { if (i > 0) vm.moveList(g, -1) }
-                TvButton("▼") { if (i < lists.size - 1) vm.moveList(g, 1) }
-                TvButton("Remove") { removing = g }
-            }
+        item { EditorRow(title = "★ Favorites", sub = "${vm.prefs.favorites.size} channels · always shown", hidden = false, selected = false, onFocus = {}, onToggle = {}) }
+        if (lists.isEmpty()) item { Label("You haven't made any lists yet. In the TV Guide, press Menu on a channel and choose Add to List.", size = 13.sp, lines = Int.MAX_VALUE) }
+        items(lists, key = { "ml-" + it.id }) { l ->
+            EditorRow(
+                title = l.name, sub = "${l.keys.size} channels" + if (l.hidden) " · not in the TV Guide" else "", hidden = l.hidden, selected = false,
+                onFocus = {}, onToggle = { vm.setListHidden(LIST_PREFIX + l.id, !l.hidden) },
+            )
         }
-        item { TvButton("＋ New list", primary = true) { naming = true } }
-    }
-    renaming?.let { g ->
-        RenameDialog("Rename list", vm.userList(g)?.name ?: "", onDismiss = { renaming = null }) { vm.renameList(g, it); renaming = null }
-    }
-    if (naming) RenameDialog("New list", "", onDismiss = { naming = false }) { vm.createList(it); naming = false }
-    removing?.let { g ->
-        val l = vm.userList(g)
-        val cancel = remember { FocusRequester() }
-        androidx.compose.material3.AlertDialog(
-            onDismissRequest = { removing = null },
-            containerColor = C.Surface,
-            title = { Text("Remove “${l?.name ?: "list"}”?", color = C.Text, fontWeight = FontWeight.Bold) },
-            text = { Label("The list is deleted. Its ${l?.keys?.size ?: 0} channel(s) stay in your playlists. This can't be undone; to keep it for later, hide it instead.", size = 14.sp, color = C.Soft, lines = Int.MAX_VALUE) },
-            confirmButton = { TvButton("Remove", primary = true) { vm.deleteList(g); removing = null } },
-            dismissButton = { TvButton("Cancel", modifier = Modifier.focusRequester(cancel)) { removing = null } },
-        )
-        LaunchedEffect(g) { kotlinx.coroutines.delay(80); runCatching { cancel.requestFocus() } }
     }
 }
 
