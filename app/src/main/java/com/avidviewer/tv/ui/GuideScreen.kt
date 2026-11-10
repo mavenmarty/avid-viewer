@@ -1,5 +1,7 @@
 package com.avidviewer.tv.ui
 
+import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.background
 import androidx.compose.material3.Text
@@ -73,6 +75,12 @@ fun GuideScreen(vm: AppViewModel) {
     val winStart = base + slots * half
     val winEnd = winStart + WINDOW_MIN * 60 * 1000L
     var focusProg by remember { mutableStateOf<Pair<String, Program?>?>(null) }
+    /** Which channel name cell has the highlight (-1 = none). */
+    var focusedRow by remember { mutableStateOf(-1) }
+    /** The channel (by key) whose name cell has the highlight; survives rows being replaced. */
+    var focusedKey by remember { mutableStateOf<String?>(null) }
+    val previewFr = remember { FocusRequester() }
+
     // The time the highlight is on. Up/Down lands on the program airing at this time in the next row,
     // whatever the run times are; it only changes when you move left or right.
     var anchor by remember { mutableStateOf(vm.now) }
@@ -91,28 +99,45 @@ fun GuideScreen(vm: AppViewModel) {
     var pendingFocus by remember { mutableStateOf<Int?>(null) }
 
     // Scroll to and focus the current channel (at startup and when returning from full screen).
-    LaunchedEffect(vm.guideFocusTick) {
+    LaunchedEffect(vm.guideFocusTick, list.isNotEmpty()) {
         val mode = vm.guideFocusMode
-        vm.guideFocusMode = GuideFocus.CURRENT
+        vm.trail("tick${vm.guideFocusTick} $mode n=${list.size} nav=${vm.navMode}")
         if (list.isEmpty() || vm.navMode != NavMode.GROUPS) return@LaunchedEffect
-        delay(150)
+        repeat(9) { androidx.compose.runtime.withFrameNanos { } }
+        vm.trail("go $mode")
+        // Only now is the request used up (if the screen was rebuilt during the pause, the new one uses it).
+        vm.guideFocusMode = GuideFocus.CURRENT
         when (mode) {
             // Newly chosen category: start at the top.
-            GuideFocus.TOP -> { listState.scrollToItem(0); pendingFocus = 0 }
+            GuideFocus.TOP -> { scope.launch { listState.scrollToItem(0) }; pendingFocus = 0 }
             // Same category again: stay where the list was.
             GuideFocus.KEEP -> pendingFocus = listState.firstVisibleItemIndex.coerceIn(0, list.size - 1)
             // Startup or back from full screen: the channel that was playing.
             GuideFocus.CURRENT -> {
                 val idx = list.indexOfFirst { it.key == vm.currentKey }.let { if (it < 0) 0 else it }
-                listState.scrollToItem((idx - 2).coerceAtLeast(0))
+                scope.launch { listState.scrollToItem((idx - 2).coerceAtLeast(0)) }
                 pendingFocus = idx
             }
         }
     }
     LaunchedEffect(pendingFocus) {
         val i = pendingFocus ?: return@LaunchedEffect
-        delay(60)
-        runCatching { rowFocus[i].requestFocus() }
+        // Keep asking each frame (up to ~2 s) until that channel really has the highlight: on a slow
+        // device the row may not be ready at once. A button press in the meantime wins.
+        val started = android.os.SystemClock.uptimeMillis()
+        val want = list.getOrNull(i)?.key
+        vm.trail("want $i")
+        var held = 0
+        for (frame in 0 until 120) {
+            androidx.compose.runtime.withFrameNanos { }
+            if (vm.lastKeyAt > started) break
+            // Done once the highlight has stayed there for a few frames (something else may grab it right after).
+            if (focusedKey == want) { if (++held >= 12) break; continue }
+            held = 0
+            val r = runCatching { rowFocus.getOrNull(i)?.requestFocus() }
+            if (frame % 20 == 0) vm.trail("f$frame fk=$focusedKey ${r.exceptionOrNull()?.javaClass?.simpleName ?: "ok"}")
+        }
+        vm.trail("end fk=$focusedKey")
         pendingFocus = null
     }
     // Re-ordering a channel: keep it on screen and highlighted as it moves.
@@ -131,13 +156,29 @@ fun GuideScreen(vm: AppViewModel) {
     }
     LaunchedEffect(pendingProg, slots) {
         val i = pendingProg ?: return@LaunchedEffect
-        delay(40)
-        runCatching { progFocus[i].requestFocus() }
+        // Retry for a few frames: the row may still be coming on screen after a scroll.
+        for (frame in 0 until 30) {
+            androidx.compose.runtime.withFrameNanos { }
+            if (runCatching { progFocus[i].requestFocus() }.isSuccess && frame > 1) break
+        }
         pendingProg = null
     }
 
+    /** Puts the highlight on a channel name row, scrolling it into view (used for wrap-around). */
+    fun wrapTo(i: Int) {
+        val target = if (i == 0) 0 else (i - (listState.layoutInfo.visibleItemsInfo.size - 2)).coerceAtLeast(0)
+        scope.launch { listState.scrollToItem(target) }
+        pendingFocus = i
+    }
+
     /** Up/Down from a program: go to the program airing at [anchor] in the row above or below. */
-    fun moveRow(from: Int, dir: Int, steps: Int = 1): Boolean {
+    fun moveRow(from: Int, dir: Int, steps: Int = 1, fresh: Boolean = false): Boolean {
+        // Down on the last row (a fresh press) wraps to the first row, keeping the time; Up on the first row
+        // goes to the header as before (Up again from the top of the screen wraps to the last row).
+        if (dir > 0 && from == list.lastIndex && fresh && list.size > 1) {
+            scope.launch { listState.scrollToItem(0); pendingProg = 0 }
+            return true
+        }
         if (from + dir !in list.indices) return false
         val target = (from + dir * steps).coerceIn(0, list.size - 1)
         val visible = listState.layoutInfo.visibleItemsInfo.map { it.index }
@@ -188,9 +229,15 @@ fun GuideScreen(vm: AppViewModel) {
         },
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        // Preview window + details of the focused show
-        Row(Modifier.fillMaxWidth().height(130.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            PreviewWindow(vm, Modifier.width(231.dp).fillMaxHeight(), onOpen = { vm.openFullScreen(vm.currentKey, PlayContext.GROUP) })
+        // Preview window + details of the focused show. Up from the top of the screen wraps to the last channel.
+        Row(
+            Modifier.fillMaxWidth().height(130.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            PreviewWindow(vm, Modifier.width(231.dp).fillMaxHeight().focusRequester(previewFr).onPreviewKeyEvent { e ->
+                // Up from the preview (the top of the screen) wraps to the last channel; a fresh press only.
+                if (e.type == KeyEventType.KeyDown && e.key == Key.DirectionUp && e.nativeKeyEvent.repeatCount == 0 && list.size > 1) { wrapTo(list.lastIndex); true } else false
+            }, onOpen = { vm.openFullScreen(vm.currentKey, PlayContext.GROUP) })
             val fc = vm.channel(focusProg?.first ?: vm.currentKey)
             val fp = focusProg?.second ?: vm.nowNext(fc).first
             Column(Modifier.weight(1f).fillMaxHeight().clip(RoundedCornerShape(10.dp)).background(C.Surface).padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -234,12 +281,19 @@ fun GuideScreen(vm: AppViewModel) {
                         val isMoving = c.key == vm.movingChannel
                         Focusable(
                             modifier = Modifier.width(CH_COL.dp).fillMaxHeight().focusRequester(rowFocus[idx])
+                                .then(if (idx == 0) Modifier.focusProperties { up = previewFr } else Modifier)
                                 .then(if (isMoving) Modifier.border(2.dp, C.AccentFocus, RoundedCornerShape(8.dp)) else Modifier)
-                                .onFocusChanged { if (isMoving) movingFocused = it.isFocused }
+                                .onFocusChanged {
+                                    if (isMoving) movingFocused = it.isFocused
+                                    if (it.isFocused) { focusedRow = idx; focusedKey = c.key } else if (focusedKey == c.key) { focusedRow = -1; focusedKey = null }
+                                }
                                 .onPreviewKeyEvent { e ->
-                                    if (!isMoving) false
-                                    else reorderKeys(e, onMove = { vm.moveChannelBy(c.key, it) }, onTop = { vm.moveChannelTo(c.key, 0) },
+                                    if (isMoving) reorderKeys(e, onMove = { vm.moveChannelBy(c.key, it) }, onTop = { vm.moveChannelTo(c.key, 0) },
                                         onBottom = { vm.moveChannelTo(c.key, Int.MAX_VALUE) }, onDone = { vm.movingChannel = null })
+                                    // Down on the last channel (a fresh press, not a hold) goes back to the first.
+                                    else if (e.type == KeyEventType.KeyDown && e.key == Key.DirectionDown && idx == list.lastIndex && e.nativeKeyEvent.repeatCount == 0 && list.size > 1) {
+                                        wrapTo(0); true
+                                    } else false
                                 },
                             color = if (isMoving) C.Surface2 else C.Surface,
                             onFocus = { focusProg = c.key to vm.nowNext(c).first },
@@ -262,8 +316,8 @@ fun GuideScreen(vm: AppViewModel) {
                                     .onPreviewKeyEvent { e ->
                                         if (e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
                                         when (e.key) {
-                                            Key.DirectionUp -> moveRow(idx, -1, holdSteps(e))
-                                            Key.DirectionDown -> moveRow(idx, 1, holdSteps(e))
+                                            Key.DirectionUp -> moveRow(idx, -1, holdSteps(e), e.nativeKeyEvent.repeatCount == 0)
+                                            Key.DirectionDown -> moveRow(idx, 1, holdSteps(e), e.nativeKeyEvent.repeatCount == 0)
                                             else -> false
                                         }
                                     },
@@ -287,8 +341,8 @@ fun GuideScreen(vm: AppViewModel) {
                                         .onPreviewKeyEvent { e ->
                                             if (e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
                                             when (e.key) {
-                                                Key.DirectionUp -> moveRow(idx, -1, holdSteps(e))
-                                                Key.DirectionDown -> moveRow(idx, 1, holdSteps(e))
+                                                Key.DirectionUp -> moveRow(idx, -1, holdSteps(e), e.nativeKeyEvent.repeatCount == 0)
+                                                Key.DirectionDown -> moveRow(idx, 1, holdSteps(e), e.nativeKeyEvent.repeatCount == 0)
                                                 // Last program in view: scroll the guide forward to the next program.
                                                 Key.DirectionRight -> if (pi == progs.lastIndex && slots < maxSlots) { shiftTo(maxOf(p.end, winEnd - 60_000L), idx, true); true } else false
                                                 // First program in view: scroll back (at the start, Left goes to the channel name).

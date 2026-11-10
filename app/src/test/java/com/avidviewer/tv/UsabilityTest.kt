@@ -117,8 +117,8 @@ class UsabilityTest {
         val threads = Thread.getAllStackTraces().filter { (t, _) -> t.name.startsWith("DefaultDispatcher") || t.name == "main" || t.name.contains("Test worker") }
             .entries.joinToString("\n\n") { (t, st) -> t.name + " (" + t.state + ")\n  " + st.take(14).joinToString("\n  ") }
         throw AssertionError(
-            "Timed out waiting for: $what\n" +
-                "status=${vm.status} vodError=${vm.vodError} vodLoading=${vm.vodLoading} vod=${vm.vod.size} " +
+            "Timed out waiting for: $what\nfocus now: ${focused()} · screen=${vm.screen} nav=${vm.navMode} group=${vm.selectedGroup}\n" +
+                "guide=${vm.focusTrail.toList().takeLast(12)} status=${vm.status} vodError=${vm.vodError} vodLoading=${vm.vodLoading} vod=${vm.vod.size} " +
                 "vodPlaylists=${vm.vodPlaylists.map { it.id }} searching=${vm.searching} results=${vm.searchResults?.size}\n\n$threads",
         )
     }
@@ -160,7 +160,7 @@ class UsabilityTest {
     fun dpadMovesThroughTheGuideAndBackLeavesCategories() {
         rule.runOnIdle { vm.chooseGroup(TestData.P1, "NEWS") }
         settle()
-        rule.onAllNodesWithText("NEWS Channel 1 with", substring = true).onFirst().requestFocus()
+        rule.onAllNodes(androidx.compose.ui.test.hasText("NEWS Channel 1 with", substring = true) and androidx.compose.ui.test.hasClickAction()).onFirst().requestFocus()
         press(listOf(Key.DirectionDown, Key.DirectionDown, Key.DirectionRight, Key.DirectionRight, Key.DirectionLeft, Key.DirectionUp))
         assertEquals(NavMode.GROUPS, vm.navMode)
         press(listOf(Key.Back))
@@ -173,7 +173,7 @@ class UsabilityTest {
         settle()
         val first = vm.channelsIn("KIDS").first().key
         // As a viewer would: highlight the channel name, press Menu, choose Re-order.
-        rule.onAllNodesWithText("KIDS Channel 1 with", substring = true).onFirst().requestFocus()
+        rule.onAllNodes(androidx.compose.ui.test.hasText("KIDS Channel 1 with", substring = true) and androidx.compose.ui.test.hasClickAction()).onFirst().requestFocus()
         settle()
         press(listOf(Key.Menu))
         waitFor("channel options to open") { rule.onAllNodesWithText("Re-order", substring = true).fetchSemanticsNodes().isNotEmpty() }
@@ -273,7 +273,7 @@ class UsabilityTest {
         assertTrue(vm.groups().isEmpty())
         rule.onNodeWithTag("le-cats-show").performClick()
         settle()
-        assertEquals(6, vm.groups().size)
+        assertEquals(7, vm.groups().size)
     }
 
     @Test
@@ -347,6 +347,158 @@ class UsabilityTest {
         rule.onNodeWithTag("backup-now").performClick()
         settle()
         assertTrue(rule.onAllNodesWithText("Choose a PIN for this backup").fetchSemanticsNodes().isNotEmpty())
+    }
+
+    // ---------------------------------------------------------------- reported bugs (Nov 10)
+
+    /** Holds a remote button: a key down, [repeats] auto-repeats (like holding it), then the key up. */
+    private fun hold(k: Key, repeats: Int) {
+        val code = k.nativeKeyCode
+        rule.runOnUiThread {
+            val target = topWindowView() ?: rule.activity.window.decorView
+            val t = android.os.SystemClock.uptimeMillis()
+            for (r in 0..repeats) target.dispatchKeyEvent(AndroidKeyEvent(t, t + r * 50L, AndroidKeyEvent.ACTION_DOWN, code, r))
+            target.dispatchKeyEvent(AndroidKeyEvent(t, t + repeats * 50L + 40, AndroidKeyEvent.ACTION_UP, code, 0))
+        }
+        settle()
+    }
+
+    /** A tiny Xtream Codes provider on this machine: a login, and a series with two seasons of episodes. */
+    private class FakeProvider : AutoCloseable {
+        private val socket = java.net.ServerSocket(0, 50, java.net.InetAddress.getByName("127.0.0.1"))
+        val port get() = socket.localPort
+        private val thread = Thread {
+            while (!socket.isClosed) {
+                val c = runCatching { socket.accept() }.getOrNull() ?: break
+                runCatching {
+                    c.use { conn ->
+                        val reader = conn.getInputStream().bufferedReader()
+                        val requestLine = reader.readLine() ?: return@use
+                        while (true) { val l = reader.readLine() ?: break; if (l.isEmpty()) break }
+                        val target = requestLine.split(" ").getOrElse(1) { "/" }
+                        val body = when {
+                            target.contains("xmltv") -> "<tv></tv>"
+                            target.contains("action=get_series_info") -> """{"info":{"name":"Test Show","plot":"A show for testing."},"episodes":{
+                                "1":[{"id":"101","episode_num":1,"title":"Pilot","container_extension":"mp4","info":{"duration":"00:42:00"}},
+                                     {"id":"102","episode_num":2,"title":"Second","container_extension":"mp4","info":{}}],
+                                "2":[{"id":"201","episode_num":1,"title":"Season Two Opener","container_extension":"mkv","info":{}}]}}"""
+                            target.contains("action=") -> "[]"
+                            else -> """{"user_info":{"auth":1,"status":"Active"},"server_info":{}}"""
+                        }.toByteArray()
+                        val out = conn.getOutputStream()
+                        out.write("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: ${body.size}\r\nConnection: close\r\n\r\n".toByteArray())
+                        out.write(body); out.flush()
+                    }
+                }
+            }
+        }.apply { isDaemon = true; start() }
+        override fun close() { runCatching { socket.close() } }
+    }
+
+    @Test
+    fun seriesEpisodeCanBeReachedWithTheRemoteAndPlays() {
+        FakeProvider().use { server ->
+            rule.runOnIdle { vm.addPlaylist("Fake provider", "xtream", "http://127.0.0.1:${server.port}", "u", "", "", "", liveOn = false, vodOn = true) }
+            waitFor("the provider to be added (status=${vm.status})") { vm.playlists.any { it.name == "Fake provider" } }
+            val pid = vm.playlists.first { it.name == "Fake provider" }.id
+            go(Screen.SERIES)
+            rule.runOnIdle { vm.openVodDetail(com.avidviewer.tv.data.VodItem("$pid:s77", pid, "series", "Test Show", null, "", seriesId = "77", category = "Shows")) }
+            waitFor("episodes to load") { vm.detailEpisodes?.isNotEmpty() == true }
+            // As a viewer: from the page's first button, press Down until an episode is highlighted.
+            var tries = 0
+            while (!focused().contains("Pilot") && tries < 10) { press(listOf(Key.DirectionDown)); tries++ }
+            assertTrue("couldn't reach an episode with Down (focus: ${focused()})", focused().contains("Pilot"))
+            press(listOf(Key.DirectionCenter))
+            waitFor("the episode to play (screen=${vm.screen}, focus=${focused()})") { vm.screen == Screen.PLAYER }
+            assertTrue(vm.vodPlaying!!.name, vm.vodPlaying!!.name.contains("S1 E1"))
+            // Back to the series page, then season 2.
+            press(listOf(Key.Back))
+            waitFor("back on the series page") { vm.screen == Screen.SERIES && vm.vodDetail != null }
+            // The highlight comes back on the episode that was playing.
+            waitFor("back on the episode that played (focus: ${focused()})") { focused().contains("Pilot") }
+            // With the remote: Up to the season buttons, Right to Season 2, OK.
+            tries = 0
+            while (!focused().contains("Season 1") && tries < 6) { press(listOf(Key.DirectionUp)); tries++ }
+            assertTrue("couldn't reach the season buttons (focus: ${focused()}, trail=${vm.focusTrail.toList().takeLast(12)})", focused().contains("Season 1"))
+            press(listOf(Key.DirectionRight))
+            assertTrue("Right didn't reach Season 2 (focus: ${focused()})", focused().contains("Season 2"))
+            press(listOf(Key.DirectionCenter))
+            tries = 0
+            while (!focused().contains("Season Two Opener") && tries < 10) { press(listOf(Key.DirectionDown)); tries++ }
+            assertTrue("couldn't reach a season 2 episode (focus: ${focused()})", focused().contains("Season Two Opener"))
+        }
+    }
+
+    @Test
+    fun backFromFullScreenReturnsToTheChannelFarDownTheList() {
+        rule.runOnIdle { vm.chooseGroup(TestData.P1, "BIG") }
+        waitFor("the long category") { focused().contains("BIG Channel 1 with") }
+        hold(Key.DirectionDown, 25)
+        var tries = 0
+        while (!focused().contains("BIG Channel 60 with") && tries < 70) {
+            press(listOf(if (Regex("BIG Channel (\\d+) ").find(focused())?.groupValues?.get(1)?.toInt()?.let { it > 60 } == true) Key.DirectionUp else Key.DirectionDown)); tries++
+        }
+        assertTrue("couldn't get to channel 60 (focus: ${focused()})", focused().contains("BIG Channel 60 with"))
+        press(listOf(Key.DirectionCenter)) // preview
+        press(listOf(Key.DirectionCenter)) // full screen
+        waitFor("full screen") { vm.screen == Screen.PLAYER }
+        press(listOf(Key.Back))
+        waitFor("back in the guide on channel 60 (focus: ${focused()})") { vm.screen == Screen.GUIDE && focused().contains("BIG Channel 60 with") }
+    }
+
+    @Test
+    fun channelAndCategoryListsWrapAround() {
+        rule.runOnIdle { vm.chooseGroup(TestData.P1, "KIDS") }
+        waitFor("KIDS channel 1 highlighted") { focused().contains("KIDS Channel 1 with") }
+        // Down on the last channel goes to the first; Up from the top (past the header) to the last.
+        press(listOf(Key.DirectionUp))
+        if (!focused().contains("KIDS Channel 12 ")) press(listOf(Key.DirectionUp))
+        waitFor("Up wraps to the last channel (focus: ${focused()})") { focused().contains("KIDS Channel 12 ") }
+        press(listOf(Key.DirectionDown))
+        waitFor("Down wraps to the first channel (focus: ${focused()})") { focused().contains("KIDS Channel 1 with") }
+        // Holding doesn't wrap: it stops at the end.
+        hold(Key.DirectionUp, 30)
+        assertTrue("holding wrapped (focus: ${focused()})", !focused().contains("KIDS Channel 12 "))
+        // Categories: Down on the last one goes to the top of the list.
+        rule.onNode(androidx.compose.ui.test.hasText("BIG") and androidx.compose.ui.test.hasClickAction()).requestFocus()
+        settle()
+        val last = vm.groups().last().name
+        rule.onNode(androidx.compose.ui.test.hasText(last) and androidx.compose.ui.test.hasClickAction()).requestFocus()
+        settle()
+        press(listOf(Key.DirectionDown))
+        waitFor("Down on the last category wraps to the top (focus: ${focused()})") { focused().contains("Menu") || focused().contains("Favorites") }
+        // Movies categories
+        go(Screen.MOVIES)
+        waitFor("movies") { vm.vodOf("movie").isNotEmpty() }
+        waitFor("All highlighted") { focused().contains("All") }
+        press(listOf(Key.DirectionUp))
+        val lastCat = vm.vodCatName("movie", vm.vodCategories("movie").last().first)
+        waitFor("Up from All wraps to the last movie category (focus: ${focused()})") { focused().contains(lastCat) }
+        press(listOf(Key.DirectionDown))
+        waitFor("Down from the last category wraps to All (focus: ${focused()})") { focused().contains("All") }
+    }
+
+    /** Press-and-hold through every screen (the reported lock-ups and crashes). */
+    @Test
+    fun holdingButtonsEverywhereNeverLocksOrCrashes() {
+        val screens = listOf(Screen.GUIDE, Screen.MOVIES, Screen.SERIES, Screen.SETTINGS, Screen.SPORTS, Screen.SEARCH, Screen.DISCOVER)
+        val rnd = Random(1110)
+        val dirs = listOf(Key.DirectionDown, Key.DirectionUp, Key.DirectionRight, Key.DirectionLeft)
+        for (round in 0 until 3) for (s in screens) try {
+            go(s)
+            if (s == Screen.GUIDE) rule.runOnIdle { vm.chooseGroup(TestData.P1, "BIG") }
+            settle()
+            repeat(12) {
+                hold(dirs[rnd.nextInt(dirs.size)], 5 + rnd.nextInt(40))
+                press(listOf(dirs[rnd.nextInt(dirs.size)]))
+            }
+            // After holding, the remote must still move the highlight.
+            val before = focused()
+            press(listOf(Key.DirectionDown)); press(listOf(Key.DirectionUp)); press(listOf(Key.DirectionRight)); press(listOf(Key.DirectionLeft))
+            assertTrue("highlight lost after holding on $s", focused() != "(nothing focused)" || before == "(nothing focused)")
+        } catch (e: Throwable) {
+            throw AssertionError("Holding failed on $s round $round (focus: ${focused()})", e)
+        }
     }
 
     // ---------------------------------------------------------------- hold to accelerate

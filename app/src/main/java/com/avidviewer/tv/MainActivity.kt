@@ -61,6 +61,19 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun dispatchKeyEvent(event: android.view.KeyEvent): Boolean {
+        val handled = super.dispatchKeyEvent(event)
+        // A remote arrow or OK that reached nothing because nothing is highlighted: put the highlight back.
+        if (!handled && event.action == android.view.KeyEvent.ACTION_DOWN && !vm.anyFocus && event.keyCode in rescueKeys) vm.focusRescue++
+        return handled
+    }
+
+    private val rescueKeys = setOf(
+        android.view.KeyEvent.KEYCODE_DPAD_UP, android.view.KeyEvent.KEYCODE_DPAD_DOWN,
+        android.view.KeyEvent.KEYCODE_DPAD_LEFT, android.view.KeyEvent.KEYCODE_DPAD_RIGHT,
+        android.view.KeyEvent.KEYCODE_DPAD_CENTER, android.view.KeyEvent.KEYCODE_ENTER,
+    )
+
     override fun onStop() {
         super.onStop()
         // Leaving the app (Home button or Back) stops playback so it doesn't run in the background.

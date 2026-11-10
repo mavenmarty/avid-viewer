@@ -143,10 +143,22 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     private var vodIndexFor: List<VodItem>? = null
     private var vodIndex: Map<String, VodItem> = emptyMap()
     var vodCategory by mutableStateOf(mapOf("movie" to "All", "series" to "All"))
+    /** The player is actually playing right now (false while buffering or paused); screens redraw when it changes. */
+    var playing by mutableStateOf(false); private set
+    /** The viewer paused (as opposed to buffering). The full-screen bar stays up only while paused. */
+    var paused by mutableStateOf(false); private set
     var vodDetail by mutableStateOf<VodItem?>(null); private set
     var vodInfo by mutableStateOf<VodInfo?>(null); private set
     var detailEpisodes by mutableStateOf<List<Episode>?>(null); private set
     var detailSeason by mutableStateOf<String?>(null)
+    /** Whether anything on screen has the highlight; a remote key with nothing highlighted asks for it back. */
+    var anyFocus = false
+    /** Recent focus-placement steps, for test diagnostics. */
+    val focusTrail = java.util.concurrent.ConcurrentLinkedDeque<String>()
+    fun trail(s: String) { focusTrail.add(s); while (focusTrail.size > 40) focusTrail.pollFirst() }
+    var focusRescue by mutableStateOf(0)
+    /** The episode last started from a series page, so Back from the player lands on it again. */
+    var lastEpisode: Episode? = null
     private var resume: Map<String, Long> = store.loadResume()
     var searchQuery by mutableStateOf("")
     var searchResults by mutableStateOf<List<PlaylistHits>?>(null); private set
@@ -368,11 +380,13 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     init {
         if (prefs.clearCacheOnExit) store.clearCache() // catches exits Android didn't report
         player.addListener(object : Player.Listener {
+            override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) { paused = !playWhenReady }
             override fun onPlayerError(error: PlaybackException) {
                 playerError = "Can't play this channel (${error.errorCodeName}). Try another channel, or switch Stream format in Settings."
             }
 
             override fun onIsPlayingChanged(isPlaying: Boolean) {
+                playing = isPlaying
                 if (isPlaying) playerError = null
             }
         })
@@ -1858,6 +1872,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     fun playDetailEpisode(e: Episode, fromStart: Boolean = false) {
         val s = vodDetail ?: return
+        lastEpisode = e
         playVod(VodItem(e.key.ifBlank { "${s.key}:${e.season}:${e.number}" }, s.playlistId, "episode", "${s.name} · S${e.season} E${e.number} · ${e.title}", s.logo, e.url), fromStart)
     }
 

@@ -242,6 +242,7 @@ fun GroupNav(vm: AppViewModel) {
         val vis = navState.layoutInfo.visibleItemsInfo.map { it.index }
         if (vis.isNotEmpty() && (item <= vis.first() || item >= vis.last())) navState.scrollToItem((item - 3).coerceAtLeast(0))
     }
+    val wrap = rememberListWrap(navState)
     LazyColumn(
         state = navState,
         modifier = Modifier.width(210.dp).fillMaxHeight().background(C.Rail),
@@ -249,7 +250,7 @@ fun GroupNav(vm: AppViewModel) {
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         item {
-            Focusable(Modifier.fillMaxWidth().height(36.dp), color = Color.Transparent, onClick = { vm.navBack() }) {
+            Focusable(Modifier.fillMaxWidth().height(36.dp).wrapEnds(wrap, isFirst = true, isLast = groups.isEmpty()), color = Color.Transparent, onClick = { vm.navBack() }) {
                 Text("‹  Menu", color = C.Accent, fontSize = 14.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 10.dp))
             }
         }
@@ -296,6 +297,7 @@ fun GroupNav(vm: AppViewModel) {
             }
             Focusable(
                 modifier = Modifier.fillMaxWidth().height(38.dp).focusRequester(fr).onFocusChanged { hasFocus = it.isFocused }
+                    .then(if (!isMoving) Modifier.wrapEnds(wrap, isFirst = false, isLast = g == groups.last()) else Modifier)
                     .then(if (isMoving) Modifier.border(2.dp, C.AccentFocus, androidx.compose.foundation.shape.RoundedCornerShape(8.dp)) else Modifier)
                     .onPreviewKeyEvent { e ->
                         if (!isMoving) return@onPreviewKeyEvent false

@@ -100,7 +100,8 @@ fun PlayerScreen(vm: AppViewModel) {
             )
         }
 
-        if (showInfo || (vm.vodPlaying != null && !vm.player.isPlaying)) {
+        // Movies and episodes: the bar hides 3 s after the last button press, unless the viewer paused.
+        if (showInfo || (vm.vodPlaying != null && vm.paused)) {
             if (vm.vodPlaying != null) VodBar(vm, Modifier.align(Alignment.BottomCenter)) else InfoBar(vm, Modifier.align(Alignment.BottomCenter))
         }
     }
@@ -132,7 +133,7 @@ private fun VodBar(vm: AppViewModel, modifier: Modifier) {
             Spacer(Modifier.width(10.dp))
             Label(if (dur > 0) t(dur) else "--:--", size = 12.sp)
         }
-        Label((if (vm.player.isPlaying) "" else "Paused · ") + "OK: play/pause · ◀ back 10s · ▶ forward 30s · Back: exit", size = 12.sp)
+        Label((if (vm.paused) "Paused · " else if (!vm.playing) "Loading… · " else "") + "OK: play/pause · ◀ back 10s · ▶ forward 30s · Back: exit", size = 12.sp)
     }
 }
 
