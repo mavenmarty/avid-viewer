@@ -64,7 +64,7 @@ class MainActivity : ComponentActivity() {
     override fun dispatchKeyEvent(event: android.view.KeyEvent): Boolean {
         val handled = super.dispatchKeyEvent(event)
         // A remote arrow or OK that reached nothing because nothing is highlighted: put the highlight back.
-        if (event.action == android.view.KeyEvent.ACTION_DOWN && !vm.anyFocus && event.keyCode in rescueKeys) vm.focusRescue++
+        if (!handled && event.action == android.view.KeyEvent.ACTION_DOWN && !vm.anyFocus && event.keyCode in rescueKeys) vm.focusRescue++
         return handled
     }
 

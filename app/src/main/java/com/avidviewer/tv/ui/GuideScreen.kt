@@ -102,18 +102,19 @@ fun GuideScreen(vm: AppViewModel) {
         val mode = vm.guideFocusMode
         vm.trail("tick${vm.guideFocusTick} $mode n=${list.size} nav=${vm.navMode}")
         if (list.isEmpty() || vm.navMode != NavMode.GROUPS) return@LaunchedEffect
-        delay(150)
+        repeat(9) { androidx.compose.runtime.withFrameNanos { } }
+        vm.trail("go $mode")
         // Only now is the request used up (if the screen was rebuilt during the pause, the new one uses it).
         vm.guideFocusMode = GuideFocus.CURRENT
         when (mode) {
             // Newly chosen category: start at the top.
-            GuideFocus.TOP -> { listState.scrollToItem(0); pendingFocus = 0 }
+            GuideFocus.TOP -> { scope.launch { listState.scrollToItem(0) }; pendingFocus = 0 }
             // Same category again: stay where the list was.
             GuideFocus.KEEP -> pendingFocus = listState.firstVisibleItemIndex.coerceIn(0, list.size - 1)
             // Startup or back from full screen: the channel that was playing.
             GuideFocus.CURRENT -> {
                 val idx = list.indexOfFirst { it.key == vm.currentKey }.let { if (it < 0) 0 else it }
-                listState.scrollToItem((idx - 2).coerceAtLeast(0))
+                scope.launch { listState.scrollToItem((idx - 2).coerceAtLeast(0)) }
                 pendingFocus = idx
             }
         }

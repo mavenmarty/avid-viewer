@@ -51,9 +51,9 @@ fun AppRoot(vm: AppViewModel) {
         LaunchedEffect(vm.focusRescue) {
             if (vm.focusRescue == 0) return@LaunchedEffect
             for (frame in 0 until 10) {
+                androidx.compose.runtime.withFrameNanos { }
                 if (vm.anyFocus) break
                 if (!rescueFm.moveFocus(androidx.compose.ui.focus.FocusDirection.Down)) rescueFm.moveFocus(androidx.compose.ui.focus.FocusDirection.Next)
-                androidx.compose.runtime.withFrameNanos { }
             }
         }
         if (vm.screen == Screen.PLAYER) {

@@ -417,7 +417,7 @@ class UsabilityTest {
             // With the remote: Down to the season buttons, Right to Season 2, OK.
             tries = 0
             while (!focused().contains("Season 1") && tries < 6) { press(listOf(Key.DirectionDown)); tries++ }
-            assertTrue("couldn't reach the season buttons (focus: ${focused()})", focused().contains("Season 1"))
+            assertTrue("couldn't reach the season buttons (focus: ${focused()}, trail=${vm.focusTrail.toList().takeLast(12)})", focused().contains("Season 1"))
             press(listOf(Key.DirectionRight))
             assertTrue("Right didn't reach Season 2 (focus: ${focused()})", focused().contains("Season 2"))
             press(listOf(Key.DirectionCenter))
