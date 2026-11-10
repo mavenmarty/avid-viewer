@@ -2,6 +2,8 @@
 
 An IPTV player for Android TV and Fire TV. Bring your own provider (Xtream Codes login or M3U link). The app includes no channels.
 
+**User guide and release notes:** [docs/USER_GUIDE.md](docs/USER_GUIDE.md) (updated automatically after each published build).
+
 ## Version 1 features
 - Playlists: Xtream Codes (server, username, password) or M3U link, with an optional XMLTV guide link. Passwords are encrypted with the Android Keystore.
 - Live TV: channel groups, channel list with what's on now, and a live preview window.

@@ -3,6 +3,12 @@ name: Build APK
 on:
   push:
     branches: [main, next, ci-check]
+    # Documentation changes don't build or publish a new version.
+    paths-ignore:
+      - "docs/**"
+      - "**.md"
+      - ".github/workflows/user-guide.yml"
+      - ".github/scripts/update_user_guide.py"
   workflow_dispatch:
 
 permissions:

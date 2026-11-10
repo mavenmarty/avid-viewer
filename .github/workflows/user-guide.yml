@@ -1,0 +1,43 @@
+name: Update user guide
+
+# After a build on main publishes a release, add that version to docs/USER_GUIDE.md
+# (version at the top + a Release notes entry with the change log) and commit it.
+on:
+  workflow_run:
+    workflows: ["Build APK"]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: user-guide
+  cancel-in-progress: false
+
+jobs:
+  update:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Add new releases to the guide
+        id: guide
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 .github/scripts/update_user_guide.py
+
+      - name: Commit the guide
+        if: steps.guide.outputs.version != ''
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/USER_GUIDE.md
+          git commit -m "Docs: user guide for ${{ steps.guide.outputs.version }} [skip ci]"
+          git pull --rebase origin main
+          git push origin HEAD:main
