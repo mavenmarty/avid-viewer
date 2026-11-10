@@ -20,6 +20,9 @@ jobs:
         env:
           USER: "test;test"
           SHARE: "backups;/share;yes;no;no;test"
+          PERMISSIONS: "true"
+          USERID: "1000"
+          GROUPID: "1000"
     steps:
       - uses: actions/checkout@v5
 
