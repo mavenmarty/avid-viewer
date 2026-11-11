@@ -149,12 +149,15 @@ class Catalog(context: Context) : SQLiteOpenHelper(context.applicationContext, "
         val nameContains: String? = null,
         val newestFirst: Boolean = false,
         val limit: Int? = null,
+        /** Only this exact kind (e.g. "episode" within the movie group). */
+        val kind: String? = null,
     ) {
         fun where(): Pair<String, Array<String>> {
             val sb = StringBuilder("g = ?")
             val args = ArrayList<String>(); args.add(group)
             if (!includeHidden) sb.append(" AND h = 0")
             if (category != null) { sb.append(" AND c = ?"); args.add(category) }
+            if (kind != null) { sb.append(" AND t = ?"); args.add(kind) }
             sb.append(" AND p IN (${playlists.joinToString(",") { "?" }})"); args.addAll(playlists)
             nameContains?.takeIf { it.isNotBlank() }?.let { sb.append(" AND n LIKE ? ESCAPE '\\'"); args.add("%" + it.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%") }
             return sb.toString() to args.toTypedArray()

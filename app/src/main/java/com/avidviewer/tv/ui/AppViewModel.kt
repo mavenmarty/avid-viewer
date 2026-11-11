@@ -1968,8 +1968,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 // Titles: searched in the catalog database, not loaded.
                 if (p.vodOn && p.enabled) importOldTitles(p)
                 val vodHitList = if (!p.vodOn || !p.enabled) emptyList() else withContext(Dispatchers.IO) {
-                    catalog.page(Catalog.Query("movie", listOf(p.id), nameContains = q), 0, 100) +
-                        catalog.page(Catalog.Query("series", listOf(p.id), nameContains = q), 0, 50)
+                    catalog.page(Catalog.Query("movie", listOf(p.id), nameContains = q, kind = "movie"), 0, 50) +
+                        catalog.page(Catalog.Query("series", listOf(p.id), nameContains = q), 0, 50) +
+                        catalog.page(Catalog.Query("movie", listOf(p.id), nameContains = q, kind = "episode"), 0, 50)
                 }
                 val res = withContext(Dispatchers.Default) {
                     val names = if (p.id == activePlaylist()?.id) chs.associate { it.key to channelName(it) } else chs.associate { it.key to it.name }
