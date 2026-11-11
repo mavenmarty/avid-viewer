@@ -2,11 +2,21 @@ name: Update user guide
 
 # After a build on main publishes a release, add that version to docs/USER_GUIDE.md
 # (version at the top + a Release notes entry with the change log) and commit it.
+# Then publish the guide as a PDF at a link that never changes (used by the app):
+#   https://github.com/mavenmarty/avid-viewer/releases/download/user-guide/AvidViewer-User-Guide.pdf
+# The "user-guide" release is a pre-release, so it never counts as the app's latest version.
+# The PDF is also attached to the version's own release.
 on:
   workflow_run:
     workflows: ["Build APK"]
     types: [completed]
     branches: [main]
+  push:
+    branches: [main]
+    paths:
+      - "docs/USER_GUIDE.md"
+      - ".github/scripts/build_guide_pdf.py"
+      - ".github/scripts/guide-pdf.css"
   workflow_dispatch:
 
 permissions:
@@ -18,7 +28,7 @@ concurrency:
 
 jobs:
   update:
-    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -41,3 +51,22 @@ jobs:
           git commit -m "Docs: user guide for ${{ steps.guide.outputs.version }} [skip ci]"
           git pull --rebase origin main
           git push origin HEAD:main
+
+      - name: Build the PDF
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq pandoc fonts-dejavu fonts-noto-color-emoji > /dev/null
+          python3 .github/scripts/build_guide_pdf.py AvidViewer-User-Guide.pdf
+
+      - name: Publish the PDF
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if ! gh release view user-guide > /dev/null 2>&1; then
+            gh release create user-guide --prerelease --target main \
+              --title "User guide (always the latest version)" \
+              --notes "The current Avid Viewer user guide. Permanent link: https://github.com/${{ github.repository }}/releases/download/user-guide/AvidViewer-User-Guide.pdf"
+          fi
+          gh release upload user-guide AvidViewer-User-Guide.pdf --clobber
+          latest=$(gh release view --json tagName --jq .tagName)
+          gh release upload "$latest" AvidViewer-User-Guide.pdf --clobber
