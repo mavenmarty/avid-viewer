@@ -592,7 +592,8 @@ private fun FirstControlStop(fr: FocusRequester, on: androidx.compose.runtime.Mu
     val fm = androidx.compose.ui.platform.LocalFocusManager.current
     val scope = androidx.compose.runtime.rememberCoroutineScope()
     androidx.compose.foundation.layout.Box(
-        Modifier.size(1.dp).focusRequester(fr)
+        // Full width and 1 dp high: never "to the left" of a control, so Left from the page can't land here.
+        Modifier.fillMaxWidth().height(1.dp).focusRequester(fr)
             .onFocusChanged { if (it.isFocused) scope.launch { fm.moveFocus(androidx.compose.ui.focus.FocusDirection.Down) } }
             .focusable(),
     )
