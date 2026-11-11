@@ -370,6 +370,71 @@ class UsabilityTest {
         vm.playlists.forEach { p -> assertTrue("leaks ${p.name}", !link.contains(p.name) && (p.server.isBlank() || !link.contains(p.server))) }
     }
 
+    // ---------------------------------------------------------------- guide management and quick dialogs
+
+    @Test
+    fun tvGuideSettingsAndGuideSourcesOpen() {
+        go(Screen.SETTINGS)
+        rule.runOnIdle { vm.settingsSection = "guide" }
+        settle()
+        assertTrue(rule.onAllNodesWithText("Download the guide every").fetchSemanticsNodes().isNotEmpty())
+        rule.onNodeWithTag("guide-every-12").performClick()
+        settle()
+        assertEquals(12, vm.prefs.guideRefreshHours)
+        rule.runOnIdle { vm.settingsSection = "playlists" }
+        settle()
+        rule.onAllNodesWithText("My provider").onFirst().performClick()
+        settle()
+        rule.onNodeWithTag("pl-guide-sources").performClick()
+        settle()
+        assertTrue(rule.onAllNodesWithText("Guide sources · My provider").fetchSemanticsNodes().isNotEmpty())
+        assertTrue(rule.onAllNodesWithText("Provider's guide").fetchSemanticsNodes().isNotEmpty())
+        rule.onNodeWithTag("guide-src-add").performClick()
+        settle()
+        assertTrue(rule.onAllNodesWithText("New guide source").fetchSemanticsNodes().isNotEmpty())
+        // Deleting asks first.
+        rule.onAllNodesWithTag("guide-src-delete").onFirst().performClick()
+        settle()
+        assertTrue(rule.onAllNodesWithText("can't be undone", substring = true).fetchSemanticsNodes().isNotEmpty())
+    }
+
+    @Test
+    fun matchGuideFromTheChannelMenu() {
+        rule.runOnIdle { vm.chooseGroup(TestData.P1, "KIDS") }
+        settle()
+        val key = vm.channelsIn("KIDS").first().key
+        rule.runOnIdle { vm.channelMenu = key }
+        settle()
+        rule.onAllNodesWithText("Match guide", substring = true).onFirst().performClick()
+        waitFor("the match dialog") { rule.onAllNodesWithText("Match guide · ", substring = true).fetchSemanticsNodes().isNotEmpty() }
+        rule.onAllNodesWithText("No guide").onFirst().performClick()
+        settle()
+        assertEquals("", vm.prefs.epgMap[key])
+        assertEquals(null, vm.matchingChannel)
+    }
+
+    @Test
+    fun choosingAListOrSavingARenameClosesTheDialog() {
+        rule.runOnIdle { vm.chooseGroup(TestData.P1, "KIDS") }
+        settle()
+        val key = vm.channelsIn("KIDS")[1].key
+        rule.runOnIdle { vm.listPickerKey = key }
+        settle()
+        rule.onAllNodesWithText("Kids night", substring = true).onFirst().performClick()
+        settle()
+        assertEquals("the picker closes once a list is chosen", null, vm.listPickerKey)
+        assertTrue(vm.listsFor(key).contains("Kids night"))
+        rule.runOnIdle { vm.channelMenu = key }
+        settle()
+        rule.onAllNodesWithText("Rename", substring = true).onFirst().performClick()
+        settle()
+        waitFor("the rename dialog") { rule.onAllNodesWithText("Rename channel").fetchSemanticsNodes().isNotEmpty() }
+        rule.onAllNodesWithText("Save").onFirst().performClick()
+        settle()
+        assertEquals("the channel menu closes after saving the new name", null, vm.channelMenu)
+        assertTrue("no dialog left open", rule.onAllNodesWithText("Rename channel").fetchSemanticsNodes().isEmpty())
+    }
+
     // ---------------------------------------------------------------- layers (Nov 10, evening)
 
     private fun goDeepInBig() {

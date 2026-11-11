@@ -392,7 +392,7 @@ fun ChannelOptionsDialog(vm: AppViewModel) {
     val c = vm.channel(key) ?: run { vm.channelMenu = null; return }
     var renaming by remember(key) { mutableStateOf(false) }
     if (renaming) {
-        RenameDialog("Rename channel", vm.channelName(c), onDismiss = { renaming = false }) { vm.renameChannel(key, it); renaming = false }
+        RenameDialog("Rename channel", vm.channelName(c), onDismiss = { renaming = false }) { vm.renameChannel(key, it); renaming = false; vm.channelMenu = null }
         return
     }
     val list = vm.channelsIn(vm.selectedGroup)
@@ -409,6 +409,7 @@ fun ChannelOptionsDialog(vm: AppViewModel) {
                 if (isListGroup(vm.selectedGroup)) OptionRow("−  Remove from ${vm.groupName(vm.selectedGroup!!).removePrefix("★ ").removePrefix("☰ ")}") { vm.toggleInList(vm.selectedGroup!!, key); vm.channelMenu = null }
                 OptionRow("✎  Rename") { renaming = true }
                 OptionRow("⇅  Re-order") { vm.channelMenu = null; vm.movingChannel = key }
+                OptionRow("▤  Match guide…" + if (vm.prefs.epgMap.containsKey(key)) "   (matched by hand)" else "") { vm.channelMenu = null; vm.matchingChannel = key }
                 if (!isListGroup(vm.selectedGroup)) OptionRow("⊘  Hide channel") { vm.hideChannel(key); vm.channelMenu = null }
             }
         },
@@ -453,7 +454,7 @@ fun GroupOptionsDialog(vm: AppViewModel) {
     val raw = vm.groupMenu ?: return
     var renaming by remember(raw) { mutableStateOf(false) }
     if (renaming) {
-        RenameDialog("Rename category", vm.groupName(raw), onDismiss = { renaming = false }) { vm.renameGroup(raw, it); renaming = false }
+        RenameDialog("Rename category", vm.groupName(raw), onDismiss = { renaming = false }) { vm.renameGroup(raw, it); renaming = false; vm.groupMenu = null }
         return
     }
     val all = vm.groups(includeHidden = true)

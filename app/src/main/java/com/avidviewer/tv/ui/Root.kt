@@ -87,6 +87,7 @@ fun AppRoot(vm: AppViewModel) {
         ChannelOptionsDialog(vm)
         GroupOptionsDialog(vm)
         ListPickerDialog(vm)
+        MatchGuideDialog(vm)
         ReorderHelp(vm)
         ListOptionsDialog(vm)
         VodCategoryOptionsDialog(vm)

@@ -175,7 +175,15 @@ object Xmltv {
         null
     }
 
-    fun read(url: String, wanted: Set<String>, from: Long, to: Long): Map<String, List<Program>> = Net.open(url) { input ->
+    /**
+     * Reads programmes for [wanted] channel ids between [from] and [to]. [offsetMs] shifts every time
+     * (for a guide published in another time zone). [directory], when given, receives every channel the
+     * guide lists (id and first display name), for matching channels by hand.
+     */
+    fun read(
+        url: String, wanted: Set<String>, from: Long, to: Long,
+        offsetMs: Long = 0L, directory: MutableList<Pair<String, String>>? = null,
+    ): Map<String, List<Program>> = Net.open(url) { input ->
         val wantedLower = wanted.associateBy { it.lowercase() }
         val out = HashMap<String, MutableList<Program>>()
         val xp = Xml.newPullParser()
@@ -185,14 +193,17 @@ object Xmltv {
         var chId: String? = null; var start = 0L; var end = 0L
         var title: String? = null; var sub: String? = null; var isNew = false
         var tag: String? = null
+        var dirId: String? = null; var dirName: String? = null
         while (event != XmlPullParser.END_DOCUMENT) {
             when (event) {
                 XmlPullParser.START_TAG -> when (xp.name) {
+                    "channel" -> if (directory != null) { dirId = xp.getAttributeValue(null, "id"); dirName = null }
+                    "display-name" -> if (dirId != null && dirName == null) tag = "display-name"
                     "programme" -> {
                         val id = xp.getAttributeValue(null, "channel")
                         val key = id?.let { wantedLower[it.lowercase()] }
-                        val s = xp.getAttributeValue(null, "start")?.let { parseTime(it) }
-                        val e = xp.getAttributeValue(null, "stop")?.let { parseTime(it) }
+                        val s = xp.getAttributeValue(null, "start")?.let { parseTime(it) }?.plus(offsetMs)
+                        val e = xp.getAttributeValue(null, "stop")?.let { parseTime(it) }?.plus(offsetMs)
                         if (key != null && s != null && e != null && e > from && s < to) {
                             chId = key; start = s; end = e; title = null; sub = null; isNew = false
                         } else chId = null
@@ -204,9 +215,15 @@ object Xmltv {
                 XmlPullParser.TEXT -> when (tag) {
                     "title" -> if (title == null) title = xp.text
                     "sub-title" -> if (sub == null) sub = xp.text
+                    "display-name" -> if (dirName == null) dirName = xp.text?.trim()?.ifBlank { null }
                 }
                 XmlPullParser.END_TAG -> when (xp.name) {
-                    "title", "sub-title" -> tag = null
+                    "title", "sub-title", "display-name" -> tag = null
+                    "channel" -> {
+                        val id = dirId
+                        if (directory != null && !id.isNullOrBlank()) directory.add(id to clean(dirName ?: id))
+                        dirId = null
+                    }
                     "programme" -> {
                         val id = chId
                         if (id != null) {

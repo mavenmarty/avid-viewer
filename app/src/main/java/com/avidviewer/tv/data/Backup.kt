@@ -43,7 +43,7 @@ object Backup {
             .put("playlists", JSONArray().apply {
                 c.playlists.forEach { p ->
                     put(
-                        JSONObject().put("id", p.id).put("name", p.name).put("type", p.type).put("server", p.server)
+                        p.guideJson(JSONObject()).put("id", p.id).put("name", p.name).put("type", p.type).put("server", p.server)
                             .put("username", p.username).put("password", p.password).put("m3uUrl", p.m3uUrl).put("epgUrl", p.epgUrl)
                             .put("enabled", p.enabled).put("liveOn", p.liveOn).put("vodOn", p.vodOn),
                     )
@@ -88,12 +88,12 @@ object Backup {
         val pls = b.optJSONArray("playlists") ?: JSONArray()
         val playlists = List(pls.length()) {
             val p = pls.getJSONObject(it)
-            Playlist(
+            Playlist.guideFrom(p, Playlist(
                 id = p.getString("id"), name = p.optString("name"), type = p.optString("type"), server = p.optString("server"),
                 username = p.optString("username"), password = p.optString("password"), m3uUrl = p.optString("m3uUrl"),
                 epgUrl = p.optString("epgUrl"), enabled = p.optBoolean("enabled", true), liveOn = p.optBoolean("liveOn", true),
                 vodOn = p.optBoolean("vodOn", true),
-            )
+            ))
         }
         val hist = b.optJSONArray("history") ?: JSONArray()
         val history = List(hist.length()) { val h = hist.getJSONObject(it); HistoryEntry(h.getString("k"), h.optLong("t"), h.optLong("s")) }
