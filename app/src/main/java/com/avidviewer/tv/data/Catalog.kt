@@ -19,7 +19,7 @@ data class Ingest<T>(val result: T, val added: Int, val committed: Boolean)
  * provider's list, h hidden (1 when the title or its category is hidden by the user), tk the
  * stream address token (ChannelKeys.token), to follow saved choices when keys change.
  */
-class Catalog(context: Context) : SQLiteOpenHelper(context.applicationContext, "catalog.db", null, 2) {
+class Catalog(context: Context) : SQLiteOpenHelper(context.applicationContext, "catalog.db", null, 3) {
 
     override fun onCreate(db: SQLiteDatabase) {
         db.execSQL(
@@ -34,6 +34,7 @@ class Catalog(context: Context) : SQLiteOpenHelper(context.applicationContext, "
         db.execSQL("CREATE INDEX title_playlist ON title (p, o)")
         db.execSQL("CREATE TABLE source (p TEXT PRIMARY KEY, saved INTEGER NOT NULL)")
         db.execSQL("CREATE INDEX title_token ON title (p, tk)")
+        LiveDb.create(db)
     }
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
@@ -42,6 +43,8 @@ class Catalog(context: Context) : SQLiteOpenHelper(context.applicationContext, "
             db.execSQL("ALTER TABLE title ADD COLUMN tk TEXT")
             db.execSQL("CREATE INDEX title_token ON title (p, tk)")
         }
+        // 3: live channels and guide programmes (LiveDb).
+        if (oldVersion < 3) LiveDb.create(db)
     }
 
     override fun onConfigure(db: SQLiteDatabase) { db.enableWriteAheadLogging() }

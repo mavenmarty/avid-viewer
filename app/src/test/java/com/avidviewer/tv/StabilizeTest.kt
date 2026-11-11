@@ -119,11 +119,12 @@ class StabilizeTest {
         vm.toggleInList(FAV_GROUP, "${TestData.P2}:f5")
         idleUntil("second favorite") { vm.channel("${TestData.P2}:f5") != null }
         assertEquals(2, vm.otherLiveSizes()[TestData.P2])
-        // The guide's search box sees every playlist while searching, and lets go afterwards.
-        vm.loadSearchPool()
-        idleUntil("search pool") { vm.searchPool.isNotEmpty() }
+        // The guide's search box sees every playlist while searching (only the matches), and lets go afterwards.
+        vm.runGuideSearch("Free News 1")
+        idleUntil("search hits") { vm.guideSearchHits.channels.any { it.key == "${TestData.P2}:f1" } }
         assertNotNull(vm.channel("${TestData.P2}:f1"))
-        vm.dropSearchPool()
+        assertEquals("only the match is held", listOf("${TestData.P2}:f1"), vm.searchPool.map { it.key })
+        vm.endGuideSearch()
         assertEquals(null, vm.channel("${TestData.P2}:f1"))
         assertEquals(2, vm.otherLiveSizes()[TestData.P2])
     }
