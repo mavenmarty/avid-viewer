@@ -240,7 +240,8 @@ object Networks {
         SYNONYMS[toks.joinToString("")]?.let(out::add)
         // Local stations: drop channel numbers and call signs ("fox 9 kmsp", "wday abc 6").
         val core = toks.filterNot { it.all(Char::isDigit) || Regex("^[kwc][a-z]{2,3}(dt|tv)?$").matches(it) && SYNONYMS[it] == null }
-        if (core.isNotEmpty() && core.size < toks.size) {
+        // Only when the whole name isn't already a network ("ESPN 2" is ESPN2, not ESPN).
+        if (out.isEmpty() && core.isNotEmpty() && core.size < toks.size) {
             SYNONYMS[core.joinToString("")]?.let { n -> if (n !in STREAMING) out.add(n) }
         }
         return out

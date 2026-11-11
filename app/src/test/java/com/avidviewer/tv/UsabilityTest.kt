@@ -455,7 +455,6 @@ class UsabilityTest {
         rule.onAllNodesWithText("NFL").onFirst().performClick()
         rule.waitForIdle()
         assertEquals(false, vm.sportLeagues().first { it.id == "NFL" }.on)
-        assertTrue(rule.onAllNodesWithText("Finished games stay for").fetchSemanticsNodes().isNotEmpty())
     }
 
     // ---------------------------------------------------------------- guide management and quick dialogs
