@@ -1,5 +1,7 @@
 package com.avidviewer.tv
 
+import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.cancel
 import android.app.Application
 import androidx.test.core.app.ApplicationProvider
 import com.avidviewer.tv.data.GuideChannel
@@ -24,6 +26,16 @@ import kotlin.concurrent.thread
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], application = Application::class)
 class GuideSourcesTest {
+
+    private val made = ArrayList<AppViewModel>()
+    private fun track(vm: AppViewModel) = vm.also { made.add(it) }
+
+    /** Stops each test's background work (downloads, timers) so nothing runs into the next test. */
+    @org.junit.After
+    fun stopBackgroundWork() {
+        made.forEach { vm -> vm.viewModelScope.cancel() }
+        shadowOf(android.os.Looper.getMainLooper()).idle()
+    }
     private val app: Application = ApplicationProvider.getApplicationContext()
     private val fmt = SimpleDateFormat("yyyyMMddHHmmss Z", Locale.US).apply { timeZone = TimeZone.getTimeZone("UTC") }
     private val hour = 3600_000L
@@ -80,7 +92,7 @@ class GuideSourcesTest {
     @Test
     fun sourcesMergeInOrderWithOffsetsAndHandMatches() {
         TestData.seed(app)
-        val vm = AppViewModel(app)
+        val vm = track(AppViewModel(app))
         idleUntil("channels") { vm.channels.isNotEmpty() }
         val p1 = vm.playlists.first { it.id == TestData.P1 }
         // An older single guide address becomes a source and keeps replacing the provider's guide, as before.
@@ -131,7 +143,7 @@ class GuideSourcesTest {
     @Test
     fun refreshEveryIsSavedAndUsed() {
         TestData.seed(app)
-        val vm = AppViewModel(app)
+        val vm = track(AppViewModel(app))
         assertEquals(8, vm.prefs.guideRefreshHours)
         vm.setGuideRefreshHours(4)
         assertEquals(4 * hour, vm.guideMs())

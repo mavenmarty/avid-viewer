@@ -1,5 +1,7 @@
 package com.avidviewer.tv
 
+import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.cancel
 import android.app.Application
 import androidx.test.core.app.ApplicationProvider
 import com.avidviewer.tv.data.Backup
@@ -26,6 +28,16 @@ import kotlin.concurrent.thread
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], application = Application::class)
 class ChannelKeysTest {
+
+    private val made = ArrayList<AppViewModel>()
+    private fun track(vm: AppViewModel) = vm.also { made.add(it) }
+
+    /** Stops each test's background work (downloads, timers) so nothing runs into the next test. */
+    @org.junit.After
+    fun stopBackgroundWork() {
+        made.forEach { vm -> vm.viewModelScope.cancel() }
+        shadowOf(android.os.Looper.getMainLooper()).idle()
+    }
     private val app: Application = ApplicationProvider.getApplicationContext()
 
     private fun m3u(names: List<String>, root: String) = "#EXTM3U\n" + names.joinToString("\n") { n ->
@@ -99,7 +111,7 @@ class ChannelKeysTest {
             })
             store.savePrefs(com.avidviewer.tv.data.Prefs(activePlaylist = "old", favorites = listOf("old:1", "old:2"), channelNames = mapOf("old:2" to "My 103")))
             // The provider has since added Channel 100 at the top; the app downloads the list again.
-            val vm = AppViewModel(app)
+            val vm = track(AppViewModel(app))
             idleUntil("saved channels") { vm.channels.isNotEmpty() }
             vm.refreshPlaylist("old")
             idleUntil("the new list (${vm.channels.map { it.key }})") { vm.channels.size == 4 }
@@ -115,7 +127,7 @@ class ChannelKeysTest {
         serve { m3u(names, "http://stream.example") }.use { srv ->
             val url = "http://127.0.0.1:${srv.localPort}/list.m3u"
             // Device 1: add the playlist, favorite 102 and 104, make a backup.
-            val vm = AppViewModel(app)
+            val vm = track(AppViewModel(app))
             vm.addPlaylist("Provider", "m3u", "", "", "", url, "")
             idleUntil("channels on device 1") { vm.channels.size == 4 }
             val k102 = vm.channels.first { it.name == "Channel 102" }.key
@@ -127,7 +139,7 @@ class ChannelKeysTest {
             // Later the provider adds a channel near the top, and the app is installed fresh on another TV.
             names = listOf("Channel 100", "Channel 101", "Channel 102", "Channel 103", "Channel 104")
             app.filesDir.deleteRecursively(); app.filesDir.mkdirs()
-            val vm2 = AppViewModel(app)
+            val vm2 = track(AppViewModel(app))
             vm2.offerRestore(text)
             var ok = false
             vm2.restore("2468") { ok = it }
