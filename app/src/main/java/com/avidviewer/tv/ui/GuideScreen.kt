@@ -171,11 +171,7 @@ fun GuideScreen(vm: AppViewModel) {
         val vis = listState.layoutInfo.visibleItemsInfo.map { it.index }
         if (vis.isEmpty() || movingIdx <= vis.first() || movingIdx >= vis.last()) listState.scrollToItem((movingIdx - 2).coerceAtLeast(0))
         // A big jump (to the top or bottom) can drop the highlight; keep asking until the channel has it.
-        for (attempt in 0 until 15) {
-            delay(30)
-            if (movingFocused) break
-            runCatching { rowFr(movingIdx)?.requestFocus() }
-        }
+        focusWhenReady(vm, frames = 30, isFocused = { movingFocused }) { runCatching { rowFr(movingIdx)?.requestFocus() }.isSuccess }
     }
     LaunchedEffect(pendingProg, slots) {
         val i = pendingProg ?: return@LaunchedEffect
@@ -344,12 +340,15 @@ fun GuideScreen(vm: AppViewModel) {
                             ) { Label("No guide information", size = 12.sp, modifier = Modifier.padding(horizontal = 10.dp)) }
                         } else {
                             var cursor = winStart
+                            // Programmes that overlap (some guides list them) each start where the one before ends;
+                            // laid out as listed, they pushed the row past the screen edge, where Right couldn't reach them.
+                            val laid = ArrayList<Triple<Program, Long, Long>>()
+                            run { var end = winStart; for (p in progs) { val a = maxOf(p.start, end); val b = minOf(p.end, winEnd); if (b > a) { laid.add(Triple(p, a, b)); end = b } } }
                             // The program at the remembered time (or the nearest one) takes Up/Down focus for this row.
                             val at = anchor.coerceIn(winStart, winEnd - 1)
-                            val target = progs.firstOrNull { at >= it.start && at < it.end }
-                                ?: progs.firstOrNull { it.start >= at } ?: progs.last()
-                            progs.forEachIndexed { pi, p ->
-                                val a = maxOf(p.start, winStart); val b = minOf(p.end, winEnd)
+                            val target = (laid.firstOrNull { at >= it.second && at < it.third }
+                                ?: laid.firstOrNull { it.second >= at } ?: laid.last()).first
+                            laid.forEachIndexed { pi, (p, a, b) ->
                                 if (a > cursor) Box(Modifier.width((((a - cursor) / 60000f * DP_PER_MIN).dp - 3.dp).coerceAtLeast(0.dp)))
                                 val isNow = vm.now >= p.start && vm.now < p.end
                                 Focusable(
@@ -361,7 +360,7 @@ fun GuideScreen(vm: AppViewModel) {
                                                 Key.DirectionUp -> moveRow(idx, -1, holdSteps(e), e.nativeKeyEvent.repeatCount == 0)
                                                 Key.DirectionDown -> moveRow(idx, 1, holdSteps(e), e.nativeKeyEvent.repeatCount == 0)
                                                 // Last program in view: scroll the guide forward to the next program.
-                                                Key.DirectionRight -> if (pi == progs.lastIndex && slots < maxSlots) { shiftTo(maxOf(p.end, winEnd - 60_000L), idx, true); true } else false
+                                                Key.DirectionRight -> if (pi == laid.lastIndex && slots < maxSlots) { shiftTo(maxOf(p.end, winEnd - 60_000L), idx, true); true } else false
                                                 // First program in view: scroll back (at the start, Left goes to the channel name).
                                                 Key.DirectionLeft -> if (pi == 0 && slots > 0) { shiftTo(minOf(p.start, winStart) - 60_000L, idx, false); true } else false
                                                 else -> false
@@ -373,7 +372,7 @@ fun GuideScreen(vm: AppViewModel) {
                                         focusProg = c.key to p
                                         vm.nav.focused(path, c.key, idx); vm.nav.guideOnProgram = true
                                         // Keep the remembered time if it falls in this program; otherwise it moves here.
-                                        if (anchor < maxOf(p.start, winStart) || anchor >= minOf(p.end, winEnd)) anchor = maxOf(p.start, winStart)
+                                        if (anchor < a || anchor >= b) anchor = a
                                     },
                                     onMenu = { vm.channelMenu = c.key },
                                     onClick = { vm.selectChannel(c.key, PlayContext.GROUP) },

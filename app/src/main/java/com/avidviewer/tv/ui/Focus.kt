@@ -13,7 +13,7 @@ import androidx.compose.runtime.withFrameNanos
  * Returns whether the highlight landed.
  */
 suspend fun focusWhenReady(
-    vm: AppViewModel,
+    vm: AppViewModel? = null,
     frames: Int = 120,
     isFocused: (() -> Boolean)? = null,
     request: () -> Boolean,
@@ -22,7 +22,7 @@ suspend fun focusWhenReady(
     var held = 0
     for (frame in 0 until frames) {
         withFrameNanos { }
-        if (vm.lastKeyAt > started) return false
+        if (vm != null && vm.lastKeyAt > started) return false
         if (isFocused != null) {
             if (isFocused()) { if (++held >= 12) return true; continue }
             held = 0

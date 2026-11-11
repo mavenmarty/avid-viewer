@@ -127,8 +127,15 @@ fun AppRoot(vm: AppViewModel) {
                 },
             )
         }
-        // Back walks up the menu levels; Back at the full menu on the TV Guide exits.
-        BackHandler(enabled = vm.screen != Screen.PLAYER && !(vm.navMode == NavMode.FULL && vm.screen == Screen.GUIDE)) { vm.navBack() }
+        vm.notice?.let { text ->
+            Box(Modifier.fillMaxSize().padding(bottom = 36.dp), contentAlignment = Alignment.BottomCenter) {
+                Label(text, size = 15.sp, color = C.Text, weight = FontWeight.Bold,
+                    modifier = Modifier.clip(RoundedCornerShape(20.dp)).background(C.Surface2).padding(horizontal = 22.dp, vertical = 10.dp))
+            }
+        }
+        // Back walks up the menu levels; at the full menu on the TV Guide it asks for a second press, then exits.
+        val activity = androidx.compose.ui.platform.LocalContext.current as? android.app.Activity
+        BackHandler(enabled = vm.screen != Screen.PLAYER) { if (!vm.navBack()) activity?.finish() }
     }
 }
 

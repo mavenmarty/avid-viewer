@@ -54,8 +54,7 @@ fun LiveScreen(vm: AppViewModel) {
         if (vm.navMode != NavMode.GROUPS || list0.isEmpty()) return@LaunchedEffect
         val idx = list0.indexOfFirst { it.key == vm.currentKey }.coerceAtLeast(0)
         listState.scrollToItem(idx)
-        delay(120)
-        runCatching { rowFocus[idx].requestFocus() }
+        focusWhenReady(vm) { runCatching { rowFocus[idx].requestFocus() }.isSuccess }
     }
 
     Row(Modifier.fillMaxSize()) {

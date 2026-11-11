@@ -227,7 +227,9 @@ fun Modifier.navFocusTarget(vm: AppViewModel, key: String?): Modifier {
 /** Left at the edge of a left-hand list goes back a layer, like Back. */
 fun Modifier.leftGoesBack(vm: AppViewModel): Modifier = this.then(Modifier.onKeyEvent { e ->
     if (e.type != KeyEventType.KeyDown || e.key != Key.DirectionLeft || e.nativeKeyEvent.repeatCount != 0) return@onKeyEvent false
-    val onLayer = (vm.navMode == NavMode.GROUPS && vm.inGroupNav) || (vm.navMode == NavMode.COLLAPSED && vm.inPlaylistTree)
+    // Only the guide's own left-hand lists are layers (Settings has its own rules).
+    val onGuide = vm.screen == Screen.GUIDE || vm.screen == Screen.LIVE
+    val onLayer = onGuide && ((vm.navMode == NavMode.GROUPS && vm.inGroupNav) || (vm.navMode == NavMode.COLLAPSED && vm.inPlaylistTree))
     if (onLayer) { vm.navBack(); true } else false
 })
 

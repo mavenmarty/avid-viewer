@@ -94,7 +94,7 @@ fun VodScreen(vm: AppViewModel, kind: String) {
                 val fr = remember { androidx.compose.ui.focus.FocusRequester() }
                 var hasFocus by remember { mutableStateOf(false) }
                 LaunchedEffect(isMoving, cats.indexOfFirst { it.first == name }) {
-                    if (isMoving) for (attempt in 0 until 15) { delay(30); if (hasFocus) break; runCatching { fr.requestFocus() } }
+                    if (isMoving) focusWhenReady(vm, frames = 30, isFocused = { hasFocus }) { runCatching { fr.requestFocus() }.isSuccess }
                 }
                 Focusable(
                     modifier = Modifier.fillMaxWidth().heightIn(min = 36.dp).focusRequester(fr).onFocusChanged { hasFocus = it.isFocused }
@@ -237,7 +237,8 @@ private fun VodDetail(vm: AppViewModel, v: VodItem) {
     // and dropped as soon as the user presses a key.
     LaunchedEffect(v.key, vm.screen, vm.detailEpisodes != null) {
         if (vm.screen == Screen.PLAYER) return@LaunchedEffect
-        val started = System.currentTimeMillis()
+        // Same clock as the key-press time (it used to compare wall time with uptime, so a press never stopped it).
+        val started = android.os.SystemClock.uptimeMillis()
         var held = 0
         for (frame in 0 until 120) {
             androidx.compose.runtime.withFrameNanos { }

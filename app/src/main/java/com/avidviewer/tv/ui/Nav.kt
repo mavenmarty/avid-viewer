@@ -95,9 +95,8 @@ fun NavRail(vm: AppViewModel) {
 
     LaunchedEffect(vm.navMode) {
         if (vm.navMode == NavMode.FULL) {
-            delay(50)
             val i = MENU.indexOfFirst { it.first == vm.screen }.coerceAtLeast(0)
-            runCatching { requesters[i].requestFocus() }
+            focusWhenReady(vm) { runCatching { requesters[i].requestFocus() }.isSuccess }
         }
     }
 
@@ -156,6 +155,9 @@ fun PlaylistTree(vm: AppViewModel) {
     val active = vm.activePlaylist()?.id
     val first = remember { FocusRequester() }
     val treeState = androidx.compose.foundation.lazy.rememberLazyListState()
+    // Leaving the screen while it had the highlight must not leave "in the playlist list" set (NAV-03):
+    // Left would then act as Back from somewhere else entirely.
+    androidx.compose.runtime.DisposableEffect(Unit) { onDispose { vm.inPlaylistTree = false } }
     LaunchedEffect(Unit) {
         // Coming back from a category: that category takes the highlight instead (see below).
         val k = vm.navFocusKey
@@ -170,8 +172,7 @@ fun PlaylistTree(vm: AppViewModel) {
             if (item >= 0) { launch { treeState.scrollToItem((item - 3).coerceAtLeast(0)) }; return@LaunchedEffect }
             vm.navFocusKey = null
         }
-        delay(80)
-        runCatching { first.requestFocus() }
+        focusWhenReady(vm) { runCatching { first.requestFocus() }.isSuccess }
     }
     LazyColumn(
         Modifier.width(250.dp).fillMaxHeight().background(C.Bg).onFocusChanged { vm.inPlaylistTree = it.hasFocus },
@@ -247,6 +248,7 @@ fun PlaylistTree(vm: AppViewModel) {
 fun GroupNav(vm: AppViewModel) {
     val groups = vm.groups()
     val navState = androidx.compose.foundation.lazy.rememberLazyListState()
+    androidx.compose.runtime.DisposableEffect(Unit) { onDispose { vm.inGroupNav = false } }
     val scope = androidx.compose.runtime.rememberCoroutineScope()
     // Re-order mode: keep the moving category on screen as it moves.
     val moving = vm.movingGroup
@@ -331,7 +333,7 @@ fun GroupNav(vm: AppViewModel) {
             val fr = remember { FocusRequester() }
             var hasFocus by remember { mutableStateOf(false) }
             LaunchedEffect(isMoving, groups.indexOf(g)) {
-                if (isMoving) for (attempt in 0 until 15) { kotlinx.coroutines.delay(30); if (hasFocus) break; runCatching { fr.requestFocus() } }
+                if (isMoving) focusWhenReady(vm, frames = 30, isFocused = { hasFocus }) { runCatching { fr.requestFocus() }.isSuccess }
             }
             Focusable(
                 modifier = Modifier.fillMaxWidth().height(38.dp).focusRequester(fr).onFocusChanged { hasFocus = it.isFocused }.navFocusTarget(vm, g.raw)

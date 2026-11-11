@@ -123,7 +123,7 @@ private fun TitleDetail(vm: AppViewModel, t: Title) {
     val match = vm.matchVod(t)
     val where = vm.whereCache[t.key]
     val first = remember { FocusRequester() }
-    LaunchedEffect(t.key) { delay(120); runCatching { first.requestFocus() } }
+    LaunchedEffect(t.key) { focusWhenReady(vm) { runCatching { first.requestFocus() }.isSuccess } }
     Row(Modifier.fillMaxSize().padding(24.dp), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
         Box(Modifier.width(210.dp).aspectRatio(2f / 3f).clip(RoundedCornerShape(10.dp)).background(badgeColor(t.name))) {
             Text(t.name, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold, modifier = Modifier.align(Alignment.BottomStart).padding(10.dp))
