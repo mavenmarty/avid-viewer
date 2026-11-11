@@ -1354,17 +1354,56 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         val list = raw.distinctBy { it.key }
         channels = list
         val gs = groups()
+        if (!startupPreviewDone && list.isNotEmpty()) {
+            startupPreviewDone = true
+            // At launch: the last channel watched, else the first favorite, else the first channel.
+            val shownHere = shownChannel(prefs.lastChannel, list, gs)
+            if (shownHere != null) {
+                currentKey = shownHere.key; selectedGroup = shownHere.group
+                preview(currentKey); guideFocusTick++
+            } else {
+                selectedGroup = selectedGroup?.takeIf { g -> gs.any { it.raw == g } } ?: gs.firstOrNull()?.raw
+                viewModelScope.launch { startOnListedChannel() }
+            }
+            return
+        }
         if (currentKey == null) currentKey = prefs.lastChannel?.takeIf { k -> list.any { it.key == k } } ?: list.firstOrNull()?.key
         // Open on the last channel's category in the guide.
         val lastGroup = channel(currentKey)?.group
         if (selectedGroup == null || gs.none { it.raw == selectedGroup }) {
             selectedGroup = lastGroup?.takeIf { g -> gs.any { it.raw == g } } ?: gs.firstOrNull()?.raw
         }
-        if (!startupPreviewDone && currentKey != null) {
-            startupPreviewDone = true
-            preview(currentKey) // the last channel plays in the guide's preview window
-            guideFocusTick++
+    }
+
+    /** [key] if it's a channel of [list] the guide shows (not hidden, in a shown category). */
+    private fun shownChannel(key: String?, list: List<Channel>, gs: List<GroupInfo>): Channel? {
+        if (key == null || key in prefs.hiddenChannels) return null
+        val c = list.firstOrNull { it.key == key } ?: return null
+        return c.takeIf { gs.any { g -> g.raw == c.group } }
+    }
+
+    /**
+     * Launch, when the last channel isn't in a shown category of this playlist: the last channel from
+     * ★ Favorites or a list (it may be another playlist's), else the first favorite that can play,
+     * else the first channel of the first category.
+     */
+    private suspend fun startOnListedChannel() {
+        val last = prefs.lastChannel
+        // Other playlists' favorites and list channels, so they can be found.
+        val pids = (listOf(last) + prefs.favorites).filterNotNull().map { it.substringBefore(':') }.distinct().filter { it != activePlaylist()?.id }
+        for (pid in pids) livePlaylists.firstOrNull { it.id == pid }?.let { runCatching { liveFavorites(it) } }
+        favDataTick++
+        fun ok(k: String?) = k != null && k !in prefs.hiddenChannels && channel(k) != null
+        val (key, group) = when {
+            ok(last) && last in prefs.favorites -> last to FAV_GROUP
+            ok(last) && prefs.lists.any { !it.hidden && last in it.keys } -> last to (LIST_PREFIX + prefs.lists.first { !it.hidden && last in it.keys }.id)
+            else -> prefs.favorites.firstOrNull { ok(it) }?.let { it to FAV_GROUP }
+                ?: groups().firstNotNullOfOrNull { g -> channelsIn(g.raw).firstOrNull()?.let { it.key to g.raw } } ?: return
         }
+        if (currentKey != null && lastKeyAt > 0) return // the viewer has already picked something
+        currentKey = key; selectedGroup = group
+        guideFocusMode = GuideFocus.CURRENT
+        preview(key); guideFocusTick++
     }
 
     // ---------------- prefs ----------------

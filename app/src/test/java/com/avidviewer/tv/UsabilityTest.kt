@@ -19,6 +19,7 @@ import androidx.compose.ui.test.printToString
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.pressKey
 import androidx.compose.ui.test.requestFocus
@@ -368,6 +369,21 @@ class UsabilityTest {
         assertTrue(link, link.startsWith("mailto:bugs@avidviewer.app?subject="))
         assertTrue(link, link.contains("App version: 1.0.test") && link.contains("Last crash: java.lang.IllegalStateException: boom"))
         vm.playlists.forEach { p -> assertTrue("leaks ${p.name}", !link.contains(p.name) && (p.server.isBlank() || !link.contains(p.server))) }
+    }
+
+    @Test
+    fun aboutShowsQrCodesForTheUserGuideAndTheControl4Driver() {
+        go(Screen.SETTINGS)
+        rule.runOnIdle { vm.settingsSection = "about" }
+        settle()
+        rule.onAllNodes(androidx.compose.ui.test.hasScrollToNodeAction()).onFirst()
+            .performScrollToNode(androidx.compose.ui.test.hasTestTag("control4-qr"))
+        settle()
+        assertTrue(rule.onAllNodesWithText("User guide (PDF)").fetchSemanticsNodes().isNotEmpty())
+        assertTrue(rule.onAllNodesWithText("Control4 mini driver").fetchSemanticsNodes().isNotEmpty())
+        assertTrue(rule.onAllNodesWithTag("guide-qr").fetchSemanticsNodes().isNotEmpty())
+        assertTrue(rule.onAllNodesWithTag("control4-qr").fetchSemanticsNodes().isNotEmpty())
+        assertTrue(com.avidviewer.tv.data.Links.USER_GUIDE.endsWith("/releases/download/user-guide/AvidViewer-User-Guide.pdf"))
     }
 
     // ---------------------------------------------------------------- guide management and quick dialogs

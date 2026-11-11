@@ -726,6 +726,7 @@ fun SettingsScreen(vm: AppViewModel) {
                                 }
                             }
                             item { BugReportBlock(vm) }
+                            item { GuideAndDriverBlock() }
                             item { BackupBlock(vm) }
                             item {
                                 SettingBlock("App updates", "Installed: version ${vm.installed.second}" + (vm.update?.let { " · version ${it.versionName} available" } ?: "")) {
@@ -860,6 +861,28 @@ private fun BugReportBlock(vm: AppViewModel) {
                     runCatching { ctx.startActivity(com.avidviewer.tv.data.BugReport.emailIntent(version, crash)) }
                 }
             }
+        }
+    }
+}
+
+/** QR codes for the user guide and the Control4 driver: a TV can't open them, a phone can. */
+@Composable
+private fun GuideAndDriverBlock() {
+    SettingBlock("User guide and Control4 driver", "Scan with your phone's camera to open them.") {
+        Row(horizontalArrangement = Arrangement.spacedBy(28.dp)) {
+            LinkQr("User guide (PDF)", "The latest version, with setup, every screen and release notes.", com.avidviewer.tv.data.Links.USER_GUIDE, "guide-qr")
+            LinkQr("Control4 mini driver", "Puts Avid Viewer in the Control4 Watch menu (um_avid_viewer.c4z). Setup is in the user guide, section 12.", com.avidviewer.tv.data.Links.CONTROL4_DRIVER, "control4-qr")
+        }
+    }
+}
+
+@Composable
+private fun androidx.compose.foundation.layout.RowScope.LinkQr(title: String, note: String, url: String, tag: String) {
+    Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+        QrCode(url, Modifier.size(120.dp).testTag(tag))
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Label(title, size = 14.sp, color = C.Accent, weight = FontWeight.Bold)
+            Label(note, size = 12.sp, color = C.Soft, lines = Int.MAX_VALUE)
         }
     }
 }
