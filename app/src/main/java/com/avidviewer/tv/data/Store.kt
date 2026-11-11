@@ -204,6 +204,10 @@ class Store(private val context: Context) {
     /** The old movies & series file, once its titles are in the catalog database. */
     fun deleteVodFile(playlistId: String) { File(dataDir, "vod_$playlistId.json").delete() }
 
+    /** ESPN's last answer per league, for when it can't be reached. */
+    fun saveSportsCache(league: String, text: String) = runCatching { File(dataDir, "sports_$league.json").writeText(text) }
+    fun loadSportsCache(league: String): String? = runCatching { File(dataDir, "sports_$league.json").takeIf { it.exists() }?.readText() }.getOrNull()
+
     /** Deletes a playlist's saved files (its rows in the database are removed separately). */
     fun deletePlaylistData(playlistId: String) {
         File(dataDir, "vod_$playlistId.json").delete()

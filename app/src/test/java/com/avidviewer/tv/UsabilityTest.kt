@@ -411,6 +411,53 @@ class UsabilityTest {
         shownWhole("Report a bug")
     }
 
+    // ---------------------------------------------------------------- Sports, ESPN first
+
+    @Test
+    fun sportsListsEspnGamesAndOkGoesToTheirChannels() {
+        val now = System.currentTimeMillis()
+        val wings = FakeEspn.Companion.T("DET", "Red Wings", "Detroit", "e30526", "7-8-3", "2")
+        val blues = FakeEspn.Companion.T("STL", "Blues", "St. Louis", "0070b9", "7-8-2", "1")
+        val espn = FakeEspn(mapOf("hockey/nhl" to FakeEspn.board(
+            FakeEspn.event("401", now - 30 * 60_000L, "in", wings, blues, listOf(Triple("TNT", "national", "TV")), "3:44 - 2nd", 2, "3:44"),
+        )))
+        try {
+            com.avidviewer.tv.data.EspnFeed.base = espn.base
+            rule.runOnIdle {
+                vm.live.replacingChannels(TestData.P2) { add ->
+                    add(com.avidviewer.tv.data.Channel("${TestData.P2}:tnt", "US| TNT HD", "SPORTS", null, "http://127.0.0.1:9/tnt.ts", null))
+                }
+            }
+            go(Screen.SPORTS)
+            waitFor("the game from ESPN") { vm.sportGames.any { it.game.id == "NHL:401" && it.channels.isNotEmpty() } }
+            settle()
+            assertTrue(rule.onAllNodesWithText("Where to watch").fetchSemanticsNodes().isNotEmpty())
+            assertTrue(rule.onAllNodesWithText("LIVE NOW · 1").fetchSemanticsNodes().isNotEmpty())
+            assertTrue(rule.onAllNodesWithText("National TV · TNT").fetchSemanticsNodes().isNotEmpty())
+            // From the league filters down to the game, then OK: the highlight goes to its first channel.
+            var tries = 0
+            while (!focused().contains("Red Wings") && tries < 6) { press(listOf(Key.DirectionDown)); tries++ }
+            assertTrue("on the game card (focus: ${focused()})", focused().contains("Red Wings"))
+            press(listOf(Key.DirectionCenter))
+            waitFor("OK on a game moves to its channels (focus: ${focused()})") { focused().contains("US| TNT HD") }
+            press(listOf(Key.DirectionCenter))
+            waitFor("OK on a channel plays it in the preview") { vm.currentKey == "${TestData.P2}:tnt" }
+        } finally { espn.close() }
+    }
+
+    @Test
+    fun settingsSportsTabSwitchesLeaguesWithOk() {
+        go(Screen.SETTINGS)
+        rule.runOnIdle { vm.settingsSection = "sports" }
+        settle()
+        assertTrue(rule.onAllNodesWithText("Leagues").fetchSemanticsNodes().isNotEmpty())
+        assertTrue(rule.onAllNodesWithText("College basketball (men)").fetchSemanticsNodes().isNotEmpty())
+        rule.onAllNodesWithText("NFL").onFirst().performClick()
+        rule.waitForIdle()
+        assertEquals(false, vm.sportLeagues().first { it.id == "NFL" }.on)
+        assertTrue(rule.onAllNodesWithText("Finished games stay for").fetchSemanticsNodes().isNotEmpty())
+    }
+
     // ---------------------------------------------------------------- guide management and quick dialogs
 
     @Test
