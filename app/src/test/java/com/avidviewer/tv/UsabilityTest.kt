@@ -386,6 +386,29 @@ class UsabilityTest {
         assertTrue(com.avidviewer.tv.data.Links.USER_GUIDE.endsWith("/releases/download/user-guide/AvidViewer-User-Guide.pdf"))
     }
 
+    @Test
+    fun updatesAndAboutBlocksAreReachableAndShownWhole() {
+        go(Screen.SETTINGS)
+        var tries = 0
+        while (!focused().contains("Updates & about") && tries < 15) { press(listOf(Key.DirectionDown)); tries++ }
+        press(listOf(Key.DirectionCenter))
+        waitFor("OK opens Updates & about on its first block (focus: ${focused()})") { vm.settingsSection == "about" && (focused().contains("Report a bug") || focused().contains("Open email app")) }
+        fun shownWhole(text: String) {
+            val root = rule.onRoot().fetchSemanticsNode().boundsInRoot
+            val b = rule.onAllNodesWithText(text).onFirst().fetchSemanticsNode().boundsInRoot
+            assertTrue("\"$text\" is cut off: $b (screen $root)", b.top >= root.top && b.bottom <= root.bottom)
+        }
+        shownWhole("Report a bug")
+        tries = 0
+        while (!focused().contains("User guide and Control4 driver") && tries < 4) { press(listOf(Key.DirectionDown)); tries++ }
+        assertTrue("Down reaches the QR codes block (focus: ${focused()})", focused().contains("User guide and Control4 driver"))
+        shownWhole("User guide and Control4 driver")
+        shownWhole("Control4 mini driver")
+        // And back up: the bug report block shows whole again.
+        press(listOf(Key.DirectionUp))
+        shownWhole("Report a bug")
+    }
+
     // ---------------------------------------------------------------- guide management and quick dialogs
 
     @Test

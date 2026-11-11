@@ -5,6 +5,7 @@ package com.avidviewer.tv.ui
 import kotlinx.coroutines.launch
 
 import androidx.compose.foundation.focusable
+import androidx.compose.foundation.border
 
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.foundation.focusGroup
@@ -849,6 +850,7 @@ private fun BugReportBlock(vm: AppViewModel) {
         "Report a bug",
         "Something not working? Email ${com.avidviewer.tv.data.BugReport.ADDRESS}. Say what happened and the steps that lead to it, and include the details below." +
             if (crash != null) " If the app closed unexpectedly, a photo of the crash report above helps too." else "",
+        focusable = !canEmail, // with an email button, that button takes the highlight instead
     ) {
         Row(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
             QrCode(link, Modifier.size(132.dp).testTag("bug-qr"))
@@ -868,7 +870,7 @@ private fun BugReportBlock(vm: AppViewModel) {
 /** QR codes for the user guide and the Control4 driver: a TV can't open them, a phone can. */
 @Composable
 private fun GuideAndDriverBlock() {
-    SettingBlock("User guide and Control4 driver", "Scan with your phone's camera to open them.") {
+    SettingBlock("User guide and Control4 driver", "Scan with your phone's camera to open them.", focusable = true) {
         Row(horizontalArrangement = Arrangement.spacedBy(28.dp)) {
             LinkQr("User guide (PDF)", "The latest version, with setup, every screen and release notes.", com.avidviewer.tv.data.Links.USER_GUIDE, "guide-qr")
             LinkQr("Control4 mini driver", "Puts Avid Viewer in the Control4 Watch menu (um_avid_viewer.c4z). Setup is in the user guide, section 12.", com.avidviewer.tv.data.Links.CONTROL4_DRIVER, "control4-qr")
@@ -929,9 +931,15 @@ private fun ToggleRow(title: String, desc: String, on: Boolean, onToggle: () -> 
 }
 
 @Composable
-internal fun SettingBlock(title: String, desc: String, content: @Composable () -> Unit) {
+internal fun SettingBlock(title: String, desc: String, focusable: Boolean = false, content: @Composable () -> Unit) {
+    // A block with nothing to press (a QR code, details) can still take the highlight when [focusable],
+    // so the remote can reach it and the page scrolls it fully into view instead of skipping past it.
+    var focused by remember { mutableStateOf(false) }
     Column(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(C.Surface).padding(14.dp),
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(C.Surface)
+            .then(if (focusable) Modifier.onFocusChanged { focused = it.isFocused }.focusable()
+                .border(2.dp, if (focused) C.AccentFocus else androidx.compose.ui.graphics.Color.Transparent, RoundedCornerShape(10.dp)) else Modifier)
+            .padding(14.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Label(title, size = 15.sp, color = C.Text, weight = FontWeight.SemiBold, lines = 2)
