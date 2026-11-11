@@ -96,8 +96,30 @@ object EspnFeed {
 
     fun url(l: League, from: String, to: String) = "$base${l.path}/scoreboard?dates=$from-$to&limit=500${l.query}"
 
-    /** The league's games from [from] to [to] (YYYYMMDD); throws on a network or format failure. */
-    fun fetchText(l: League, from: String, to: String): String = Net.text(url(l, from, to))
+    /**
+     * The league's games from [from] to [to] (YYYYMMDD); throws on a network failure. If the range is
+     * refused, asks one day at a time and merges the days' events.
+     */
+    fun fetchText(l: League, from: String, to: String): String =
+        runCatching { Net.text(url(l, from, to)) }.getOrElse { first ->
+            val days = daysBetween(from, to)
+            if (days.size <= 1) throw first
+            val events = JSONArray()
+            var any = false
+            for (d in days) runCatching { JSONObject(Net.text(url(l, d, d))) }.getOrNull()?.let { o ->
+                any = true
+                o.optJSONArray("events")?.let { a -> for (i in 0 until a.length()) events.put(a.get(i)) }
+            }
+            if (!any) throw first
+            JSONObject().put("events", events).toString()
+        }
+
+    private fun daysBetween(from: String, to: String): List<String> {
+        val f = java.text.SimpleDateFormat("yyyyMMdd", java.util.Locale.US).apply { timeZone = TimeZone.getTimeZone("UTC") }
+        val a = f.parse(from)?.time ?: return listOf(from)
+        val b = f.parse(to)?.time ?: return listOf(from)
+        return generateSequence(a) { it + 86_400_000L }.takeWhile { it <= b }.map { f.format(it) }.take(10).toList()
+    }
 
     fun parse(league: String, text: String): List<Game> {
         val root = JSONObject(text)
