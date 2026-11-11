@@ -204,6 +204,14 @@ class AuditHarnessTest {
             report("parse", "m3u_40k_entries_ms", (System.nanoTime() - t0) / 1_000_000)
             report("parse", "m3u_peak_heap_mb", peak)
             report("parse", "m3u_live_vod", "${chs.size} live, ${vodOut.size} vod")
+            // Catalog step 2: the same file streamed straight into the database (what the app now does).
+            val cat = com.avidviewer.tv.data.Catalog(app)
+            val t2 = System.nanoTime()
+            val (ing, speak) = peakMb { cat.replacing("fx-stream", { false }) { add -> com.avidviewer.tv.data.M3u.read(pl, add) } }
+            report("parse", "m3u_stream_to_catalog_ms", (System.nanoTime() - t2) / 1_000_000)
+            report("parse", "m3u_stream_to_catalog_peak_heap_mb", speak)
+            report("parse", "m3u_stream_to_catalog_titles", ing.added)
+            cat.delete("fx-stream")
             val (_, jpeak) = peakMb { org.json.JSONArray(File(fx, "live_streams.json").readText()).length() }
             report("parse", "xtream_live_10k_JSONArray_peak_heap_mb", jpeak)
             report("parse", "xtream_live_10k_json_mb", File(fx, "live_streams.json").length() / (1024 * 1024.0))
