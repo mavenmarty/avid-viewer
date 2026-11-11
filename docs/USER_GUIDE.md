@@ -110,7 +110,6 @@ If a channel shows the wrong listings, or none, press **Menu** on it and choose 
 ### Category options (Menu on a category in the left navigation)
 
 - **✎ Rename**, **⇅ Re-order**, **⊘ Hide category**.
-- **🏆 Add to Sports tab / Remove from Sports tab**: show this category's channels on the Sports screen.
 
 ### Re-ordering
 
@@ -169,12 +168,24 @@ Discover needs a free **TMDB API key**. Enter it in **Settings › Discover**; i
 
 ## 7. Sports
 
-The Sports screen finds games and events in your TV guide.
+Sports lists real games from **ESPN's schedules** for today and the next 2 days, plus recent finals, then finds the channels in your playlists that carry them. Leagues: NFL, NBA, NHL, MLB, WNBA, CFL, college football (FBS) and men's college basketball (Division I).
 
-- **Categories** across the top: All, plus your Sports categories. The built-ins are NFL, NHL, NBA, MLB, NCAA, ESPN+, PPV and Soccer.
-- Events are grouped into **Live now**, **Upcoming** and **Final**, with times in your time zone and scores where available (from ESPN's public scoreboard).
-- The **preview window** shows the selected event, tagged LIVE, FINAL or STARTS [time]. Choose **Watch full screen**. If the event is on more than one channel, the screen tells you how many.
-- To change what appears here, use **Settings › Sports tab** or press Menu on a category in the TV Guide.
+- **Top:** the preview window and the highlighted game. It shows the league, the status (**LIVE** with the period and clock, **FINAL**, or the start time), both teams with logos, records and the score, the venue, and the national TV or streaming service.
+- **Left:**
+  - **League filters:** **All**, then each league you've switched on.
+  - **Games:** grouped as **Live now**, **Later today**, the next days and **Final**. Each card shows the matchup, its networks, its time or score, and how many channels were found. Games with no channel found are greyed out.
+- **Right: Where to watch.** The game's channels, best first, each with why it matched:
+  - **National TV / Streaming:** a channel named for the network ESPN lists (TNT, ESPN2, Fox, Prime Video…).
+  - **In the guide:** a listing during the game that names both teams.
+  - **Event channel:** the channel's name has both teams, for example "NHL 03: Red Wings @ Blues".
+  - **Local TV:** a team's regional network (FanDuel Sports Network, MSG, Altitude…).
+- **OK on a game** moves to its channels. **OK on a channel** plays it in the preview; **OK** again opens full screen. In full screen, **Channel Up/Down** moves between live games.
+- **Every playlist:** Sports searches every switched-on playlist with live TV. Hidden channels and categories are skipped.
+- **North America only:**
+  - US channels come first; Canadian channels are the backup.
+  - Channels marked for other countries are left out, for example "UK |" in the name, or a category for another country.
+- **Games further ahead:** your guide covers about 36 hours, so guide listings and event channels for later games appear closer to the start. **Search the guide for "[team]"** jumps to the TV Guide's search.
+- **Updates:** every minute while a game is live, every 5 minutes otherwise while Sports is open, and every 30 minutes in the background. If ESPN can't be reached, Sports says so and keeps the last list.
 
 ## 8. Movies and Series
 
@@ -247,10 +258,12 @@ Rename, re-order and Add to List are done with Menu on the item itself in the TV
 
 ### Sports tab
 
-- Turn categories on or off and set their order (the order of the filters on the Sports screen).
-- **Remove** a built-in category, or bring it back with **Restore all**.
-- **Add your own category by words**: give it a name and match words, separated by commas.
-- **Add a category from your playlist**: everything on that category's channels shows on the Sports screen.
+- **Leagues**: **OK** switches a league on or off.
+  - **Menu** on a league re-orders it: ▲▼ move, ◀ top, ▶ bottom, OK done. The order is the order of the filters on the Sports screen.
+- **Games with no channel found**: Show (greyed out, with ESPN's networks) or Hide.
+- **Finished games stay for**: 6, 12 or 24 hours.
+- **Scores**: Show or Hide. Hiding them avoids spoilers: live games show only the period.
+- Soccer, rugby, cricket, golf, motor racing and combat sports aren't included yet.
 
 ### Discover
 
@@ -288,7 +301,7 @@ Everything here stays on the device; nothing is uploaded or backed up to the clo
 
 #### Backup & restore
 
-A backup saves your playlists (with their logins), ★ Favorites and your lists, renamed and re-ordered channels and categories, hidden items, Sports categories, location, the TMDB key, network-share settings, all other settings, watch history and resume points. Channels, guides and movie catalogs aren't included; they download again after a restore.
+A backup saves your playlists (with their logins), ★ Favorites and your lists, renamed and re-ordered channels and categories, hidden items, Sports leagues and options, location, the TMDB key, network-share settings, all other settings, watch history and resume points. Channels, guides and movie catalogs aren't included; they download again after a restore.
 
 Because it holds your provider logins, every backup is locked with a **PIN** you choose (4 or more digits). The PIN can't be recovered if you forget it.
 
@@ -331,7 +344,9 @@ The share password is stored encrypted on the TV and is included in your PIN-loc
 - **No channels or guide**: check that the playlist, and its Live TV switch, are on in Settings › Playlists, then choose Refresh.
 - **No movies or series**: turn on Movies & series for the playlist and Refresh.
 - **Discover is empty**: add a TMDB API key in Settings › Discover, or turn off "My services".
-- **Sports is empty**: wait for the TV guide to load, or adjust your categories in Settings › Sports tab.
+- **Sports is empty**: check the leagues in Settings › Sports tab; off-season leagues have no games. "Couldn't reach ESPN" means the schedules couldn't be downloaded, so the last list is shown.
+- **A game shows "No channel yet"**: your playlists have no channel named for its network, and no guide listing or event channel for it yet. Those often appear closer to the start. You can also use **Search the guide** on the game.
+- **Discover froze or the app closed after about 20 seconds** (1.0.137 and earlier, with large movie catalogs): update the app.
 - **A channel or category disappeared**: it may be hidden. Check Settings › List Editor.
 - **A guide row ends early and Right won't go further**: fixed in 1.0.133 for guides that list overlapping programmes; update the app.
 - **A channel shows the wrong listings, or none**: press Menu on it and choose **Match guide…**. If a whole guide is consistently early or late, set a **time offset** on its source in Settings › Playlists › ▤ Guide sources.
@@ -395,11 +410,19 @@ Every public release since 1.0.35, newest first. Releases are published on GitHu
 
 ### 1.0.141 — November 11, 2026, 4:51 PM CT (current)
 
+**Release notes**
+
+- **Sports, rebuilt around ESPN's schedules:** real games for today and the next 2 days, plus recent finals, for the NFL, NBA, NHL, MLB, WNBA, CFL, college football and men's college basketball. Each game shows where to watch it in your playlists, best first: national TV, guide listings, event channels, then local networks. US channels come first and Canadian ones as a backup; channels for other countries are left out. Before, Sports guessed events from guide listings and often showed promos (and lately nothing).
+- **Settings › Sports tab:** choose leagues and their order, whether to show games with no channel found, how long finished games stay, and whether to show scores. Custom keyword and playlist categories, and Add to Sports tab in the category Menu, are gone.
+- **Discover no longer freezes or closes** with a large movie and series catalog (the remote stopped responding and the app closed after about 20 seconds). Movies and Series could stall the same way.
+
 **Change log**
 
-- Sports, ESPN first: games from ESPN's schedules, then the channels that carry them; Discover freeze fix
-- Sports: a numbered network name (ESPN 2) is only that network; settings test checks what's on screen
-- Sports: if ESPN refuses a date range, ask one day at a time
+- Sports from ESPN's scoreboard feed: 8 North American leagues, today−1 to today+2 (day by day if a range is refused), last answer kept
+- Channel matching across playlists: national networks by name, guide listings naming both teams, event channels, local networks; US first, Canada next, other countries left out
+- New Sports screen and Settings › Sports tab
+- Discover / Movies: paged title lists compared by identity (Compose compared them item by item, reading whole catalogs on the main thread)
+- Tests: ESPN parsing, network and country names, matching order, Sports screen with a stand-in ESPN, ESPN unreachable, settings, paged-list comparison
 
 ### 1.0.137 — November 11, 2026, 2:12 PM CT
 
