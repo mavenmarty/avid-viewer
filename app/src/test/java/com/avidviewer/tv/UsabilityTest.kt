@@ -493,6 +493,116 @@ class UsabilityTest {
         assertTrue("couldn't get to channel 60 (focus: ${focused()})", focused().contains("BIG Channel 60 with"))
     }
 
+    // ---------------------------------------------------------------- navigation store (audit work plan 2.1)
+
+    @Test
+    fun aCategorySeenBeforeComesBackOnTheSameChannelEvenAfterAChannelAboveIsHidden() {
+        goDeepInBig()
+        rule.runOnIdle { vm.chooseGroup(TestData.P1, "KIDS") }
+        waitFor("KIDS starts at its first channel (focus: ${focused()})") { focused().contains("KIDS Channel 1 with") }
+        rule.runOnIdle { vm.chooseGroup(TestData.P1, "BIG") }
+        waitFor("BIG comes back on channel 60, not the top (focus: ${focused()})") { focused().contains("BIG Channel 60 with") }
+        // Hide channels above it: the same channel keeps the highlight (positions are by key, not by index).
+        rule.runOnIdle { vm.setChannelsHidden(listOf("${TestData.P1}:big3", "${TestData.P1}:big4"), true) }
+        rule.runOnIdle { vm.chooseGroup(TestData.P1, "KIDS") }
+        waitFor("KIDS again (focus: ${focused()})") { focused().contains("KIDS Channel") }
+        rule.runOnIdle { vm.chooseGroup(TestData.P1, "BIG") }
+        waitFor("still channel 60 after hiding two above it (focus: ${focused()})") { focused().contains("BIG Channel 60 with") }
+    }
+
+    @Test
+    fun backFromFullScreenKeepsTheChosenTimeAndProgramme() {
+        rule.runOnIdle { vm.chooseGroup(TestData.P1, "NEWS") }
+        waitFor("NEWS") { focused().contains("NEWS Channel 1 with") }
+        press(listOf(Key.DirectionDown, Key.DirectionDown))
+        // Into the programmes, then far enough right that the guide's window moves on.
+        val seen = ArrayList<String>()
+        repeat(9) { press(listOf(Key.DirectionRight)); seen.add(focused() + " @" + vm.nav.guideWindowStart) }
+        val programme = focused()
+        assertTrue("Right should move the window on to later programmes (focus: $programme; base ${(vm.now / (30 * 60_000L)) * (30 * 60_000L)}; steps $seen)", programme.contains("Program") && vm.nav.guideWindowStart > (vm.now / (30 * 60_000L)) * (30 * 60_000L))
+        val window = vm.nav.guideWindowStart
+        press(listOf(Key.DirectionCenter)) // preview
+        press(listOf(Key.DirectionCenter)) // full screen
+        waitFor("full screen") { vm.screen == Screen.PLAYER }
+        press(listOf(Key.Back))
+        waitFor("back on the same programme, same time window (focus: ${focused()}, wanted $programme)") {
+            vm.screen == Screen.GUIDE && focused() == programme && vm.nav.guideWindowStart == window
+        }
+    }
+
+    @Test
+    fun backFromATitlePageReturnsToItsPoster() {
+        go(Screen.MOVIES)
+        waitFor("movies") { vm.vodOf("movie").isNotEmpty() }
+        rule.runOnIdle { vm.chooseVodCategory("movie", "Action") }
+        settle()
+        press(listOf(Key.DirectionRight, Key.DirectionDown, Key.DirectionRight))
+        val poster = focused()
+        assertTrue("should be on a poster (focus: $poster)", poster.contains("Action Movie"))
+        press(listOf(Key.DirectionCenter))
+        waitFor("the title's page") { vm.vodDetail != null }
+        press(listOf(Key.Back))
+        waitFor("back on the same poster (focus: ${focused()}, wanted $poster)") { vm.vodDetail == null && focused() == poster }
+    }
+
+    // ---------------------------------------------------------------- focus and Back rules (audit work plan 2.2, 2.3)
+
+    @Test
+    fun settingsLeftAndBackReturnToTheSectionYouWereIn() {
+        // First leave the guide from its playlist list (this used to leave a stale "in the playlist list" flag).
+        press(listOf(Key.Back, Key.Back))
+        waitFor("the playlist list (nav=${vm.navMode})") { vm.navMode == NavMode.COLLAPSED && vm.inPlaylistTree }
+        go(Screen.SETTINGS)
+        waitFor("Settings opens on its first section (focus: ${focused()})") { focused().contains("Playlists") }
+        press(listOf(Key.DirectionDown, Key.DirectionDown, Key.DirectionDown, Key.DirectionDown))
+        waitFor("on TV guide (focus: ${focused()})") { vm.settingsSection == "guide" && focused().contains("TV guide") }
+        press(listOf(Key.DirectionRight))
+        waitFor("Right lands inside the section, on a control (focus: ${focused()})") { vm.settingsInContent && focused() != "(nothing focused)" }
+        val steps = ArrayList<String>()
+        repeat(6) { press(listOf(Key.DirectionDown)); steps.add(focused()) }
+        press(listOf(Key.DirectionLeft)); steps.add("◀ " + focused())
+        waitFor("Left goes back to TV guide in the list, not a neighbouring section (section=${vm.settingsSection}, focus: ${focused()}, steps $steps)") {
+            vm.settingsSection == "guide" && focused().contains("TV guide") && !vm.settingsInContent
+        }
+        assertEquals("Left from Settings didn't open the main menu", NavMode.COLLAPSED, vm.navMode)
+        press(listOf(Key.DirectionRight))
+        waitFor("back inside") { vm.settingsInContent }
+        press(listOf(Key.Back))
+        waitFor("Back goes up one level, to TV guide in the list (focus: ${focused()}, nav=${vm.navMode})") {
+            vm.navMode == NavMode.COLLAPSED && vm.settingsSection == "guide" && focused().contains("TV guide")
+        }
+        press(listOf(Key.Back))
+        waitFor("Back again opens the main menu") { vm.navMode == NavMode.FULL }
+    }
+
+    @Test
+    fun backAtTheTopAsksForASecondPressBeforeExiting() {
+        press(listOf(Key.Back, Key.Back, Key.Back))
+        waitFor("the main menu") { vm.navMode == NavMode.FULL }
+        press(listOf(Key.Back))
+        assertEquals("Press Back again to exit", vm.notice)
+        assertTrue("one Back mustn't exit", !rule.activity.isFinishing)
+        press(listOf(Key.Back))
+        assertTrue("a second Back exits", rule.activity.isFinishing)
+    }
+
+    @Test
+    fun backFromAChannelOpenedFromSearchReturnsToTheResult() {
+        go(Screen.SEARCH)
+        rule.runOnIdle { vm.search("KIDS Channel 3") }
+        waitFor("results") { vm.searchResults?.any { it.stations.isNotEmpty() } == true }
+        var tries = 0
+        while (!focused().contains("KIDS Channel 3 with") && tries < 12) { press(listOf(Key.DirectionDown)); tries++ }
+        assertTrue("couldn't reach the result (focus: ${focused()})", focused().contains("KIDS Channel 3 with"))
+        val result = focused()
+        press(listOf(Key.DirectionCenter))
+        waitFor("full screen") { vm.screen == Screen.PLAYER }
+        press(listOf(Key.Back))
+        waitFor("Back returns to the search results, on the chosen result (screen=${vm.screen}, focus: ${focused()})") {
+            vm.screen == Screen.SEARCH && focused() == result
+        }
+    }
+
     @Test
     fun theMainMenuShowsAsIconsAtLaunchOnTheGuide() {
         settle()

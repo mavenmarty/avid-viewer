@@ -118,14 +118,17 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     var guideFocusTick by mutableStateOf(0)
     /** What the guide does on the next [guideFocusTick]: jump to the top, keep its place, or find the current channel. */
     var guideFocusMode = GuideFocus.CURRENT
-    /** Scroll position of the guide list, remembered per category: (category, first item, offset). */
-    var guideScroll: Triple<String?, Int, Int> = Triple(null, 0, 0)
-    /** Scroll position of the Movies / Series grid per kind: kind → (category, first item, offset). */
-    val vodScroll = HashMap<String, Triple<String, Int, Int>>()
+    /** Where the highlight and scroll were in each guide category and Movies/Series category (by item key). */
+    val nav = NavStore()
+    /** The guide's place for a category of the playlist being watched. */
+    fun guidePath(group: String?) = "guide/${activePlaylist()?.id}/$group"
+    /** The Movies / Series grid's place for a category and search. */
+    fun vodPath(kind: String, category: String, query: String) = "vod/$kind/$category|$query"
+    /** Set when a title's page closes: the grid puts the highlight back on that title. */
+    var vodFocusBack by mutableStateOf(0); private set
 
-    /** Movies / Series category: a different category starts at the top; the same one keeps its place. */
+    /** Movies / Series category: each category keeps its own place (a new one starts at the top). */
     fun chooseVodCategory(kind: String, name: String) {
-        if ((vodCategory[kind] ?: "All") != name) vodScroll[kind] = Triple(name, 0, 0)
         vodCategory = vodCategory + (kind to name)
     }
     var selectedGroup by mutableStateOf<String?>(null)
@@ -1754,6 +1757,15 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             player.clearMediaItems()
             vodPlaying = null
             screen = lastScreen
+            if (jumpedFrom != null) { jumpedFrom = null; navFocusKey = lastHit }
+            return
+        }
+        // Opened from Search: Back goes back to the results, on the result that was chosen (NAV-12).
+        val from = jumpedFrom
+        if (from != null) {
+            jumpedFrom = null
+            screen = from; navMode = NavMode.COLLAPSED
+            navFocusKey = lastHit
             return
         }
         if (playContext == PlayContext.GROUP) {
@@ -2146,6 +2158,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     var lastKeyAt = 0L
 
     fun navSelect(target: Screen) {
+        jumpedFrom = null
         entryFocusFor = if (target == Screen.PLAYLISTS || target == Screen.MANAGE) Screen.SETTINGS else target
         val s = if (target == Screen.LIVE) Screen.GUIDE else target
         if (s == Screen.FAVORITES) {
@@ -2154,7 +2167,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             return
         }
         if (s == Screen.DISCOVER) { ensureVod(); openDiscover(); navMode = NavMode.COLLAPSED; return }
-        if (s == Screen.MOVIES || s == Screen.SERIES) { closeVodDetail(); ensureVod() }
+        if (s == Screen.MOVIES || s == Screen.SERIES) { closeVodDetail(returnFocus = false); ensureVod() }
         if (s == Screen.SPORTS) openSportsScreen() else {
             when (s) {
                 Screen.SETTINGS -> { settingsSection = "playlists"; screen = s }
@@ -2190,9 +2203,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             val same = raw == selectedGroup && pid == activePlaylist()?.id
             switchPlaylist(pid)
-            // A newly chosen category starts at its first channel; choosing the same one keeps the scroll position.
-            guideFocusMode = if (same) GuideFocus.KEEP else GuideFocus.TOP
-            if (!same) guideScroll = Triple(raw, 0, 0)
+            // A category seen before comes back on the channel it was on; a new one starts at its first channel.
+            guideFocusMode = if (same || nav.has(guidePath(raw))) GuideFocus.KEEP else GuideFocus.TOP
             selectedGroup = raw
             navMode = NavMode.GROUPS
             guideFocusTick++
@@ -2203,6 +2215,15 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** Which left-hand list has the highlight, so Back and Left know which layer the viewer is on. */
     var inGroupNav = false
     var inPlaylistTree = false
+    /** Whether the highlight is inside a Settings section (not on the section list). */
+    var settingsInContent = false
+    /** Bumped when Back inside a Settings section should go to that section's row in the list. */
+    var settingsBackTick by mutableStateOf(0); private set
+    /** When Back was pressed at the top of the app; a second press within 2.5 s exits (NAV-11). */
+    private var exitArmedAt = 0L
+    /** A screen a jump started from (Search): Back from what it opened returns there (NAV-12). */
+    var jumpedFrom: Screen? = null
+
     /** A category (raw name, ★ Favorites or a list) the left-hand list should highlight next; cleared once it has. */
     var navFocusKey by mutableStateOf<String?>(null)
 
@@ -2210,7 +2231,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
      * Back, one layer at a time: guide channels → the current category in the category list →
      * the same category in the playlist list → the main menu.
      */
-    fun navBack(): Boolean = if (movingGroup != null || movingChannel != null || vodMovingCat != null) { movingGroup = null; movingChannel = null; vodMovingCat = null; true } else when (navMode) {
+    fun navBack(): Boolean = if (movingGroup != null || movingChannel != null || vodMovingCat != null) { movingGroup = null; movingChannel = null; vodMovingCat = null; true }
+    else if (screen == Screen.SETTINGS && settingsInContent) { settingsBackTick++; true }
+    else when (navMode) {
         NavMode.GROUPS -> {
             if (!inGroupNav && (screen == Screen.GUIDE || screen == Screen.LIVE) && selectedGroup != null) {
                 navFocusKey = selectedGroup
@@ -2226,10 +2249,15 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         NavMode.COLLAPSED -> { inPlaylistTree = false; navFocusKey = null; navMode = NavMode.FULL; true }
         NavMode.FULL -> if (screen != Screen.GUIDE && channels.isNotEmpty()) {
             screen = Screen.GUIDE; navMode = NavMode.GROUPS; guideFocusTick++; true
-        } else false
+        } else exitPressed()
     }
 
+    /** Identifies a search result, so Back can put the highlight back on it. */
+    fun hitId(h: Hit) = "hit|${h.playlistId}|${h.kind}|${h.channelKey ?: h.vod?.key}|${h.title}"
+    private var lastHit: String? = null
+
     fun openHit(h: Hit) {
+        if (screen == Screen.SEARCH && h.kind in setOf("channel", "program", "movie", "episode")) { jumpedFrom = Screen.SEARCH; lastHit = hitId(h) }
         when (h.kind) {
             "channel", "program" -> viewModelScope.launch {
                 switchPlaylist(h.playlistId)
@@ -2416,7 +2444,12 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    fun closeVodDetail() { vodDetail = null; vodInfo = null; detailEpisodes = null }
+    /** Closes a title's page; [returnFocus] puts the highlight back on its poster (not when leaving via the menu). */
+    fun closeVodDetail(returnFocus: Boolean = true) {
+        val had = vodDetail != null
+        vodDetail = null; vodInfo = null; detailEpisodes = null
+        if (had && returnFocus) vodFocusBack++
+    }
 
     fun playDetailEpisode(e: Episode, fromStart: Boolean = false) {
         val s = vodDetail ?: return
@@ -2489,6 +2522,24 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         start(list[i])
         val wrapped = (dir > 0 && i == 0) || (dir < 0 && i == list.size - 1)
         flashOsd(contextLabel() + if (wrapped && list.size > 1) " · back to ${if (dir > 0) "top" else "bottom"} of list" else "")
+    }
+
+    /** A short notice over any screen (e.g. "Press Back again to exit"). */
+    var notice by mutableStateOf<String?>(null); private set
+    private var noticeJob: Job? = null
+    fun showNotice(text: String, ms: Long = 2500) {
+        notice = text
+        noticeJob?.cancel()
+        noticeJob = viewModelScope.launch { delay(ms); notice = null }
+    }
+
+    /** Back at the very top: the first press says how to exit, a second one within 2.5 s exits (false). */
+    private fun exitPressed(): Boolean {
+        val t = android.os.SystemClock.uptimeMillis()
+        if (exitArmedAt > 0 && t - exitArmedAt < 2500) { exitArmedAt = 0; notice = null; return false }
+        exitArmedAt = t
+        showNotice("Press Back again to exit")
+        return true
     }
 
     private fun flashOsd(text: String) {

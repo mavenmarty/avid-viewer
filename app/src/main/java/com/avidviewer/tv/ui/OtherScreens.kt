@@ -2,6 +2,10 @@
 
 package com.avidviewer.tv.ui
 
+import kotlinx.coroutines.launch
+
+import androidx.compose.foundation.focusable
+
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.verticalScroll
@@ -284,7 +288,7 @@ private fun ConfirmDialog(c: Confirm, close: () -> Unit) {
         confirmButton = { TvButton(c.yes, primary = true) { close(); c.run() } },
         dismissButton = { TvButton("Cancel", modifier = Modifier.focusRequester(cancelFocus)) { close() } },
     )
-    LaunchedEffect(c) { kotlinx.coroutines.delay(80); runCatching { cancelFocus.requestFocus() } }
+    LaunchedEffect(c) { focusWhenReady { runCatching { cancelFocus.requestFocus() }.isSuccess } }
 }
 
 /**
@@ -415,7 +419,7 @@ fun PlaylistsScreen(vm: AppViewModel) {
             confirmButton = { TvButton(c.yes, primary = true) { confirm = null; c.run() } },
             dismissButton = { TvButton("Cancel", modifier = Modifier.focusRequester(cancelFocus)) { confirm = null } },
         )
-        LaunchedEffect(c) { kotlinx.coroutines.delay(80); runCatching { cancelFocus.requestFocus() } }
+        LaunchedEffect(c) { focusWhenReady { runCatching { cancelFocus.requestFocus() }.isSuccess } }
     }
 }
 
@@ -545,12 +549,22 @@ private val ZONES = listOf(
 private data class SettingsSection(val id: String, val title: String, val icon: androidx.compose.ui.graphics.vector.ImageVector)
 
 @OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
-private fun Modifier.staysInSection(): Modifier = this
+/**
+ * A settings section's content: Up/Down never leave it; Left at its left edge goes to the section
+ * it belongs to in the list ([sectionFr], not whichever row happens to be nearest, NAV-02); Right
+ * into it lands on its first control ([firstFr], NAV-10).
+ */
+private fun Modifier.staysInSection(sectionFr: FocusRequester? = null, firstFr: FocusRequester? = null, firstOn: () -> Boolean = { false }): Modifier = this
     .focusProperties {
         exit = { dir ->
-            if (dir == androidx.compose.ui.focus.FocusDirection.Up || dir == androidx.compose.ui.focus.FocusDirection.Down) FocusRequester.Cancel
-            else FocusRequester.Default
+            when (dir) {
+                androidx.compose.ui.focus.FocusDirection.Up, androidx.compose.ui.focus.FocusDirection.Down -> FocusRequester.Cancel
+                androidx.compose.ui.focus.FocusDirection.Left -> sectionFr ?: FocusRequester.Default
+                else -> FocusRequester.Default
+            }
         }
+        // Only while the stop is on screen (scrolled away, a lazy list has dropped it and asking it would crash).
+        if (firstFr != null) enter = { dir -> if (dir == androidx.compose.ui.focus.FocusDirection.Right && firstOn()) firstFr else FocusRequester.Default }
     }
     .focusGroup()
 
@@ -568,6 +582,23 @@ private val SECTIONS = listOf(
     SettingsSection("about", "Updates & about", NavIcons.Settings),
 )
 
+/**
+ * An invisible stop at the top of a settings page: entering the page lands here, and it hands the
+ * highlight straight down to the page's first control (whatever kind of control that is).
+ */
+@Composable
+private fun FirstControlStop(fr: FocusRequester, on: androidx.compose.runtime.MutableState<Boolean>) {
+    androidx.compose.runtime.DisposableEffect(fr) { on.value = true; onDispose { on.value = false } }
+    val fm = androidx.compose.ui.platform.LocalFocusManager.current
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    androidx.compose.foundation.layout.Box(
+        // Full width and 1 dp high: never "to the left" of a control, so Left from the page can't land here.
+        Modifier.fillMaxWidth().height(1.dp).focusRequester(fr)
+            .onFocusChanged { if (it.isFocused) scope.launch { fm.moveFocus(androidx.compose.ui.focus.FocusDirection.Down) } }
+            .focusable(),
+    )
+}
+
 /** Settings: sections on the left (highlighting one shows it), options on the right. */
 @Composable
 fun SettingsScreen(vm: AppViewModel) {
@@ -579,6 +610,16 @@ fun SettingsScreen(vm: AppViewModel) {
     var settingsConfirm by remember { mutableStateOf<Confirm?>(null) }
     settingsConfirm?.let { c -> ConfirmDialog(c) { settingsConfirm = null } }
     val listWidth by androidx.compose.animation.core.animateDpAsState(if (compact) 64.dp else 230.dp, label = "settingsNav")
+    // One handle per section row, so Left and Back from a section come back to its own row.
+    val sectionFrs = remember { SECTIONS.associate { it.id to FocusRequester() } }
+    // The first control of a section (a hidden stop at the top of the page that hands the highlight down).
+    val firstFr = remember(section) { FocusRequester() }
+    val firstOn = remember(section) { mutableStateOf(false) }
+    // Back inside a section goes up one level, to its row in the section list (NAV-07); Back there opens the menu.
+    LaunchedEffect(vm.settingsBackTick) {
+        if (vm.settingsBackTick > 0) focusWhenReady(vm) { runCatching { sectionFrs[section]?.requestFocus() }.isSuccess }
+    }
+    androidx.compose.runtime.DisposableEffect(Unit) { onDispose { vm.settingsInContent = false } }
     Row(Modifier.fillMaxSize()) {
         Column(
             Modifier.width(listWidth).fillMaxHeight().background(C.Bg)
@@ -593,7 +634,8 @@ fun SettingsScreen(vm: AppViewModel) {
             SECTIONS.forEach { sec ->
                 val on = sec.id == section
                 Focusable(
-                    modifier = Modifier.fillMaxWidth().height(42.dp).then(if (sec == SECTIONS.first()) Modifier.entryFocus(vm, Screen.SETTINGS) else Modifier),
+                    modifier = Modifier.fillMaxWidth().height(42.dp).focusRequester(sectionFrs.getValue(sec.id))
+                        .then(if (sec == SECTIONS.first()) Modifier.entryFocus(vm, Screen.SETTINGS) else Modifier),
                     color = if (on) C.Surface2 else androidx.compose.ui.graphics.Color.Transparent,
                     onFocus = { vm.settingsSection = sec.id },
                     onClick = { vm.settingsSection = sec.id },
@@ -608,7 +650,9 @@ fun SettingsScreen(vm: AppViewModel) {
         }
         // Up/Down never leave the section you're in: at the top or bottom of its options the highlight stays put
         // (only Left goes back to the list of sections).
-        Column(Modifier.weight(1f).fillMaxHeight().onFocusChanged { if (it.hasFocus) compact = true }.staysInSection()) {
+        val generic = section != "playlists" && section != "channels"
+        Column(Modifier.weight(1f).fillMaxHeight().onFocusChanged { vm.settingsInContent = it.hasFocus; if (it.hasFocus) compact = true }
+            .staysInSection(sectionFrs[section], if (generic) firstFr else null) { firstOn.value }) {
             when (section) {
                 "playlists" -> PlaylistsScreen(vm)
                 "channels" -> ListEditor(vm)
@@ -617,7 +661,10 @@ fun SettingsScreen(vm: AppViewModel) {
                     contentPadding = PaddingValues(20.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    item { Text(SECTIONS.first { it.id == section }.title, color = C.Text, fontSize = 20.sp, fontWeight = FontWeight.Bold) }
+                    item {
+                        FirstControlStop(firstFr, firstOn)
+                        Text(SECTIONS.first { it.id == section }.title, color = C.Text, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                    }
                     when (section) {
                         "location" -> locationSettings(vm)
                         "display" -> displaySettings(vm)

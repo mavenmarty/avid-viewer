@@ -94,7 +94,7 @@ fun VodScreen(vm: AppViewModel, kind: String) {
                 val fr = remember { androidx.compose.ui.focus.FocusRequester() }
                 var hasFocus by remember { mutableStateOf(false) }
                 LaunchedEffect(isMoving, cats.indexOfFirst { it.first == name }) {
-                    if (isMoving) for (attempt in 0 until 15) { delay(30); if (hasFocus) break; runCatching { fr.requestFocus() } }
+                    if (isMoving) focusWhenReady(vm, frames = 30, isFocused = { hasFocus }) { runCatching { fr.requestFocus() }.isSuccess }
                 }
                 Focusable(
                     modifier = Modifier.fillMaxWidth().heightIn(min = 36.dp).focusRequester(fr).onFocusChanged { hasFocus = it.isFocused }
@@ -150,17 +150,30 @@ fun VodScreen(vm: AppViewModel, kind: String) {
                     }, size = 14.sp, color = C.Muted, lines = 2,
                 )
             } else {
-                // One scroll state per category: a new category starts at the top, the same one (or coming
-                // back from a title's page) keeps its place.
-                val gridKey = "$current|$vq"
-                val gridState = remember(kind, gridKey) {
-                    val saved = vm.vodScroll[kind]
-                    if (saved != null && saved.first == gridKey) androidx.compose.foundation.lazy.grid.LazyGridState(saved.second, saved.third)
-                    else androidx.compose.foundation.lazy.grid.LazyGridState()
+                // Each category (and search) keeps its own place, by title key: coming back, or a list that
+                // changed meanwhile (hidden titles, a refresh), lands on the same title (NAV-04).
+                val path = vm.vodPath(kind, current, vq)
+                val itemsNow by androidx.compose.runtime.rememberUpdatedState(items)
+                // Only nearby titles are checked (a long list reads its pages from the database).
+                fun findTitle(key: String?, index: Int) = NavStore.find(itemsNow.size, { itemsNow[it].key }, key, index, radius = 300)
+                val gridState = remember(kind, path) {
+                    val spot = vm.nav[path]
+                    val i = spot?.let { findTitle(it.firstKey, it.firstIndex) } ?: -1
+                    if (i >= 0) androidx.compose.foundation.lazy.grid.LazyGridState(i, spot!!.offset) else androidx.compose.foundation.lazy.grid.LazyGridState()
                 }
                 LaunchedEffect(gridState) {
                     androidx.compose.runtime.snapshotFlow { gridState.firstVisibleItemIndex to gridState.firstVisibleItemScrollOffset }
-                        .collect { (i, o) -> vm.vodScroll[kind] = Triple(gridKey, i, o) }
+                        .collect { (i, o) -> vm.nav.scrolled(path, itemsNow.getOrNull(i)?.key, i, o) }
+                }
+                // Back from a title's page: the highlight goes back to that title's poster.
+                val backFr = remember(path) { FocusRequester() }
+                val backKey = remember(path, vm.vodFocusBack) { vm.nav[path]?.key }
+                LaunchedEffect(vm.vodFocusBack) {
+                    if (vm.vodFocusBack == 0 || backKey == null) return@LaunchedEffect
+                    val idx = vm.nav[path]?.let { findTitle(it.key, it.index) } ?: return@LaunchedEffect
+                    val vis = gridState.layoutInfo.visibleItemsInfo.map { it.index }
+                    if (vis.isEmpty() || idx < vis.first() || idx > vis.last()) gridState.scrollToItem(idx)
+                    focusWhenReady(vm) { runCatching { backFr.requestFocus() }.isSuccess }
                 }
                 LazyVerticalGrid(
                     state = gridState,
@@ -169,7 +182,9 @@ fun VodScreen(vm: AppViewModel, kind: String) {
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                     contentPadding = PaddingValues(bottom = 24.dp),
                 ) {
-                    itemsIndexed(items, key = { i, v -> "$i-${v.key}" }) { _, v -> Poster(vm, v) }
+                    itemsIndexed(items, key = { i, v -> "$i-${v.key}" }) { i, v ->
+                        Poster(vm, v, Modifier.then(if (v.key == backKey) Modifier.focusRequester(backFr) else Modifier)) { vm.nav.focused(path, v.key, i) }
+                    }
                 }
             }
         }
@@ -177,9 +192,10 @@ fun VodScreen(vm: AppViewModel, kind: String) {
 }
 
 @Composable
-private fun Poster(vm: AppViewModel, v: VodItem) {
+private fun Poster(vm: AppViewModel, v: VodItem, modifier: Modifier = Modifier, onFocus: () -> Unit = {}) {
     Focusable(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth(),
+        onFocus = onFocus,
         shape = RoundedCornerShape(8.dp),
         color = Color.Transparent,
         focusedColor = C.Surface2,
@@ -221,7 +237,8 @@ private fun VodDetail(vm: AppViewModel, v: VodItem) {
     // and dropped as soon as the user presses a key.
     LaunchedEffect(v.key, vm.screen, vm.detailEpisodes != null) {
         if (vm.screen == Screen.PLAYER) return@LaunchedEffect
-        val started = System.currentTimeMillis()
+        // Same clock as the key-press time (it used to compare wall time with uptime, so a press never stopped it).
+        val started = android.os.SystemClock.uptimeMillis()
         var held = 0
         for (frame in 0 until 120) {
             androidx.compose.runtime.withFrameNanos { }
