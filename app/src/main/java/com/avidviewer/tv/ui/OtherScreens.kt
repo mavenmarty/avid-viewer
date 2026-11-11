@@ -6,6 +6,7 @@ import kotlinx.coroutines.launch
 
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.border
+import androidx.compose.ui.semantics.semantics
 
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.foundation.focusGroup
@@ -937,7 +938,8 @@ internal fun SettingBlock(title: String, desc: String, focusable: Boolean = fals
     var focused by remember { mutableStateOf(false) }
     Column(
         Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(C.Surface)
-            .then(if (focusable) Modifier.onFocusChanged { focused = it.isFocused }.focusable()
+            // Read as one item (title, text and all) when highlighted.
+            .then(if (focusable) Modifier.semantics(mergeDescendants = true) {}.onFocusChanged { focused = it.isFocused }.focusable()
                 .border(2.dp, if (focused) C.AccentFocus else androidx.compose.ui.graphics.Color.Transparent, RoundedCornerShape(10.dp)) else Modifier)
             .padding(14.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
