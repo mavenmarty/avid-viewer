@@ -396,6 +396,36 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     fun clearCrash() { com.avidviewer.tv.data.CrashLog.clear(getApplication()); lastCrash = null }
 
+    /** Live channels of every playlist with live TV on, for the TV Guide's search box. */
+    var searchPool by mutableStateOf<List<Channel>>(emptyList()); private set
+    /** Bumped when other playlists' favorites finish loading, so the guide redraws. */
+    var favDataTick by mutableStateOf(0); private set
+    // Declared before init: startup code below already asks for these (a later declaration
+    // would still be null when the saved channels load quickly).
+    // ---- derived lists, computed once per data change (screens ask for them on every highlight move) ----
+    /** Remembers one value until any of its inputs is replaced by a different object. */
+    private class Memo<V> {
+        private var inputs: Array<out Any?>? = null
+        private var value: Any? = null
+        @Suppress("UNCHECKED_CAST")
+        @Synchronized fun get(vararg now: Any?, compute: () -> V): V {
+            val last = inputs
+            // Same object, or an equal string/number (those are often new instances with the same value).
+            fun same(a: Any?, b: Any?) = a === b || ((a is String || a is Number) && a == b)
+            if (last != null && last.size == now.size && last.indices.all { same(last[it], now[it]) }) return value as V
+            val v = compute(); inputs = now; value = v
+            return v
+        }
+    }
+    private val groupsMemo = Memo<List<GroupInfo>>()
+    private val groupsAllMemo = Memo<List<GroupInfo>>()
+    private val numbersMemo = Memo<Map<String, Int>>()
+    private val channelIndexMemo = Memo<Map<String, Channel>>()
+    private val channelsInMemo = Memo<HashMap<String, List<Channel>>>()
+    private val vodOfMemo = HashMap<String, Memo<List<VodItem>>>()
+    private val vodCatsMemo = HashMap<String, Memo<List<Pair<String, Int>>>>()
+    private val vodItemsMemo = HashMap<String, Memo<List<VodItem>>>()
+
     init {
         if (prefs.clearCacheOnExit) store.clearCache() // catches exits Android didn't report
         player.addListener(object : Player.Listener {
@@ -1147,8 +1177,6 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    /** Live channels of every playlist with live TV on, for the TV Guide's search box. */
-    var searchPool by mutableStateOf<List<Channel>>(emptyList()); private set
 
     fun loadSearchPool() {
         viewModelScope.launch {
@@ -1214,30 +1242,6 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         else -> prefs.groupNames[raw] ?: raw
     }
     fun channelName(c: Channel) = prefs.channelNames[c.key] ?: c.name
-
-    // ---- derived lists, computed once per data change (screens ask for them on every highlight move) ----
-    /** Remembers one value until any of its inputs is replaced by a different object. */
-    private class Memo<V> {
-        private var inputs: Array<out Any?>? = null
-        private var value: Any? = null
-        @Suppress("UNCHECKED_CAST")
-        @Synchronized fun get(vararg now: Any?, compute: () -> V): V {
-            val last = inputs
-            // Same object, or an equal string/number (those are often new instances with the same value).
-            fun same(a: Any?, b: Any?) = a === b || ((a is String || a is Number) && a == b)
-            if (last != null && last.size == now.size && last.indices.all { same(last[it], now[it]) }) return value as V
-            val v = compute(); inputs = now; value = v
-            return v
-        }
-    }
-    private val groupsMemo = Memo<List<GroupInfo>>()
-    private val groupsAllMemo = Memo<List<GroupInfo>>()
-    private val numbersMemo = Memo<Map<String, Int>>()
-    private val channelIndexMemo = Memo<Map<String, Channel>>()
-    private val channelsInMemo = Memo<HashMap<String, List<Channel>>>()
-    private val vodOfMemo = HashMap<String, Memo<List<VodItem>>>()
-    private val vodCatsMemo = HashMap<String, Memo<List<Pair<String, Int>>>>()
-    private val vodItemsMemo = HashMap<String, Memo<List<VodItem>>>()
 
     fun groups(includeHidden: Boolean = false): List<GroupInfo> =
         (if (includeHidden) groupsAllMemo else groupsMemo).get(channels, prefs, activePlaylist()?.id) { computeGroups(includeHidden) }
@@ -1330,8 +1334,6 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     fun playlistName(c: Channel?): String = c?.let { ch -> playlists.firstOrNull { ch.key.startsWith(it.id + ":") }?.name } ?: ""
 
-    /** Bumped when other playlists' favorites finish loading, so the guide redraws. */
-    var favDataTick by mutableStateOf(0); private set
 
     /** Loads channels and guides of other playlists that hold favorites. */
     fun ensureFavoriteData() {
