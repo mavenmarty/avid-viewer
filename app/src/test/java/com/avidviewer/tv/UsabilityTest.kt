@@ -392,9 +392,36 @@ class UsabilityTest {
         go(Screen.SETTINGS)
         waitFor("Settings' first section highlighted (focus: ${focused()})") { focused().contains("Playlists") && vm.settingsSection == "playlists" }
         var tries = 0
-        while (vm.settingsSection != "about" && tries < 15) { press(listOf(Key.DirectionDown)); tries++ }
-        assertEquals("Down reaches Updates & about (focus: ${focused()})", "about", vm.settingsSection)
-        assertTrue("it's on screen and highlighted", focused().contains("Updates & about"))
+        while (!focused().contains("Updates & about") && tries < 15) { press(listOf(Key.DirectionDown)); tries++ }
+        assertTrue("Down reaches Updates & about, on screen and highlighted (focus: ${focused()})", focused().contains("Updates & about"))
+        assertEquals("moving the highlight doesn't open sections", "playlists", vm.settingsSection)
+        // The section list doesn't wrap: Down at the end stays on the last section.
+        press(listOf(Key.DirectionDown))
+        assertTrue("no wrap in the section list (focus: ${focused()})", focused().contains("Updates & about"))
+        press(listOf(Key.DirectionCenter))
+        waitFor("OK opens it (section=${vm.settingsSection})") { vm.settingsSection == "about" && vm.settingsInContent }
+    }
+
+    @Test
+    fun onlyCategoryAndChannelListsWrapAround() {
+        // The main menu: Down on its last item stays there.
+        press(listOf(Key.Back, Key.Back, Key.Back))
+        waitFor("the main menu") { vm.navMode == NavMode.FULL }
+        var tries = 0
+        while (!focused().contains("Settings") && tries < 12) { press(listOf(Key.DirectionDown)); tries++ }
+        press(listOf(Key.DirectionDown))
+        assertTrue("no wrap in the main menu (focus: ${focused()})", focused().contains("Settings"))
+        // The poster grid: Down on the last row stays on it.
+        go(Screen.MOVIES)
+        waitFor("movies") { vm.vodOf("movie").isNotEmpty() }
+        rule.runOnIdle { vm.chooseVodCategory("movie", "Action") }
+        settle()
+        press(listOf(Key.DirectionRight))
+        repeat(4) { press(listOf(Key.DirectionDown)) }
+        val last = focused()
+        press(listOf(Key.DirectionDown))
+        assertEquals("no wrap in the poster grid", last, focused())
+        assertTrue("on the grid's last row (focus: $last)", Regex("Action Movie (\\d+)").find(last)?.groupValues?.get(1)?.toInt()?.let { it > 12 } == true)
     }
 
     @Test
@@ -555,9 +582,12 @@ class UsabilityTest {
         go(Screen.SETTINGS)
         waitFor("Settings opens on its first section (focus: ${focused()})") { focused().contains("Playlists") }
         press(listOf(Key.DirectionDown, Key.DirectionDown, Key.DirectionDown, Key.DirectionDown))
-        waitFor("on TV guide (focus: ${focused()})") { vm.settingsSection == "guide" && focused().contains("TV guide") }
-        press(listOf(Key.DirectionRight))
-        waitFor("Right lands on the section's first control (focus: ${focused()})") { vm.settingsInContent && focused().contains("4 hours") }
+        waitFor("on TV guide (focus: ${focused()})") { focused().contains("TV guide") }
+        assertEquals("highlighting a section doesn't open it", "playlists", vm.settingsSection)
+        press(listOf(Key.DirectionCenter))
+        waitFor("OK opens it and lands on its first control (section=${vm.settingsSection}, focus: ${focused()})") {
+            vm.settingsSection == "guide" && vm.settingsInContent && focused().contains("4 hours")
+        }
         val steps = ArrayList<String>()
         repeat(6) { press(listOf(Key.DirectionDown)); steps.add(focused()) }
         press(listOf(Key.DirectionLeft)); steps.add("◀ " + focused())

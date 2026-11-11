@@ -601,7 +601,7 @@ private fun FirstControlStop(fr: FocusRequester, on: androidx.compose.runtime.Mu
     )
 }
 
-/** Settings: sections on the left (highlighting one shows it), options on the right. */
+/** Settings: sections on the left (OK opens one), options on the right. */
 @Composable
 fun SettingsScreen(vm: AppViewModel) {
     val p = vm.prefs
@@ -617,6 +617,12 @@ fun SettingsScreen(vm: AppViewModel) {
     // The first control of a section (a hidden stop at the top of the page that hands the highlight down).
     val firstFr = remember(section) { FocusRequester() }
     val firstOn = remember(section) { mutableStateOf(false) }
+    // OK on a section: once its page is on screen, step into it (as Right does: its first control).
+    var openTick by remember { mutableStateOf(0) }
+    val fm = androidx.compose.ui.platform.LocalFocusManager.current
+    LaunchedEffect(openTick) {
+        if (openTick > 0) focusWhenReady(vm, frames = 60, isFocused = { vm.settingsInContent }) { fm.moveFocus(androidx.compose.ui.focus.FocusDirection.Right) }
+    }
     // Back inside a section goes up one level, to its row in the section list (NAV-07); Back there opens the menu.
     LaunchedEffect(vm.settingsBackTick) {
         if (vm.settingsBackTick > 0) focusWhenReady(vm) { runCatching { sectionFrs[section]?.requestFocus() }.isSuccess }
@@ -639,8 +645,8 @@ fun SettingsScreen(vm: AppViewModel) {
                     modifier = Modifier.fillMaxWidth().height(42.dp).focusRequester(sectionFrs.getValue(sec.id))
                         .then(if (sec == SECTIONS.first()) Modifier.entryFocus(vm, Screen.SETTINGS) else Modifier),
                     color = if (on) C.Surface2 else androidx.compose.ui.graphics.Color.Transparent,
-                    onFocus = { vm.settingsSection = sec.id },
-                    onClick = { vm.settingsSection = sec.id },
+                    // Highlighting a section only shows its summary; OK opens it and moves into it (NAV-08).
+                    onClick = { vm.settingsSection = sec.id; openTick++ },
                 ) {
                     androidx.compose.material3.Icon(sec.icon, contentDescription = sec.title, tint = if (on) C.Accent else C.Muted, modifier = Modifier.padding(start = if (compact) 12.dp else 10.dp).width(20.dp).height(20.dp))
                     if (!compact) Column(Modifier.padding(start = 12.dp).weight(1f)) {
