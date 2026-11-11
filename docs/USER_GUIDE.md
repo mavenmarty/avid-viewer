@@ -2,7 +2,7 @@
 
 <!-- The version below and the Release notes section are updated automatically after each published build
      (.github/workflows/user-guide.yml). Feature descriptions are written by hand. -->
-This guide covers **Avid Viewer 1.0.86**, the current public release. Avid Viewer is an IPTV player for Android TV and Fire TV. You bring your own provider (an Xtream Codes login or an M3U link); the app doesn't include any channels.
+This guide covers **Avid Viewer 1.0.94**, the current public release. Avid Viewer is an IPTV player for Android TV and Fire TV. You bring your own provider (an Xtream Codes login or an M3U link); the app doesn't include any channels.
 
 **Contents:** [Getting started](#1-getting-started) · [Main menu](#2-main-menu) · [TV Guide](#3-tv-guide) · [Full-screen playback](#4-full-screen-playback) · [Search](#5-search) · [Discover](#6-discover) · [Sports](#7-sports) · [Movies and Series](#8-movies-and-series) · [Settings](#9-settings) · [Privacy](#10-privacy) · [Troubleshooting](#11-troubleshooting) · [Release notes](#release-notes)
 
@@ -305,7 +305,19 @@ Every public release since 1.0.35, newest first. Releases are published on GitHu
 
 <!-- new-releases: entries for new builds are added automatically below this line -->
 
-### 1.0.86 — November 10, 2026, 5:42 PM CT (current)
+### 1.0.94 — November 10, 2026, 7:27 PM CT (current)
+
+**Change log**
+
+- Layers: main menu always visible (icons), Back and Left step back one layer, landing on the current category
+- TV guide management: refresh every 4/8/12/24 h, guide sources per playlist, match channels by hand; Add to List and Rename close on the action
+- Re-order help sits over the preview and title area; test fixes
+- Test: pick the list row inside the picker
+- Test: use a channel not yet in the list
+- Fix favorites one channel off after restoring a backup: stable M3U channel keys
+- Tests: stop background work after tests that create the app outside the UI harness
+
+### 1.0.86 — November 10, 2026, 5:42 PM CT
 
 **Change log**
 
