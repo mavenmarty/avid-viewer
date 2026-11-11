@@ -417,7 +417,7 @@ class UsabilityTest {
     fun choosingAListOrSavingARenameClosesTheDialog() {
         rule.runOnIdle { vm.chooseGroup(TestData.P1, "KIDS") }
         settle()
-        val key = vm.channelsIn("KIDS")[1].key
+        val key = vm.channelsIn("KIDS").first { !vm.listsFor(it.key).contains("Kids night") }.key
         rule.runOnIdle { vm.listPickerKey = key }
         settle()
         // The row in the picker ("＋  …Kids night"), not the category list behind it.
