@@ -155,6 +155,18 @@ fun PlaylistTree(vm: AppViewModel) {
     val active = vm.activePlaylist()?.id
     val first = remember { FocusRequester() }
     val treeState = androidx.compose.foundation.lazy.rememberLazyListState()
+    /** The keys of the list's items, in order: the same keys the items below are given. */
+    fun treeKeys(): List<String> = buildList {
+        add("tfav"); vm.shownLists.forEach { add("tl-" + it.id) }; add("ttitle")
+        if (vm.livePlaylists.isEmpty()) add("tempty")
+        vm.livePlaylists.forEach { p ->
+            add("pl-" + p.id)
+            if (vm.expandedPlaylist == p.id) {
+                val groups = if (p.id == active) vm.groups() else vm.playlistGroups[p.id]
+                if (groups == null) add("ld-" + p.id) else groups.forEach { add("g-" + p.id + "-" + it.raw) }
+            }
+        }
+    }
     // Leaving the screen while it had the highlight must not leave "in the playlist list" set (NAV-03):
     // Left would then act as Back from somewhere else entirely.
     androidx.compose.runtime.DisposableEffect(Unit) { onDispose { vm.inPlaylistTree = false } }
@@ -162,13 +174,10 @@ fun PlaylistTree(vm: AppViewModel) {
         // Coming back from a category: that category takes the highlight instead (see below).
         val k = vm.navFocusKey
         if (k != null) {
-            val n = vm.shownLists.size
-            val activeIdx = vm.livePlaylists.indexOfFirst { it.id == active }
-            val item = when {
-                k == FAV_GROUP -> 0
-                isListGroup(k) -> 1 + vm.shownLists.indexOfFirst { LIST_PREFIX + it.id == k }.coerceAtLeast(0)
-                else -> vm.groups().indexOfFirst { it.raw == k }.let { gi -> if (gi < 0 || activeIdx < 0) -1 else n + 2 + activeIdx + 1 + gi }
-            }
+            // Found by key in the list's own item keys (no counting of header rows, NAV-13).
+            val item = treeKeys().indexOf(
+                when { k == FAV_GROUP -> "tfav"; isListGroup(k) -> "tl-" + k.removePrefix(LIST_PREFIX); else -> "g-$active-$k" },
+            )
             if (item >= 0) { launch { treeState.scrollToItem((item - 3).coerceAtLeast(0)) }; return@LaunchedEffect }
             vm.navFocusKey = null
         }
@@ -180,7 +189,7 @@ fun PlaylistTree(vm: AppViewModel) {
         contentPadding = PaddingValues(10.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        item {
+        item(key = "tfav") {
             Focusable(
                 modifier = Modifier.fillMaxWidth().height(44.dp).navFocusTarget(vm, FAV_GROUP),
                 color = C.Surface,
@@ -208,8 +217,8 @@ fun PlaylistTree(vm: AppViewModel) {
                 }
             }
         }
-        item { SectionTitle("Playlists", Modifier.padding(start = 6.dp, top = 10.dp, bottom = 6.dp)) }
-        if (vm.livePlaylists.isEmpty()) item { Label(if (vm.playlists.isEmpty()) "No playlists yet. Add one in Settings › Playlists." else "No playlist has live TV switched on. Turn it on in Settings › Playlists.", size = 13.sp, lines = 3) }
+        item(key = "ttitle") { SectionTitle("Playlists", Modifier.padding(start = 6.dp, top = 10.dp, bottom = 6.dp)) }
+        if (vm.livePlaylists.isEmpty()) item(key = "tempty") { Label(if (vm.playlists.isEmpty()) "No playlists yet. Add one in Settings › Playlists." else "No playlist has live TV switched on. Turn it on in Settings › Playlists.", size = 13.sp, lines = 3) }
         vm.livePlaylists.forEach { p ->
             val open = vm.expandedPlaylist == p.id
             item(key = "pl-" + p.id) {
@@ -250,14 +259,18 @@ fun GroupNav(vm: AppViewModel) {
     val navState = androidx.compose.foundation.lazy.rememberLazyListState()
     androidx.compose.runtime.DisposableEffect(Unit) { onDispose { vm.inGroupNav = false } }
     val scope = androidx.compose.runtime.rememberCoroutineScope()
+    /** The keys of the list's items, in order: the same keys the items below are given. */
+    fun navKeys(): List<String> = buildList {
+        add("menu"); add("title"); add("fav"); vm.shownLists.forEach { add("list-" + it.id) }
+        add("newlist"); add("search"); add("spacer"); groups.forEach { add("g:" + it.raw) }
+    }
     // Re-order mode: keep the moving category on screen as it moves.
     val moving = vm.movingGroup
     LaunchedEffect(moving, groups.indexOfFirst { it.raw == moving }) {
         if (moving == null) return@LaunchedEffect
         val idx = groups.indexOfFirst { it.raw == moving }
         if (idx < 0) return@LaunchedEffect
-        val headerItems = 5 + vm.shownLists.size // menu, title, favorites, lists, new list, search, spacer… before categories
-        val item = idx + headerItems + 1
+        val item = navKeys().indexOf("g:$moving")
         val vis = navState.layoutInfo.visibleItemsInfo.map { it.index }
         if (vis.isNotEmpty() && (item <= vis.first() || item >= vis.last())) navState.scrollToItem((item - 3).coerceAtLeast(0))
     }
@@ -265,12 +278,9 @@ fun GroupNav(vm: AppViewModel) {
     // Back/Left from the guide: bring the current category into view (it then takes the highlight itself).
     LaunchedEffect(vm.navFocusKey) {
         val k = vm.navFocusKey ?: return@LaunchedEffect
-        val n = vm.shownLists.size
-        val item = when {
-            k == FAV_GROUP -> 2
-            isListGroup(k) -> 3 + vm.shownLists.indexOfFirst { LIST_PREFIX + it.id == k }.coerceAtLeast(0)
-            else -> groups.indexOfFirst { it.raw == k }.let { if (it < 0) 0 else it + 6 + n }
-        }
+        // Found by key in the list's own item keys (no counting of header rows, NAV-13).
+        val item = navKeys().indexOf(when { k == FAV_GROUP -> "fav"; isListGroup(k) -> "list-" + k.removePrefix(LIST_PREFIX); else -> "g:$k" })
+            .coerceAtLeast(0)
         val vis = navState.layoutInfo.visibleItemsInfo.map { it.index }
         if (vis.isEmpty() || item < vis.first() || item > vis.last()) scope.launch { navState.scrollToItem((item - 3).coerceAtLeast(0)) }
     }
@@ -280,12 +290,12 @@ fun GroupNav(vm: AppViewModel) {
         contentPadding = PaddingValues(10.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        item {
+        item(key = "menu") {
             Focusable(Modifier.fillMaxWidth().height(36.dp).wrapEnds(wrap, isFirst = true, isLast = groups.isEmpty()), color = Color.Transparent, onClick = { vm.navBack() }) {
                 Text("‹  Menu", color = C.Accent, fontSize = 14.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 10.dp))
             }
         }
-        item { SectionTitle(vm.activePlaylist()?.name ?: "Categories", Modifier.padding(start = 6.dp, top = 8.dp, bottom = 6.dp)) }
+        item(key = "title") { SectionTitle(vm.activePlaylist()?.name ?: "Categories", Modifier.padding(start = 6.dp, top = 8.dp, bottom = 6.dp)) }
         item(key = "fav") {
             val on = vm.selectedGroup == FAV_GROUP
             Focusable(
@@ -326,8 +336,8 @@ fun GroupNav(vm: AppViewModel) {
                 if (vm.guideQuery.isNotBlank()) TvButton("✕  Clear search", modifier = Modifier.fillMaxWidth()) { text = ""; vm.guideQuery = "" }
             }
         }
-        item { Spacer(Modifier.height(6.dp)) }
-        items(groups, key = { it.raw }) { g ->
+        item(key = "spacer") { Spacer(Modifier.height(6.dp)) }
+        items(groups, key = { "g:" + it.raw }) { g ->
             val on = g.raw == vm.selectedGroup
             val isMoving = g.raw == moving
             val fr = remember { FocusRequester() }
