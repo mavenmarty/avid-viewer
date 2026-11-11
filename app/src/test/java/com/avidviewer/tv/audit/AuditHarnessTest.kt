@@ -248,6 +248,32 @@ class AuditHarnessTest {
             report("parse", "xmltv_7d_500ch_ms", (System.nanoTime() - t1) / 1_000_000)
             report("parse", "xmltv_peak_heap_mb", gpk)
             report("parse", "xmltv_programmes_kept", g.values.sumOf { it.size })
+            // Step 3: the guide and the live list streamed straight into the database (what the app now does).
+            val cat3 = com.avidviewer.tv.data.Catalog(app)
+            val live = com.avidviewer.tv.data.LiveDb(cat3)
+            val from = System.currentTimeMillis() - 3 * 3600_000L; val to = System.currentTimeMillis() + 36 * 3600_000L
+            val (_, glist) = peakLiveMb { com.avidviewer.tv.data.Xmltv.read("http://$host/guide.xml.gz", wanted, from, to).size }
+            report("parse", "xmltv_list_live_peak_mb", glist)
+            val t3 = System.nanoTime()
+            val (gi, gstream) = peakLiveMb { live.replacingGuide("fx") { add -> com.avidviewer.tv.data.Xmltv.read("http://$host/guide.xml.gz", wanted, from, to, 0L, null) { id, pr -> add(id, pr) } } }
+            report("parse", "xmltv_stream_to_db_ms", (System.nanoTime() - t3) / 1_000_000)
+            report("parse", "xmltv_stream_live_peak_mb", gstream)
+            report("parse", "xmltv_stream_programmes", gi.added)
+            val t4 = System.nanoTime()
+            val (win, wpk) = peakLiveMb { live.guide("fx", null, from, to) }
+            report("parse", "guide_window_read_ms", (System.nanoTime() - t4) / 1_000_000)
+            report("parse", "guide_window_live_mb", wpk)
+            report("parse", "guide_window_channels", win.size)
+            val (_, clist) = peakLiveMb { com.avidviewer.tv.data.M3u.read(pl, null).size }
+            report("parse", "m3u_live_list_live_peak_mb", clist)
+            val (ci, cstream) = peakLiveMb { live.replacingChannels("fx") { add -> com.avidviewer.tv.data.M3u.read(pl, add, null) } }
+            report("parse", "m3u_live_stream_to_db_live_peak_mb", cstream)
+            report("parse", "m3u_live_stream_to_db_channels", ci.added)
+            val t5 = System.nanoTime()
+            val hits = live.searchChannels("fx", "news", 60).size + live.searchPrograms("fx", "news", System.currentTimeMillis(), 80).size
+            report("parse", "db_live_search_ms", (System.nanoTime() - t5) / 1_000_000)
+            report("parse", "db_live_search_hits", hits)
+            live.delete("fx"); cat3.close()
         }.onFailure { report("parse", "error", it.toString()) }
 
         // ---- S1 cold start ----
