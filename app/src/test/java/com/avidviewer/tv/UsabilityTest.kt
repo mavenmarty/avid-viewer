@@ -557,7 +557,7 @@ class UsabilityTest {
         press(listOf(Key.DirectionDown, Key.DirectionDown, Key.DirectionDown, Key.DirectionDown))
         waitFor("on TV guide (focus: ${focused()})") { vm.settingsSection == "guide" && focused().contains("TV guide") }
         press(listOf(Key.DirectionRight))
-        waitFor("Right lands inside the section, on a control (focus: ${focused()})") { vm.settingsInContent && focused() != "(nothing focused)" }
+        waitFor("Right lands on the section's first control (focus: ${focused()})") { vm.settingsInContent && focused().contains("4 hours") }
         val steps = ArrayList<String>()
         repeat(6) { press(listOf(Key.DirectionDown)); steps.add(focused()) }
         press(listOf(Key.DirectionLeft)); steps.add("◀ " + focused())

@@ -594,7 +594,9 @@ private fun FirstControlStop(fr: FocusRequester, on: androidx.compose.runtime.Mu
     androidx.compose.foundation.layout.Box(
         // Full width and 1 dp high: never "to the left" of a control, so Left from the page can't land here.
         Modifier.fillMaxWidth().height(1.dp).focusRequester(fr)
-            .onFocusChanged { if (it.isFocused) scope.launch { fm.moveFocus(androidx.compose.ui.focus.FocusDirection.Down) } }
+            // "Next" follows the page's order, so this is its first control (the leftmost of a row of buttons),
+            // where "Down" picked whichever was nearest the middle.
+            .onFocusChanged { if (it.isFocused) scope.launch { fm.moveFocus(androidx.compose.ui.focus.FocusDirection.Next) } }
             .focusable(),
     )
 }
