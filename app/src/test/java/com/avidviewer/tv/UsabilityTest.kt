@@ -516,9 +516,10 @@ class UsabilityTest {
         waitFor("NEWS") { focused().contains("NEWS Channel 1 with") }
         press(listOf(Key.DirectionDown, Key.DirectionDown))
         // Into the programmes, then far enough right that the guide's window moves on.
-        repeat(9) { press(listOf(Key.DirectionRight)) }
+        val seen = ArrayList<String>()
+        repeat(9) { press(listOf(Key.DirectionRight)); seen.add(focused() + " @" + vm.nav.guideWindowStart) }
         val programme = focused()
-        assertTrue("should be on a programme later in the day (focus: $programme)", programme.contains("Program") && vm.nav.guideWindowStart > (vm.now / (30 * 60_000L)) * (30 * 60_000L))
+        assertTrue("should be on a programme later in the day (focus: $programme; base ${(vm.now / (30 * 60_000L)) * (30 * 60_000L)}; steps $seen)", programme.contains("Program") && vm.nav.guideWindowStart > (vm.now / (30 * 60_000L)) * (30 * 60_000L))
         val window = vm.nav.guideWindowStart
         press(listOf(Key.DirectionCenter)) // preview
         press(listOf(Key.DirectionCenter)) // full screen
