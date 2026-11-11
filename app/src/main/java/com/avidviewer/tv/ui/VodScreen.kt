@@ -1,5 +1,6 @@
 package com.avidviewer.tv.ui
 
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.input.key.onPreviewKeyEvent
@@ -86,15 +87,7 @@ fun VodScreen(vm: AppViewModel, kind: String) {
     val catState = androidx.compose.foundation.lazy.rememberLazyListState()
     val catWrap = rememberListWrap(catState)
     val allCats = specials + cats
-    Row(Modifier.fillMaxSize()) {
-        LazyColumn(
-            Modifier.width(220.dp).fillMaxHeight().background(C.Bg),
-            state = catState,
-            contentPadding = PaddingValues(10.dp),
-            verticalArrangement = Arrangement.spacedBy(3.dp),
-        ) {
-            item { Text(title, color = C.Text, fontSize = 20.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 8.dp, bottom = 8.dp)) }
-            items(specials + cats, key = { "c-" + it.first }) { (name, count) ->
+    val catRow: @Composable (String, Int) -> Unit = { name, count ->
                 val on = name == current
                 val special = specials.any { it.first == name }
                 val isMoving = vm.vodMovingCat == (kind to name)
@@ -123,15 +116,30 @@ fun VodScreen(vm: AppViewModel, kind: String) {
                     else if (count >= 0) Label("$count", size = 12.sp, modifier = Modifier.padding(end = 10.dp))
                 }
             }
+    Row(Modifier.fillMaxSize()) {
+        LazyColumn(
+            Modifier.width(220.dp).fillMaxHeight().background(C.Bg),
+            state = catState,
+            contentPadding = PaddingValues(10.dp),
+            verticalArrangement = Arrangement.spacedBy(3.dp),
+        ) {
+            item { Text(title, color = C.Text, fontSize = 20.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 8.dp, bottom = 8.dp)) }
+            items(specials, key = { "c-" + it.first }) { (name, count) -> catRow(name, count) }
+            item(key = "vod-search") {
+                // Search sits with the categories, below My List; results replace the grid.
+                var text by remember(kind, vq.isBlank()) { mutableStateOf(vq) }
+                Column(Modifier.padding(vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    TvField("🔍  Search ${title.lowercase()}", text, modifier = Modifier.fillMaxWidth().testTag("vod-search"), imeAction = androidx.compose.ui.text.input.ImeAction.Search,
+                        onSubmit = { vm.vodQuery = vm.vodQuery + (kind to text.trim()) }) { text = it }
+                    if (vq.isNotBlank()) TvButton("✕  Clear search", modifier = Modifier.fillMaxWidth()) { text = ""; vm.vodQuery = vm.vodQuery + (kind to "") }
+                }
+            }
+            items(cats, key = { "c-" + it.first }) { (name, count) -> catRow(name, count) }
             item { Label("Menu on a category: rename, re-order, hide", size = 11.sp, lines = Int.MAX_VALUE, modifier = Modifier.padding(start = 10.dp, top = 8.dp)) }
         }
         Column(Modifier.weight(1f).fillMaxHeight().padding(start = 12.dp, end = 16.dp, top = 14.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(bottom = 10.dp)) {
                 Label(if (vq.isNotBlank()) "Results for “$vq”  ·  ${items.size} titles" else "${vm.vodCatName(kind, current)}  ·  ${items.size} titles", size = 14.sp, color = C.Soft, weight = FontWeight.Bold, modifier = Modifier.weight(1f))
-                var text by remember(kind) { mutableStateOf(vq) }
-                TvField("Search ${title.lowercase()}", text, modifier = Modifier.width(280.dp), imeAction = androidx.compose.ui.text.input.ImeAction.Search,
-                    onSubmit = { vm.vodQuery = vm.vodQuery + (kind to text.trim()) }) { text = it }
-                if (vq.isNotBlank()) TvButton("✕ Clear") { text = ""; vm.vodQuery = vm.vodQuery + (kind to "") }
             }
             if (items.isEmpty()) {
                 Label(

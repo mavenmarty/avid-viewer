@@ -373,6 +373,21 @@ class UsabilityTest {
     // ---------------------------------------------------------------- guide management and quick dialogs
 
     @Test
+    fun searchSitsInTheCategoryListsAndTheHeaderHasNoInstructions() {
+        rule.runOnIdle { vm.chooseGroup(TestData.P1, "KIDS") }
+        settle()
+        assertTrue("search in the guide's category list", rule.onAllNodesWithTag("nav-search").fetchSemanticsNodes().isNotEmpty())
+        assertTrue("no key instructions in the header", rule.onAllNodesWithText("OK: preview", substring = true).fetchSemanticsNodes().isEmpty())
+        assertTrue("no category label next to search", rule.onAllNodesWithText("KIDS  ·  12 channels").fetchSemanticsNodes().isEmpty())
+        rule.runOnIdle { vm.guideQuery = "Free News" }
+        settle()
+        assertTrue(rule.onAllNodesWithText("Clear search", substring = true).fetchSemanticsNodes().isNotEmpty())
+        go(Screen.MOVIES)
+        waitFor("movies") { vm.vodOf("movie").isNotEmpty() }
+        assertTrue("search in the movie category list", rule.onAllNodesWithTag("vod-search").fetchSemanticsNodes().isNotEmpty())
+    }
+
+    @Test
     fun everySettingsSectionIsReachableWithDownIncludingTheLast() {
         go(Screen.SETTINGS)
         waitFor("Settings' first section highlighted (focus: ${focused()})") { focused().contains("Playlists") && vm.settingsSection == "playlists" }

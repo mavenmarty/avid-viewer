@@ -239,21 +239,10 @@ fun GuideScreen(vm: AppViewModel) {
                 if (e.type == KeyEventType.KeyDown && e.key == Key.DirectionUp && e.nativeKeyEvent.repeatCount == 0 && list.size > 1) { wrapTo(list.lastIndex); true } else false
             }, onOpen = { vm.openFullScreen(vm.currentKey, PlayContext.GROUP) })
             val fc = vm.channel(focusProg?.first ?: vm.currentKey)
-            val fp = focusProg?.second ?: vm.nowNext(fc).first
-            Column(Modifier.weight(1f).fillMaxHeight().clip(RoundedCornerShape(10.dp)).background(C.Surface).padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Label(listOfNotNull(fc?.let { vm.channelName(it) }, fc?.let { vm.playlistName(it) }?.ifBlank { null }, fp?.let { "${vm.fmtTime(it.start)} – ${vm.fmtTime(it.end)}" }).joinToString(" · "), size = 12.sp)
-                Label(fp?.title ?: "No guide information", size = 18.sp, color = C.Text, weight = FontWeight.Bold)
-                Label(listOfNotNull(fp?.subtitle?.let { "“$it”" }, if (fp?.isNew == true) "New" else null).joinToString(" · "), size = 13.sp, color = C.Soft)
-                Label("OK: preview · OK again: full screen · CH+/CH−: page · Menu: options", size = 12.sp, lines = Int.MAX_VALUE)
-            }
+            DetailsPanel(vm, fc, focusProg?.second, numbers[fc?.key], Modifier.weight(1f).fillMaxHeight())
         }
-        // Groups
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Label(vm.groupName(vm.selectedGroup ?: "") + "  ·  ${list.size} channels", size = 13.sp, color = C.Soft, weight = FontWeight.Bold, modifier = Modifier.weight(1f))
-            var text by remember { mutableStateOf(vm.guideQuery) }
-            TvField("Search channels and programs", text, modifier = Modifier.width(300.dp), imeAction = androidx.compose.ui.text.input.ImeAction.Search, onSubmit = { vm.guideQuery = text.trim() }) { text = it }
-            if (vm.guideQuery.isNotBlank()) TvButton("✕ Clear") { text = ""; vm.guideQuery = "" }
-        }
+        // Search lives in the category list now (🔍 Search, under ＋ New list); results replace the guide.
+        if (vm.guideQuery.isNotBlank()) Label("Results for “${vm.guideQuery}”  ·  clear it with ✕ in the category list", size = 13.sp, color = C.Soft, weight = FontWeight.Bold)
         if (vm.selectedGroup == FAV_GROUP && vm.guideQuery.isBlank()) LocalSuggestions(vm)
         if (list.isEmpty() && vm.selectedGroup == FAV_GROUP) {
             Label("No favorites yet. Press Menu (or hold OK) on any channel and choose Add to List — favorites from every playlist appear here.", size = 13.sp, color = C.Soft, lines = Int.MAX_VALUE)
@@ -415,6 +404,46 @@ fun ChannelOptionsDialog(vm: AppViewModel) {
         },
         confirmButton = { TvButton("Done", primary = true) { vm.channelMenu = null } },
     )
+}
+
+/**
+ * What's on the highlighted channel: number and name, the programme (with a New tag), its times,
+ * time left and progress, up to two lines about it, and what's next. No key instructions.
+ */
+@Composable
+private fun DetailsPanel(vm: AppViewModel, c: com.avidviewer.tv.data.Channel?, chosen: com.avidviewer.tv.data.Program?, number: Int?, modifier: Modifier) {
+    val (nowP, nextP) = vm.nowNext(c)
+    val p = chosen ?: nowP
+    val following = if (chosen == null || chosen == nowP) nextP else vm.programs(c).firstOrNull { it.start >= chosen.end }
+    Column(modifier.clip(RoundedCornerShape(10.dp)).background(C.Surface).padding(horizontal = 14.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Label(listOfNotNull(number?.toString(), c?.let { vm.channelName(it) }).joinToString(" · ").ifBlank { "No channel" }, size = 13.sp, color = C.Text, weight = FontWeight.SemiBold, modifier = Modifier.weight(1f, fill = false))
+            if (vm.livePlaylists.size > 1) c?.let { Label(vm.playlistName(it), size = 11.sp, color = C.Muted) }
+        }
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Label(p?.title ?: "No guide information", size = 18.sp, color = C.Text, weight = FontWeight.Bold, modifier = Modifier.weight(1f, fill = false))
+            if (p?.isNew == true) Label("New", size = 11.sp, color = C.OnAccent, weight = FontWeight.Bold, modifier = Modifier.clip(RoundedCornerShape(4.dp)).background(C.Accent).padding(horizontal = 6.dp, vertical = 1.dp))
+        }
+        if (p != null) {
+            val now = vm.now
+            val airing = now >= p.start && now < p.end
+            val left = ((p.end - now) / 60000L).coerceAtLeast(0)
+            val untilStart = ((p.start - now) / 60000L).coerceAtLeast(0)
+            Label("${vm.fmtTime(p.start)} – ${vm.fmtTime(p.end)}" + when {
+                airing -> " · $left min left"
+                p.start > now -> " · starts in " + (if (untilStart >= 60) "${untilStart / 60} h ${untilStart % 60} min" else "$untilStart min")
+                else -> ""
+            }, size = 12.sp, color = if (airing) C.Accent else C.Soft)
+            if (airing) {
+                val frac = ((now - p.start).toFloat() / (p.end - p.start).coerceAtLeast(1)).coerceIn(0f, 1f)
+                Box(Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(2.dp)).background(C.Line)) {
+                    Box(Modifier.fillMaxWidth(frac).fillMaxHeight().background(C.Accent))
+                }
+            }
+            p.subtitle?.let { Label(it, size = 12.sp, color = C.Soft, lines = 2) }
+        }
+        following?.let { Label("Next ${vm.fmtTime(it.start)} · ${it.title}", size = 12.sp, color = C.Muted) }
+    }
 }
 
 /** "Suggested near Fargo, ND": local channels from the postal code that aren't favorites yet. */
