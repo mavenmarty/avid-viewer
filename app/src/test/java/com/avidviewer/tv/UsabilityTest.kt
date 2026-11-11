@@ -392,7 +392,9 @@ class UsabilityTest {
         var tries = 0
         while (!focused().contains("Updates & about") && tries < 15) { press(listOf(Key.DirectionDown)); tries++ }
         press(listOf(Key.DirectionCenter))
-        waitFor("OK opens Updates & about on its first block (focus: ${focused()})") { vm.settingsSection == "about" && (focused().contains("Report a bug") || focused().contains("Open email app")) }
+        fun focusedTag(): String = rule.onAllNodes(androidx.compose.ui.test.isFocused()).fetchSemanticsNodes()
+            .joinToString { it.config.getOrNull(androidx.compose.ui.semantics.SemanticsProperties.TestTag) ?: focused() }
+        waitFor("OK opens Updates & about on its first block (focus: ${focusedTag()})") { vm.settingsSection == "about" && (focusedTag() == "block-Report a bug" || focused().contains("Open email app")) }
         fun shownWhole(text: String) {
             val root = rule.onRoot().fetchSemanticsNode().boundsInRoot
             val b = rule.onAllNodesWithText(text).onFirst().fetchSemanticsNode().boundsInRoot
@@ -400,8 +402,8 @@ class UsabilityTest {
         }
         shownWhole("Report a bug")
         tries = 0
-        while (!focused().contains("User guide and Control4 driver") && tries < 4) { press(listOf(Key.DirectionDown)); tries++ }
-        assertTrue("Down reaches the QR codes block (focus: ${focused()})", focused().contains("User guide and Control4 driver"))
+        while (focusedTag() != "block-User guide and Control4 driver" && tries < 4) { press(listOf(Key.DirectionDown)); tries++ }
+        assertEquals("Down reaches the QR codes block", "block-User guide and Control4 driver", focusedTag())
         shownWhole("User guide and Control4 driver")
         shownWhole("Control4 mini driver")
         // And back up: the bug report block shows whole again.
