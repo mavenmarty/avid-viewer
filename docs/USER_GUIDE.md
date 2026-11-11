@@ -2,7 +2,7 @@
 
 <!-- The version below and the Release notes section are updated automatically after each published build
      (.github/workflows/user-guide.yml). Feature descriptions are written by hand. -->
-This guide covers **Avid Viewer 1.0.109**, the current public release. Avid Viewer is an IPTV player for Android TV and Fire TV. You bring your own provider (an Xtream Codes login or an M3U link); the app doesn't include any channels.
+This guide covers **Avid Viewer 1.0.133**, the current public release. Avid Viewer is an IPTV player for Android TV and Fire TV. You bring your own provider (an Xtream Codes login or an M3U link); the app doesn't include any channels.
 
 **Contents:** [Getting started](#1-getting-started) · [Main menu](#2-main-menu) · [TV Guide](#3-tv-guide) · [Full-screen playback](#4-full-screen-playback) · [Search](#5-search) · [Discover](#6-discover) · [Sports](#7-sports) · [Movies and Series](#8-movies-and-series) · [Settings](#9-settings) · [Privacy](#10-privacy) · [Troubleshooting](#11-troubleshooting) · [Control4](#12-control4) · [Release notes](#release-notes)
 
@@ -381,7 +381,28 @@ Every public release since 1.0.35, newest first. Releases are published on GitHu
 
 <!-- new-releases: entries for new builds are added automatically below this line -->
 
-### 1.0.109 — November 11, 2026, 7:21 AM CT (current)
+### 1.0.133 — November 11, 2026, 12:37 PM CT (current)
+
+**Change log**
+
+- Catalog database (audit work plan 1.5, step 1): movies and series live in SQLite and screens read pages
+- Catalog: hidden changes apply immediately; old saved titles are moved in before a search
+- Catalog search: movies, series and episodes each get their own results (episodes were crowded out)
+- Catalog step 2: movies and series stream from the download straight into the database
+- Catalog step 3: live channels and the guide in the on-device database
+- Test: a fresh install starts without the database too
+- Guide downloads for a playlist run one at a time, with the sources current when each starts
+- Navigation store (audit 2.1): categories, the guide's time and posters come back where they were, by key
+- Test: show each step when the guide time test fails
+- Focus and Back rules (audit 2.2, 2.3)
+- Settings: only enter on the first-control stop while it's on screen; test shows each step
+- Settings: the first-control stop spans the page, so Left never lands on it
+- Left-hand lists find a category by item key, not by counting header rows (audit 2.4, NAV-13)
+- Settings: entering a section lands on its first control in reading order
+- Settings sections open on OK, not on highlight (NAV-08); test that only category and channel lists wrap
+- Start on the last channel watched, else the first favorite; QR codes for the user guide and Control4 driver
+
+### 1.0.109 — November 11, 2026, 7:21 AM CT
 
 **Release notes**
 
