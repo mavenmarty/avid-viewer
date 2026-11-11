@@ -129,7 +129,11 @@ object M3u {
     private val attr = Regex("""([A-Za-z0-9_-]+)="([^"]*)"""")
 
     /** Live channels; movies and series entries go into [vodOut] when given. */
-    fun channels(p: Playlist, vodOut: MutableList<VodItem>? = null): List<Channel> = Net.open(p.m3uUrl.trim()) { input ->
+    fun channels(p: Playlist, vodOut: MutableList<VodItem>? = null): List<Channel> =
+        read(p, if (vodOut == null) null else { v -> vodOut.add(v) })
+
+    /** Live channels; each movie or series entry is handed to [onVod] as it's read (none kept here). */
+    fun read(p: Playlist, onVod: ((VodItem) -> Unit)?): List<Channel> = Net.open(p.m3uUrl.trim()) { input ->
         val out = ArrayList<Channel>()
         var pending: Triple<String, Map<String, String>, String?>? = null
         // Named after the stream address, not the position, so a changed list doesn't shift favorites.
@@ -150,7 +154,7 @@ object M3u {
                         val url = line
                         val isMovie = url.contains("/movie/"); val isEpisode = url.contains("/series/")
                         if (isMovie || isEpisode) {
-                            vodOut?.add(
+                            onVod?.invoke(
                                 VodItem(
                                     key = vodKeys.next(url), playlistId = p.id, kind = if (isMovie) "movie" else "episode",
                                     name = pnd.first, logo = pnd.second["tvg-logo"]?.ifBlank { null }, url = url,

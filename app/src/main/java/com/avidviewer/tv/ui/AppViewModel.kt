@@ -652,24 +652,16 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         if (!p.isXtream && (refresh || empty) && !p.liveOn) {
             status = "Loading movies from ${p.name}…"
             runCatching {
-                val m3uVod = ArrayList<VodItem>()
-                withContext(Dispatchers.IO) { M3u.channels(p, m3uVod) }; commitVod(p.id, m3uVod)
-                status = "Loaded ${m3uVod.size} movies and series."
+                val done = ingestVod(p.id) { add -> M3u.read(p, add) }
+                status = "Loaded ${done.added} movies and series."
             }.onFailure { vodError = "Movies couldn't load: ${it.message}" }
         }
         // Re-download when asked, when nothing is saved, or when the saved list predates categories.
         if (p.isXtream && (refresh || empty || oldFormat)) {
             status = "Loading movies from ${p.name}…"
-            val movies = withContext(Dispatchers.IO) { runCatching { XtreamVod.movies(p) } }
-            status = "Loading series…"
-            val series = withContext(Dispatchers.IO) { runCatching { XtreamVod.series(p) } }
-            val list = (movies.getOrDefault(emptyList()) + series.getOrDefault(emptyList())).distinctBy { it.key }
-            if (list.isNotEmpty()) commitVod(p.id, list)
-            vodError = listOfNotNull(
-                movies.exceptionOrNull()?.let { "Movies couldn't load: ${it.message}" },
-                series.exceptionOrNull()?.let { "Series couldn't load: ${it.message}" },
-            ).joinToString("\n").ifBlank { null }
-            status = vodError ?: "Loaded ${movies.getOrDefault(emptyList()).size} movies and ${series.getOrDefault(emptyList()).size} series."
+            val (movies, series, err) = ingestXtreamVod(p) { viewModelScope.launch { status = "Loading series…" } }
+            vodError = err
+            status = vodError ?: "Loaded $movies movies and $series series."
         }
     }
 
@@ -843,17 +835,16 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             if (p.liveOn && (refresh || download || cached.isEmpty())) {
                 status = "Loading channels from ${p.name}…"
                 try {
-                    val m3uVod = ArrayList<VodItem>()
-                    val list = withContext(Dispatchers.IO) {
-                        if (p.isXtream) Xtream.liveChannels(p, prefs.streamFormat) else M3u.channels(p, m3uVod)
-                    }
+                    // An M3U playlist lists its movies alongside its channels: they're saved for when VOD is used
+                    // as the file is read.
+                    val list = if (p.isXtream) withContext(Dispatchers.IO) { Xtream.liveChannels(p, prefs.streamFormat) }
+                        else if (p.vodOn) ingestVod(p.id) { add -> M3u.read(p, add) }.result
+                        else withContext(Dispatchers.IO) { M3u.read(p, null) }
                     commitChannels(p.id, list)
                     applyChannels(list)
                     status = "Loaded ${list.size} channels."
                     otherLive.remove(p.id)
-                    // An M3U playlist lists its movies alongside its channels: save them for when VOD is used.
                     if (!p.isXtream && p.vodOn) {
-                        commitVod(p.id, m3uVod)
                         otherVod.remove(p.id)
                         if (vodLoadedFor?.split(',')?.contains(p.id) == true) vodLoadedFor = null
                     }
@@ -941,20 +932,49 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** The same for a playlist's movies & series (resume points, My List, hidden titles, history). */
-    private suspend fun commitVod(playlistId: String, list: List<VodItem>) {
-        val (m, leftover) = withContext(Dispatchers.IO) {
+    /**
+     * Saves a playlist's movies & series as [fill] hands them over (straight from the download,
+     * nothing collected in memory), then moves saved choices to any changed keys. The old titles stay
+     * if [fill] throws, or when [keep] says no; returns what [fill] returned and how many were added.
+     */
+    private suspend fun <T> ingestVod(
+        playlistId: String,
+        keep: (T, Int) -> Boolean = { _, _ -> true },
+        fill: ((VodItem) -> Unit) -> T,
+    ): com.avidviewer.tv.data.Ingest<T> {
+        val wanted = with(com.avidviewer.tv.data.ChannelKeys) { prefs.referencedKeys(resume, history) }.filter { it.startsWith("$playlistId:") }
+        val (done, m, leftover) = withContext(Dispatchers.IO) {
             val refs = store.loadKeyRefs(playlistId)
             // Only titles the user's choices point at need following to their new keys.
-            val wanted = with(com.avidviewer.tv.data.ChannelKeys) { prefs.referencedKeys(resume, history) }.filter { it.startsWith("$playlistId:") }
             val old = (if (wanted.isEmpty()) emptyList() else catalog.refs(playlistId, wanted)) + refs.filter { it.isVod }
-            val map = if (old.isEmpty()) emptyMap() else com.avidviewer.tv.data.ChannelKeys.remap(old, list.map { com.avidviewer.tv.data.ChannelKeys.Ref.of(it) })
-            catalog.replace(playlistId, list.asSequence().distinctBy { it.key }) { vodHiddenNow(it) }
+            val done = catalog.replacing(playlistId, { vodHiddenNow(it) }, keep, fill)
+            if (!done.committed) return@withContext Triple(done, emptyMap(), null)
+            val map = catalog.remap(playlistId, old)
             store.deleteVodFile(playlistId)
-            map to refs.filter { !it.isVod }
+            Triple(done, map, refs.filter { !it.isVod })
         }
-        withContext(Dispatchers.IO) { store.saveKeyRefs(playlistId, leftover) }
+        if (!done.committed) return done
+        withContext(Dispatchers.IO) { store.saveKeyRefs(playlistId, leftover!!) }
         applyKeyRemap(m)
         vodVersion++
+        return done
+    }
+
+    /** Downloads an Xtream playlist's movies and series into the catalog (one save); null error when both loaded. */
+    private suspend fun ingestXtreamVod(p: Playlist, onSeries: () -> Unit = {}): Triple<Int, Int, String?> {
+        var movies = 0; var series = 0
+        val hadTitles = withContext(Dispatchers.IO) { catalog.has(p.id) }
+        // A part that failed would drop its titles: keep the saved ones instead, unless there are none.
+        val done = ingestVod(p.id, keep = { errs: List<String>, added -> added > 0 && (errs.isEmpty() || !hadTitles) }) { add ->
+            val errs = ArrayList<String>()
+            runCatching { movies = XtreamVod.movies(p, add) }.onFailure { errs.add("Movies couldn't load: ${it.message}") }
+            onSeries()
+            runCatching { series = XtreamVod.series(p, add) }.onFailure { errs.add("Series couldn't load: ${it.message}") }
+            errs.toList()
+        }
+        val err = done.result.joinToString("\n").ifBlank { null }
+            ?: if (!done.committed) "Nothing came back from ${p.name}." else null
+        return Triple(movies, series, err?.let { if (!done.committed && hadTitles) "$it Showing saved titles." else it })
     }
 
     /** Moves every saved choice from old keys to new ones. */
@@ -1175,12 +1195,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                     var chs: List<Channel>? = null
                     if (force || withContext(Dispatchers.IO) { store.savedAt("channels", p.id) } == 0L ||
                         nowMs - withContext(Dispatchers.IO) { store.savedAt("channels", p.id) } > dayMs) {
-                        val m3uVod = ArrayList<VodItem>()
-                        val list = withContext(Dispatchers.IO) {
-                            if (p.isXtream) Xtream.liveChannels(p, prefs.streamFormat) else M3u.channels(p, m3uVod)
-                        }.distinctBy { it.key }
+                        val list = (if (p.isXtream) withContext(Dispatchers.IO) { Xtream.liveChannels(p, prefs.streamFormat) }
+                            else if (p.vodOn) ingestVod(p.id) { add -> M3u.read(p, add) }.result
+                            else withContext(Dispatchers.IO) { M3u.read(p, null) }).distinctBy { it.key }
                         commitChannels(p.id, list)
-                        if (!p.isXtream && p.vodOn) commitVod(p.id, m3uVod)
                         chs = list
                         otherLive.remove(p.id); playlistGroups = playlistGroups - p.id
                     }
@@ -1193,11 +1211,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 if (p.vodOn && p.isXtream) runCatching {
                     val at = withContext(Dispatchers.IO) { catalog.savedAt(p.id) }
                     if (force || at == 0L || nowMs - at > dayMs) {
-                        val list = withContext(Dispatchers.IO) {
-                            (runCatching { XtreamVod.movies(p) }.getOrDefault(emptyList()) + runCatching { XtreamVod.series(p) }.getOrDefault(emptyList())).distinctBy { it.key }
-                        }
-                        if (list.isNotEmpty()) {
-                            commitVod(p.id, list)
+                        val (movies, series, _) = ingestXtreamVod(p)
+                        if (movies + series > 0) {
                             otherVod.remove(p.id)
                             if (vodLoadedFor != null && p.id in vodLoadedFor!!.split(',')) { vodLoadedFor = null; if (screen == Screen.MOVIES || screen == Screen.SERIES || screen == Screen.DISCOVER) ensureVod() }
                         }

@@ -6,6 +6,9 @@ import android.database.Cursor
 import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
 
+/** What a streamed save did: [fill]'s result, how many titles were added, and whether they replaced the old ones. */
+data class Ingest<T>(val result: T, val added: Int, val committed: Boolean)
+
 /**
  * Movies and series of every playlist, on the device (SQLite), so screens read a page at a time
  * instead of holding the whole catalog in memory (menu audit DATA-01, work plan 1.5).
@@ -13,15 +16,16 @@ import android.database.sqlite.SQLiteOpenHelper
  * Columns: k key, p playlist, t kind (movie/series/episode), g kind group ("movie" for movies and
  * episodes, "series" for series), c category ("Other" when blank), n name, nn normalized name (for
  * search and matching), l logo, u url, s series id, a added, r rating, y year, o position in the
- * provider's list, h hidden (1 when the title or its category is hidden by the user).
+ * provider's list, h hidden (1 when the title or its category is hidden by the user), tk the
+ * stream address token (ChannelKeys.token), to follow saved choices when keys change.
  */
-class Catalog(context: Context) : SQLiteOpenHelper(context.applicationContext, "catalog.db", null, 1) {
+class Catalog(context: Context) : SQLiteOpenHelper(context.applicationContext, "catalog.db", null, 2) {
 
     override fun onCreate(db: SQLiteDatabase) {
         db.execSQL(
             """CREATE TABLE title (k TEXT PRIMARY KEY, p TEXT NOT NULL, t TEXT NOT NULL, g TEXT NOT NULL, c TEXT NOT NULL,
                n TEXT NOT NULL, nn TEXT NOT NULL, l TEXT, u TEXT NOT NULL, s TEXT, a INTEGER NOT NULL DEFAULT 0,
-               r TEXT NOT NULL DEFAULT '', y TEXT NOT NULL DEFAULT '', o INTEGER NOT NULL, h INTEGER NOT NULL DEFAULT 0)""",
+               r TEXT NOT NULL DEFAULT '', y TEXT NOT NULL DEFAULT '', o INTEGER NOT NULL, h INTEGER NOT NULL DEFAULT 0, tk TEXT)""",
         )
         db.execSQL("CREATE INDEX title_list ON title (g, h, c, p, o)")
         db.execSQL("CREATE INDEX title_all ON title (g, h, p, o)")
@@ -29,9 +33,16 @@ class Catalog(context: Context) : SQLiteOpenHelper(context.applicationContext, "
         db.execSQL("CREATE INDEX title_name ON title (g, nn)")
         db.execSQL("CREATE INDEX title_playlist ON title (p, o)")
         db.execSQL("CREATE TABLE source (p TEXT PRIMARY KEY, saved INTEGER NOT NULL)")
+        db.execSQL("CREATE INDEX title_token ON title (p, tk)")
     }
 
-    override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {}
+    override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
+        // 2: stream-address token, to follow titles to new keys after a download (ChannelKeys).
+        if (oldVersion < 2) {
+            db.execSQL("ALTER TABLE title ADD COLUMN tk TEXT")
+            db.execSQL("CREATE INDEX title_token ON title (p, tk)")
+        }
+    }
 
     override fun onConfigure(db: SQLiteDatabase) { db.enableWriteAheadLogging() }
 
@@ -56,13 +67,30 @@ class Catalog(context: Context) : SQLiteOpenHelper(context.applicationContext, "
      * commits). [hidden] says which titles the user has hidden.
      */
     fun replace(pid: String, items: Sequence<VodItem>, hidden: (VodItem) -> Boolean) {
+        replacing(pid, hidden) { add -> items.forEach(add) }
+    }
+
+    /**
+     * Replaces a playlist's titles with what [fill] hands to `add`, as it reads them (a download can
+     * stream straight in, nothing is collected in memory). One transaction: readers keep seeing the old
+     * titles until it commits, and if [fill] throws (a failed download) the old titles stay.
+     * The first title with a given key wins, as before. [keep] decides, once [fill] is done, whether
+     * the new titles replace the old (false keeps the old ones, e.g. when part of a download failed).
+     */
+    fun <T> replacing(
+        pid: String,
+        hidden: (VodItem) -> Boolean,
+        keep: (result: T, added: Int) -> Boolean = { _, _ -> true },
+        fill: ((VodItem) -> Unit) -> T,
+    ): Ingest<T> {
         val db = writableDatabase
         db.beginTransaction()
         try {
             db.delete("title", "p = ?", arrayOf(pid))
-            val st = db.compileStatement("INSERT OR REPLACE INTO title (k, p, t, g, c, n, nn, l, u, s, a, r, y, o, h) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
+            val st = db.compileStatement("INSERT OR IGNORE INTO title (k, p, t, g, c, n, nn, l, u, s, a, r, y, o, h, tk) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
             var o = 0L
-            for (v in items) {
+            var added = 0
+            val result = fill { v ->
                 st.clearBindings()
                 st.bindString(1, v.key); st.bindString(2, pid); st.bindString(3, v.kind); st.bindString(4, group(v.kind)); st.bindString(5, cat(v))
                 st.bindString(6, v.name); st.bindString(7, Tmdb.normalize(v.name))
@@ -70,13 +98,56 @@ class Catalog(context: Context) : SQLiteOpenHelper(context.applicationContext, "
                 st.bindString(9, v.url)
                 if (v.seriesId != null) st.bindString(10, v.seriesId) else st.bindNull(10)
                 st.bindLong(11, v.added); st.bindString(12, v.rating); st.bindString(13, v.year); st.bindLong(14, o++); st.bindLong(15, if (hidden(v)) 1 else 0)
-                st.executeInsert()
+                st.bindString(16, ChannelKeys.token(v.url))
+                if (st.executeInsert() != -1L) added++
             }
+            if (!keep(result, added)) return Ingest(result, added, committed = false)
             db.insertWithOnConflict("source", null, ContentValues().apply { put("p", pid); put("saved", System.currentTimeMillis()) }, SQLiteDatabase.CONFLICT_REPLACE)
             db.setTransactionSuccessful()
+            return Ingest(result, added, committed = true)
         } finally {
             db.endTransaction()
         }
+    }
+
+    /**
+     * Old key → new key for titles the user's choices point at, looked up in the newly saved titles:
+     * same stream address first, then name + category, then a name that appears only once
+     * (the same rules as [ChannelKeys.remap], without loading the whole new list).
+     */
+    fun remap(pid: String, old: List<ChannelKeys.Ref>): Map<String, String> {
+        if (old.isEmpty()) return emptyMap()
+        val db = readableDatabase
+        val out = HashMap<String, String>()
+        val taken = HashSet<String>()
+        val unmatched = ArrayList<ChannelKeys.Ref>()
+        fun keys(sql: String, args: Array<String>): List<String> =
+            db.rawQuery(sql, args).use { c -> val l = ArrayList<String>(); while (c.moveToNext()) l.add(c.getString(0)); l }
+        // Same key, same address: nothing moved.
+        for (o in old) {
+            if (keys("SELECT k FROM title WHERE p = ? AND k = ? AND tk = ?", arrayOf(pid, o.key, o.token)).isNotEmpty()) taken.add(o.key)
+            else unmatched.add(o)
+        }
+        val byToken = HashMap<ChannelKeys.Ref, List<String>>()
+        for (o in unmatched) byToken[o] = keys("SELECT k FROM title WHERE p = ? AND tk = ? ORDER BY o LIMIT 8", arrayOf(pid, o.token))
+        // Name fallbacks: one pass over the playlist, keeping only rows whose name one of the refs needs.
+        val wantedNames = unmatched.filter { byToken[it].isNullOrEmpty() }.mapTo(HashSet()) { ChannelKeys.norm(it.name) }
+        val byName = HashMap<String, MutableList<Pair<String, String>>>()   // norm name → (key, norm category), in list order
+        if (wantedNames.isNotEmpty()) db.rawQuery("SELECT k, n, c FROM title WHERE p = ? ORDER BY o", arrayOf(pid)).use { c ->
+            while (c.moveToNext()) {
+                val n = ChannelKeys.norm(c.getString(1))
+                if (n in wantedNames) byName.getOrPut(n) { ArrayList() }.add(c.getString(0) to ChannelKeys.norm(c.getString(2)))
+            }
+        }
+        for (o in unmatched) {
+            val n = ChannelKeys.norm(o.name)
+            val named = byName[n].orEmpty()
+            val hit = byToken[o].orEmpty().firstOrNull { it !in taken }
+                ?: named.filter { it.second == ChannelKeys.norm(o.group.ifBlank { "Other" }) }.map { it.first }.firstOrNull { it !in taken }
+                ?: named.takeIf { it.size == 1 }?.first()?.first?.takeIf { it !in taken }
+            if (hit != null) { taken.add(hit); if (hit != o.key) out[o.key] = hit }
+        }
+        return out
     }
 
     /** Makes the next sync download this playlist's titles again (they stay visible meanwhile). */
