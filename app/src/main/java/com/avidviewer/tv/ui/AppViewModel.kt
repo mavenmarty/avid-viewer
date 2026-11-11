@@ -625,24 +625,27 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /** Titles saved by versions before the catalog database: move them in once (any screen may need them). */
+    private suspend fun importOldTitles(p: Playlist): Boolean = withContext(Dispatchers.IO) {
+        var oldFormat = false
+        if (!catalog.has(p.id)) {
+            val saved = store.loadVod(p.id).distinctBy { it.key }
+            if (saved.isNotEmpty()) {
+                oldFormat = saved.all { it.category.isBlank() }
+                catalog.replace(p.id, saved.asSequence()) { vodHiddenNow(it) }
+            }
+            store.deleteVodFile(p.id)
+        }
+        oldFormat
+    }
+
     /** Hidden flag for a title being saved to the catalog. */
     private fun vodHiddenNow(v: VodItem) = isVodHidden(v)
 
     /** Loads (and downloads when needed) one playlist's movies & series; returns them. */
     private suspend fun loadVodSource(p: Playlist, refresh: Boolean, sig: String) {
         vodLoading = true
-        // Titles saved by versions before the catalog database: move them in once.
-        var oldFormat = false
-        withContext(Dispatchers.IO) {
-            if (!catalog.has(p.id)) {
-                val saved = store.loadVod(p.id).distinctBy { it.key }
-                if (saved.isNotEmpty()) {
-                    oldFormat = saved.all { it.category.isBlank() }
-                    catalog.replace(p.id, saved.asSequence()) { vodHiddenNow(it) }
-                }
-                store.deleteVodFile(p.id)
-            }
-        }
+        val oldFormat = importOldTitles(p)
         if (vodLoadedFor != sig) return
         val empty = withContext(Dispatchers.IO) { !catalog.has(p.id) }
         // An M3U playlist with live TV off: its movies come from the same file, so read it just for them.
@@ -1256,8 +1259,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         prefs = f(prefs)
         store.savePrefs(prefs)
         if (before.vodHiddenCats !== prefs.vodHiddenCats || before.vodHiddenTitles !== prefs.vodHiddenTitles) {
-            val cats = prefs.vodHiddenCats; val titles = prefs.vodHiddenTitles
-            viewModelScope.launch { withContext(Dispatchers.IO) { catalog.applyHidden(cats, titles) }; vodVersion++ }
+            // Right away, so the lists on screen (and the next one read) are already correct.
+            runCatching { catalog.applyHiddenChange(before.vodHiddenCats, prefs.vodHiddenCats, before.vodHiddenTitles, prefs.vodHiddenTitles) }
+            vodVersion++
         }
         if (before.favorites !== prefs.favorites || before.lists !== prefs.lists) {
             // A channel from another playlist was added to a list: reload that playlist's small cache.
@@ -1962,6 +1966,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 if (!p.liveOn && !p.vodOn) continue
                 val (chs, g) = liveFor(p)
                 // Titles: searched in the catalog database, not loaded.
+                if (p.vodOn && p.enabled) importOldTitles(p)
                 val vodHitList = if (!p.vodOn || !p.enabled) emptyList() else withContext(Dispatchers.IO) {
                     catalog.page(Catalog.Query("movie", listOf(p.id), nameContains = q), 0, 100) +
                         catalog.page(Catalog.Query("series", listOf(p.id), nameContains = q), 0, 50)

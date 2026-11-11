@@ -114,6 +114,32 @@ class Catalog(context: Context) : SQLiteOpenHelper(context.applicationContext, "
         }
     }
 
+    /**
+     * Applies only what changed in the hidden categories and titles (fast enough to run as the user
+     * presses the button, so lists are right immediately).
+     */
+    fun applyHiddenChange(beforeCats: Set<String>, afterCats: Set<String>, beforeTitles: Set<String>, afterTitles: Set<String>) {
+        val db = writableDatabase
+        fun catArgs(key: String) = key.split('|', limit = 3).takeIf { it.size == 3 }?.toTypedArray()
+        db.beginTransaction()
+        try {
+            for (k in afterCats - beforeCats) catArgs(k)?.let { db.execSQL("UPDATE title SET h = 1 WHERE g = ? AND p = ? AND c = ?", it) }
+            for (k in beforeCats - afterCats) catArgs(k)?.let { a ->
+                db.execSQL("UPDATE title SET h = 0 WHERE g = ? AND p = ? AND c = ?", a)
+                afterTitles.chunked(400).forEach { ch -> db.execSQL("UPDATE title SET h = 1 WHERE g = ? AND p = ? AND c = ? AND k IN (${ch.joinToString(",") { "?" }})", a + ch) }
+            }
+            (afterTitles - beforeTitles).chunked(400).forEach { ch -> db.execSQL("UPDATE title SET h = 1 WHERE k IN (${ch.joinToString(",") { "?" }})", ch.toTypedArray()) }
+            val shown = (beforeTitles - afterTitles).toList()
+            shown.chunked(400).forEach { ch ->
+                db.execSQL("UPDATE title SET h = 0 WHERE k IN (${ch.joinToString(",") { "?" }})", ch.toTypedArray())
+                for (k in afterCats) catArgs(k)?.let { a -> db.execSQL("UPDATE title SET h = 1 WHERE g = ? AND p = ? AND c = ? AND k IN (${ch.joinToString(",") { "?" }})", a + ch) }
+            }
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
+        }
+    }
+
     /** Which rows a list shows. */
     data class Query(
         val group: String,
