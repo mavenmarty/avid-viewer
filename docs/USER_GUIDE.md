@@ -37,9 +37,9 @@ Your password is stored encrypted on the device (Android Keystore) and is never 
 - **Arrows** move the highlight. **Hold an arrow** to speed up (3, then 6, then 12 items per repeat).
 - **OK** selects. Text boxes open the keyboard only when you press OK on them.
 - **Menu** (or **hold OK**) opens options for the highlighted item.
-- **Back** goes up one level. Pressing Back on the full menu while on the TV Guide exits the app.
+- **Back** goes up one level, landing on the item that led there. On the full menu while on the TV Guide, Back shows **Press Back again to exit**; a second Back within about 2.5 seconds closes the app.
 - **Channel Up / Channel Down** (or Page Up / Page Down) move a page at a time in the TV Guide and change channels in full screen.
-- **Lists wrap around.** In channel and category lists, a single press past the last item goes to the first, and the reverse. Holding a button stops at the end, so a fast scroll doesn't fly past.
+- **Channel and category lists wrap around.** A single press past the last item goes to the first, and the reverse. Holding a button stops at the end, so a fast scroll doesn't fly past. Other lists (the main menu, the playlist list, Settings and poster grids) stop at the end.
 - If a press ever finds nothing highlighted, the app puts the highlight back.
 
 ## 2. Main menu
@@ -52,7 +52,12 @@ At the bottom of the menu you'll see:
 - **Current weather** (if a postal code is set and Show weather is on).
 - An **Update x.y.z** button when a new version is available.
 
-The app opens on the TV Guide at the last channel you watched, with the menu shown as icons.
+The app opens on the TV Guide with the menu shown as icons, on:
+
+1. the last channel you watched, in its own category;
+2. if that channel is in ★ Favorites or one of your lists, that list (the channel can belong to another playlist);
+3. otherwise your first favorite, with ★ Favorites open;
+4. with no favorites, the first channel of the first category.
 
 ## 3. TV Guide
 
@@ -73,8 +78,9 @@ The TV Guide is the home screen for live TV. Next to the main menu it has:
 - **Up on the first channel** moves to the preview window; **Up again** jumps to the last channel. **Down on the last channel** goes back to the first.
 - **CH+/CH−** (Page Up/Down) move a full page and wrap around at the ends.
 - **OK** on a channel or program starts it in the preview. **OK again**, or OK on the preview window, opens it full screen.
-- Choosing a new category starts at the top, with its first channel highlighted. Coming back to the same category keeps your place.
-- **Back from full screen** returns to the channel you were watching, even far down a long category.
+- **Each category remembers where you were.** A category you haven't opened yet starts at its first channel. Coming back to one you've visited highlights the channel you left, even if channels above it were hidden or the list refreshed; if that channel is gone, the nearest one is highlighted, not the top.
+- **The guide keeps its time.** If you scroll ahead (to tonight, say), the guide stays on that time when you open full screen or another screen and come back.
+- **Back from full screen** returns to the same channel and program, even far down a long category.
 - In the category list, **Up on ‹ Menu** jumps to the last category, and **Down on the last category** returns to ‹ Menu.
 
 ### Search in the guide
@@ -148,6 +154,8 @@ The **Search** screen searches **every playlist** at once: TV stations, programs
 - **+ Add to List** for a channel (shows **✓ In a list** once added).
 - **+ My List** for a movie or series (shows **✓ My List**).
 
+After you play a channel, program, movie or episode from Search, **Back** returns to the results with that result highlighted.
+
 ## 6. Discover
 
 Discover shows what's new and popular, and where to watch it, using TMDB and JustWatch data.
@@ -174,13 +182,14 @@ The Sports screen finds games and events in your TV guide.
 - **Right side**: posters for the chosen category.
 - **🔍 Search movies / 🔍 Search series** is in the category list, below My List. Results replace the poster grid; **✕ Clear search** ends the search.
 - **OK on a poster** opens its page: plot, cast, director, **▶ Play**, or **▶ Resume from [time]** and **Start over**, plus **+ My List**. Series pages list episodes by **Season**, with resume points. From the page's buttons, **Down** goes to the season buttons, then to the episodes; **Up** from the first episode goes back to the seasons. After you watch an episode and press **Back**, that episode is highlighted.
-- **Category list wraps around**: Up on **All** jumps to the last category, and Down on the last returns to All.
+- **Each category (and each search) keeps its own place.** Back from a title's page highlights that title's poster.
+- **Category list wraps around**: Up on **All** jumps to the last category, and Down on the last returns to All. The poster grid stops at the end.
 - **Menu on a category**: **Rename**, **Re-order** or **Hide** it. Hidden categories come back in Settings › List Editor.
 - If you have more than one playlist, movies and series from all of them are merged.
 
 ## 9. Settings
 
-Settings has sections on the left; highlighting one shows its options on the right. The section list scrolls to keep the highlighted one in view. Inside a section, Up and Down stop at the first and last option, and Left goes back to the list of sections.
+Settings has sections on the left and the open section's options on the right. **Up/Down** move through the sections; the section list scrolls to keep the highlighted one in view. **OK** opens the highlighted section and moves into it, on its first option (**Right** also moves into the open section). Inside a section, Up and Down stop at the first and last option. **Left** at the left edge of a section, or **Back**, returns to that section in the list; **Back** again opens the main menu.
 
 ### Playlists
 
@@ -273,6 +282,7 @@ Everything here stays on the device; nothing is uploaded or backed up to the clo
   - If Android's installer doesn't appear within about 25 seconds, an **Open installer** button opens Android's own install screen for the same file.
 - **Last crash**: if the app closed unexpectedly, the details are kept here on the device (nothing is sent anywhere), with **Clear crash report**.
 - **Report a bug**: email **bugs@avidviewer.app** with what happened and the steps that lead to it. The section lists the details to include, read from the TV (app version, device model, Android and Fire OS versions, and the last crash's error). Scan the **QR code** with a phone camera to start that email with the details filled in; **Open email app** appears only on TVs that have one. No playlists, logins or provider addresses are included.
+- **User guide and Control4 driver**: two QR codes to scan with a phone. **User guide (PDF)** opens the latest version of this guide; **Control4 mini driver** downloads `um_avid_viewer.c4z` (see [Control4](#12-control4)).
 - **Credits**: TMDB, JustWatch, Open-Meteo and ESPN.
 
 #### Backup & restore
@@ -322,6 +332,7 @@ The share password is stored encrypted on the TV and is included in your PIN-loc
 - **Discover is empty**: add a TMDB API key in Settings › Discover, or turn off "My services".
 - **Sports is empty**: wait for the TV guide to load, or adjust your categories in Settings › Sports tab.
 - **A channel or category disappeared**: it may be hidden. Check Settings › List Editor.
+- **A guide row ends early and Right won't go further**: fixed in 1.0.133 for guides that list overlapping programmes; update the app.
 - **A channel shows the wrong listings, or none**: press Menu on it and choose **Match guide…**. If a whole guide is consistently early or late, set a **time offset** on its source in Settings › Playlists › ▤ Guide sources.
 - **Favorites landed one channel off after a restore** (on a version before 1.0.94): that backup can't fix them automatically. Set them once, then make a new backup; newer backups record which channel each favorite points to.
 - **An update hangs at about 95%** (updating from 1.0.82 or earlier, which have the old updater): try again. If it still hangs, install the new version once by hand with the Downloader app; later updates resume stalled downloads.
@@ -347,7 +358,7 @@ Every build runs automated usability tests before it's released: the real app sc
 
 The **Avid Viewer** Control4 driver (`um_avid_viewer.c4z`) adds Avid Viewer to the Watch menu. Picking it switches the room to your Fire TV and opens Avid Viewer. Your Control4 installer adds it in Composer.
 
-**Download:** [Control4 drivers folder](https://drive.google.com/drive/folders/1PeYs-U4YgndrVZm6PN-uAF-hgRGoIr9d) on Google Drive, or the [driver file directly](https://drive.google.com/file/d/10XxPywvX456lPTmou6xsqERmbTfhOJul/view?usp=drivesdk). Anyone with the link can download it.
+**Download:** [Control4 drivers folder](https://drive.google.com/drive/folders/1PeYs-U4YgndrVZm6PN-uAF-hgRGoIr9d) on Google Drive, or the [driver file directly](https://drive.google.com/file/d/10XxPywvX456lPTmou6xsqERmbTfhOJul/view?usp=drivesdk). Anyone with the link can download it. You can also scan the QR code in **Settings › Updates & about** with a phone.
 
 ### What you need
 
@@ -383,24 +394,29 @@ Every public release since 1.0.35, newest first. Releases are published on GitHu
 
 ### 1.0.133 — November 11, 2026, 12:37 PM CT (current)
 
+**Release notes**
+
+- **Much lighter on Fire TV Stick with big playlists:** channels, the TV guide, movies and series are now kept in a small database on the TV. Screens read only what they show, and downloads go straight into storage instead of being held in memory. Saved channels, guides and catalogs move in on the first launch, so nothing downloads again.
+- **The app remembers where you were:** each TV Guide category comes back on the channel you left, the guide keeps the time you scrolled to (Back from full screen lands on the same show), and Movies and Series keep their place in each category, with Back from a title's page landing on its poster.
+- **Starts on your last channel**, even a favorite from another playlist; without one, on your first favorite.
+- **Settings:** a section opens when you press **OK**, not when you highlight it, and **Left** and **Back** return to the section you were in.
+- **Back at the top asks before closing:** "Press Back again to exit".
+- **Back after Search** returns to your results, on the result you chose.
+- **Settings › Updates & about:** QR codes for the latest user guide and the Control4 driver.
+- **TV guide fixes:** guides that list overlapping programmes no longer push the end of a row off screen; changing guide sources quickly no longer lets an older download overwrite a newer one; a failed or empty download keeps the channels and guide you already had.
+
 **Change log**
 
-- Catalog database (audit work plan 1.5, step 1): movies and series live in SQLite and screens read pages
-- Catalog: hidden changes apply immediately; old saved titles are moved in before a search
-- Catalog search: movies, series and episodes each get their own results (episodes were crowded out)
-- Catalog step 2: movies and series stream from the download straight into the database
-- Catalog step 3: live channels and the guide in the on-device database
-- Test: a fresh install starts without the database too
-- Guide downloads for a playlist run one at a time, with the sources current when each starts
-- Navigation store (audit 2.1): categories, the guide's time and posters come back where they were, by key
-- Test: show each step when the guide time test fails
-- Focus and Back rules (audit 2.2, 2.3)
-- Settings: only enter on the first-control stop while it's on screen; test shows each step
-- Settings: the first-control stop spans the page, so Left never lands on it
-- Left-hand lists find a category by item key, not by counting header rows (audit 2.4, NAV-13)
-- Settings: entering a section lands on its first control in reading order
-- Settings sections open on OK, not on highlight (NAV-08); test that only category and channel lists wrap
-- Start on the last channel watched, else the first favorite; QR codes for the user guide and Control4 driver
+- On-device database (SQLite) for movies & series, live channels and guide programmes; screens read pages, and search, favorites, category counts and the guide's search box look things up instead of loading whole playlists
+- Downloads (M3U, Xtream live/movies/series, XMLTV) stream straight into the database in one transaction; failed or empty downloads keep the saved data; saved choices follow changed keys; old files moved in on first use
+- Guide downloads for a playlist run one at a time
+- Navigation memory: per-category channel and scroll, guide time and programme, poster after a title page
+- Highlight placement retries until it lands (replaces fixed delays); Left-as-Back only in the guide
+- Settings: OK opens a section; Left/Back return to its row; entry on the first option
+- Back at the top: press again to exit; Back after Search returns to the result
+- Start on the last channel, else from Favorites or a list, else the first favorite
+- QR codes for the user guide PDF and the Control4 mini driver
+- Tests: database (rollback, upgrades, remapping, guide windows), navigation memory, Settings Left/Back/OK, exit, search return, wrap limits, startup channel, QR codes
 
 ### 1.0.109 — November 11, 2026, 7:21 AM CT
 
