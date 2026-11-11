@@ -2,7 +2,7 @@
 
 <!-- The version below and the Release notes section are updated automatically after each published build
      (.github/workflows/user-guide.yml). Feature descriptions are written by hand. -->
-This guide covers **Avid Viewer 1.0.97**, the current public release. Avid Viewer is an IPTV player for Android TV and Fire TV. You bring your own provider (an Xtream Codes login or an M3U link); the app doesn't include any channels.
+This guide covers **Avid Viewer 1.0.109**, the current public release. Avid Viewer is an IPTV player for Android TV and Fire TV. You bring your own provider (an Xtream Codes login or an M3U link); the app doesn't include any channels.
 
 **Contents:** [Getting started](#1-getting-started) · [Main menu](#2-main-menu) · [TV Guide](#3-tv-guide) · [Full-screen playback](#4-full-screen-playback) · [Search](#5-search) · [Discover](#6-discover) · [Sports](#7-sports) · [Movies and Series](#8-movies-and-series) · [Settings](#9-settings) · [Privacy](#10-privacy) · [Troubleshooting](#11-troubleshooting) · [Release notes](#release-notes)
 
@@ -305,7 +305,15 @@ Every public release since 1.0.35, newest first. Releases are published on GitHu
 
 <!-- new-releases: entries for new builds are added automatically below this line -->
 
-### 1.0.97 — November 10, 2026, 9:00 PM CT (current)
+### 1.0.109 — November 11, 2026, 7:21 AM CT (current)
+
+**Change log**
+
+- Stabilize (audit work plan 1.1–1.4): stream Xtream live list, keep only favorite channels of other playlists, compute derived lists once per change, update dialog never opens mid-browse
+- StabilizeTest: select the category before re-ordering
+- Fix startup crash risk: declare the derived-list caches and their inputs before init
+
+### 1.0.97 — November 10, 2026, 9:00 PM CT
 
 **Change log**
 
