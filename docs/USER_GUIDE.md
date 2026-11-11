@@ -283,6 +283,7 @@ Everything here stays on the device; nothing is uploaded or backed up to the clo
 - **Last crash**: if the app closed unexpectedly, the details are kept here on the device (nothing is sent anywhere), with **Clear crash report**.
 - **Report a bug**: email **bugs@avidviewer.app** with what happened and the steps that lead to it. The section lists the details to include, read from the TV (app version, device model, Android and Fire OS versions, and the last crash's error). Scan the **QR code** with a phone camera to start that email with the details filled in; **Open email app** appears only on TVs that have one. No playlists, logins or provider addresses are included.
 - **User guide and Control4 driver**: two QR codes to scan with a phone. **User guide (PDF)** opens the latest version of this guide; **Control4 mini driver** downloads `um_avid_viewer.c4z` (see [Control4](#12-control4)).
+- **Moving through this section:** opening it (OK on Updates & about) highlights **Report a bug** first; **Down** moves to the QR codes, then to Backup & restore and App updates. Blocks without buttons (Report a bug on TVs without an email app, and the QR codes) take the highlight themselves, with a ring around the whole block, so the page scrolls each one fully into view.
 - **Credits**: TMDB, JustWatch, Open-Meteo and ESPN.
 
 #### Backup & restore
@@ -394,11 +395,14 @@ Every public release since 1.0.35, newest first. Releases are published on GitHu
 
 ### 1.0.137 — November 11, 2026, 2:12 PM CT (current)
 
+**Release notes**
+
+- **Settings › Updates & about shows every block in full.** On Fire TV, Report a bug and the user guide / Control4 QR codes were cut off at the top of the screen. They can now be highlighted, so the page scrolls them into view: opening the section lands on Report a bug, and Down moves to the QR codes. On TVs with an email app, **Open email app** takes the highlight instead.
+
 **Change log**
 
-- Updates & about: the Report a bug and QR code blocks take the highlight, so they scroll into view whole
-- Updates & about: a highlighted block reads as one item
-- Updates & about: tag the selectable blocks instead of merging their text (keeps their parts findable)
+- Updates & about: Report a bug and the QR code block can take the highlight, so they're scrolled into view whole (the page used to skip past them to the first button, pushing their tops off screen)
+- Tests: opening Updates & about lands on Report a bug; both blocks are reachable with Down and Up and shown whole
 
 ### 1.0.133 — November 11, 2026, 12:37 PM CT
 
