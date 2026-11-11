@@ -558,9 +558,10 @@ class UsabilityTest {
         waitFor("on TV guide (focus: ${focused()})") { vm.settingsSection == "guide" && focused().contains("TV guide") }
         press(listOf(Key.DirectionRight))
         waitFor("Right lands inside the section, on a control (focus: ${focused()})") { vm.settingsInContent && focused() != "(nothing focused)" }
-        repeat(6) { press(listOf(Key.DirectionDown)) }
-        press(listOf(Key.DirectionLeft))
-        waitFor("Left goes back to TV guide in the list, not a neighbouring section (section=${vm.settingsSection}, focus: ${focused()})") {
+        val steps = ArrayList<String>()
+        repeat(6) { press(listOf(Key.DirectionDown)); steps.add(focused()) }
+        press(listOf(Key.DirectionLeft)); steps.add("◀ " + focused())
+        waitFor("Left goes back to TV guide in the list, not a neighbouring section (section=${vm.settingsSection}, focus: ${focused()}, steps $steps)") {
             vm.settingsSection == "guide" && focused().contains("TV guide") && !vm.settingsInContent
         }
         assertEquals("Left from Settings didn't open the main menu", NavMode.COLLAPSED, vm.navMode)

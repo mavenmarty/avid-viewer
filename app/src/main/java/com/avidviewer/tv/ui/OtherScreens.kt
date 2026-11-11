@@ -554,7 +554,7 @@ private data class SettingsSection(val id: String, val title: String, val icon: 
  * it belongs to in the list ([sectionFr], not whichever row happens to be nearest, NAV-02); Right
  * into it lands on its first control ([firstFr], NAV-10).
  */
-private fun Modifier.staysInSection(sectionFr: FocusRequester? = null, firstFr: FocusRequester? = null): Modifier = this
+private fun Modifier.staysInSection(sectionFr: FocusRequester? = null, firstFr: FocusRequester? = null, firstOn: () -> Boolean = { false }): Modifier = this
     .focusProperties {
         exit = { dir ->
             when (dir) {
@@ -563,7 +563,8 @@ private fun Modifier.staysInSection(sectionFr: FocusRequester? = null, firstFr: 
                 else -> FocusRequester.Default
             }
         }
-        if (firstFr != null) enter = { dir -> if (dir == androidx.compose.ui.focus.FocusDirection.Right) firstFr else FocusRequester.Default }
+        // Only while the stop is on screen (scrolled away, a lazy list has dropped it and asking it would crash).
+        if (firstFr != null) enter = { dir -> if (dir == androidx.compose.ui.focus.FocusDirection.Right && firstOn()) firstFr else FocusRequester.Default }
     }
     .focusGroup()
 
@@ -586,7 +587,8 @@ private val SECTIONS = listOf(
  * highlight straight down to the page's first control (whatever kind of control that is).
  */
 @Composable
-private fun FirstControlStop(fr: FocusRequester) {
+private fun FirstControlStop(fr: FocusRequester, on: androidx.compose.runtime.MutableState<Boolean>) {
+    androidx.compose.runtime.DisposableEffect(fr) { on.value = true; onDispose { on.value = false } }
     val fm = androidx.compose.ui.platform.LocalFocusManager.current
     val scope = androidx.compose.runtime.rememberCoroutineScope()
     androidx.compose.foundation.layout.Box(
@@ -611,6 +613,7 @@ fun SettingsScreen(vm: AppViewModel) {
     val sectionFrs = remember { SECTIONS.associate { it.id to FocusRequester() } }
     // The first control of a section (a hidden stop at the top of the page that hands the highlight down).
     val firstFr = remember(section) { FocusRequester() }
+    val firstOn = remember(section) { mutableStateOf(false) }
     // Back inside a section goes up one level, to its row in the section list (NAV-07); Back there opens the menu.
     LaunchedEffect(vm.settingsBackTick) {
         if (vm.settingsBackTick > 0) focusWhenReady(vm) { runCatching { sectionFrs[section]?.requestFocus() }.isSuccess }
@@ -648,7 +651,7 @@ fun SettingsScreen(vm: AppViewModel) {
         // (only Left goes back to the list of sections).
         val generic = section != "playlists" && section != "channels"
         Column(Modifier.weight(1f).fillMaxHeight().onFocusChanged { vm.settingsInContent = it.hasFocus; if (it.hasFocus) compact = true }
-            .staysInSection(sectionFrs[section], if (generic) firstFr else null)) {
+            .staysInSection(sectionFrs[section], if (generic) firstFr else null) { firstOn.value }) {
             when (section) {
                 "playlists" -> PlaylistsScreen(vm)
                 "channels" -> ListEditor(vm)
@@ -658,7 +661,7 @@ fun SettingsScreen(vm: AppViewModel) {
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     item {
-                        FirstControlStop(firstFr)
+                        FirstControlStop(firstFr, firstOn)
                         Text(SECTIONS.first { it.id == section }.title, color = C.Text, fontSize = 20.sp, fontWeight = FontWeight.Bold)
                     }
                     when (section) {
