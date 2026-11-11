@@ -45,6 +45,7 @@ fun AppRoot(vm: AppViewModel) {
         Modifier.fillMaxSize().background(C.Bg)
             .onFocusChanged { vm.anyFocus = it.hasFocus }
             .onPreviewKeyEvent { if (it.type == KeyEventType.KeyDown) vm.lastKeyAt = android.os.SystemClock.uptimeMillis(); false }
+            .leftGoesBack(vm)
             .holdToAccelerate(),
     ) {
         val rescueFm = androidx.compose.ui.platform.LocalFocusManager.current
@@ -61,7 +62,8 @@ fun AppRoot(vm: AppViewModel) {
         } else {
             Row(Modifier.fillMaxSize()) {
                 val browsing = vm.screen == Screen.LIVE || vm.screen == Screen.GUIDE
-                if (vm.navMode != NavMode.GROUPS || !browsing) NavRail(vm)
+                // The main menu is always there: icons only while a lower layer is in use.
+                NavRail(vm)
                 if (browsing && vm.navMode == NavMode.COLLAPSED) PlaylistTree(vm)
                 if (browsing && vm.navMode == NavMode.GROUPS) GroupNav(vm)
                 Box(Modifier.fillMaxHeight().weight(1f)) {

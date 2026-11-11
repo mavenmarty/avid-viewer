@@ -1,5 +1,6 @@
 package com.avidviewer.tv
 
+import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithTag
 import android.app.Application
 import android.view.KeyEvent as AndroidKeyEvent
@@ -164,6 +165,8 @@ class UsabilityTest {
         rule.onAllNodes(androidx.compose.ui.test.hasText("NEWS Channel 1 with", substring = true) and androidx.compose.ui.test.hasClickAction()).onFirst().requestFocus()
         press(listOf(Key.DirectionDown, Key.DirectionDown, Key.DirectionRight, Key.DirectionRight, Key.DirectionLeft, Key.DirectionUp))
         assertEquals(NavMode.GROUPS, vm.navMode)
+        press(listOf(Key.Back)) // first to the category list
+        waitFor("Back from a channel highlights the current category (focus: ${focused()})") { vm.inGroupNav && focused().contains("NEWS") }
         press(listOf(Key.Back))
         assertNotEquals("Back should leave the category list", NavMode.GROUPS, vm.navMode)
     }
@@ -365,6 +368,55 @@ class UsabilityTest {
         assertTrue(link, link.startsWith("mailto:bugs@avidviewer.app?subject="))
         assertTrue(link, link.contains("App version: 1.0.test") && link.contains("Last crash: java.lang.IllegalStateException: boom"))
         vm.playlists.forEach { p -> assertTrue("leaks ${p.name}", !link.contains(p.name) && (p.server.isBlank() || !link.contains(p.server))) }
+    }
+
+    // ---------------------------------------------------------------- layers (Nov 10, evening)
+
+    private fun goDeepInBig() {
+        rule.runOnIdle { vm.chooseGroup(TestData.P1, "BIG") }
+        waitFor("the long category") { focused().contains("BIG Channel 1 with") }
+        hold(Key.DirectionDown, 25)
+        var tries = 0
+        while (!focused().contains("BIG Channel 60 with") && tries < 70) {
+            press(listOf(if (Regex("BIG Channel (\\d+) ").find(focused())?.groupValues?.get(1)?.toInt()?.let { it > 60 } == true) Key.DirectionUp else Key.DirectionDown)); tries++
+        }
+        assertTrue("couldn't get to channel 60 (focus: ${focused()})", focused().contains("BIG Channel 60 with"))
+    }
+
+    @Test
+    fun theMainMenuShowsAsIconsAtLaunchOnTheGuide() {
+        settle()
+        assertEquals(Screen.GUIDE, vm.screen)
+        assertEquals(NavMode.GROUPS, vm.navMode)
+        assertTrue("main menu icons are on screen", rule.onAllNodesWithContentDescription("Settings").fetchSemanticsNodes().isNotEmpty())
+    }
+
+    @Test
+    fun backFromDeepInACategoryStepsThroughTheLayers() {
+        goDeepInBig()
+        press(listOf(Key.Back))
+        waitFor("Back highlights the current category in the category list (focus: ${focused()}, nav=${vm.navMode})") {
+            vm.navMode == NavMode.GROUPS && vm.inGroupNav && focused().trim().startsWith("▶ BIG")
+        }
+        press(listOf(Key.Back))
+        waitFor("Back again highlights the same category in the playlist list, not the top (focus: ${focused()}, nav=${vm.navMode})") {
+            vm.navMode == NavMode.COLLAPSED && vm.inPlaylistTree && focused().trim().startsWith("BIG")
+        }
+        press(listOf(Key.Back))
+        waitFor("Back again opens the main menu (nav=${vm.navMode})") { vm.navMode == NavMode.FULL }
+    }
+
+    @Test
+    fun leftWorksLikeBackBetweenTheLayers() {
+        goDeepInBig()
+        press(listOf(Key.DirectionLeft))
+        waitFor("Left from a channel name highlights the current category (focus: ${focused()})") { vm.inGroupNav && focused().trim().startsWith("▶ BIG") }
+        press(listOf(Key.DirectionLeft))
+        waitFor("Left again goes to the playlist list on that category (focus: ${focused()}, nav=${vm.navMode})") {
+            vm.navMode == NavMode.COLLAPSED && focused().trim().startsWith("BIG")
+        }
+        press(listOf(Key.DirectionLeft))
+        waitFor("Left again opens the main menu (nav=${vm.navMode})") { vm.navMode == NavMode.FULL }
     }
 
     // ---------------------------------------------------------------- reported bugs (Nov 10)

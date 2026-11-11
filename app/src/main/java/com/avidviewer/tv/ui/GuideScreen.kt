@@ -290,6 +290,10 @@ fun GuideScreen(vm: AppViewModel) {
                                 .onPreviewKeyEvent { e ->
                                     if (isMoving) reorderKeys(e, onMove = { vm.moveChannelBy(c.key, it) }, onTop = { vm.moveChannelTo(c.key, 0) },
                                         onBottom = { vm.moveChannelTo(c.key, Int.MAX_VALUE) }, onDone = { vm.movingChannel = null })
+                                    // Left from a channel name goes back to the category list, on the current category (like Back).
+                                    else if (e.type == KeyEventType.KeyDown && e.key == Key.DirectionLeft && e.nativeKeyEvent.repeatCount == 0 && vm.navMode == NavMode.GROUPS && vm.selectedGroup != null) {
+                                        vm.navFocusKey = vm.selectedGroup; true
+                                    }
                                     // Down on the last channel (a fresh press, not a hold) goes back to the first.
                                     else if (e.type == KeyEventType.KeyDown && e.key == Key.DirectionDown && idx == list.lastIndex && e.nativeKeyEvent.repeatCount == 0 && list.size > 1) {
                                         wrapTo(0); true

@@ -1,5 +1,6 @@
 package com.avidviewer.tv.ui
 
+import kotlinx.coroutines.launch
 import androidx.compose.foundation.border
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.key.key
@@ -153,18 +154,33 @@ fun NavRail(vm: AppViewModel) {
 fun PlaylistTree(vm: AppViewModel) {
     val active = vm.activePlaylist()?.id
     val first = remember { FocusRequester() }
+    val treeState = androidx.compose.foundation.lazy.rememberLazyListState()
     LaunchedEffect(Unit) {
+        // Coming back from a category: that category takes the highlight instead (see below).
+        val k = vm.navFocusKey
+        if (k != null) {
+            val n = vm.shownLists.size
+            val activeIdx = vm.livePlaylists.indexOfFirst { it.id == active }
+            val item = when {
+                k == FAV_GROUP -> 0
+                isListGroup(k) -> 1 + vm.shownLists.indexOfFirst { LIST_PREFIX + it.id == k }.coerceAtLeast(0)
+                else -> vm.groups().indexOfFirst { it.raw == k }.let { gi -> if (gi < 0 || activeIdx < 0) -1 else n + 2 + activeIdx + 1 + gi }
+            }
+            if (item >= 0) { launch { treeState.scrollToItem((item - 3).coerceAtLeast(0)) }; return@LaunchedEffect }
+            vm.navFocusKey = null
+        }
         delay(80)
         runCatching { first.requestFocus() }
     }
     LazyColumn(
-        Modifier.width(250.dp).fillMaxHeight().background(C.Bg),
+        Modifier.width(250.dp).fillMaxHeight().background(C.Bg).onFocusChanged { vm.inPlaylistTree = it.hasFocus },
+        state = treeState,
         contentPadding = PaddingValues(10.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         item {
             Focusable(
-                modifier = Modifier.fillMaxWidth().height(44.dp),
+                modifier = Modifier.fillMaxWidth().height(44.dp).navFocusTarget(vm, FAV_GROUP),
                 color = C.Surface,
                 onClick = { vm.ensureFavoriteData(); vm.chooseGroup(active ?: "", FAV_GROUP) },
             ) {
@@ -178,7 +194,7 @@ fun PlaylistTree(vm: AppViewModel) {
         items(vm.shownLists, key = { "tl-" + it.id }) { l ->
             val g = LIST_PREFIX + l.id
             Focusable(
-                modifier = Modifier.fillMaxWidth().height(44.dp),
+                modifier = Modifier.fillMaxWidth().height(44.dp).navFocusTarget(vm, g),
                 color = C.Surface,
                 onMenu = { vm.listMenu = g },
                 onClick = { vm.ensureFavoriteData(); vm.chooseGroup(active ?: "", g) },
@@ -212,7 +228,7 @@ fun PlaylistTree(vm: AppViewModel) {
                 if (groups == null) item(key = "ld-" + p.id) { Label("Loading…", size = 12.sp, modifier = Modifier.padding(start = 30.dp)) }
                 else items(groups, key = { "g-" + p.id + "-" + it.raw }) { g ->
                     Focusable(
-                        modifier = Modifier.fillMaxWidth().padding(start = 18.dp).height(36.dp),
+                        modifier = Modifier.fillMaxWidth().padding(start = 18.dp).height(36.dp).navFocusTarget(vm, if (p.id == active) g.raw else null),
                         color = C.Bg,
                         onClick = { vm.chooseGroup(p.id, g.raw) },
                     ) {
@@ -243,9 +259,21 @@ fun GroupNav(vm: AppViewModel) {
         if (vis.isNotEmpty() && (item <= vis.first() || item >= vis.last())) navState.scrollToItem((item - 3).coerceAtLeast(0))
     }
     val wrap = rememberListWrap(navState)
+    // Back/Left from the guide: bring the current category into view (it then takes the highlight itself).
+    LaunchedEffect(vm.navFocusKey) {
+        val k = vm.navFocusKey ?: return@LaunchedEffect
+        val n = vm.shownLists.size
+        val item = when {
+            k == FAV_GROUP -> 2
+            isListGroup(k) -> 3 + vm.shownLists.indexOfFirst { LIST_PREFIX + it.id == k }.coerceAtLeast(0)
+            else -> groups.indexOfFirst { it.raw == k }.let { if (it < 0) 0 else it + 5 + n }
+        }
+        val vis = navState.layoutInfo.visibleItemsInfo.map { it.index }
+        if (vis.isEmpty() || item < vis.first() || item > vis.last()) scope.launch { navState.scrollToItem((item - 3).coerceAtLeast(0)) }
+    }
     LazyColumn(
         state = navState,
-        modifier = Modifier.width(210.dp).fillMaxHeight().background(C.Rail),
+        modifier = Modifier.width(210.dp).fillMaxHeight().background(C.Rail).onFocusChanged { vm.inGroupNav = it.hasFocus },
         contentPadding = PaddingValues(10.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
@@ -258,7 +286,7 @@ fun GroupNav(vm: AppViewModel) {
         item(key = "fav") {
             val on = vm.selectedGroup == FAV_GROUP
             Focusable(
-                modifier = Modifier.fillMaxWidth().height(38.dp),
+                modifier = Modifier.fillMaxWidth().height(38.dp).navFocusTarget(vm, FAV_GROUP),
                 color = if (on) C.Surface2 else Color.Transparent,
                 onClick = { vm.ensureFavoriteData(); vm.chooseGroup(vm.activePlaylist()?.id ?: "", FAV_GROUP) },
             ) {
@@ -270,7 +298,7 @@ fun GroupNav(vm: AppViewModel) {
             val g = LIST_PREFIX + l.id
             val on = vm.selectedGroup == g
             Focusable(
-                modifier = Modifier.fillMaxWidth().height(38.dp),
+                modifier = Modifier.fillMaxWidth().height(38.dp).navFocusTarget(vm, g),
                 color = if (on) C.Surface2 else Color.Transparent,
                 onMenu = { vm.listMenu = g },
                 onClick = { vm.ensureFavoriteData(); vm.chooseGroup(vm.activePlaylist()?.id ?: "", g) },
@@ -296,7 +324,7 @@ fun GroupNav(vm: AppViewModel) {
                 if (isMoving) for (attempt in 0 until 15) { kotlinx.coroutines.delay(30); if (hasFocus) break; runCatching { fr.requestFocus() } }
             }
             Focusable(
-                modifier = Modifier.fillMaxWidth().height(38.dp).focusRequester(fr).onFocusChanged { hasFocus = it.isFocused }
+                modifier = Modifier.fillMaxWidth().height(38.dp).focusRequester(fr).onFocusChanged { hasFocus = it.isFocused }.navFocusTarget(vm, g.raw)
                     .then(if (!isMoving) Modifier.wrapEnds(wrap, isFirst = false, isLast = g == groups.last()) else Modifier)
                     .then(if (isMoving) Modifier.border(2.dp, C.AccentFocus, androidx.compose.foundation.shape.RoundedCornerShape(8.dp)) else Modifier)
                     .onPreviewKeyEvent { e ->

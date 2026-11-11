@@ -1747,14 +1747,30 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** Back walks up the navigation: categories → playlists → full menu → TV Guide. Returns false to let the app exit. */
+    /** Which left-hand list has the highlight, so Back and Left know which layer the viewer is on. */
+    var inGroupNav = false
+    var inPlaylistTree = false
+    /** A category (raw name, ★ Favorites or a list) the left-hand list should highlight next; cleared once it has. */
+    var navFocusKey by mutableStateOf<String?>(null)
+
+    /**
+     * Back, one layer at a time: guide channels → the current category in the category list →
+     * the same category in the playlist list → the main menu.
+     */
     fun navBack(): Boolean = if (movingGroup != null || movingChannel != null || vodMovingCat != null) { movingGroup = null; movingChannel = null; vodMovingCat = null; true } else when (navMode) {
         NavMode.GROUPS -> {
-            navMode = NavMode.COLLAPSED
-            expandedPlaylist = activePlaylist()?.id
-            loadPlaylistGroups(expandedPlaylist)
+            if (!inGroupNav && (screen == Screen.GUIDE || screen == Screen.LIVE) && selectedGroup != null) {
+                navFocusKey = selectedGroup
+            } else {
+                inGroupNav = false
+                navMode = NavMode.COLLAPSED
+                expandedPlaylist = activePlaylist()?.id
+                loadPlaylistGroups(expandedPlaylist)
+                navFocusKey = selectedGroup
+            }
             true
         }
-        NavMode.COLLAPSED -> { navMode = NavMode.FULL; true }
+        NavMode.COLLAPSED -> { inPlaylistTree = false; navFocusKey = null; navMode = NavMode.FULL; true }
         NavMode.FULL -> if (screen != Screen.GUIDE && channels.isNotEmpty()) {
             screen = Screen.GUIDE; navMode = NavMode.GROUPS; guideFocusTick++; true
         } else false
