@@ -94,6 +94,17 @@ fun GuideSourcesPane(vm: AppViewModel, pl: Playlist, confirm: (title: String, me
             }
         }
         item {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Label("Download from these sources every", size = 13.sp, color = C.Text, weight = FontWeight.SemiBold)
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    listOf(4, 8, 12, 24).forEach { h ->
+                        TvButton("$h h", selected = vm.prefs.guideRefreshHours == h, modifier = Modifier.testTag("src-every-$h")) { vm.setGuideRefreshHours(h) }
+                    }
+                }
+                Label("Applies to every playlist's guide (also in Settings › TV guide).", size = 12.sp, color = C.Muted, lines = Int.MAX_VALUE)
+            }
+        }
+        item {
             Focusable(Modifier.fillMaxWidth().heightIn(min = 58.dp).testTag("guide-provider"), onClick = { vm.setProviderGuide(pl.id, !pl.providerGuide) }) {
                 Column(Modifier.weight(1f).padding(start = 12.dp, end = 8.dp, top = 8.dp, bottom = 8.dp)) {
                     Label("Provider's guide", size = 14.sp, color = C.Text, weight = FontWeight.SemiBold)

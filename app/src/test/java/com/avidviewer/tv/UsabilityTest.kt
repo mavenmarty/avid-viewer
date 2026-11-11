@@ -373,6 +373,47 @@ class UsabilityTest {
     // ---------------------------------------------------------------- guide management and quick dialogs
 
     @Test
+    fun searchSitsInTheCategoryListsAndTheHeaderHasNoInstructions() {
+        rule.runOnIdle { vm.chooseGroup(TestData.P1, "KIDS") }
+        settle()
+        assertTrue("search in the guide's category list", rule.onAllNodesWithTag("nav-search").fetchSemanticsNodes().isNotEmpty())
+        assertTrue("no key instructions in the header", rule.onAllNodesWithText("OK: preview", substring = true).fetchSemanticsNodes().isEmpty())
+        assertTrue("no category label next to search", rule.onAllNodesWithText("KIDS  ·  12 channels").fetchSemanticsNodes().isEmpty())
+        rule.runOnIdle { vm.guideQuery = "Free News" }
+        settle()
+        assertTrue(rule.onAllNodesWithText("Clear search", substring = true).fetchSemanticsNodes().isNotEmpty())
+        go(Screen.MOVIES)
+        waitFor("movies") { vm.vodOf("movie").isNotEmpty() }
+        assertTrue("search in the movie category list", rule.onAllNodesWithTag("vod-search").fetchSemanticsNodes().isNotEmpty())
+    }
+
+    @Test
+    fun everySettingsSectionIsReachableWithDownIncludingTheLast() {
+        go(Screen.SETTINGS)
+        waitFor("Settings' first section highlighted (focus: ${focused()})") { focused().contains("Playlists") && vm.settingsSection == "playlists" }
+        var tries = 0
+        while (vm.settingsSection != "about" && tries < 15) { press(listOf(Key.DirectionDown)); tries++ }
+        assertEquals("Down reaches Updates & about (focus: ${focused()})", "about", vm.settingsSection)
+        assertTrue("it's on screen and highlighted", focused().contains("Updates & about"))
+    }
+
+    @Test
+    fun downAtTheEndOfAPlaylistListStaysInPlaylists() {
+        go(Screen.SETTINGS)
+        rule.runOnIdle { vm.settingsSection = "playlists" }
+        settle()
+        rule.onAllNodesWithText("Free channels").onFirst().requestFocus()
+        settle()
+        press(listOf(Key.DirectionDown, Key.DirectionDown, Key.DirectionDown))
+        assertEquals("still in Playlists (focus: ${focused()})", "playlists", vm.settingsSection)
+        assertTrue("still on the last playlist (focus: ${focused()})", focused().contains("Free channels"))
+        // In the actions column too: Down past the last option goes nowhere.
+        press(listOf(Key.DirectionRight))
+        repeat(12) { press(listOf(Key.DirectionDown)) }
+        assertEquals("still in Playlists after Down in the actions (focus: ${focused()})", "playlists", vm.settingsSection)
+    }
+
+    @Test
     fun tvGuideSettingsAndGuideSourcesOpen() {
         go(Screen.SETTINGS)
         rule.runOnIdle { vm.settingsSection = "guide" }

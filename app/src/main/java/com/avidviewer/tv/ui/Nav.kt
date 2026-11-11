@@ -1,5 +1,6 @@
 package com.avidviewer.tv.ui
 
+import androidx.compose.ui.platform.testTag
 import kotlinx.coroutines.launch
 import androidx.compose.foundation.border
 import androidx.compose.ui.input.key.type
@@ -253,7 +254,7 @@ fun GroupNav(vm: AppViewModel) {
         if (moving == null) return@LaunchedEffect
         val idx = groups.indexOfFirst { it.raw == moving }
         if (idx < 0) return@LaunchedEffect
-        val headerItems = 4 + vm.shownLists.size // menu, title, favorites, new list, spacer… before categories
+        val headerItems = 5 + vm.shownLists.size // menu, title, favorites, lists, new list, search, spacer… before categories
         val item = idx + headerItems + 1
         val vis = navState.layoutInfo.visibleItemsInfo.map { it.index }
         if (vis.isNotEmpty() && (item <= vis.first() || item >= vis.last())) navState.scrollToItem((item - 3).coerceAtLeast(0))
@@ -266,7 +267,7 @@ fun GroupNav(vm: AppViewModel) {
         val item = when {
             k == FAV_GROUP -> 2
             isListGroup(k) -> 3 + vm.shownLists.indexOfFirst { LIST_PREFIX + it.id == k }.coerceAtLeast(0)
-            else -> groups.indexOfFirst { it.raw == k }.let { if (it < 0) 0 else it + 5 + n }
+            else -> groups.indexOfFirst { it.raw == k }.let { if (it < 0) 0 else it + 6 + n }
         }
         val vis = navState.layoutInfo.visibleItemsInfo.map { it.index }
         if (vis.isEmpty() || item < vis.first() || item > vis.last()) scope.launch { navState.scrollToItem((item - 3).coerceAtLeast(0)) }
@@ -312,6 +313,15 @@ fun GroupNav(vm: AppViewModel) {
             if (naming) NewListDialog(vm) { naming = false }
             Focusable(Modifier.fillMaxWidth().height(34.dp), color = Color.Transparent, onClick = { naming = true }) {
                 Label("＋ New list", size = 13.sp, color = C.Muted, modifier = Modifier.padding(start = 10.dp))
+            }
+        }
+        item(key = "search") {
+            // Search sits with the categories it searches; results replace the guide.
+            var text by remember(vm.guideQuery.isBlank()) { mutableStateOf(vm.guideQuery) }
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                TvField("🔍  Search", text, modifier = Modifier.fillMaxWidth().testTag("nav-search"), imeAction = androidx.compose.ui.text.input.ImeAction.Search,
+                    onSubmit = { vm.guideQuery = text.trim() }) { text = it }
+                if (vm.guideQuery.isNotBlank()) TvButton("✕  Clear search", modifier = Modifier.fillMaxWidth()) { text = ""; vm.guideQuery = "" }
             }
         }
         item { Spacer(Modifier.height(6.dp)) }
