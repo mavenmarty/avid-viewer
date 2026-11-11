@@ -104,7 +104,9 @@ object M3u {
     fun channels(p: Playlist, vodOut: MutableList<VodItem>? = null): List<Channel> = Net.open(p.m3uUrl.trim()) { input ->
         val out = ArrayList<Channel>()
         var pending: Triple<String, Map<String, String>, String?>? = null
-        var n = 0
+        // Named after the stream address, not the position, so a changed list doesn't shift favorites.
+        val liveKeys = ChannelKeys.Namer("${p.id}:u")
+        val vodKeys = ChannelKeys.Namer("${p.id}:vu")
         input.bufferedReader().forEachLine { raw ->
             val line = raw.trim()
             when {
@@ -122,7 +124,7 @@ object M3u {
                         if (isMovie || isEpisode) {
                             vodOut?.add(
                                 VodItem(
-                                    key = "${p.id}:v${n++}", playlistId = p.id, kind = if (isMovie) "movie" else "episode",
+                                    key = vodKeys.next(url), playlistId = p.id, kind = if (isMovie) "movie" else "episode",
                                     name = pnd.first, logo = pnd.second["tvg-logo"]?.ifBlank { null }, url = url,
                                     category = pnd.third?.ifBlank { null } ?: "Other",
                                 )
@@ -130,7 +132,7 @@ object M3u {
                         } else {
                             out.add(
                                 Channel(
-                                    key = "${p.id}:${n++}",
+                                    key = liveKeys.next(url),
                                     name = pnd.first,
                                     group = pnd.third?.ifBlank { null } ?: "Uncategorized",
                                     logo = pnd.second["tvg-logo"]?.ifBlank { null },

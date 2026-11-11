@@ -236,7 +236,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             val text = runCatching {
                 withContext(Dispatchers.Default) {
                     com.avidviewer.tv.data.Backup.write(
-                        com.avidviewer.tv.data.Backup.Contents(playlists, prefs, tmdbKey(), history, resume, System.currentTimeMillis(), installed.second, smbPassword()), pin,
+                        com.avidviewer.tv.data.Backup.Contents(playlists, prefs, tmdbKey(), history, resume, System.currentTimeMillis(), installed.second, smbPassword(), backupRefs()), pin,
                     )
                 }
             }.getOrElse { backupBusy = false; backupStatus = "Couldn't make the backup: ${it.message}"; return@launch }
@@ -368,6 +368,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             }
             otherLive.clear(); otherVod.clear(); playlistGroups = emptyMap()
             vod = emptyList(); vodLoadedFor = null
+            // Point favorites, lists etc. at the right channels even if the provider's list has changed since the backup.
+            placeRestoredRefs(c.refs)
             pendingRestore = null
             backupBusy = false
             backupStatus = "Restored ${c.playlists.size} playlist(s) and your settings. Channels and guides are downloading again now."
@@ -578,7 +580,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             status = "Loading movies from ${p.name}…"
             runCatching {
                 val m3uVod = ArrayList<VodItem>()
-                withContext(Dispatchers.IO) { M3u.channels(p, m3uVod); store.saveVod(p.id, m3uVod) }
+                withContext(Dispatchers.IO) { M3u.channels(p, m3uVod) }; commitVod(p.id, m3uVod)
                 result = m3uVod.distinctBy { it.key }
                 status = "Loaded ${m3uVod.size} movies and series."
             }.onFailure { vodError = "Movies couldn't load: ${it.message}" }
@@ -592,7 +594,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             val series = withContext(Dispatchers.IO) { runCatching { XtreamVod.series(p) } }
             val list = (movies.getOrDefault(emptyList()) + series.getOrDefault(emptyList())).distinctBy { it.key }
             if (list.isNotEmpty()) {
-                withContext(Dispatchers.IO) { store.saveVod(p.id, list) }
+                commitVod(p.id, list)
                 result = list
                 otherVod.remove(p.id)
             }
@@ -778,13 +780,13 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                     val list = withContext(Dispatchers.IO) {
                         if (p.isXtream) Xtream.liveChannels(p, prefs.streamFormat) else M3u.channels(p, m3uVod)
                     }
-                    withContext(Dispatchers.IO) { store.saveChannels(p.id, list) }
+                    commitChannels(p.id, list)
                     applyChannels(list)
                     status = "Loaded ${list.size} channels."
                     otherLive.remove(p.id)
                     // An M3U playlist lists its movies alongside its channels: save them for when VOD is used.
                     if (!p.isXtream && p.vodOn) {
-                        withContext(Dispatchers.IO) { store.saveVod(p.id, m3uVod) }
+                        commitVod(p.id, m3uVod)
                         otherVod.remove(p.id)
                         if (vodLoadedFor?.split(',')?.contains(p.id) == true) vodLoadedFor = null
                     }
@@ -852,6 +854,72 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         } catch (e: Exception) {
             status = "Couldn't load the TV guide: ${e.message}"
         }
+    }
+
+    // ---------------- stable channel keys (saved choices follow a changed list) ----------------
+    /** Saves a playlist's new channel list and moves favorites, lists, renames etc. onto the new keys. */
+    private suspend fun commitChannels(playlistId: String, list: List<Channel>) {
+        val (m, leftover) = withContext(Dispatchers.IO) {
+            val refs = store.loadKeyRefs(playlistId)
+            val old = store.loadChannels(playlistId).map { com.avidviewer.tv.data.ChannelKeys.Ref.of(it) } + refs.filter { !it.isVod }
+            val map = com.avidviewer.tv.data.ChannelKeys.remap(old, list.map { com.avidviewer.tv.data.ChannelKeys.Ref.of(it) })
+            store.saveChannels(playlistId, list)
+            map to refs.filter { it.isVod }
+        }
+        withContext(Dispatchers.IO) { store.saveKeyRefs(playlistId, leftover) }
+        applyKeyRemap(m)
+    }
+
+    /** The same for a playlist's movies & series (resume points, My List, hidden titles, history). */
+    private suspend fun commitVod(playlistId: String, list: List<VodItem>) {
+        val (m, leftover) = withContext(Dispatchers.IO) {
+            val refs = store.loadKeyRefs(playlistId)
+            val old = store.loadVod(playlistId).map { com.avidviewer.tv.data.ChannelKeys.Ref.of(it) } + refs.filter { it.isVod }
+            val map = com.avidviewer.tv.data.ChannelKeys.remap(old, list.map { com.avidviewer.tv.data.ChannelKeys.Ref.of(it) })
+            store.saveVod(playlistId, list)
+            map to refs.filter { !it.isVod }
+        }
+        withContext(Dispatchers.IO) { store.saveKeyRefs(playlistId, leftover) }
+        applyKeyRemap(m)
+    }
+
+    /** Moves every saved choice from old keys to new ones. */
+    internal fun applyKeyRemap(m: Map<String, String>) {
+        if (m.isEmpty()) return
+        with(com.avidviewer.tv.data.ChannelKeys) { updatePrefs { it.remapped(m) } }
+        if (resume.keys.any { it in m }) { resume = resume.mapKeys { (k, _) -> m[k] ?: k }; store.saveResume(resume) }
+        if (history.any { it.key in m }) { history = history.map { h -> m[h.key]?.let { h.copy(key = it) } ?: h }; store.saveHistory(history) }
+        currentKey?.let { k -> m[k]?.let { currentKey = it } }
+        favDataTick++
+    }
+
+    /** For a backup: what each saved choice points at, so a restore can find it in a changed list. */
+    internal fun backupRefs(): List<com.avidviewer.tv.data.ChannelKeys.Ref> {
+        val wanted = with(com.avidviewer.tv.data.ChannelKeys) { prefs.referencedKeys(resume, history) }
+        if (wanted.isEmpty()) return emptyList()
+        val out = ArrayList<com.avidviewer.tv.data.ChannelKeys.Ref>()
+        for (p in playlists) {
+            if (wanted.none { it.startsWith(p.id + ":") }) continue
+            store.loadChannels(p.id).forEach { c -> if (c.key in wanted) out.add(com.avidviewer.tv.data.ChannelKeys.Ref.of(c)) }
+            store.loadVod(p.id).forEach { v -> if (v.key in wanted) out.add(com.avidviewer.tv.data.ChannelKeys.Ref.of(v)) }
+        }
+        return out
+    }
+
+    /** After a restore: match the backup's references against lists already on this device, keep the rest for the next download. */
+    private suspend fun placeRestoredRefs(refs: List<com.avidviewer.tv.data.ChannelKeys.Ref>) {
+        val m = HashMap<String, String>()
+        withContext(Dispatchers.IO) {
+            refs.groupBy { it.key.substringBefore(':') }.forEach { (pid, rs) ->
+                val chs = store.loadChannels(pid).map { com.avidviewer.tv.data.ChannelKeys.Ref.of(it) }
+                val vds = store.loadVod(pid).map { com.avidviewer.tv.data.ChannelKeys.Ref.of(it) }
+                val (rv, rc) = rs.partition { it.isVod }
+                if (chs.isNotEmpty()) m.putAll(com.avidviewer.tv.data.ChannelKeys.remap(rc, chs))
+                if (vds.isNotEmpty()) m.putAll(com.avidviewer.tv.data.ChannelKeys.remap(rv, vds))
+                store.saveKeyRefs(pid, (if (chs.isEmpty()) rc else emptyList()) + (if (vds.isEmpty()) rv else emptyList()))
+            }
+        }
+        applyKeyRemap(m)
     }
 
     // ---------------- guide sources, matching and refresh ----------------
@@ -1037,10 +1105,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                         val list = withContext(Dispatchers.IO) {
                             if (p.isXtream) Xtream.liveChannels(p, prefs.streamFormat) else M3u.channels(p, m3uVod)
                         }.distinctBy { it.key }
-                        withContext(Dispatchers.IO) {
-                            store.saveChannels(p.id, list)
-                            if (!p.isXtream && p.vodOn) store.saveVod(p.id, m3uVod)
-                        }
+                        commitChannels(p.id, list)
+                        if (!p.isXtream && p.vodOn) commitVod(p.id, m3uVod)
                         chs = list
                         otherLive.remove(p.id); playlistGroups = playlistGroups - p.id
                     }
@@ -1057,7 +1123,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                             (runCatching { XtreamVod.movies(p) }.getOrDefault(emptyList()) + runCatching { XtreamVod.series(p) }.getOrDefault(emptyList())).distinctBy { it.key }
                         }
                         if (list.isNotEmpty()) {
-                            withContext(Dispatchers.IO) { store.saveVod(p.id, list) }
+                            commitVod(p.id, list)
                             otherVod.remove(p.id)
                             if (vodLoadedFor != null && p.id in vodLoadedFor!!.split(',')) { vodLoadedFor = null; if (screen == Screen.MOVIES || screen == Screen.SERIES || screen == Screen.DISCOVER) ensureVod() }
                         }

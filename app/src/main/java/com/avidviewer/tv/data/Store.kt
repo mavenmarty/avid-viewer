@@ -173,6 +173,13 @@ class Store(private val context: Context) {
     fun loadGuideChannels(playlistId: String): List<GuideChannel> =
         readArray(File(dataDir, "guidech_$playlistId.json")) { GuideChannel(it.getString("i"), it.optString("n"), it.optString("s")) }
 
+    // ---- channel references from a restored backup, used once to find them in the new list ----
+    fun saveKeyRefs(playlistId: String, refs: List<ChannelKeys.Ref>) =
+        if (refs.isEmpty()) { File(dataDir, "keyrefs_$playlistId.json").delete(); Unit }
+        else writeArrayAtomic(File(dataDir, "keyrefs_$playlistId.json"), refs) { it.toJson() }
+
+    fun loadKeyRefs(playlistId: String): List<ChannelKeys.Ref> = readArray(File(dataDir, "keyrefs_$playlistId.json")) { ChannelKeys.Ref.fromJson(it) }
+
     // ---- movies & series per playlist ----
     fun saveVod(playlistId: String, list: List<VodItem>) {
         writeArrayAtomic(File(dataDir, "vod_$playlistId.json"), list) { it.toJson() }
