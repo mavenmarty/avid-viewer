@@ -18,6 +18,8 @@ import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import com.avidviewer.tv.data.Channel
+import com.avidviewer.tv.data.EpgSource
+import com.avidviewer.tv.data.GuideChannel
 import com.avidviewer.tv.data.ChannelList
 import com.avidviewer.tv.data.LocalSuggest
 import com.avidviewer.tv.data.Suggestion
@@ -234,7 +236,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             val text = runCatching {
                 withContext(Dispatchers.Default) {
                     com.avidviewer.tv.data.Backup.write(
-                        com.avidviewer.tv.data.Backup.Contents(playlists, prefs, tmdbKey(), history, resume, System.currentTimeMillis(), installed.second, smbPassword()), pin,
+                        com.avidviewer.tv.data.Backup.Contents(playlists, prefs, tmdbKey(), history, resume, System.currentTimeMillis(), installed.second, smbPassword(), backupRefs()), pin,
                     )
                 }
             }.getOrElse { backupBusy = false; backupStatus = "Couldn't make the backup: ${it.message}"; return@launch }
@@ -366,6 +368,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             }
             otherLive.clear(); otherVod.clear(); playlistGroups = emptyMap()
             vod = emptyList(); vodLoadedFor = null
+            // Point favorites, lists etc. at the right channels even if the provider's list has changed since the backup.
+            placeRestoredRefs(c.refs)
             pendingRestore = null
             backupBusy = false
             backupStatus = "Restored ${c.playlists.size} playlist(s) and your settings. Channels and guides are downloading again now."
@@ -416,6 +420,20 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             while (true) {
                 refreshWeather()
                 delay(30 * 60 * 1000L) // every 30 minutes
+            }
+        }
+        // The guide downloads again on the chosen schedule even when the app stays open for days.
+        viewModelScope.launch {
+            delay(15 * 60 * 1000L)
+            while (true) {
+                runCatching {
+                    activePlaylist()?.let { p ->
+                        val at = withContext(Dispatchers.IO) { store.savedAt("guide", p.id) }
+                        if (at > 0 && System.currentTimeMillis() - at > guideMs() && guideBusy == null) refreshGuide(p)
+                    }
+                    syncAllPlaylists(force = false)
+                }
+                delay(15 * 60 * 1000L)
             }
         }
         Updater.onStatus = { msg ->
@@ -562,7 +580,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             status = "Loading movies from ${p.name}…"
             runCatching {
                 val m3uVod = ArrayList<VodItem>()
-                withContext(Dispatchers.IO) { M3u.channels(p, m3uVod); store.saveVod(p.id, m3uVod) }
+                withContext(Dispatchers.IO) { M3u.channels(p, m3uVod) }; commitVod(p.id, m3uVod)
                 result = m3uVod.distinctBy { it.key }
                 status = "Loaded ${m3uVod.size} movies and series."
             }.onFailure { vodError = "Movies couldn't load: ${it.message}" }
@@ -576,7 +594,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             val series = withContext(Dispatchers.IO) { runCatching { XtreamVod.series(p) } }
             val list = (movies.getOrDefault(emptyList()) + series.getOrDefault(emptyList())).distinctBy { it.key }
             if (list.isNotEmpty()) {
-                withContext(Dispatchers.IO) { store.saveVod(p.id, list) }
+                commitVod(p.id, list)
                 result = list
                 otherVod.remove(p.id)
             }
@@ -600,7 +618,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             id = UUID.randomUUID().toString().take(8),
             name = name.ifBlank { if (type == "xtream") "My provider" else "M3U playlist" },
             type = type, server = server.trim(), username = user.trim(), password = pass,
-            m3uUrl = m3u.trim(), epgUrl = epg.trim(), liveOn = liveOn, vodOn = vodOn,
+            m3uUrl = m3u.trim(), liveOn = liveOn, vodOn = vodOn,
+            // A guide address typed when adding becomes the playlist's first guide source (the provider's guide stays on too).
+            epgSources = if (epg.isBlank()) emptyList() else listOf(EpgSource("src-" + System.currentTimeMillis().toString(36), "Guide address", epg.trim())),
         )
         viewModelScope.launch {
             busy = true
@@ -631,13 +651,15 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         val old = playlists.firstOrNull { it.id == id } ?: return
         val p = old.copy(
             name = name.ifBlank { old.name }, type = type, server = server.trim(), username = user.trim(),
-            password = pass.ifEmpty { old.password }, m3uUrl = m3u.trim(), epgUrl = epg.trim(),
+            password = pass.ifEmpty { old.password }, m3uUrl = m3u.trim(),
+            epgSources = if (epg.isBlank() || old.epgSources.any { it.url == epg.trim() }) old.epgSources
+                else old.epgSources + EpgSource("src-" + System.currentTimeMillis().toString(36), "Guide address", epg.trim()),
         )
         viewModelScope.launch {
             busy = true
             status = "Checking ${p.name}…"
             val sourceChanged = p.type != old.type || p.server != old.server || p.username != old.username ||
-                p.password != old.password || p.m3uUrl != old.m3uUrl || p.epgUrl != old.epgUrl
+                p.password != old.password || p.m3uUrl != old.m3uUrl
             val problem = if (!sourceChanged) null else withContext(Dispatchers.IO) {
                 if (p.isXtream) Xtream.checkLogin(p) else if (p.m3uUrl.isBlank()) "Enter the playlist link." else null
             }
@@ -758,13 +780,13 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                     val list = withContext(Dispatchers.IO) {
                         if (p.isXtream) Xtream.liveChannels(p, prefs.streamFormat) else M3u.channels(p, m3uVod)
                     }
-                    withContext(Dispatchers.IO) { store.saveChannels(p.id, list) }
+                    commitChannels(p.id, list)
                     applyChannels(list)
                     status = "Loaded ${list.size} channels."
                     otherLive.remove(p.id)
                     // An M3U playlist lists its movies alongside its channels: save them for when VOD is used.
                     if (!p.isXtream && p.vodOn) {
-                        withContext(Dispatchers.IO) { store.saveVod(p.id, m3uVod) }
+                        commitVod(p.id, m3uVod)
                         otherVod.remove(p.id)
                         if (vodLoadedFor?.split(',')?.contains(p.id) == true) vodLoadedFor = null
                     }
@@ -775,7 +797,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             if (p.liveOn) {
                 val (savedGuide, savedAt) = withContext(Dispatchers.IO) { store.loadGuide(p.id) }
                 if (savedGuide.isNotEmpty()) guide = savedGuide
-                val stale = System.currentTimeMillis() - savedAt > 8 * 3600 * 1000L
+                val stale = System.currentTimeMillis() - savedAt > guideMs()
                 if (refresh || download || stale || savedGuide.isEmpty()) refreshGuide(p)
             }
             ensureFavoriteData()
@@ -834,18 +856,229 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    /** Downloads and saves a playlist's guide for [chs]; null when it has no guide. */
+    // ---------------- stable channel keys (saved choices follow a changed list) ----------------
+    /** Saves a playlist's new channel list and moves favorites, lists, renames etc. onto the new keys. */
+    private suspend fun commitChannels(playlistId: String, list: List<Channel>) {
+        val (m, leftover) = withContext(Dispatchers.IO) {
+            val refs = store.loadKeyRefs(playlistId)
+            val old = store.loadChannels(playlistId).map { com.avidviewer.tv.data.ChannelKeys.Ref.of(it) } + refs.filter { !it.isVod }
+            val map = com.avidviewer.tv.data.ChannelKeys.remap(old, list.map { com.avidviewer.tv.data.ChannelKeys.Ref.of(it) })
+            store.saveChannels(playlistId, list)
+            map to refs.filter { it.isVod }
+        }
+        withContext(Dispatchers.IO) { store.saveKeyRefs(playlistId, leftover) }
+        applyKeyRemap(m)
+    }
+
+    /** The same for a playlist's movies & series (resume points, My List, hidden titles, history). */
+    private suspend fun commitVod(playlistId: String, list: List<VodItem>) {
+        val (m, leftover) = withContext(Dispatchers.IO) {
+            val refs = store.loadKeyRefs(playlistId)
+            val old = store.loadVod(playlistId).map { com.avidviewer.tv.data.ChannelKeys.Ref.of(it) } + refs.filter { it.isVod }
+            val map = com.avidviewer.tv.data.ChannelKeys.remap(old, list.map { com.avidviewer.tv.data.ChannelKeys.Ref.of(it) })
+            store.saveVod(playlistId, list)
+            map to refs.filter { !it.isVod }
+        }
+        withContext(Dispatchers.IO) { store.saveKeyRefs(playlistId, leftover) }
+        applyKeyRemap(m)
+    }
+
+    /** Moves every saved choice from old keys to new ones. */
+    internal fun applyKeyRemap(m: Map<String, String>) {
+        if (m.isEmpty()) return
+        with(com.avidviewer.tv.data.ChannelKeys) { updatePrefs { it.remapped(m) } }
+        if (resume.keys.any { it in m }) { resume = resume.mapKeys { (k, _) -> m[k] ?: k }; store.saveResume(resume) }
+        if (history.any { it.key in m }) { history = history.map { h -> m[h.key]?.let { h.copy(key = it) } ?: h }; store.saveHistory(history) }
+        currentKey?.let { k -> m[k]?.let { currentKey = it } }
+        favDataTick++
+    }
+
+    /** For a backup: what each saved choice points at, so a restore can find it in a changed list. */
+    internal fun backupRefs(): List<com.avidviewer.tv.data.ChannelKeys.Ref> {
+        val wanted = with(com.avidviewer.tv.data.ChannelKeys) { prefs.referencedKeys(resume, history) }
+        if (wanted.isEmpty()) return emptyList()
+        val out = ArrayList<com.avidviewer.tv.data.ChannelKeys.Ref>()
+        for (p in playlists) {
+            if (wanted.none { it.startsWith(p.id + ":") }) continue
+            store.loadChannels(p.id).forEach { c -> if (c.key in wanted) out.add(com.avidviewer.tv.data.ChannelKeys.Ref.of(c)) }
+            store.loadVod(p.id).forEach { v -> if (v.key in wanted) out.add(com.avidviewer.tv.data.ChannelKeys.Ref.of(v)) }
+        }
+        return out
+    }
+
+    /** After a restore: match the backup's references against lists already on this device, keep the rest for the next download. */
+    private suspend fun placeRestoredRefs(refs: List<com.avidviewer.tv.data.ChannelKeys.Ref>) {
+        val m = HashMap<String, String>()
+        withContext(Dispatchers.IO) {
+            refs.groupBy { it.key.substringBefore(':') }.forEach { (pid, rs) ->
+                val chs = store.loadChannels(pid).map { com.avidviewer.tv.data.ChannelKeys.Ref.of(it) }
+                val vds = store.loadVod(pid).map { com.avidviewer.tv.data.ChannelKeys.Ref.of(it) }
+                val (rv, rc) = rs.partition { it.isVod }
+                if (chs.isNotEmpty()) m.putAll(com.avidviewer.tv.data.ChannelKeys.remap(rc, chs))
+                if (vds.isNotEmpty()) m.putAll(com.avidviewer.tv.data.ChannelKeys.remap(rv, vds))
+                store.saveKeyRefs(pid, (if (chs.isEmpty()) rc else emptyList()) + (if (vds.isEmpty()) rv else emptyList()))
+            }
+        }
+        applyKeyRemap(m)
+    }
+
+    // ---------------- guide sources, matching and refresh ----------------
+    fun guideMs() = prefs.guideRefreshHours * 3600 * 1000L
+
+    /** The guide channel a channel uses: the one matched by hand, else the provider's (null = no guide). */
+    fun epgIdOf(c: Channel): String? {
+        val m = prefs.epgMap[c.key]
+        return if (m != null) m.ifBlank { null } else c.epgId
+    }
+
+    /** Result of the last download of each guide source: "playlistId|sourceId" → message. */
+    var guideSourceStatus by mutableStateOf<Map<String, String>>(emptyMap()); private set
+    var guideBusy by mutableStateOf<String?>(null); private set
+
+    /** The guide sources a playlist downloads, in order: (status key, label, url, offset hours). */
+    private suspend fun guideSourcesOf(p: Playlist): List<GuideSourceRef> {
+        val out = ArrayList<GuideSourceRef>()
+        if (p.providerGuide) {
+            val url = p.providerGuideUrl().ifBlank { withContext(Dispatchers.IO) { runCatching { M3u.headerGuideUrl(p) }.getOrNull() } ?: "" }
+            if (url.isNotBlank()) out.add(GuideSourceRef("provider", "Provider's guide", url, 0))
+        }
+        p.epgSources.filter { it.enabled && it.url.isNotBlank() }.forEach { out.add(GuideSourceRef(it.id, it.name.ifBlank { "Guide source" }, it.url.trim(), it.offsetHours)) }
+        return out
+    }
+
+    data class GuideSourceRef(val id: String, val name: String, val url: String, val offsetHours: Int)
+
+    /**
+     * Downloads and saves a playlist's guide for [chs] from all its sources; null when it has none.
+     * Sources are read in order and the first one with programmes for a channel wins. Every source's
+     * channel list is saved too, for matching channels by hand.
+     */
     private suspend fun downloadGuide(p: Playlist, chs: List<Channel>): Map<String, List<Program>>? {
-        val url = p.guideUrl().ifBlank { withContext(Dispatchers.IO) { M3u.headerGuideUrl(p) } ?: "" }
-        if (url.isBlank()) return null
-        val wanted = chs.mapNotNull { it.epgId }.toSet()
-        if (wanted.isEmpty()) return null
+        val sources = guideSourcesOf(p)
+        if (sources.isEmpty()) return null
+        val wanted = chs.mapNotNull { epgIdOf(it) }.toSet()
         val from = System.currentTimeMillis() - 3 * 3600 * 1000L
         val to = System.currentTimeMillis() + 36 * 3600 * 1000L
-        val g = withContext(Dispatchers.IO) { Xmltv.read(url, wanted, from, to) }
-        withContext(Dispatchers.IO) { store.saveGuide(p.id, g) }
-        return g
+        val merged = HashMap<String, List<Program>>()
+        val directory = ArrayList<GuideChannel>()
+        val statuses = HashMap(guideSourceStatus)
+        var anyOk = false
+        for (src in sources) {
+            val dir = ArrayList<Pair<String, String>>()
+            val r = withContext(Dispatchers.IO) {
+                runCatching { Xmltv.read(src.url, wanted, from, to, src.offsetHours * 3600 * 1000L, dir) }
+            }
+            r.onSuccess { g ->
+                anyOk = true
+                g.forEach { (id, list) -> if (merged[id].isNullOrEmpty()) merged[id] = list }
+                dir.forEach { (id, name) -> directory.add(GuideChannel(id, name, src.name)) }
+                statuses[p.id + "|" + src.id] = "Updated ${fmtTime(System.currentTimeMillis())} · ${dir.size} guide channels · programmes for ${g.size} of your channels"
+            }.onFailure { e ->
+                statuses[p.id + "|" + src.id] = "Couldn't download: ${e.message ?: e.javaClass.simpleName}"
+            }
+        }
+        guideSourceStatus = statuses
+        if (!anyOk) throw java.io.IOException("no guide source could be downloaded")
+        withContext(Dispatchers.IO) {
+            store.saveGuide(p.id, merged)
+            store.saveGuideChannels(p.id, directory.distinctBy { it.id })
+        }
+        guideChannelCache.remove(p.id)
+        return merged
     }
+
+    fun setGuideRefreshHours(h: Int) {
+        if (h !in listOf(4, 8, 12, 24)) return
+        updatePrefs { it.copy(guideRefreshHours = h) }
+        status = "The TV guide now downloads again every $h hours."
+    }
+
+    /** Downloads a playlist's guide again now (null = every playlist with live TV). */
+    fun refreshGuideNow(playlistId: String? = null) {
+        viewModelScope.launch {
+            val targets = livePlaylists.filter { playlistId == null || it.id == playlistId }
+            for (p in targets) {
+                guideBusy = p.id
+                try {
+                    if (p.id == activePlaylist()?.id) refreshGuide(p)
+                    else {
+                        val chs = withContext(Dispatchers.IO) { store.loadChannels(p.id) }
+                        runCatching { downloadGuide(p, chs) }.onFailure { status = "Couldn't load the TV guide for ${p.name}: ${it.message}" }
+                        otherLive.remove(p.id)
+                    }
+                } finally { guideBusy = null }
+            }
+            favDataTick++
+        }
+    }
+
+    fun guideSavedAt(playlistId: String): Long = store.savedAt("guide", playlistId)
+
+    private fun updateSources(playlistId: String, f: (Playlist) -> Playlist) {
+        val p = playlists.firstOrNull { it.id == playlistId } ?: return
+        replacePlaylist(f(p))
+    }
+
+    fun setProviderGuide(playlistId: String, on: Boolean) { updateSources(playlistId) { it.copy(providerGuide = on) }; refreshGuideNow(playlistId) }
+
+    fun addEpgSource(playlistId: String, name: String, url: String, offsetHours: Int) {
+        val src = EpgSource("src-" + System.currentTimeMillis().toString(36), name.trim().ifBlank { "Guide source" }, url.trim(), true, offsetHours.coerceIn(-12, 12))
+        updateSources(playlistId) { it.copy(epgSources = it.epgSources + src) }
+        status = "Added ${src.name}. Downloading the guide…"
+        refreshGuideNow(playlistId)
+    }
+
+    fun updateEpgSource(playlistId: String, id: String, name: String, url: String, offsetHours: Int) {
+        updateSources(playlistId) { p -> p.copy(epgSources = p.epgSources.map { if (it.id == id) it.copy(name = name.trim().ifBlank { it.name }, url = url.trim(), offsetHours = offsetHours.coerceIn(-12, 12)) else it }) }
+        refreshGuideNow(playlistId)
+    }
+
+    fun setEpgSourceEnabled(playlistId: String, id: String, on: Boolean) {
+        updateSources(playlistId) { p -> p.copy(epgSources = p.epgSources.map { if (it.id == id) it.copy(enabled = on) else it }) }
+        refreshGuideNow(playlistId)
+    }
+
+    fun moveEpgSource(playlistId: String, id: String, by: Int) = updateSources(playlistId) { p ->
+        val l = p.epgSources.toMutableList(); val i = l.indexOfFirst { it.id == id }
+        if (i < 0) return@updateSources p
+        val j = (i + by).coerceIn(0, l.lastIndex); val x = l.removeAt(i); l.add(j, x)
+        p.copy(epgSources = l)
+    }.also { refreshGuideNow(playlistId) }
+
+    fun removeEpgSource(playlistId: String, id: String) {
+        updateSources(playlistId) { p -> p.copy(epgSources = p.epgSources.filterNot { it.id == id }) }
+        guideSourceStatus = guideSourceStatus - (playlistId + "|" + id)
+        refreshGuideNow(playlistId)
+    }
+
+    private val guideChannelCache = HashMap<String, List<GuideChannel>>()
+
+    /** Channels listed in a playlist's guide sources (from the last download). */
+    suspend fun guideChannels(playlistId: String): List<GuideChannel> =
+        guideChannelCache[playlistId] ?: withContext(Dispatchers.IO) { store.loadGuideChannels(playlistId) }.also { guideChannelCache[playlistId] = it }
+
+    /** The channel whose guide match is being chosen (Menu › Match guide…). */
+    var matchingChannel by mutableStateOf<String?>(null)
+
+    private var matchRefreshJob: kotlinx.coroutines.Job? = null
+
+    /**
+     * Matches a channel to a guide channel by hand: [epgId] = a guide channel id, "" = no guide,
+     * null = back to the provider's match. The guide downloads again shortly after (once for several changes).
+     */
+    fun setEpgMatch(channelKey: String, epgId: String?) {
+        updatePrefs { p -> p.copy(epgMap = if (epgId == null) p.epgMap - channelKey else p.epgMap + (channelKey to epgId)) }
+        val pid = channelKey.substringBefore(':')
+        matchRefreshJob?.cancel()
+        matchRefreshJob = viewModelScope.launch {
+            delay(2500)
+            status = "Updating the guide for your matched channels…"
+            refreshGuideNow(pid)
+        }
+    }
+
+    fun epgMatchCount(): Int = prefs.epgMap.size
+    fun clearEpgMatches() { updatePrefs { it.copy(epgMap = emptyMap()) }; refreshGuideNow() }
 
     // ---------------- every playlist kept current (no "active" playlist for the user) ----------------
     private var syncJob: kotlinx.coroutines.Job? = null
@@ -860,7 +1093,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         syncJob?.cancel()
         syncJob = viewModelScope.launch {
             if (!force) delay(10_000) // let the first screen settle on slow devices
-            val dayMs = 24 * 3600 * 1000L; val guideMs = 8 * 3600 * 1000L
+            val dayMs = 24 * 3600 * 1000L; val guideMs = guideMs()
             for (p in shownPlaylists) {
                 val nowMs = System.currentTimeMillis()
                 val isGuidePlaylist = p.id == activePlaylist()?.id
@@ -872,10 +1105,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                         val list = withContext(Dispatchers.IO) {
                             if (p.isXtream) Xtream.liveChannels(p, prefs.streamFormat) else M3u.channels(p, m3uVod)
                         }.distinctBy { it.key }
-                        withContext(Dispatchers.IO) {
-                            store.saveChannels(p.id, list)
-                            if (!p.isXtream && p.vodOn) store.saveVod(p.id, m3uVod)
-                        }
+                        commitChannels(p.id, list)
+                        if (!p.isXtream && p.vodOn) commitVod(p.id, m3uVod)
                         chs = list
                         otherLive.remove(p.id); playlistGroups = playlistGroups - p.id
                     }
@@ -892,7 +1123,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                             (runCatching { XtreamVod.movies(p) }.getOrDefault(emptyList()) + runCatching { XtreamVod.series(p) }.getOrDefault(emptyList())).distinctBy { it.key }
                         }
                         if (list.isNotEmpty()) {
-                            withContext(Dispatchers.IO) { store.saveVod(p.id, list) }
+                            commitVod(p.id, list)
                             otherVod.remove(p.id)
                             if (vodLoadedFor != null && p.id in vodLoadedFor!!.split(',')) { vodLoadedFor = null; if (screen == Screen.MOVIES || screen == Screen.SERIES || screen == Screen.DISCOVER) ensureVod() }
                         }
@@ -1265,7 +1496,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     // ---------------- guide ----------------
     fun programs(c: Channel?): List<Program> {
-        val id = c?.epgId ?: return emptyList()
+        val id = c?.let { epgIdOf(it) } ?: return emptyList()
         val pid = c.key.substringBefore(':')
         return if (pid == activePlaylist()?.id) guide[id] ?: emptyList() else otherLive[pid]?.second?.get(id) ?: emptyList()
     }
@@ -1554,7 +1785,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 fun hasKw(s: String) = kws.isNotEmpty() && kws.any { s.contains(it) }
                 for (c in chs) {
                     val catChannel = c.group in cat.groups || hasKw(((groupsByRaw[c.group] ?: c.group) + " " + c.group + " " + (names[c.key] ?: c.name)).lowercase())
-                    val progs = c.epgId?.let { g[it] } ?: emptyList()
+                    val progs = epgIdOf(c)?.let { g[it] } ?: emptyList()
                     if (catChannel && progs.isEmpty()) continue
                     for (p in progs) {
                         if (p.end <= from || p.start >= to) continue
@@ -1636,7 +1867,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                         .map { Hit("channel", p.id, names[it.key] ?: it.name, groupName(it.group), it.logo, channelKey = it.key) }
                     val progs = ArrayList<Pair<Long, Hit>>()
                     for (c in chs) {
-                        val list = c.epgId?.let { g[it] } ?: continue
+                        val list = epgIdOf(c)?.let { g[it] } ?: continue
                         for (pr in list) {
                             if (pr.end <= nowMs) continue
                             if (pr.title.lowercase().contains(needle) || pr.subtitle?.lowercase()?.contains(needle) == true) {
@@ -1747,14 +1978,30 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** Back walks up the navigation: categories → playlists → full menu → TV Guide. Returns false to let the app exit. */
+    /** Which left-hand list has the highlight, so Back and Left know which layer the viewer is on. */
+    var inGroupNav = false
+    var inPlaylistTree = false
+    /** A category (raw name, ★ Favorites or a list) the left-hand list should highlight next; cleared once it has. */
+    var navFocusKey by mutableStateOf<String?>(null)
+
+    /**
+     * Back, one layer at a time: guide channels → the current category in the category list →
+     * the same category in the playlist list → the main menu.
+     */
     fun navBack(): Boolean = if (movingGroup != null || movingChannel != null || vodMovingCat != null) { movingGroup = null; movingChannel = null; vodMovingCat = null; true } else when (navMode) {
         NavMode.GROUPS -> {
-            navMode = NavMode.COLLAPSED
-            expandedPlaylist = activePlaylist()?.id
-            loadPlaylistGroups(expandedPlaylist)
+            if (!inGroupNav && (screen == Screen.GUIDE || screen == Screen.LIVE) && selectedGroup != null) {
+                navFocusKey = selectedGroup
+            } else {
+                inGroupNav = false
+                navMode = NavMode.COLLAPSED
+                expandedPlaylist = activePlaylist()?.id
+                loadPlaylistGroups(expandedPlaylist)
+                navFocusKey = selectedGroup
+            }
             true
         }
-        NavMode.COLLAPSED -> { navMode = NavMode.FULL; true }
+        NavMode.COLLAPSED -> { inPlaylistTree = false; navFocusKey = null; navMode = NavMode.FULL; true }
         NavMode.FULL -> if (screen != Screen.GUIDE && channels.isNotEmpty()) {
             screen = Screen.GUIDE; navMode = NavMode.GROUPS; guideFocusTick++; true
         } else false

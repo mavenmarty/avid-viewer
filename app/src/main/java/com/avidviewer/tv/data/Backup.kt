@@ -31,6 +31,8 @@ object Backup {
         val created: Long,
         val appVersion: String,
         val smbPassword: String = "",
+        /** The channels and titles the choices above refer to, so a restore can find them in a changed list. */
+        val refs: List<ChannelKeys.Ref> = emptyList(),
     )
 
     class WrongPin : Exception("That PIN doesn't open this backup.")
@@ -43,7 +45,7 @@ object Backup {
             .put("playlists", JSONArray().apply {
                 c.playlists.forEach { p ->
                     put(
-                        JSONObject().put("id", p.id).put("name", p.name).put("type", p.type).put("server", p.server)
+                        p.guideJson(JSONObject()).put("id", p.id).put("name", p.name).put("type", p.type).put("server", p.server)
                             .put("username", p.username).put("password", p.password).put("m3uUrl", p.m3uUrl).put("epgUrl", p.epgUrl)
                             .put("enabled", p.enabled).put("liveOn", p.liveOn).put("vodOn", p.vodOn),
                     )
@@ -54,6 +56,7 @@ object Backup {
             .put("smbPassword", c.smbPassword)
             .put("history", JSONArray().apply { c.history.forEach { put(JSONObject().put("k", it.key).put("t", it.time).put("s", it.seconds)) } })
             .put("resume", JSONObject(c.resume))
+            .put("refs", JSONArray().apply { c.refs.forEach { put(it.toJson()) } })
         val salt = ByteArray(16).also { SecureRandom().nextBytes(it) }
         val kdf = bestKdf()
         val cipher = Cipher.getInstance("AES/GCM/NoPadding")
@@ -88,18 +91,19 @@ object Backup {
         val pls = b.optJSONArray("playlists") ?: JSONArray()
         val playlists = List(pls.length()) {
             val p = pls.getJSONObject(it)
-            Playlist(
+            Playlist.guideFrom(p, Playlist(
                 id = p.getString("id"), name = p.optString("name"), type = p.optString("type"), server = p.optString("server"),
                 username = p.optString("username"), password = p.optString("password"), m3uUrl = p.optString("m3uUrl"),
                 epgUrl = p.optString("epgUrl"), enabled = p.optBoolean("enabled", true), liveOn = p.optBoolean("liveOn", true),
                 vodOn = p.optBoolean("vodOn", true),
-            )
+            ))
         }
         val hist = b.optJSONArray("history") ?: JSONArray()
         val history = List(hist.length()) { val h = hist.getJSONObject(it); HistoryEntry(h.getString("k"), h.optLong("t"), h.optLong("s")) }
         val r = b.optJSONObject("resume")
         val resume = r?.keys()?.asSequence()?.associateWith { r.optLong(it) } ?: emptyMap()
-        return Contents(playlists, Prefs.fromJson(b.getJSONObject("prefs")), b.optString("tmdbKey"), history, resume, b.optLong("created"), b.optString("appVersion"), smbPassword = b.optString("smbPassword"))
+        val refs = b.optJSONArray("refs")?.let { a -> List(a.length()) { ChannelKeys.Ref.fromJson(a.getJSONObject(it)) } } ?: emptyList()
+        return Contents(playlists, Prefs.fromJson(b.getJSONObject("prefs")), b.optString("tmdbKey"), history, resume, b.optLong("created"), b.optString("appVersion"), smbPassword = b.optString("smbPassword"), refs = refs)
     }
 
     /** SHA-256 where the device has it (Android 8+), SHA-1 on older devices; the file records which. */

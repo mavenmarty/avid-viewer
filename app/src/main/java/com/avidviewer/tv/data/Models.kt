@@ -19,6 +19,10 @@ data class Playlist(
     val liveOn: Boolean = true,
     /** Load movies and series from this playlist. */
     val vodOn: Boolean = true,
+    /** Use the guide the provider supplies (Xtream's guide, or the M3U file's url-tvg). */
+    val providerGuide: Boolean = true,
+    /** Guide (XMLTV) sources the user added for this playlist, in order: the first one with a channel wins. */
+    val epgSources: List<EpgSource> = emptyList(),
 ) {
     val isXtream get() = type == "xtream"
 
@@ -28,14 +32,46 @@ data class Playlist(
         return s
     }
 
+    /** The provider's own guide address (Xtream); for M3U it comes from the file's header. */
+    fun providerGuideUrl(): String = if (isXtream) "${xtreamBase()}/xmltv.php?username=${enc(username)}&password=${enc(password)}" else ""
+
     fun guideUrl(): String = when {
         epgUrl.isNotBlank() -> epgUrl.trim()
-        isXtream -> "${xtreamBase()}/xmltv.php?username=${enc(username)}&password=${enc(password)}"
-        else -> ""
+        else -> providerGuideUrl()
+    }
+
+    /** Older versions had one optional guide address that replaced the provider's: make it a source. */
+    fun migrated(): Playlist = if (epgUrl.isBlank()) this else copy(
+        epgUrl = "",
+        providerGuide = if (epgSources.isEmpty()) false else providerGuide,
+        epgSources = if (epgSources.any { it.url == epgUrl.trim() }) epgSources else listOf(EpgSource("src-legacy", "Guide address", epgUrl.trim())) + epgSources,
+    )
+
+    /** Fields shared by the playlist file and backups (password handled by the caller). */
+    fun guideJson(o: JSONObject): JSONObject = o.put("providerGuide", providerGuide)
+        .put("epgSources", JSONArray().apply { epgSources.forEach { put(it.toJson()) } })
+
+    companion object {
+        fun guideFrom(o: JSONObject, p: Playlist): Playlist = p.copy(
+            providerGuide = o.optBoolean("providerGuide", true),
+            epgSources = o.optJSONArray("epgSources")?.let { a -> List(a.length()) { EpgSource.fromJson(a.getJSONObject(it)) } } ?: emptyList(),
+        ).migrated()
     }
 
     private fun enc(s: String) = java.net.URLEncoder.encode(s, "UTF-8")
 }
+
+/** A guide (XMLTV) address the user added to a playlist. [offsetHours] shifts its times (for guides in another time zone). */
+data class EpgSource(val id: String, val name: String, val url: String, val enabled: Boolean = true, val offsetHours: Int = 0) {
+    fun toJson(): JSONObject = JSONObject().put("id", id).put("name", name).put("url", url).put("enabled", enabled).put("offset", offsetHours)
+
+    companion object {
+        fun fromJson(o: JSONObject) = EpgSource(o.getString("id"), o.optString("name"), o.optString("url"), o.optBoolean("enabled", true), o.optInt("offset", 0))
+    }
+}
+
+/** A channel found in a guide source, for matching channels by hand. */
+data class GuideChannel(val id: String, val name: String, val source: String)
 
 /** One live channel. [key] is unique across playlists. */
 data class Channel(
@@ -119,6 +155,10 @@ data class Prefs(
     val vodCatNames: Map<String, String> = emptyMap(),
     /** Order of movie/series categories: "movie" or "series" → category names in order. */
     val vodCatOrder: Map<String, List<String>> = emptyMap(),
+    /** How often the TV guide downloads again, in hours (4, 8, 12 or 24). */
+    val guideRefreshHours: Int = 8,
+    /** Channels matched to a guide channel by hand: channel key → guide channel id ("" = no guide). */
+    val epgMap: Map<String, String> = emptyMap(),
 ) {
     fun toJson(): JSONObject {
         val o = JSONObject()
@@ -150,6 +190,8 @@ data class Prefs(
         o.put("vodCatNames", JSONObject(vodCatNames))
         o.put("vodCatOrder", JSONObject().apply { vodCatOrder.forEach { (k, l) -> put(k, JSONArray(l)) } })
         o.put("lists", JSONArray().apply { lists.forEach { put(it.toJson()) } })
+        o.put("guideRefreshHours", guideRefreshHours)
+        o.put("epgMap", JSONObject(epgMap))
         o.put("showSuggestions", showSuggestions)
         o.put("dismissedSuggestions", JSONArray(dismissedSuggestions.toList()))
         return o
@@ -194,6 +236,8 @@ data class Prefs(
                 vodCatNames = strMap(o.optJSONObject("vodCatNames")),
                 vodCatOrder = o.optJSONObject("vodCatOrder")?.let { vo -> vo.keys().asSequence().associateWith { strList(vo.getJSONArray(it)) } } ?: emptyMap(),
                 lists = o.optJSONArray("lists")?.let { a -> List(a.length()) { ChannelList.fromJson(a.getJSONObject(it)) } } ?: emptyList(),
+                guideRefreshHours = o.optInt("guideRefreshHours", 8).let { if (it in listOf(4, 8, 12, 24)) it else 8 },
+                epgMap = strMap(o.optJSONObject("epgMap")),
                 showSuggestions = o.optBoolean("showSuggestions", true),
                 dismissedSuggestions = strList(o.optJSONArray("dismissedSuggestions")).toSet(),
                 myServices = o.optJSONArray("myServices")?.let { a -> List(a.length()) { a.getJSONObject(it).let { s -> WatchProvider(s.getInt("id"), s.optString("name"), s.optString("logo").ifBlank { null }) } } } ?: emptyList(),

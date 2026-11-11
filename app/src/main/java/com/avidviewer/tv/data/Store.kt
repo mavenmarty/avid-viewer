@@ -74,7 +74,7 @@ class Store(private val context: Context) {
             val a = JSONArray(f.readText())
             List(a.length()) {
                 val o = a.getJSONObject(it)
-                Playlist(
+                Playlist.guideFrom(o, Playlist(
                     id = o.getString("id"),
                     name = o.getString("name"),
                     type = o.getString("type"),
@@ -86,7 +86,7 @@ class Store(private val context: Context) {
                     enabled = o.optBoolean("enabled", true),
                     liveOn = o.optBoolean("liveOn", true),
                     vodOn = o.optBoolean("vodOn", true),
-                )
+                ))
             }
         } catch (e: Exception) {
             emptyList()
@@ -97,7 +97,7 @@ class Store(private val context: Context) {
         val a = JSONArray()
         list.forEach {
             a.put(
-                JSONObject().put("id", it.id).put("name", it.name).put("type", it.type)
+                it.guideJson(JSONObject()).put("id", it.id).put("name", it.name).put("type", it.type)
                     .put("server", it.server).put("username", it.username)
                     .put("password", Crypto.encrypt(it.password))
                     .put("m3uUrl", it.m3uUrl).put("epgUrl", it.epgUrl)
@@ -166,6 +166,20 @@ class Store(private val context: Context) {
         }
     }
 
+    // ---- channels found in a playlist's guide sources (for matching by hand) ----
+    fun saveGuideChannels(playlistId: String, list: List<GuideChannel>) =
+        writeArrayAtomic(File(dataDir, "guidech_$playlistId.json"), list) { JSONObject().put("i", it.id).put("n", it.name).put("s", it.source) }
+
+    fun loadGuideChannels(playlistId: String): List<GuideChannel> =
+        readArray(File(dataDir, "guidech_$playlistId.json")) { GuideChannel(it.getString("i"), it.optString("n"), it.optString("s")) }
+
+    // ---- channel references from a restored backup, used once to find them in the new list ----
+    fun saveKeyRefs(playlistId: String, refs: List<ChannelKeys.Ref>) =
+        if (refs.isEmpty()) { File(dataDir, "keyrefs_$playlistId.json").delete(); Unit }
+        else writeArrayAtomic(File(dataDir, "keyrefs_$playlistId.json"), refs) { it.toJson() }
+
+    fun loadKeyRefs(playlistId: String): List<ChannelKeys.Ref> = readArray(File(dataDir, "keyrefs_$playlistId.json")) { ChannelKeys.Ref.fromJson(it) }
+
     // ---- movies & series per playlist ----
     fun saveVod(playlistId: String, list: List<VodItem>) {
         writeArrayAtomic(File(dataDir, "vod_$playlistId.json"), list) { it.toJson() }
@@ -177,6 +191,7 @@ class Store(private val context: Context) {
         File(dataDir, "vod_$playlistId.json").delete()
         File(dataDir, "channels_$playlistId.json").delete()
         File(dataDir, "guide_$playlistId.json").delete()
+        File(dataDir, "guidech_$playlistId.json").delete()
     }
 
     // ---- watch history ----

@@ -1,5 +1,7 @@
 package com.avidviewer.tv
 
+import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.cancel
 import android.app.Application
 import androidx.test.core.app.ApplicationProvider
 import com.avidviewer.tv.data.Store
@@ -25,6 +27,16 @@ import java.io.File
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], application = Application::class)
 class DiscoverMemoryTest {
+
+    private val made = ArrayList<AppViewModel>()
+    private fun track(vm: AppViewModel) = vm.also { made.add(it) }
+
+    /** Stops each test's background work (downloads, timers) so nothing runs into the next test. */
+    @org.junit.After
+    fun stopBackgroundWork() {
+        made.forEach { vm -> vm.viewModelScope.cancel() }
+        shadowOf(android.os.Looper.getMainLooper()).idle()
+    }
     private val app: Application = ApplicationProvider.getApplicationContext()
 
     private fun catalog(n: Int) = List(n) { i ->
@@ -61,7 +73,7 @@ class DiscoverMemoryTest {
         val list = catalog(120_000) + VodItem("big:x", "big", "movie", "EN - The Matrix [4K]", null, "http://x")
         TestData.seed(app)
         Store(app).saveVod(TestData.P1, list)
-        val vm = AppViewModel(app)
+        val vm = track(AppViewModel(app))
         vm.ensureVod()
         // Let the catalog load.
         val until = System.currentTimeMillis() + 60_000

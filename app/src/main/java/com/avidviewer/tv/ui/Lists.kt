@@ -34,6 +34,7 @@ fun ListPickerDialog(vm: AppViewModel) {
         RenameDialog("New list", "", onDismiss = { naming = false }) { name ->
             vm.createList(name, key)
             naming = false
+            vm.listPickerKey = null // the channel is in the new list: done
         }
         return
     }
@@ -51,7 +52,8 @@ fun ListPickerDialog(vm: AppViewModel) {
                         Focusable(
                             modifier = Modifier.fillMaxWidth().height(44.dp).then(if (group == FAV_GROUP) Modifier.focusRequester(first) else Modifier),
                             color = if (on) C.Surface2 else C.Bg,
-                            onClick = { vm.toggleInList(group, key) },
+                            // Choosing a list is the whole action: the picker closes (choosing a ✓ list takes the channel out).
+                            onClick = { vm.toggleInList(group, key); vm.listPickerKey = null },
                         ) {
                             Label((if (on) "✓  " else "＋  ") + name, size = 15.sp, color = C.Text, weight = FontWeight.SemiBold, modifier = Modifier.padding(start = 14.dp).weight(1f))
                             Label(if (on) "In list" else "", size = 12.sp, color = C.Accent, modifier = Modifier.padding(end = 14.dp))
@@ -78,7 +80,7 @@ fun ListOptionsDialog(vm: AppViewModel) {
     var renaming by remember(group) { mutableStateOf(false) }
     var deleting by remember(group) { mutableStateOf(false) }
     if (renaming) {
-        RenameDialog("Rename list", lst.name, onDismiss = { renaming = false }) { vm.renameList(group, it); renaming = false }
+        RenameDialog("Rename list", lst.name, onDismiss = { renaming = false }) { vm.renameList(group, it); renaming = false; vm.listMenu = null }
         return
     }
     if (deleting) {
@@ -127,7 +129,7 @@ fun VodCategoryOptionsDialog(vm: AppViewModel) {
     val (kind, cat) = vm.vodCatMenu ?: return
     var renaming by remember(kind, cat) { mutableStateOf(false) }
     if (renaming) {
-        RenameDialog("Rename category", vm.vodCatName(kind, cat), onDismiss = { renaming = false }) { vm.renameVodCat(kind, cat, it); renaming = false }
+        RenameDialog("Rename category", vm.vodCatName(kind, cat), onDismiss = { renaming = false }) { vm.renameVodCat(kind, cat, it); renaming = false; vm.vodCatMenu = null }
         return
     }
     val cats = vm.vodCategories(kind)

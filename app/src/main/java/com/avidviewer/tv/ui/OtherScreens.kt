@@ -269,6 +269,21 @@ private const val ADD_PLAYLIST = "__add__"
 /** An action that needs a yes before it runs. */
 private class Confirm(val title: String, val message: String, val yes: String, val run: () -> Unit)
 
+/** "This can't be undone" confirmation; Cancel has the highlight. */
+@Composable
+private fun ConfirmDialog(c: Confirm, close: () -> Unit) {
+    val cancelFocus = remember { FocusRequester() }
+    AlertDialog(
+        onDismissRequest = close,
+        containerColor = C.Surface,
+        title = { Text(c.title, color = C.Text, fontWeight = FontWeight.Bold) },
+        text = { Label(c.message, size = 14.sp, color = C.Soft, lines = Int.MAX_VALUE) },
+        confirmButton = { TvButton(c.yes, primary = true) { close(); c.run() } },
+        dismissButton = { TvButton("Cancel", modifier = Modifier.focusRequester(cancelFocus)) { close() } },
+    )
+    LaunchedEffect(c) { kotlinx.coroutines.delay(80); runCatching { cancelFocus.requestFocus() } }
+}
+
 /**
  * Settings › Playlists, laid out left to right for the remote:
  * the list (Up/Down picks a playlist or "Add playlist"), then that playlist's actions and switches,
@@ -278,7 +293,9 @@ private class Confirm(val title: String, val message: String, val yes: String, v
 fun PlaylistsScreen(vm: AppViewModel) {
     var sel by remember { mutableStateOf(vm.activePlaylist()?.id ?: vm.playlists.firstOrNull()?.id ?: ADD_PLAYLIST) }
     var editing by remember { mutableStateOf(false) }
+    var sources by remember { mutableStateOf(false) }
     var confirm by remember { mutableStateOf<Confirm?>(null) }
+    LaunchedEffect(sel) { sources = false }
     val selP = vm.playlists.firstOrNull { it.id == sel }
     val adding = selP == null
     val active = vm.activePlaylist()?.id
@@ -334,7 +351,8 @@ fun PlaylistsScreen(vm: AppViewModel) {
                         Label(if (selP.isXtream) "Xtream Codes" else "M3U link", size = 12.sp)
                     }
                 }
-                item { TvButton("✎  Edit", modifier = Modifier.fillMaxWidth(), selected = editing) { editing = true } }
+                item { TvButton("✎  Edit", modifier = Modifier.fillMaxWidth(), selected = editing) { editing = true; sources = false } }
+                item { TvButton("▤  Guide sources", modifier = Modifier.fillMaxWidth().testTag("pl-guide-sources"), selected = sources) { sources = true; editing = false } }
                 item {
                     TvButton(if (vm.busy) "Working…" else "↻  Refresh", modifier = Modifier.fillMaxWidth()) {
                         if (!vm.busy) confirm = Confirm(
@@ -378,6 +396,7 @@ fun PlaylistsScreen(vm: AppViewModel) {
                         "Save",
                     ) { vm.updatePlaylist(selP.id, f.name, f.type, f.server, f.user, f.pass, f.m3u, f.epg) }
                 }
+                sources && selP != null -> GuideSourcesPane(vm, selP) { t, m, y, r -> confirm = Confirm(t, m, y, r) }
                 else -> PlaylistDetails(selP!!, selP.id == active)
             }
         }
@@ -485,7 +504,8 @@ private fun PlaylistForm(vm: AppViewModel, existing: com.avidviewer.tv.data.Play
             item { Label("Live TV and the TV guide load from your login. Your password is stored encrypted on this device only.", size = 12.sp, lines = Int.MAX_VALUE) }
         } else {
             item { TvField("M3U playlist link", m3u) { m3u = it } }
-            item { TvField("TV guide (XMLTV) link, optional", epg) { epg = it } }
+            if (existing == null) item { TvField("TV guide (XMLTV) link, optional", epg) { epg = it } }
+            else item { Label("Guide sources for this playlist (add, edit, remove, time offset) are under ▤ Guide sources.", size = 12.sp, color = C.Soft, lines = Int.MAX_VALUE) }
         }
         if (existing == null) item {
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -526,6 +546,7 @@ private val SECTIONS = listOf(
     SettingsSection("channels", "List Editor", NavIcons.Manage),
     SettingsSection("location", "Location & weather", NavIcons.Location),
     SettingsSection("display", "Display & time", NavIcons.Guide),
+    SettingsSection("guide", "TV guide", NavIcons.Guide),
     SettingsSection("sports", "Sports tab", NavIcons.Sports),
     SettingsSection("discover", "Discover", NavIcons.Discover),
     SettingsSection("playback", "Playback", NavIcons.Live),
@@ -542,6 +563,8 @@ fun SettingsScreen(vm: AppViewModel) {
     // The section list shows names while it has focus; once you move into a section it shrinks to icons,
     // giving the page the width. Moving back left (or Back) brings the names back.
     var compact by remember { mutableStateOf(false) }
+    var settingsConfirm by remember { mutableStateOf<Confirm?>(null) }
+    settingsConfirm?.let { c -> ConfirmDialog(c) { settingsConfirm = null } }
     val listWidth by androidx.compose.animation.core.animateDpAsState(if (compact) 64.dp else 230.dp, label = "settingsNav")
     Row(Modifier.fillMaxSize()) {
         Column(
@@ -580,6 +603,7 @@ fun SettingsScreen(vm: AppViewModel) {
                     when (section) {
                         "location" -> locationSettings(vm)
                         "display" -> displaySettings(vm)
+                        "guide" -> guideSettings(vm) { t, m, y, r -> settingsConfirm = Confirm(t, m, y, r) }
                         "sports" -> sportsSettings(vm)
                         "discover" -> discoverSettings(vm)
                         "playback" -> item {
@@ -659,6 +683,7 @@ fun SettingsScreen(vm: AppViewModel) {
 private fun sectionSummary(vm: AppViewModel, id: String): String? = when (id) {
     "playlists" -> "${vm.playlists.size} added" + (vm.playlists.count { !it.enabled }.takeIf { it > 0 }?.let { " · $it off" } ?: "")
     "channels" -> (vm.prefs.hiddenGroups.size + vm.prefs.hiddenChannels.size).let { if (it == 0) "Nothing hidden" else "$it hidden" }
+    "guide" -> "Every ${vm.prefs.guideRefreshHours} h" + (vm.epgMatchCount().takeIf { it > 0 }?.let { " · $it matched" } ?: "")
     "location" -> vm.prefs.postalCode.ifBlank { null }?.let { "$it · ${vm.prefs.placeName.substringBefore(',')}" } ?: "Not set"
     "display" -> vm.zoneLabel()
     "sports" -> "${vm.prefs.sportCats.count { it.on }} categories on"
@@ -808,7 +833,7 @@ private fun ToggleRow(title: String, desc: String, on: Boolean, onToggle: () -> 
 }
 
 @Composable
-private fun SettingBlock(title: String, desc: String, content: @Composable () -> Unit) {
+internal fun SettingBlock(title: String, desc: String, content: @Composable () -> Unit) {
     Column(
         Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(C.Surface).padding(14.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),

@@ -199,6 +199,38 @@ fun holdSteps(e: androidx.compose.ui.input.key.KeyEvent): Int {
 /** Root-level handler: when an arrow key is held, move focus several items per repeat. */
 private var lastHeldMove = 0L
 
+/**
+ * Takes the highlight when the view model asks for this item ([key] == vm.navFocusKey), retrying
+ * each frame until it holds; a button press in the meantime wins.
+ */
+@Composable
+fun Modifier.navFocusTarget(vm: AppViewModel, key: String?): Modifier {
+    if (key == null) return this
+    val fr = androidx.compose.runtime.remember { FocusRequester() }
+    var focused by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+    androidx.compose.runtime.LaunchedEffect(vm.navFocusKey) {
+        if (vm.navFocusKey != key) return@LaunchedEffect
+        val started = android.os.SystemClock.uptimeMillis()
+        var held = 0
+        for (frame in 0 until 120) {
+            androidx.compose.runtime.withFrameNanos { }
+            if (vm.lastKeyAt > started) break
+            if (focused) { if (++held >= 8) break; continue }
+            held = 0
+            runCatching { fr.requestFocus() }
+        }
+        if (vm.navFocusKey == key) vm.navFocusKey = null
+    }
+    return this.then(Modifier.focusRequester(fr)).then(Modifier.onFocusChanged { focused = it.isFocused })
+}
+
+/** Left at the edge of a left-hand list goes back a layer, like Back. */
+fun Modifier.leftGoesBack(vm: AppViewModel): Modifier = this.then(Modifier.onKeyEvent { e ->
+    if (e.type != KeyEventType.KeyDown || e.key != Key.DirectionLeft || e.nativeKeyEvent.repeatCount != 0) return@onKeyEvent false
+    val onLayer = (vm.navMode == NavMode.GROUPS && vm.inGroupNav) || (vm.navMode == NavMode.COLLAPSED && vm.inPlaylistTree)
+    if (onLayer) { vm.navBack(); true } else false
+})
+
 @Composable
 fun Modifier.holdToAccelerate(): Modifier {
     val fm = androidx.compose.ui.platform.LocalFocusManager.current

@@ -1,5 +1,6 @@
 package com.avidviewer.tv
 
+import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithTag
 import android.app.Application
 import android.view.KeyEvent as AndroidKeyEvent
@@ -164,6 +165,8 @@ class UsabilityTest {
         rule.onAllNodes(androidx.compose.ui.test.hasText("NEWS Channel 1 with", substring = true) and androidx.compose.ui.test.hasClickAction()).onFirst().requestFocus()
         press(listOf(Key.DirectionDown, Key.DirectionDown, Key.DirectionRight, Key.DirectionRight, Key.DirectionLeft, Key.DirectionUp))
         assertEquals(NavMode.GROUPS, vm.navMode)
+        press(listOf(Key.Back)) // first to the category list
+        waitFor("Back from a channel highlights the current category (focus: ${focused()})") { vm.inGroupNav && focused().contains("NEWS") }
         press(listOf(Key.Back))
         assertNotEquals("Back should leave the category list", NavMode.GROUPS, vm.navMode)
     }
@@ -365,6 +368,124 @@ class UsabilityTest {
         assertTrue(link, link.startsWith("mailto:bugs@avidviewer.app?subject="))
         assertTrue(link, link.contains("App version: 1.0.test") && link.contains("Last crash: java.lang.IllegalStateException: boom"))
         vm.playlists.forEach { p -> assertTrue("leaks ${p.name}", !link.contains(p.name) && (p.server.isBlank() || !link.contains(p.server))) }
+    }
+
+    // ---------------------------------------------------------------- guide management and quick dialogs
+
+    @Test
+    fun tvGuideSettingsAndGuideSourcesOpen() {
+        go(Screen.SETTINGS)
+        rule.runOnIdle { vm.settingsSection = "guide" }
+        settle()
+        assertTrue(rule.onAllNodesWithText("Download the guide every").fetchSemanticsNodes().isNotEmpty())
+        rule.onNodeWithTag("guide-every-12").performClick()
+        settle()
+        assertEquals(12, vm.prefs.guideRefreshHours)
+        rule.runOnIdle { vm.settingsSection = "playlists" }
+        settle()
+        rule.onAllNodesWithText("My provider").onFirst().performClick()
+        settle()
+        rule.onNodeWithTag("pl-guide-sources").performClick()
+        settle()
+        assertTrue(rule.onAllNodesWithText("Guide sources · My provider").fetchSemanticsNodes().isNotEmpty())
+        assertTrue(rule.onAllNodesWithText("Provider's guide").fetchSemanticsNodes().isNotEmpty())
+        rule.onNodeWithTag("guide-src-add").performClick()
+        settle()
+        assertTrue(rule.onAllNodesWithText("New guide source").fetchSemanticsNodes().isNotEmpty())
+        // Deleting asks first.
+        rule.onAllNodesWithTag("guide-src-delete").onFirst().performClick()
+        settle()
+        assertTrue(rule.onAllNodesWithText("can't be undone", substring = true).fetchSemanticsNodes().isNotEmpty())
+    }
+
+    @Test
+    fun matchGuideFromTheChannelMenu() {
+        rule.runOnIdle { vm.chooseGroup(TestData.P1, "KIDS") }
+        settle()
+        val key = vm.channelsIn("KIDS").first().key
+        rule.runOnIdle { vm.channelMenu = key }
+        settle()
+        rule.onAllNodesWithText("Match guide", substring = true).onFirst().performClick()
+        waitFor("the match dialog") { rule.onAllNodesWithText("Match guide · ", substring = true).fetchSemanticsNodes().isNotEmpty() }
+        rule.onAllNodesWithText("No guide").onFirst().performClick()
+        settle()
+        assertEquals("", vm.prefs.epgMap[key])
+        assertEquals(null, vm.matchingChannel)
+    }
+
+    @Test
+    fun choosingAListOrSavingARenameClosesTheDialog() {
+        rule.runOnIdle { vm.chooseGroup(TestData.P1, "KIDS") }
+        settle()
+        val key = vm.channelsIn("KIDS").first { !vm.listsFor(it.key).contains("Kids night") }.key
+        rule.runOnIdle { vm.listPickerKey = key }
+        settle()
+        // The row in the picker ("＋  …Kids night"), not the category list behind it.
+        val rows = rule.onAllNodesWithText("Kids night", substring = true)
+        val idx = rows.fetchSemanticsNodes().indexOfFirst { n -> n.config.getOrNull(androidx.compose.ui.semantics.SemanticsProperties.Text)?.any { it.text.startsWith("＋") } == true }
+        assertTrue("the list is in the picker", idx >= 0)
+        rows[idx].performClick()
+        settle()
+        assertEquals("the picker closes once a list is chosen", null, vm.listPickerKey)
+        assertTrue(vm.listsFor(key).contains("Kids night"))
+        rule.runOnIdle { vm.channelMenu = key }
+        settle()
+        rule.onAllNodesWithText("Rename", substring = true).onFirst().performClick()
+        settle()
+        waitFor("the rename dialog") { rule.onAllNodesWithText("Rename channel").fetchSemanticsNodes().isNotEmpty() }
+        rule.onAllNodesWithText("Save").onFirst().performClick()
+        settle()
+        assertEquals("the channel menu closes after saving the new name", null, vm.channelMenu)
+        assertTrue("no dialog left open", rule.onAllNodesWithText("Rename channel").fetchSemanticsNodes().isEmpty())
+    }
+
+    // ---------------------------------------------------------------- layers (Nov 10, evening)
+
+    private fun goDeepInBig() {
+        rule.runOnIdle { vm.chooseGroup(TestData.P1, "BIG") }
+        waitFor("the long category") { focused().contains("BIG Channel 1 with") }
+        hold(Key.DirectionDown, 25)
+        var tries = 0
+        while (!focused().contains("BIG Channel 60 with") && tries < 70) {
+            press(listOf(if (Regex("BIG Channel (\\d+) ").find(focused())?.groupValues?.get(1)?.toInt()?.let { it > 60 } == true) Key.DirectionUp else Key.DirectionDown)); tries++
+        }
+        assertTrue("couldn't get to channel 60 (focus: ${focused()})", focused().contains("BIG Channel 60 with"))
+    }
+
+    @Test
+    fun theMainMenuShowsAsIconsAtLaunchOnTheGuide() {
+        settle()
+        assertEquals(Screen.GUIDE, vm.screen)
+        assertEquals(NavMode.GROUPS, vm.navMode)
+        assertTrue("main menu icons are on screen", rule.onAllNodesWithContentDescription("Settings").fetchSemanticsNodes().isNotEmpty())
+    }
+
+    @Test
+    fun backFromDeepInACategoryStepsThroughTheLayers() {
+        goDeepInBig()
+        press(listOf(Key.Back))
+        waitFor("Back highlights the current category in the category list (focus: ${focused()}, nav=${vm.navMode})") {
+            vm.navMode == NavMode.GROUPS && vm.inGroupNav && focused().trim().startsWith("▶ BIG")
+        }
+        press(listOf(Key.Back))
+        waitFor("Back again highlights the same category in the playlist list, not the top (focus: ${focused()}, nav=${vm.navMode})") {
+            vm.navMode == NavMode.COLLAPSED && vm.inPlaylistTree && focused().trim().startsWith("BIG")
+        }
+        press(listOf(Key.Back))
+        waitFor("Back again opens the main menu (nav=${vm.navMode})") { vm.navMode == NavMode.FULL }
+    }
+
+    @Test
+    fun leftWorksLikeBackBetweenTheLayers() {
+        goDeepInBig()
+        press(listOf(Key.DirectionLeft))
+        waitFor("Left from a channel name highlights the current category (focus: ${focused()})") { vm.inGroupNav && focused().trim().startsWith("▶ BIG") }
+        press(listOf(Key.DirectionLeft))
+        waitFor("Left again goes to the playlist list on that category (focus: ${focused()}, nav=${vm.navMode})") {
+            vm.navMode == NavMode.COLLAPSED && focused().trim().startsWith("BIG")
+        }
+        press(listOf(Key.DirectionLeft))
+        waitFor("Left again opens the main menu (nav=${vm.navMode})") { vm.navMode == NavMode.FULL }
     }
 
     // ---------------------------------------------------------------- reported bugs (Nov 10)
