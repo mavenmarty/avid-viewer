@@ -12,7 +12,7 @@ import java.io.File
  */
 class Store(private val context: Context) {
     private val dir: File get() = context.filesDir
-    private val dataDir: File get() = File(dir, "data").apply { mkdirs() }
+    internal val dataDir: File get() = File(dir, "data").apply { mkdirs() }
 
     private fun writeAtomic(f: File, text: String) {
         val tmp = File(f.parentFile, f.name + ".tmp")
@@ -132,6 +132,20 @@ class Store(private val context: Context) {
 
     fun loadChannels(playlistId: String): List<Channel> = readArray(File(dataDir, "channels_$playlistId.json")) { Channel.fromJson(it) }
 
+    /** An older version's saved channel list, one channel at a time (for moving it into the database). */
+    fun forEachSavedChannel(playlistId: String, emit: (Channel) -> Unit) {
+        val f = File(dataDir, "channels_$playlistId.json")
+        if (!f.exists()) return
+        android.util.JsonReader(f.bufferedReader(Charsets.UTF_8, 64 * 1024)).use { r ->
+            r.beginArray()
+            while (r.hasNext()) {
+                val o = readJsonValue(r)
+                if (o is JSONObject) runCatching { Channel.fromJson(o) }.getOrNull()?.let(emit)
+            }
+            r.endArray()
+        }
+    }
+
     // ---- guide per playlist ----
     fun saveGuide(playlistId: String, guide: Map<String, List<Program>>) {
         val o = JSONObject()
@@ -187,6 +201,10 @@ class Store(private val context: Context) {
 
     fun loadVod(playlistId: String): List<VodItem> = readArray(File(dataDir, "vod_$playlistId.json")) { VodItem.fromJson(it) }
 
+    /** The old movies & series file, once its titles are in the catalog database. */
+    fun deleteVodFile(playlistId: String) { File(dataDir, "vod_$playlistId.json").delete() }
+
+    /** Deletes a playlist's saved files (its rows in the database are removed separately). */
     fun deletePlaylistData(playlistId: String) {
         File(dataDir, "vod_$playlistId.json").delete()
         File(dataDir, "channels_$playlistId.json").delete()

@@ -69,7 +69,7 @@ fun ListPickerDialog(vm: AppViewModel) {
         },
         confirmButton = { TvButton("Done", primary = true) { vm.listPickerKey = null } },
     )
-    LaunchedEffect(key) { delay(80); runCatching { first.requestFocus() } }
+    LaunchedEffect(key) { focusWhenReady(vm) { runCatching { first.requestFocus() }.isSuccess } }
 }
 
 /** Menu key on one of the user's lists in the TV Guide: rename, move, delete (with a confirmation). */
@@ -93,7 +93,7 @@ fun ListOptionsDialog(vm: AppViewModel) {
             confirmButton = { TvButton("Delete", primary = true) { vm.deleteList(group); deleting = false; vm.listMenu = null } },
             dismissButton = { TvButton("Cancel", modifier = Modifier.focusRequester(cancel)) { deleting = false } },
         )
-        LaunchedEffect(Unit) { delay(80); runCatching { cancel.requestFocus() } }
+        LaunchedEffect(Unit) { focusWhenReady(vm) { runCatching { cancel.requestFocus() }.isSuccess } }
         return
     }
     AlertDialog(

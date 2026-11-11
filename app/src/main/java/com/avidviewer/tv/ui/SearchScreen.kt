@@ -72,7 +72,7 @@ private fun androidx.compose.foundation.lazy.LazyListScope.section(vm: AppViewMo
     item(key = "$pid-$title") { SectionTitle("$title (${hits.size})", Modifier.padding(start = 4.dp, top = 6.dp)) }
     itemsIndexed(hits, key = { i, _ -> "$pid-$title-$i" }) { _, h ->
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Focusable(Modifier.weight(1f).height(50.dp), onClick = { vm.openHit(h) }) {
+            Focusable(Modifier.weight(1f).height(50.dp).navFocusTarget(vm, vm.hitId(h)), onClick = { vm.openHit(h) }) {
                 ChannelBadge(h.title, h.logo, 32.dp)
                 Column(Modifier.padding(horizontal = 10.dp).weight(1f)) {
                     Label(h.title, size = 14.sp, color = C.Text, weight = FontWeight.SemiBold)

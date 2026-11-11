@@ -2,6 +2,10 @@
 
 package com.avidviewer.tv.ui
 
+import kotlinx.coroutines.launch
+
+import androidx.compose.foundation.focusable
+
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.verticalScroll
@@ -284,7 +288,7 @@ private fun ConfirmDialog(c: Confirm, close: () -> Unit) {
         confirmButton = { TvButton(c.yes, primary = true) { close(); c.run() } },
         dismissButton = { TvButton("Cancel", modifier = Modifier.focusRequester(cancelFocus)) { close() } },
     )
-    LaunchedEffect(c) { kotlinx.coroutines.delay(80); runCatching { cancelFocus.requestFocus() } }
+    LaunchedEffect(c) { focusWhenReady { runCatching { cancelFocus.requestFocus() }.isSuccess } }
 }
 
 /**
@@ -415,7 +419,7 @@ fun PlaylistsScreen(vm: AppViewModel) {
             confirmButton = { TvButton(c.yes, primary = true) { confirm = null; c.run() } },
             dismissButton = { TvButton("Cancel", modifier = Modifier.focusRequester(cancelFocus)) { confirm = null } },
         )
-        LaunchedEffect(c) { kotlinx.coroutines.delay(80); runCatching { cancelFocus.requestFocus() } }
+        LaunchedEffect(c) { focusWhenReady { runCatching { cancelFocus.requestFocus() }.isSuccess } }
     }
 }
 
@@ -545,12 +549,22 @@ private val ZONES = listOf(
 private data class SettingsSection(val id: String, val title: String, val icon: androidx.compose.ui.graphics.vector.ImageVector)
 
 @OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
-private fun Modifier.staysInSection(): Modifier = this
+/**
+ * A settings section's content: Up/Down never leave it; Left at its left edge goes to the section
+ * it belongs to in the list ([sectionFr], not whichever row happens to be nearest, NAV-02); Right
+ * into it lands on its first control ([firstFr], NAV-10).
+ */
+private fun Modifier.staysInSection(sectionFr: FocusRequester? = null, firstFr: FocusRequester? = null, firstOn: () -> Boolean = { false }): Modifier = this
     .focusProperties {
         exit = { dir ->
-            if (dir == androidx.compose.ui.focus.FocusDirection.Up || dir == androidx.compose.ui.focus.FocusDirection.Down) FocusRequester.Cancel
-            else FocusRequester.Default
+            when (dir) {
+                androidx.compose.ui.focus.FocusDirection.Up, androidx.compose.ui.focus.FocusDirection.Down -> FocusRequester.Cancel
+                androidx.compose.ui.focus.FocusDirection.Left -> sectionFr ?: FocusRequester.Default
+                else -> FocusRequester.Default
+            }
         }
+        // Only while the stop is on screen (scrolled away, a lazy list has dropped it and asking it would crash).
+        if (firstFr != null) enter = { dir -> if (dir == androidx.compose.ui.focus.FocusDirection.Right && firstOn()) firstFr else FocusRequester.Default }
     }
     .focusGroup()
 
@@ -568,7 +582,26 @@ private val SECTIONS = listOf(
     SettingsSection("about", "Updates & about", NavIcons.Settings),
 )
 
-/** Settings: sections on the left (highlighting one shows it), options on the right. */
+/**
+ * An invisible stop at the top of a settings page: entering the page lands here, and it hands the
+ * highlight straight down to the page's first control (whatever kind of control that is).
+ */
+@Composable
+private fun FirstControlStop(fr: FocusRequester, on: androidx.compose.runtime.MutableState<Boolean>) {
+    androidx.compose.runtime.DisposableEffect(fr) { on.value = true; onDispose { on.value = false } }
+    val fm = androidx.compose.ui.platform.LocalFocusManager.current
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    androidx.compose.foundation.layout.Box(
+        // Full width and 1 dp high: never "to the left" of a control, so Left from the page can't land here.
+        Modifier.fillMaxWidth().height(1.dp).focusRequester(fr)
+            // "Next" follows the page's order, so this is its first control (the leftmost of a row of buttons),
+            // where "Down" picked whichever was nearest the middle.
+            .onFocusChanged { if (it.isFocused) scope.launch { fm.moveFocus(androidx.compose.ui.focus.FocusDirection.Next) } }
+            .focusable(),
+    )
+}
+
+/** Settings: sections on the left (OK opens one), options on the right. */
 @Composable
 fun SettingsScreen(vm: AppViewModel) {
     val p = vm.prefs
@@ -579,6 +612,22 @@ fun SettingsScreen(vm: AppViewModel) {
     var settingsConfirm by remember { mutableStateOf<Confirm?>(null) }
     settingsConfirm?.let { c -> ConfirmDialog(c) { settingsConfirm = null } }
     val listWidth by androidx.compose.animation.core.animateDpAsState(if (compact) 64.dp else 230.dp, label = "settingsNav")
+    // One handle per section row, so Left and Back from a section come back to its own row.
+    val sectionFrs = remember { SECTIONS.associate { it.id to FocusRequester() } }
+    // The first control of a section (a hidden stop at the top of the page that hands the highlight down).
+    val firstFr = remember(section) { FocusRequester() }
+    val firstOn = remember(section) { mutableStateOf(false) }
+    // OK on a section: once its page is on screen, step into it (as Right does: its first control).
+    var openTick by remember { mutableStateOf(0) }
+    val fm = androidx.compose.ui.platform.LocalFocusManager.current
+    LaunchedEffect(openTick) {
+        if (openTick > 0) focusWhenReady(vm, frames = 60, isFocused = { vm.settingsInContent }) { fm.moveFocus(androidx.compose.ui.focus.FocusDirection.Right) }
+    }
+    // Back inside a section goes up one level, to its row in the section list (NAV-07); Back there opens the menu.
+    LaunchedEffect(vm.settingsBackTick) {
+        if (vm.settingsBackTick > 0) focusWhenReady(vm) { runCatching { sectionFrs[section]?.requestFocus() }.isSuccess }
+    }
+    androidx.compose.runtime.DisposableEffect(Unit) { onDispose { vm.settingsInContent = false } }
     Row(Modifier.fillMaxSize()) {
         Column(
             Modifier.width(listWidth).fillMaxHeight().background(C.Bg)
@@ -593,10 +642,11 @@ fun SettingsScreen(vm: AppViewModel) {
             SECTIONS.forEach { sec ->
                 val on = sec.id == section
                 Focusable(
-                    modifier = Modifier.fillMaxWidth().height(42.dp).then(if (sec == SECTIONS.first()) Modifier.entryFocus(vm, Screen.SETTINGS) else Modifier),
+                    modifier = Modifier.fillMaxWidth().height(42.dp).focusRequester(sectionFrs.getValue(sec.id))
+                        .then(if (sec == SECTIONS.first()) Modifier.entryFocus(vm, Screen.SETTINGS) else Modifier),
                     color = if (on) C.Surface2 else androidx.compose.ui.graphics.Color.Transparent,
-                    onFocus = { vm.settingsSection = sec.id },
-                    onClick = { vm.settingsSection = sec.id },
+                    // Highlighting a section only shows its summary; OK opens it and moves into it (NAV-08).
+                    onClick = { vm.settingsSection = sec.id; openTick++ },
                 ) {
                     androidx.compose.material3.Icon(sec.icon, contentDescription = sec.title, tint = if (on) C.Accent else C.Muted, modifier = Modifier.padding(start = if (compact) 12.dp else 10.dp).width(20.dp).height(20.dp))
                     if (!compact) Column(Modifier.padding(start = 12.dp).weight(1f)) {
@@ -608,7 +658,9 @@ fun SettingsScreen(vm: AppViewModel) {
         }
         // Up/Down never leave the section you're in: at the top or bottom of its options the highlight stays put
         // (only Left goes back to the list of sections).
-        Column(Modifier.weight(1f).fillMaxHeight().onFocusChanged { if (it.hasFocus) compact = true }.staysInSection()) {
+        val generic = section != "playlists" && section != "channels"
+        Column(Modifier.weight(1f).fillMaxHeight().onFocusChanged { vm.settingsInContent = it.hasFocus; if (it.hasFocus) compact = true }
+            .staysInSection(sectionFrs[section], if (generic) firstFr else null) { firstOn.value }) {
             when (section) {
                 "playlists" -> PlaylistsScreen(vm)
                 "channels" -> ListEditor(vm)
@@ -617,7 +669,10 @@ fun SettingsScreen(vm: AppViewModel) {
                     contentPadding = PaddingValues(20.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    item { Text(SECTIONS.first { it.id == section }.title, color = C.Text, fontSize = 20.sp, fontWeight = FontWeight.Bold) }
+                    item {
+                        FirstControlStop(firstFr, firstOn)
+                        Text(SECTIONS.first { it.id == section }.title, color = C.Text, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                    }
                     when (section) {
                         "location" -> locationSettings(vm)
                         "display" -> displaySettings(vm)
@@ -671,6 +726,7 @@ fun SettingsScreen(vm: AppViewModel) {
                                 }
                             }
                             item { BugReportBlock(vm) }
+                            item { GuideAndDriverBlock() }
                             item { BackupBlock(vm) }
                             item {
                                 SettingBlock("App updates", "Installed: version ${vm.installed.second}" + (vm.update?.let { " · version ${it.versionName} available" } ?: "")) {
@@ -805,6 +861,28 @@ private fun BugReportBlock(vm: AppViewModel) {
                     runCatching { ctx.startActivity(com.avidviewer.tv.data.BugReport.emailIntent(version, crash)) }
                 }
             }
+        }
+    }
+}
+
+/** QR codes for the user guide and the Control4 driver: a TV can't open them, a phone can. */
+@Composable
+private fun GuideAndDriverBlock() {
+    SettingBlock("User guide and Control4 driver", "Scan with your phone's camera to open them.") {
+        Row(horizontalArrangement = Arrangement.spacedBy(28.dp)) {
+            LinkQr("User guide (PDF)", "The latest version, with setup, every screen and release notes.", com.avidviewer.tv.data.Links.USER_GUIDE, "guide-qr")
+            LinkQr("Control4 mini driver", "Puts Avid Viewer in the Control4 Watch menu (um_avid_viewer.c4z). Setup is in the user guide, section 12.", com.avidviewer.tv.data.Links.CONTROL4_DRIVER, "control4-qr")
+        }
+    }
+}
+
+@Composable
+private fun androidx.compose.foundation.layout.RowScope.LinkQr(title: String, note: String, url: String, tag: String) {
+    Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+        QrCode(url, Modifier.size(120.dp).testTag(tag))
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Label(title, size = 14.sp, color = C.Accent, weight = FontWeight.Bold)
+            Label(note, size = 12.sp, color = C.Soft, lines = Int.MAX_VALUE)
         }
     }
 }
@@ -1021,15 +1099,12 @@ private fun EditorColumns(vm: AppViewModel, tab: LeTab, modifier: Modifier) {
         if (live) liveData = vm.playlists.filter { it.liveOn }.associate { it.id to vm.editorChannels(it.id) }
         else vm.ensureVod()
     }
-    val vodAll = if (live) emptyList() else vm.vodAll(kind)
     // Sections: one per playlist, with its categories.
     val sections: List<Pair<com.avidviewer.tv.data.Playlist, List<LeCat>>> = vm.playlists.map { p ->
         p to if (live) {
             liveData[p.id]?.let { chs -> vm.editorGroups(chs).map { (raw, n) -> LeCat("L|${p.id}|$raw", p.id, raw, vm.groupName(raw), n) } } ?: emptyList()
         } else {
-            val counts = LinkedHashMap<String, Int>()
-            vodAll.filter { it.playlistId == p.id }.forEach { val c = it.category.ifBlank { "Other" }; counts[c] = (counts[c] ?: 0) + 1 }
-            vm.orderVodCats(kind, counts.keys.toList()).map { LeCat(vm.vodCatKey(kind, p.id, it), p.id, it, vm.vodCatName(kind, it), counts[it] ?: 0) }
+            vm.vodEditorCategories(kind, p.id).map { (c, n) -> LeCat(vm.vodCatKey(kind, p.id, c), p.id, c, vm.vodCatName(kind, c), n) }
         }
     }
     fun hidden(c: LeCat) = if (live) vm.isGroupHidden(c.pid, c.raw) else c.key in vm.prefs.vodHiddenCats
@@ -1055,7 +1130,7 @@ private fun EditorColumns(vm: AppViewModel, tab: LeTab, modifier: Modifier) {
                 TvButton("Show $n", modifier = Modifier.testTag("le-cats-show")) { setHidden(allShown, false) }
                 TvButton("Hide $n", modifier = Modifier.testTag("le-cats-hide")) { setHidden(allShown, true) }
             }
-            if (!live && vm.vodLoading && vodAll.isEmpty()) Label("Loading movies and series…", size = 13.sp)
+            if (!live && vm.vodLoading && vm.vod.isEmpty()) Label("Loading movies and series…", size = 13.sp)
             LazyColumn(Modifier.weight(1f).testTag("le-cats"), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 filtered.forEach { (p, cats) ->
                     item(key = "h-" + p.id) {
@@ -1085,13 +1160,13 @@ private fun EditorColumns(vm: AppViewModel, tab: LeTab, modifier: Modifier) {
                 return@Column
             }
             val chs = if (live) vm.editorChannelsIn(liveData[sel.pid] ?: emptyList(), sel.raw) else emptyList()
-            val titles = if (live) emptyList() else vodAll.filter { it.playlistId == sel.pid && it.category.ifBlank { "Other" } == sel.raw }
+            val titles = if (live) emptyList() else remember(sel.key, vm.vodVersion) { vm.vodEditorTitles(kind, sel.pid, sel.raw) }
             val total = if (live) chs.size else titles.size
             val hiddenN = if (live) chs.count { it.key in vm.prefs.hiddenChannels } else titles.count { it.key in vm.prefs.vodHiddenTitles }
             Label(sel.name.uppercase() + " · $total" + (if (hiddenN > 0) " · $hiddenN hidden" else ""), size = 12.sp, weight = FontWeight.Bold, lines = 2)
             TvField(if (live) "Filter channels" else "Filter titles", itemQ, modifier = Modifier.fillMaxWidth()) { itemQ = it }
             val shownChs = chs.filter { itemQ.isBlank() || vm.channelName(it).contains(itemQ, ignoreCase = true) }
-            val shownTitles = titles.filter { itemQ.isBlank() || it.name.contains(itemQ, ignoreCase = true) }
+            val shownTitles = if (live || itemQ.isBlank()) titles else remember(sel.key, itemQ, vm.vodVersion) { vm.vodEditorTitles(kind, sel.pid, sel.raw, itemQ) }
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
                 val n = if (itemQ.isBlank()) "all" else "${if (live) shownChs.size else shownTitles.size}"
                 TvButton("Show $n", modifier = Modifier.testTag("le-items-show")) {

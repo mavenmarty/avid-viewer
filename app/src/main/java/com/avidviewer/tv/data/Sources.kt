@@ -65,7 +65,10 @@ object Xtream {
         "Couldn't reach the server: ${e.message}"
     }
 
-    fun liveChannels(p: Playlist, format: String): List<Channel> {
+    fun liveChannels(p: Playlist, format: String): List<Channel> = ArrayList<Channel>().also { l -> liveChannels(p, format) { l.add(it) } }
+
+    /** Hands each live channel to [emit] as it's read; returns how many. */
+    fun liveChannels(p: Playlist, format: String, emit: (Channel) -> Unit): Int {
         val cats = JSONArray(Net.text(api(p, "get_live_categories")))
         val catNames = HashMap<String, String>()
         for (i in 0 until cats.length()) {
@@ -78,7 +81,7 @@ object Xtream {
         // Read the list one channel at a time: a big provider's answer is tens of MB, and holding it
         // as one string plus a JSON tree is what runs a Fire TV Stick out of memory.
         return Net.open(api(p, "get_live_streams")) { input ->
-            val out = ArrayList<Channel>()
+            var n = 0
             android.util.JsonReader(java.io.InputStreamReader(input, Charsets.UTF_8)).use { r ->
                 if (r.peek() != android.util.JsonToken.BEGIN_ARRAY) { r.skipValue(); return@use } // empty or an error object
                 r.beginArray()
@@ -98,7 +101,8 @@ object Xtream {
                     }
                     r.endObject()
                     if (id.isBlank()) continue
-                    out.add(
+                    n++
+                    emit(
                         Channel(
                             key = "${p.id}:$id",
                             name = name.trim().ifBlank { "Channel $id" },
@@ -111,7 +115,7 @@ object Xtream {
                 }
                 r.endArray()
             }
-            out
+            n
         }
     }
 
@@ -129,8 +133,15 @@ object M3u {
     private val attr = Regex("""([A-Za-z0-9_-]+)="([^"]*)"""")
 
     /** Live channels; movies and series entries go into [vodOut] when given. */
-    fun channels(p: Playlist, vodOut: MutableList<VodItem>? = null): List<Channel> = Net.open(p.m3uUrl.trim()) { input ->
-        val out = ArrayList<Channel>()
+    fun channels(p: Playlist, vodOut: MutableList<VodItem>? = null): List<Channel> =
+        read(p, if (vodOut == null) null else { v -> vodOut.add(v) })
+
+    /** Live channels; each movie or series entry is handed to [onVod] as it's read (none kept here). */
+    fun read(p: Playlist, onVod: ((VodItem) -> Unit)?): List<Channel> = ArrayList<Channel>().also { l -> read(p, { l.add(it) }, onVod) }
+
+    /** Hands each live channel to [onLive] and each movie/series entry to [onVod] as the file is read; returns live count. */
+    fun read(p: Playlist, onLive: (Channel) -> Unit, onVod: ((VodItem) -> Unit)?): Int = Net.open(p.m3uUrl.trim()) { input ->
+        var n = 0
         var pending: Triple<String, Map<String, String>, String?>? = null
         // Named after the stream address, not the position, so a changed list doesn't shift favorites.
         val liveKeys = ChannelKeys.Namer("${p.id}:u")
@@ -150,7 +161,7 @@ object M3u {
                         val url = line
                         val isMovie = url.contains("/movie/"); val isEpisode = url.contains("/series/")
                         if (isMovie || isEpisode) {
-                            vodOut?.add(
+                            onVod?.invoke(
                                 VodItem(
                                     key = vodKeys.next(url), playlistId = p.id, kind = if (isMovie) "movie" else "episode",
                                     name = pnd.first, logo = pnd.second["tvg-logo"]?.ifBlank { null }, url = url,
@@ -158,7 +169,8 @@ object M3u {
                                 )
                             )
                         } else {
-                            out.add(
+                            n++
+                            onLive(
                                 Channel(
                                     key = liveKeys.next(url),
                                     name = pnd.first,
@@ -174,7 +186,7 @@ object M3u {
                 }
             }
         }
-        out
+        n
     }
 
     /** M3U Plus lists often name their guide in the header: url-tvg="...". */
@@ -213,9 +225,19 @@ object Xmltv {
     fun read(
         url: String, wanted: Set<String>, from: Long, to: Long,
         offsetMs: Long = 0L, directory: MutableList<Pair<String, String>>? = null,
-    ): Map<String, List<Program>> = Net.open(url) { input ->
-        val wantedLower = wanted.associateBy { it.lowercase() }
+    ): Map<String, List<Program>> {
         val out = HashMap<String, MutableList<Program>>()
+        read(url, wanted, from, to, offsetMs, directory) { id, pr -> out.getOrPut(id) { ArrayList() }.add(pr) }
+        return out.mapValues { (_, v) -> v.sortedBy { it.start } }
+    }
+
+    /** The same, handing each programme to [emit] (channel id as in [wanted]) as it's read; returns how many. */
+    fun read(
+        url: String, wanted: Set<String>, from: Long, to: Long,
+        offsetMs: Long, directory: MutableList<Pair<String, String>>?, emit: (String, Program) -> Unit,
+    ): Int = Net.open(url) { input ->
+        val wantedLower = wanted.associateBy { it.lowercase() }
+        var n = 0
         val xp = Xml.newPullParser()
         xp.setFeature(XmlPullParser.FEATURE_PROCESS_NAMESPACES, false)
         xp.setInput(input, null)
@@ -257,7 +279,7 @@ object Xmltv {
                     "programme" -> {
                         val id = chId
                         if (id != null) {
-                            out.getOrPut(id) { ArrayList() }.add(Program(start, end, clean(title ?: "Untitled"), sub?.let { clean(it) }, isNew))
+                            emit(id, Program(start, end, clean(title ?: "Untitled"), sub?.let { clean(it) }, isNew)); n++
                         }
                         chId = null
                     }
@@ -265,7 +287,7 @@ object Xmltv {
             }
             event = xp.next()
         }
-        out.mapValues { (_, v) -> v.sortedBy { it.start } }
+        n
     }
 
     // Some community guides put emoji and [TAGS] in titles; keep titles tidy on a TV.
