@@ -130,6 +130,19 @@ class AuditHarnessTest {
         return res to ((peak.get() - base).coerceAtLeast(0L) / (1024 * 1024))
     }
 
+    /** Largest amount of memory still in use right after a collection, while [block] runs (what it holds, not its garbage). */
+    private fun <T> peakLiveMb(block: () -> T): Pair<T, Long> {
+        repeat(3) { System.gc(); Thread.sleep(40) }
+        val r = Runtime.getRuntime()
+        val base = r.totalMemory() - r.freeMemory()
+        val peak = java.util.concurrent.atomic.AtomicLong(base)
+        val running = java.util.concurrent.atomic.AtomicBoolean(true)
+        val sampler = thread(isDaemon = true) { while (running.get()) { System.gc(); peak.accumulateAndGet(r.totalMemory() - r.freeMemory()) { a, b -> maxOf(a, b) }; Thread.sleep(30) } }
+        val res = try { block() } finally { running.set(false); sampler.join() }
+        System.gc(); val after = r.totalMemory() - r.freeMemory()
+        return res to ((peak.get() - base).coerceAtLeast(0L) / (1024 * 1024))
+    }
+
     // ------------------------------------------------------------------ remote helpers (as in UsabilityTest)
 
     private lateinit var vm: AppViewModel
@@ -212,6 +225,13 @@ class AuditHarnessTest {
             report("parse", "m3u_stream_to_catalog_peak_heap_mb", speak)
             report("parse", "m3u_stream_to_catalog_titles", ing.added)
             cat.delete("fx-stream")
+            // Live memory (after collections) — the list way vs the streamed way, same file.
+            val (lv, lpeak) = peakLiveMb { val out = ArrayList<com.avidviewer.tv.data.VodItem>(); com.avidviewer.tv.data.M3u.channels(pl, out).size + out.size }
+            report("parse", "m3u_list_live_peak_mb", lpeak)
+            val (_, slpeak) = peakLiveMb { cat.replacing("fx-stream", { false }) { add -> com.avidviewer.tv.data.M3u.read(pl, add) }.added }
+            report("parse", "m3u_stream_live_peak_mb", slpeak)
+            report("parse", "m3u_list_entries", lv)
+            cat.delete("fx-stream"); cat.close()
             val (_, jpeak) = peakMb { org.json.JSONArray(File(fx, "live_streams.json").readText()).length() }
             report("parse", "xtream_live_10k_JSONArray_peak_heap_mb", jpeak)
             report("parse", "xtream_live_10k_json_mb", File(fx, "live_streams.json").length() / (1024 * 1024.0))
