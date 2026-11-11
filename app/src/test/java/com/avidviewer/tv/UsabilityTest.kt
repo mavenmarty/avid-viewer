@@ -373,6 +373,32 @@ class UsabilityTest {
     // ---------------------------------------------------------------- guide management and quick dialogs
 
     @Test
+    fun everySettingsSectionIsReachableWithDownIncludingTheLast() {
+        go(Screen.SETTINGS)
+        waitFor("Settings' first section highlighted (focus: ${focused()})") { focused().contains("Playlists") && vm.settingsSection == "playlists" }
+        var tries = 0
+        while (vm.settingsSection != "about" && tries < 15) { press(listOf(Key.DirectionDown)); tries++ }
+        assertEquals("Down reaches Updates & about (focus: ${focused()})", "about", vm.settingsSection)
+        assertTrue("it's on screen and highlighted", focused().contains("Updates & about"))
+    }
+
+    @Test
+    fun downAtTheEndOfAPlaylistListStaysInPlaylists() {
+        go(Screen.SETTINGS)
+        rule.runOnIdle { vm.settingsSection = "playlists" }
+        settle()
+        rule.onAllNodesWithText("Free channels").onFirst().requestFocus()
+        settle()
+        press(listOf(Key.DirectionDown, Key.DirectionDown, Key.DirectionDown))
+        assertEquals("still in Playlists (focus: ${focused()})", "playlists", vm.settingsSection)
+        assertTrue("still on the last playlist (focus: ${focused()})", focused().contains("Free channels"))
+        // In the actions column too: Down past the last option goes nowhere.
+        press(listOf(Key.DirectionRight))
+        repeat(12) { press(listOf(Key.DirectionDown)) }
+        assertEquals("still in Playlists after Down in the actions (focus: ${focused()})", "playlists", vm.settingsSection)
+    }
+
+    @Test
     fun tvGuideSettingsAndGuideSourcesOpen() {
         go(Screen.SETTINGS)
         rule.runOnIdle { vm.settingsSection = "guide" }

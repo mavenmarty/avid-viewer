@@ -2,6 +2,9 @@
 
 package com.avidviewer.tv.ui
 
+import androidx.compose.ui.focus.focusProperties
+import androidx.compose.foundation.focusGroup
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.size
 import androidx.compose.ui.platform.testTag
 import androidx.compose.foundation.background
@@ -310,7 +313,7 @@ fun PlaylistsScreen(vm: AppViewModel) {
 
     Row(Modifier.fillMaxSize().padding(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 12.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
         // 1. The list
-        LazyColumn(Modifier.width(220.dp).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        LazyColumn(Modifier.width(220.dp).fillMaxHeight().staysInSection(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             item { Text("Playlists", color = C.Text, fontSize = 22.sp, fontWeight = FontWeight.Bold) }
             item { Label("Up/Down to choose · Right for options", size = 12.sp, modifier = Modifier.padding(bottom = 4.dp)) }
             item(key = "add") {
@@ -344,7 +347,7 @@ fun PlaylistsScreen(vm: AppViewModel) {
 
         // 2. Actions and switches for the chosen playlist
         if (selP != null) {
-            LazyColumn(Modifier.width(250.dp).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            LazyColumn(Modifier.width(250.dp).fillMaxHeight().staysInSection(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 item {
                     Column(Modifier.padding(bottom = 4.dp)) {
                         Label(selP.name, size = 17.sp, color = C.Text, weight = FontWeight.Bold, lines = 2)
@@ -541,6 +544,16 @@ private val ZONES = listOf(
 
 private data class SettingsSection(val id: String, val title: String, val icon: androidx.compose.ui.graphics.vector.ImageVector)
 
+@OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
+private fun Modifier.staysInSection(): Modifier = this
+    .focusProperties {
+        exit = { dir ->
+            if (dir == androidx.compose.ui.focus.FocusDirection.Up || dir == androidx.compose.ui.focus.FocusDirection.Down) FocusRequester.Cancel
+            else FocusRequester.Default
+        }
+    }
+    .focusGroup()
+
 private val SECTIONS = listOf(
     SettingsSection("playlists", "Playlists", NavIcons.Playlists),
     SettingsSection("channels", "List Editor", NavIcons.Manage),
@@ -568,7 +581,10 @@ fun SettingsScreen(vm: AppViewModel) {
     val listWidth by androidx.compose.animation.core.animateDpAsState(if (compact) 64.dp else 230.dp, label = "settingsNav")
     Row(Modifier.fillMaxSize()) {
         Column(
-            Modifier.width(listWidth).fillMaxHeight().background(C.Bg).padding(if (compact) 6.dp else 10.dp)
+            Modifier.width(listWidth).fillMaxHeight().background(C.Bg)
+                // More sections than fit on a TV screen: the list scrolls to keep the highlighted one in view.
+                .verticalScroll(androidx.compose.foundation.rememberScrollState())
+                .padding(if (compact) 6.dp else 10.dp)
                 .onFocusChanged { if (it.hasFocus) compact = false },
             verticalArrangement = Arrangement.spacedBy(3.dp),
         ) {
@@ -577,7 +593,7 @@ fun SettingsScreen(vm: AppViewModel) {
             SECTIONS.forEach { sec ->
                 val on = sec.id == section
                 Focusable(
-                    modifier = Modifier.fillMaxWidth().height(44.dp).then(if (sec == SECTIONS.first()) Modifier.entryFocus(vm, Screen.SETTINGS) else Modifier),
+                    modifier = Modifier.fillMaxWidth().height(42.dp).then(if (sec == SECTIONS.first()) Modifier.entryFocus(vm, Screen.SETTINGS) else Modifier),
                     color = if (on) C.Surface2 else androidx.compose.ui.graphics.Color.Transparent,
                     onFocus = { vm.settingsSection = sec.id },
                     onClick = { vm.settingsSection = sec.id },
@@ -590,7 +606,9 @@ fun SettingsScreen(vm: AppViewModel) {
                 }
             }
         }
-        Column(Modifier.weight(1f).fillMaxHeight().onFocusChanged { if (it.hasFocus) compact = true }) {
+        // Up/Down never leave the section you're in: at the top or bottom of its options the highlight stays put
+        // (only Left goes back to the list of sections).
+        Column(Modifier.weight(1f).fillMaxHeight().onFocusChanged { if (it.hasFocus) compact = true }.staysInSection()) {
             when (section) {
                 "playlists" -> PlaylistsScreen(vm)
                 "channels" -> ListEditor(vm)
