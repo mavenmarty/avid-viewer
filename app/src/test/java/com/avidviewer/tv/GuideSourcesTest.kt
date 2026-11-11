@@ -71,7 +71,8 @@ class GuideSourcesTest {
         val until = System.currentTimeMillis() + timeoutMs
         while (!ok()) {
             if (System.currentTimeMillis() > until) throw AssertionError("Timed out waiting for: $what")
-            shadowOf(android.os.Looper.getMainLooper()).idle()
+            // Move the test clock too, so short waits in the app (like the 2.5 s before re-downloading) pass.
+            shadowOf(android.os.Looper.getMainLooper()).idleFor(java.time.Duration.ofMillis(100))
             Thread.sleep(25)
         }
     }

@@ -420,7 +420,7 @@ class UsabilityTest {
         val key = vm.channelsIn("KIDS")[1].key
         rule.runOnIdle { vm.listPickerKey = key }
         settle()
-        rule.onAllNodesWithText("Kids night", substring = true).onFirst().performClick()
+        rule.onAllNodesWithText("＋  Kids night", substring = true).onFirst().performClick() // the row in the picker, not the category list behind it
         settle()
         assertEquals("the picker closes once a list is chosen", null, vm.listPickerKey)
         assertTrue(vm.listsFor(key).contains("Kids night"))

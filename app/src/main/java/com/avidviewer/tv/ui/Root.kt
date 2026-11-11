@@ -1,5 +1,7 @@
 package com.avidviewer.tv.ui
 
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.key.KeyEventType
@@ -188,15 +190,17 @@ private fun androidx.compose.foundation.layout.BoxScope.ReorderHelp(vm: AppViewM
         ?: vm.movingChannel?.let { k -> vm.channel(k)?.let { "channel “${vm.channelName(it)}”" } }
         ?: vm.vodMovingCat?.let { (k, c) -> "category “${vm.vodCatName(k, c)}”" }
         ?: return
+    // Sits over the preview window and title area at the top, so the list being re-ordered stays in view.
     androidx.compose.foundation.layout.Column(
-        Modifier.align(androidx.compose.ui.Alignment.BottomCenter).padding(bottom = 18.dp)
-            .clip(androidx.compose.foundation.shape.RoundedCornerShape(14.dp)).background(C.Surface2)
-            .border(1.dp, C.AccentFocus, androidx.compose.foundation.shape.RoundedCornerShape(14.dp))
-            .padding(horizontal = 20.dp, vertical = 12.dp),
-        verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(4.dp),
+        Modifier.align(androidx.compose.ui.Alignment.TopEnd).padding(top = 14.dp, end = 16.dp)
+            .widthIn(max = 560.dp).heightIn(max = 132.dp)
+            .clip(androidx.compose.foundation.shape.RoundedCornerShape(12.dp)).background(C.Surface2)
+            .border(1.dp, C.AccentFocus, androidx.compose.foundation.shape.RoundedCornerShape(12.dp))
+            .padding(horizontal = 16.dp, vertical = 10.dp),
+        verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(3.dp),
     ) {
-        Text("Re-ordering the $what", color = C.Text, fontSize = 15.sp, fontWeight = FontWeight.Bold)
-        Text("▲ ▼  Move up or down (hold to move faster)     ◀  Move to the top     ▶  Move to the bottom", color = C.Soft, fontSize = 13.sp)
-        Text("OK or Back  Done — the new order is saved", color = C.Accent, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+        Text("Re-ordering the $what", color = C.Text, fontSize = 14.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+        Text("▲ ▼  Move (hold = faster)   ◀  To the top   ▶  To the bottom", color = C.Soft, fontSize = 12.sp)
+        Text("OK or Back  Done — the new order is saved", color = C.Accent, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
     }
 }
