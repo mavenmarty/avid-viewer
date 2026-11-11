@@ -175,21 +175,31 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** Search boxes on the TV Guide, Movies and Series screens (applied when OK/Search is pressed). */
     var guideQuery by mutableStateOf("")
     var vodQuery by mutableStateOf(mapOf("movie" to "", "series" to ""))
-    var update by mutableStateOf<Updater.Release?>(null); private set
+    var update by mutableStateOf<Updater.Release?>(null); internal set
     var updateStatus by mutableStateOf<String?>(null); private set
     var updateBusy by mutableStateOf(false); private set
     /** The downloaded update, when the installer needs a second way in ("Open installer"). */
     var updateFile by mutableStateOf<java.io.File?>(null); private set
     private var installAnswered = false
     var updatePromptDismissed by mutableStateOf(false)
+    /**
+     * The update dialog may open by itself only if the new version was found before the first remote
+     * button press after launch. Found later, it waits: the menu shows "Update …" and Settings › Updates has it.
+     */
+    var updatePromptAllowed by mutableStateOf(false); private set
     val installed: Pair<Long, String> = runCatching { Updater.installedVersion(app) }.getOrDefault(0L to "")
     var selectedEvent by mutableStateOf<String?>(null)
     private var sportsPlayCat: String? = null
     private var scoreCache: Map<String, List<Scores.Game>> = emptyMap()
-    /** Live channels + guide of playlists other than the active one, loaded only when needed. */
+    /**
+     * Other playlists' channels that are in ★ Favorites or a list, with their guide: only those channels,
+     * never whole playlists, so memory stays small however many playlists there are.
+     */
     private val otherLive = HashMap<String, Pair<List<Channel>, Map<String, List<Program>>>>()
-    /** Movies & series of playlists other than the VOD source, loaded only for search. */
+    /** Kept for call sites that drop a playlist's cache; nothing is cached here any more. */
     private val otherVod = HashMap<String, List<VodItem>>()
+    /** Other playlists' channels and guides while the TV Guide's search box has a query; dropped when it's cleared. */
+    private var searchLive: Map<String, Pair<List<Channel>, Map<String, List<Program>>>> = emptyMap()
     /** Which playlist [vod] currently holds (null = not loaded yet; VOD loads only when a VOD screen needs it). */
     private var vodLoadedFor: String? = null
     var vodLoading by mutableStateOf(false); private set
@@ -385,6 +395,36 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     var crashNoticeSeen by mutableStateOf(false)
 
     fun clearCrash() { com.avidviewer.tv.data.CrashLog.clear(getApplication()); lastCrash = null }
+
+    /** Live channels of every playlist with live TV on, for the TV Guide's search box. */
+    var searchPool by mutableStateOf<List<Channel>>(emptyList()); private set
+    /** Bumped when other playlists' favorites finish loading, so the guide redraws. */
+    var favDataTick by mutableStateOf(0); private set
+    // Declared before init: startup code below already asks for these (a later declaration
+    // would still be null when the saved channels load quickly).
+    // ---- derived lists, computed once per data change (screens ask for them on every highlight move) ----
+    /** Remembers one value until any of its inputs is replaced by a different object. */
+    private class Memo<V> {
+        private var inputs: Array<out Any?>? = null
+        private var value: Any? = null
+        @Suppress("UNCHECKED_CAST")
+        @Synchronized fun get(vararg now: Any?, compute: () -> V): V {
+            val last = inputs
+            // Same object, or an equal string/number (those are often new instances with the same value).
+            fun same(a: Any?, b: Any?) = a === b || ((a is String || a is Number) && a == b)
+            if (last != null && last.size == now.size && last.indices.all { same(last[it], now[it]) }) return value as V
+            val v = compute(); inputs = now; value = v
+            return v
+        }
+    }
+    private val groupsMemo = Memo<List<GroupInfo>>()
+    private val groupsAllMemo = Memo<List<GroupInfo>>()
+    private val numbersMemo = Memo<Map<String, Int>>()
+    private val channelIndexMemo = Memo<Map<String, Channel>>()
+    private val channelsInMemo = Memo<HashMap<String, List<Channel>>>()
+    private val vodOfMemo = HashMap<String, Memo<List<VodItem>>>()
+    private val vodCatsMemo = HashMap<String, Memo<List<Pair<String, Int>>>>()
+    private val vodItemsMemo = HashMap<String, Memo<List<VodItem>>>()
 
     init {
         if (prefs.clearCacheOnExit) store.clearCache() // catches exits Android didn't report
@@ -822,10 +862,13 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         val place = prefs.placeName
         if (place.isBlank()) { allSuggestions = emptyList(); return }
         viewModelScope.launch {
-            val data = livePlaylists.map { p -> p to liveFor(p).first }
-            allSuggestions = withContext(Dispatchers.Default) {
-                LocalSuggest.find(data, place, { raw -> groupName(raw) })
+            // One playlist at a time, so only one channel list is in memory.
+            val found = ArrayList<Suggestion>()
+            for (p in livePlaylists) {
+                val chs = liveFor(p).first
+                found.addAll(withContext(Dispatchers.Default) { LocalSuggest.find(listOf(p to chs), place, { raw -> groupName(raw) }) })
             }
+            allSuggestions = found.take(40)
             favDataTick++
         }
     }
@@ -1134,15 +1177,19 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    /** Live channels of every playlist with live TV on, for the TV Guide's search box. */
-    var searchPool by mutableStateOf<List<Channel>>(emptyList()); private set
 
     fun loadSearchPool() {
         viewModelScope.launch {
-            searchPool = livePlaylists.flatMap { liveFor(it).first }
+            val m = HashMap<String, Pair<List<Channel>, Map<String, List<Program>>>>()
+            for (p in livePlaylists) if (p.id != activePlaylist()?.id) m[p.id] = liveFor(p)
+            searchLive = m
+            searchPool = m.values.flatMap { it.first }
             favDataTick++
         }
     }
+
+    /** The TV Guide's search ended: let go of the other playlists' channels and guides. */
+    fun dropSearchPool() { searchLive = emptyMap(); searchPool = emptyList() }
 
     /** Tunes a channel from any playlist: the guide moves to that playlist and category, then previews it. */
     fun tuneAnywhere(key: String) {
@@ -1177,8 +1224,15 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     // ---------------- prefs ----------------
     fun updatePrefs(f: (Prefs) -> Prefs) {
+        val before = prefs
         prefs = f(prefs)
         store.savePrefs(prefs)
+        if (before.favorites !== prefs.favorites || before.lists !== prefs.lists) {
+            // A channel from another playlist was added to a list: reload that playlist's small cache.
+            val added = listedKeys(prefs) - listedKeys(before)
+            val stale = added.map { it.substringBefore(':') }.filter { it in otherLive }.toSet()
+            if (stale.isNotEmpty()) { stale.forEach { otherLive.remove(it) }; ensureFavoriteData() }
+        }
     }
 
     // ---------------- groups & channels ----------------
@@ -1189,7 +1243,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
     fun channelName(c: Channel) = prefs.channelNames[c.key] ?: c.name
 
-    fun groups(includeHidden: Boolean = false): List<GroupInfo> {
+    fun groups(includeHidden: Boolean = false): List<GroupInfo> =
+        (if (includeHidden) groupsAllMemo else groupsMemo).get(channels, prefs, activePlaylist()?.id) { computeGroups(includeHidden) }
+
+    private fun computeGroups(includeHidden: Boolean): List<GroupInfo> {
         val counts = LinkedHashMap<String, Int>()
         channels.forEach { counts[it.group] = (counts[it.group] ?: 0) + 1 }
         val ordered = prefs.groupOrder.filter { it in counts } + counts.keys.filterNot { it in prefs.groupOrder }
@@ -1230,7 +1287,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         val p = playlists.firstOrNull { it.id == pid } ?: return emptyList()
         if (!p.liveOn) return emptyList()
         if (p.id == activePlaylist()?.id) return channels
-        return otherLive[p.id]?.first ?: withContext(Dispatchers.IO) { store.loadChannels(p.id) }.distinctBy { it.key }
+        return withContext(Dispatchers.IO) { store.loadChannels(p.id) }.distinctBy { it.key }
     }
 
     /** Categories of [chs] in the user's order: (name, channel count). */
@@ -1251,6 +1308,14 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     fun channelsIn(group: String?): List<Channel> {
         if (group == null) return emptyList()
+        val cache = channelsInMemo.get(channels, prefs, favDataTick, searchPool) { HashMap() }
+        synchronized(cache) { cache[group]?.let { return it } }
+        val list = computeChannelsIn(group)
+        synchronized(cache) { cache[group] = list }
+        return list
+    }
+
+    private fun computeChannelsIn(group: String): List<Channel> {
         if (isListGroup(group)) return listKeys(group).mapNotNull { channel(it) }
         val list = channels.filter { it.group == group && it.key !in prefs.hiddenChannels }
         val order = prefs.channelOrder[group] ?: return list
@@ -1261,16 +1326,14 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** Looks in the active playlist first, then in other playlists' saved channels (for combined Favorites). */
     fun channel(key: String?): Channel? {
         if (key == null) return null
-        channels.firstOrNull { it.key == key }?.let { return it }
+        channelIndexMemo.get(channels) { channels.associateBy { it.key } }[key]?.let { return it }
         val pid = key.substringBefore(':')
         if (livePlaylists.none { it.id == pid }) return null
-        return otherLive[pid]?.first?.firstOrNull { it.key == key }
+        return otherLive[pid]?.first?.firstOrNull { it.key == key } ?: searchLive[pid]?.first?.firstOrNull { it.key == key }
     }
 
     fun playlistName(c: Channel?): String = c?.let { ch -> playlists.firstOrNull { ch.key.startsWith(it.id + ":") }?.name } ?: ""
 
-    /** Bumped when other playlists' favorites finish loading, so the guide redraws. */
-    var favDataTick by mutableStateOf(0); private set
 
     /** Loads channels and guides of other playlists that hold favorites. */
     fun ensureFavoriteData() {
@@ -1278,13 +1341,15 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         val pids = (prefs.favorites + prefs.lists.flatMap { it.keys }).map { it.substringBefore(':') }.distinct().filter { it != active && !otherLive.containsKey(it) }
         if (pids.isEmpty()) return
         viewModelScope.launch {
-            pids.forEach { pid -> livePlaylists.firstOrNull { it.id == pid }?.let { liveFor(it) } }
+            pids.forEach { pid -> livePlaylists.firstOrNull { it.id == pid }?.let { liveFavorites(it) } }
             favDataTick++
         }
     }
 
     /** Channel numbers follow the user's group and channel order, skipping hidden groups. */
-    fun numbers(): Map<String, Int> {
+    fun numbers(): Map<String, Int> = numbersMemo.get(channels, prefs, activePlaylist()?.id) { computeNumbers() }
+
+    private fun computeNumbers(): Map<String, Int> {
         val m = HashMap<String, Int>()
         var n = 1
         groups().forEach { g -> channelsIn(g.raw).forEach { m[it.key] = n++ } }
@@ -1473,7 +1538,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             val out = ArrayList<Pair<Playlist, Channel>>()
             for (p in shownPlaylists) {
                 if (p.id == active || prefs.favorites.none { it.startsWith(p.id + ":") }) continue
-                val chs = liveFor(p).first.associateBy { it.key }
+                val chs = liveFavorites(p).first.associateBy { it.key }
                 prefs.favorites.filter { it.startsWith(p.id + ":") }.mapNotNull { chs[it] }.forEach { out.add(p to it) }
             }
             otherFavorites = out
@@ -1498,7 +1563,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun programs(c: Channel?): List<Program> {
         val id = c?.let { epgIdOf(it) } ?: return emptyList()
         val pid = c.key.substringBefore(':')
-        return if (pid == activePlaylist()?.id) guide[id] ?: emptyList() else otherLive[pid]?.second?.get(id) ?: emptyList()
+        return if (pid == activePlaylist()?.id) guide[id] ?: emptyList() else otherLive[pid]?.second?.get(id) ?: searchLive[pid]?.second?.get(id) ?: emptyList()
     }
 
     fun nowNext(c: Channel?): Pair<Program?, Program?> {
@@ -1701,6 +1766,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             val r = runCatching { withContext(Dispatchers.IO) { Updater.latest() } }
             r.onSuccess { rel ->
                 update = rel?.takeIf { it.versionCode > installed.first }
+                onUpdateFound()
                 updateStatus = when {
                     rel == null -> if (quiet) null else "Couldn't read the latest release."
                     update != null -> "Version ${rel.versionName} is available."
@@ -1708,6 +1774,11 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 }
             }.onFailure { if (!quiet) updateStatus = "Couldn't check for updates: ${it.message}" }
         }
+    }
+
+    /** Decides whether a found update may open its dialog now (never in the middle of browsing). */
+    internal fun onUpdateFound() {
+        updatePromptAllowed = update != null && lastKeyAt == 0L
     }
 
     /** Second way to install: Android's own install screen for the downloaded file. */
@@ -1829,11 +1900,30 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     // ---------------- search (all playlists) ----------------
     /** Live channels + guide of a playlist; nothing at all when its live TV is off. Never touches movies & series. */
+    /** A playlist's whole channel list and guide, read from its saved files and not kept (the active one is in memory). */
     private suspend fun liveFor(p: Playlist): Pair<List<Channel>, Map<String, List<Program>>> {
         if (!p.liveOn || !p.enabled) return emptyList<Channel>() to emptyMap()
         if (p.id == activePlaylist()?.id) return channels to guide
+        return withContext(Dispatchers.IO) { store.loadChannels(p.id).distinctBy { it.key } to store.loadGuide(p.id).first }
+    }
+
+    /** For tests: how many channels of each other playlist are held in memory. */
+    internal fun otherLiveSizes(): Map<String, Int> = otherLive.mapValues { it.value.first.size }
+
+    /** Keys in ★ Favorites or any list. */
+    private fun listedKeys(pr: Prefs = prefs): Set<String> = (pr.favorites + pr.lists.flatMap { it.keys }).toHashSet()
+
+    /** Another playlist's favorite/list channels and their guide, kept in memory (small). */
+    private suspend fun liveFavorites(p: Playlist): Pair<List<Channel>, Map<String, List<Program>>> {
+        if (!p.liveOn || !p.enabled) return emptyList<Channel>() to emptyMap()
+        if (p.id == activePlaylist()?.id) return channels to guide
         otherLive[p.id]?.let { return it }
-        val t = withContext(Dispatchers.IO) { store.loadChannels(p.id).distinctBy { it.key } to store.loadGuide(p.id).first }
+        val keys = listedKeys()
+        val t = withContext(Dispatchers.IO) {
+            val chs = store.loadChannels(p.id).filter { it.key in keys }.distinctBy { it.key }
+            val ids = chs.mapNotNull { epgIdOf(it) }.toHashSet()
+            chs to store.loadGuide(p.id).first.filterKeys { it in ids }
+        }
         otherLive[p.id] = t
         return t
     }
@@ -1842,10 +1932,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     private suspend fun vodFor(p: Playlist): List<VodItem> {
         if (!p.vodOn || !p.enabled) return emptyList()
         if (vodLoadedFor?.split(',')?.contains(p.id) == true) return vod.filter { it.playlistId == p.id }
-        otherVod[p.id]?.let { return it }
-        val v = withContext(Dispatchers.IO) { store.loadVod(p.id).distinctBy { it.key } }
-        otherVod[p.id] = v
-        return v
+        // Read for this search only; not kept.
+        return withContext(Dispatchers.IO) { store.loadVod(p.id).distinctBy { it.key } }
     }
 
     fun search(query: String) {
@@ -2075,7 +2163,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun isVodHidden(v: VodItem) = v.key in prefs.vodHiddenTitles || isVodCatHidden(v.kind, v.playlistId, v.category.ifBlank { "Other" })
 
     /** What the Movies / Series screens show: hidden titles and categories left out. */
-    fun vodOf(kind: String): List<VodItem> = vodAll(kind).filter { !isVodHidden(it) }
+    fun vodOf(kind: String): List<VodItem> = vodOfMemo.getOrPut(kind) { Memo() }.get(vod, prefs) { vodAll(kind).filter { !isVodHidden(it) } }
 
     fun vodCatName(kind: String, cat: String) = prefs.vodCatNames[vodKindKey(kind) + "|" + cat] ?: cat
 
@@ -2085,7 +2173,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         return ord.filter { it in names } + names.filterNot { it in ord }
     }
 
-    fun vodCategories(kind: String): List<Pair<String, Int>> {
+    fun vodCategories(kind: String): List<Pair<String, Int>> = vodCatsMemo.getOrPut(kind) { Memo() }.get(vod, prefs) { computeVodCategories(kind) }
+
+    private fun computeVodCategories(kind: String): List<Pair<String, Int>> {
         val counts = LinkedHashMap<String, Int>()
         vodOf(kind).forEach { counts[it.category.ifBlank { "Other" }] = (counts[it.category.ifBlank { "Other" }] ?: 0) + 1 }
         return orderVodCats(kind, counts.keys.toList()).map { it to (counts[it] ?: 0) }
@@ -2129,7 +2219,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun setVodTitlesHidden(keys: Collection<String>, hidden: Boolean) =
         updatePrefs { it.copy(vodHiddenTitles = if (hidden) it.vodHiddenTitles + keys else it.vodHiddenTitles - keys.toSet()) }
 
-    fun vodItems(kind: String): List<VodItem> {
+    fun vodItems(kind: String): List<VodItem> =
+        vodItemsMemo.getOrPut(kind) { Memo() }.get(vod, prefs, vodCategory[kind] ?: "All", resume) { computeVodItems(kind) }
+
+    private fun computeVodItems(kind: String): List<VodItem> {
         val all = vodOf(kind)
         return when (val c = vodCategory[kind] ?: "All") {
             "All" -> all

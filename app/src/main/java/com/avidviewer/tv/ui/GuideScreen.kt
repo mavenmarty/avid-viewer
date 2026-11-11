@@ -84,7 +84,10 @@ fun GuideScreen(vm: AppViewModel) {
     // The time the highlight is on. Up/Down lands on the program airing at this time in the next row,
     // whatever the run times are; it only changes when you move left or right.
     var anchor by remember { mutableStateOf(vm.now) }
-    val progFocus = remember(list.size, vm.selectedGroup) { List(list.size) { FocusRequester() } }
+    // Focus handles per channel, made only for rows that are actually shown (an 8,000-channel category
+    // used to allocate 16,000 of them up front).
+    val progFocusMap = remember(vm.selectedGroup) { HashMap<String, FocusRequester>() }
+    fun progFr(i: Int): FocusRequester? = list.getOrNull(i)?.let { progFocusMap.getOrPut(it.key) { FocusRequester() } }
     var pendingProg by remember { mutableStateOf<Int?>(null) }
     val listState = remember(vm.selectedGroup) {
         val (g, i, o) = vm.guideScroll
@@ -95,7 +98,8 @@ fun GuideScreen(vm: AppViewModel) {
             .collect { (i, o) -> vm.guideScroll = Triple(vm.selectedGroup, i, o) }
     }
     val scope = rememberCoroutineScope()
-    val rowFocus = remember(list.size, vm.selectedGroup) { List(list.size) { FocusRequester() } }
+    val rowFocusMap = remember(vm.selectedGroup) { HashMap<String, FocusRequester>() }
+    fun rowFr(i: Int): FocusRequester? = list.getOrNull(i)?.let { rowFocusMap.getOrPut(it.key) { FocusRequester() } }
     var pendingFocus by remember { mutableStateOf<Int?>(null) }
 
     // Scroll to and focus the current channel (at startup and when returning from full screen).
@@ -134,7 +138,7 @@ fun GuideScreen(vm: AppViewModel) {
             // Done once the highlight has stayed there for a few frames (something else may grab it right after).
             if (focusedKey == want) { if (++held >= 12) break; continue }
             held = 0
-            val r = runCatching { rowFocus.getOrNull(i)?.requestFocus() }
+            val r = runCatching { rowFr(i)?.requestFocus() }
             if (frame % 20 == 0) vm.trail("f$frame fk=$focusedKey ${r.exceptionOrNull()?.javaClass?.simpleName ?: "ok"}")
         }
         vm.trail("end fk=$focusedKey")
@@ -151,7 +155,7 @@ fun GuideScreen(vm: AppViewModel) {
         for (attempt in 0 until 15) {
             delay(30)
             if (movingFocused) break
-            runCatching { rowFocus[movingIdx].requestFocus() }
+            runCatching { rowFr(movingIdx)?.requestFocus() }
         }
     }
     LaunchedEffect(pendingProg, slots) {
@@ -159,7 +163,7 @@ fun GuideScreen(vm: AppViewModel) {
         // Retry for a few frames: the row may still be coming on screen after a scroll.
         for (frame in 0 until 30) {
             androidx.compose.runtime.withFrameNanos { }
-            if (runCatching { progFocus[i].requestFocus() }.isSuccess && frame > 1) break
+            if (runCatching { progFr(i)!!.requestFocus() }.isSuccess && frame > 1) break
         }
         pendingProg = null
     }
@@ -269,7 +273,7 @@ fun GuideScreen(vm: AppViewModel) {
                         // Channel name: a fixed-width cell with up to two lines (no widening while highlighted).
                         val isMoving = c.key == vm.movingChannel
                         Focusable(
-                            modifier = Modifier.width(CH_COL.dp).fillMaxHeight().focusRequester(rowFocus[idx])
+                            modifier = Modifier.width(CH_COL.dp).fillMaxHeight().focusRequester(rowFr(idx)!!)
                                 .then(if (idx == 0) Modifier.focusProperties { up = previewFr } else Modifier)
                                 .then(if (isMoving) Modifier.border(2.dp, C.AccentFocus, RoundedCornerShape(8.dp)) else Modifier)
                                 .onFocusChanged {
@@ -305,7 +309,7 @@ fun GuideScreen(vm: AppViewModel) {
                         val progs = vm.programs(c).filter { it.end > winStart && it.start < winEnd }
                         if (progs.isEmpty()) {
                             Focusable(
-                                modifier = Modifier.width((WINDOW_MIN * DP_PER_MIN).dp).fillMaxHeight().focusRequester(progFocus[idx])
+                                modifier = Modifier.width((WINDOW_MIN * DP_PER_MIN).dp).fillMaxHeight().focusRequester(progFr(idx)!!)
                                     .onPreviewKeyEvent { e ->
                                         if (e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
                                         when (e.key) {
@@ -330,7 +334,7 @@ fun GuideScreen(vm: AppViewModel) {
                                 val isNow = vm.now >= p.start && vm.now < p.end
                                 Focusable(
                                     modifier = Modifier.width(((((b - a) / 60000f) * DP_PER_MIN).dp - 3.dp).coerceAtLeast(4.dp)).fillMaxHeight()
-                                        .then(if (p === target) Modifier.focusRequester(progFocus[idx]) else Modifier)
+                                        .then(if (p === target) Modifier.focusRequester(progFr(idx)!!) else Modifier)
                                         .onPreviewKeyEvent { e ->
                                             if (e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
                                             when (e.key) {
@@ -518,6 +522,8 @@ fun OptionRow(label: String, onClick: () -> Unit) {
 private fun GuideSearchResults(vm: AppViewModel, modifier: Modifier) {
     val q = vm.guideQuery.lowercase()
     LaunchedEffect(Unit) { vm.loadSearchPool() }
+    // Search over: let go of the other playlists' channels and guides.
+    androidx.compose.runtime.DisposableEffect(Unit) { onDispose { vm.dropSearchPool() } }
     val pool = remember(vm.searchPool, vm.channels, vm.favDataTick) { (vm.searchPool + vm.channels).distinctBy { it.key }.filter { it.key !in vm.prefs.hiddenChannels } }
     val chHits = remember(q, pool) { pool.filter { vm.channelName(it).lowercase().contains(q) }.take(60) }
     val progHits = remember(q, pool, vm.guide) {

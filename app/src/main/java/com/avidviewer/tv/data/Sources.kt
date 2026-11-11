@@ -72,27 +72,55 @@ object Xtream {
             val c = cats.getJSONObject(i)
             catNames[c.optString("category_id")] = c.optString("category_name", "Uncategorized")
         }
-        val streams = JSONArray(Net.text(api(p, "get_live_streams")))
         val ext = if (format == "m3u8") "m3u8" else "ts"
         val base = p.xtreamBase()
         val u = p.username; val pw = p.password
-        val out = ArrayList<Channel>(streams.length())
-        for (i in 0 until streams.length()) {
-            val s = streams.getJSONObject(i)
-            val id = s.optString("stream_id")
-            if (id.isBlank()) continue
-            out.add(
-                Channel(
-                    key = "${p.id}:$id",
-                    name = s.optString("name", "Channel $id").trim(),
-                    group = catNames[s.optString("category_id")] ?: "Uncategorized",
-                    logo = s.optString("stream_icon").ifBlank { null },
-                    url = "$base/live/$u/$pw/$id.$ext",
-                    epgId = s.optString("epg_channel_id").ifBlank { null },
-                )
-            )
+        // Read the list one channel at a time: a big provider's answer is tens of MB, and holding it
+        // as one string plus a JSON tree is what runs a Fire TV Stick out of memory.
+        return Net.open(api(p, "get_live_streams")) { input ->
+            val out = ArrayList<Channel>()
+            android.util.JsonReader(java.io.InputStreamReader(input, Charsets.UTF_8)).use { r ->
+                if (r.peek() != android.util.JsonToken.BEGIN_ARRAY) { r.skipValue(); return@use } // empty or an error object
+                r.beginArray()
+                while (r.hasNext()) {
+                    if (r.peek() != android.util.JsonToken.BEGIN_OBJECT) { r.skipValue(); continue }
+                    var id = ""; var name = ""; var cat = ""; var icon = ""; var epg = ""
+                    r.beginObject()
+                    while (r.hasNext()) {
+                        when (r.nextName()) {
+                            "stream_id" -> id = r.text()
+                            "name" -> name = r.text()
+                            "category_id" -> cat = r.text()
+                            "stream_icon" -> icon = r.text()
+                            "epg_channel_id" -> epg = r.text()
+                            else -> r.skipValue()
+                        }
+                    }
+                    r.endObject()
+                    if (id.isBlank()) continue
+                    out.add(
+                        Channel(
+                            key = "${p.id}:$id",
+                            name = name.trim().ifBlank { "Channel $id" },
+                            group = catNames[cat] ?: "Uncategorized",
+                            logo = icon.ifBlank { null },
+                            url = "$base/live/$u/$pw/$id.$ext",
+                            epgId = epg.ifBlank { null },
+                        )
+                    )
+                }
+                r.endArray()
+            }
+            out
         }
-        return out
+    }
+
+    /** A JSON value as text: numbers and booleans as written, null as "". */
+    private fun android.util.JsonReader.text(): String = when (peek()) {
+        android.util.JsonToken.NULL -> { nextNull(); "" }
+        android.util.JsonToken.STRING, android.util.JsonToken.NUMBER -> nextString()
+        android.util.JsonToken.BOOLEAN -> nextBoolean().toString()
+        else -> { skipValue(); "" }
     }
 }
 

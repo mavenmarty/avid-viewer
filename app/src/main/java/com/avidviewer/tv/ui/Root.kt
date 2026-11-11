@@ -106,7 +106,8 @@ fun AppRoot(vm: AppViewModel) {
         }
         // New version found: ask before updating (never interrupts full-screen viewing).
         val rel = vm.update
-        if (rel != null && !vm.updatePromptDismissed && vm.screen != Screen.PLAYER) {
+        // Opens by itself only when found before the first button press (see updatePromptAllowed).
+        if (rel != null && vm.updatePromptAllowed && !vm.updatePromptDismissed && vm.screen != Screen.PLAYER) {
             androidx.compose.material3.AlertDialog(
                 onDismissRequest = { if (!vm.updateBusy) vm.updatePromptDismissed = true },
                 containerColor = C.Surface,
