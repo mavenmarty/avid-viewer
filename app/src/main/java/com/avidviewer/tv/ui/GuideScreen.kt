@@ -70,7 +70,9 @@ fun GuideScreen(vm: AppViewModel) {
     // The visible 2.5-hour window starts at the current half hour plus [slots] × 30 minutes (up to 12 hours ahead).
     val base = (vm.now / half) * half
     val maxSlots = (AHEAD_MIN - WINDOW_MIN) / 30 + 1
-    var slots by remember { mutableStateOf(0) }
+    // The window and the highlighted time are kept in the navigation store, so leaving the guide
+    // (full screen, another screen) comes back to the same time (NAV-05).
+    var slots by remember { mutableStateOf(((vm.nav.guideWindowStart - base) / half).toInt().coerceAtLeast(0)) }
     slots = slots.coerceIn(0, maxSlots)
     val winStart = base + slots * half
     val winEnd = winStart + WINDOW_MIN * 60 * 1000L
@@ -83,24 +85,37 @@ fun GuideScreen(vm: AppViewModel) {
 
     // The time the highlight is on. Up/Down lands on the program airing at this time in the next row,
     // whatever the run times are; it only changes when you move left or right.
-    var anchor by remember { mutableStateOf(vm.now) }
+    var anchor by remember { mutableStateOf(vm.nav.guideAnchor.takeIf { it >= base } ?: vm.now) }
+    LaunchedEffect(slots, anchor) { vm.nav.guideWindowStart = winStart; vm.nav.guideAnchor = anchor }
+    val path = vm.guidePath(vm.selectedGroup)
     // Focus handles per channel, made only for rows that are actually shown (an 8,000-channel category
     // used to allocate 16,000 of them up front).
     val progFocusMap = remember(vm.selectedGroup) { HashMap<String, FocusRequester>() }
     fun progFr(i: Int): FocusRequester? = list.getOrNull(i)?.let { progFocusMap.getOrPut(it.key) { FocusRequester() } }
     var pendingProg by remember { mutableStateOf<Int?>(null) }
-    val listState = remember(vm.selectedGroup) {
-        val (g, i, o) = vm.guideScroll
-        if (g == vm.selectedGroup) androidx.compose.foundation.lazy.LazyListState(i, o) else androidx.compose.foundation.lazy.LazyListState()
+    // Each category keeps its scroll by the first visible channel's key (a changed list doesn't shift it).
+    val listState = remember(path) {
+        val spot = vm.nav[path]
+        val i = spot?.let { sp -> NavStore.find(list.size, { list[it].key }, sp.firstKey, sp.firstIndex) } ?: -1
+        if (i >= 0) androidx.compose.foundation.lazy.LazyListState(i, spot!!.offset) else androidx.compose.foundation.lazy.LazyListState()
     }
+    val listNow by androidx.compose.runtime.rememberUpdatedState(list)
     LaunchedEffect(listState) {
         androidx.compose.runtime.snapshotFlow { listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset }
-            .collect { (i, o) -> vm.guideScroll = Triple(vm.selectedGroup, i, o) }
+            .collect { (i, o) -> vm.nav.scrolled(path, listNow.getOrNull(i)?.key, i, o) }
     }
+    /** Where the remembered channel of this category is now (-1 = nothing remembered). */
+    fun rememberedRow(): Int = vm.nav[path]?.let { sp -> NavStore.find(list.size, { list[it].key }, sp.key, sp.index) } ?: -1
     val scope = rememberCoroutineScope()
     val rowFocusMap = remember(vm.selectedGroup) { HashMap<String, FocusRequester>() }
     fun rowFr(i: Int): FocusRequester? = list.getOrNull(i)?.let { rowFocusMap.getOrPut(it.key) { FocusRequester() } }
     var pendingFocus by remember { mutableStateOf<Int?>(null) }
+
+    /** Scrolls only if row [i] isn't already comfortably on screen (a restored scroll stays as it was). */
+    fun bringIntoView(i: Int) {
+        val vis = listState.layoutInfo.visibleItemsInfo.map { it.index }
+        if (vis.isEmpty() || i <= vis.first() || i >= vis.last()) scope.launch { listState.scrollToItem((i - 2).coerceAtLeast(0)) }
+    }
 
     // Scroll to and focus the current channel (at startup and when returning from full screen).
     LaunchedEffect(vm.guideFocusTick, list.isNotEmpty()) {
@@ -114,13 +129,17 @@ fun GuideScreen(vm: AppViewModel) {
         when (mode) {
             // Newly chosen category: start at the top.
             GuideFocus.TOP -> { scope.launch { listState.scrollToItem(0) }; pendingFocus = 0 }
-            // Same category again: stay where the list was.
-            GuideFocus.KEEP -> pendingFocus = listState.firstVisibleItemIndex.coerceIn(0, list.size - 1)
-            // Startup or back from full screen: the channel that was playing.
+            // A category seen before: the channel it was on (or its nearest neighbour if that one is gone).
+            GuideFocus.KEEP -> {
+                val idx = rememberedRow().let { if (it < 0) listState.firstVisibleItemIndex.coerceIn(0, list.size - 1) else it }
+                bringIntoView(idx)
+                pendingFocus = idx
+            }
+            // Startup or back from full screen: the channel that was playing, on the programme that was highlighted.
             GuideFocus.CURRENT -> {
                 val idx = list.indexOfFirst { it.key == vm.currentKey }.let { if (it < 0) 0 else it }
-                scope.launch { listState.scrollToItem((idx - 2).coerceAtLeast(0)) }
-                pendingFocus = idx
+                bringIntoView(idx)
+                if (vm.nav.guideOnProgram && vm.nav[path]?.key == vm.currentKey) pendingProg = idx else pendingFocus = idx
             }
         }
     }
@@ -278,7 +297,8 @@ fun GuideScreen(vm: AppViewModel) {
                                 .then(if (isMoving) Modifier.border(2.dp, C.AccentFocus, RoundedCornerShape(8.dp)) else Modifier)
                                 .onFocusChanged {
                                     if (isMoving) movingFocused = it.isFocused
-                                    if (it.isFocused) { focusedRow = idx; focusedKey = c.key } else if (focusedKey == c.key) { focusedRow = -1; focusedKey = null }
+                                    if (it.isFocused) { focusedRow = idx; focusedKey = c.key; vm.nav.focused(path, c.key, idx); vm.nav.guideOnProgram = false }
+                                    else if (focusedKey == c.key) { focusedRow = -1; focusedKey = null }
                                 }
                                 .onPreviewKeyEvent { e ->
                                     if (isMoving) reorderKeys(e, onMove = { vm.moveChannelBy(c.key, it) }, onTop = { vm.moveChannelTo(c.key, 0) },
@@ -319,7 +339,7 @@ fun GuideScreen(vm: AppViewModel) {
                                         }
                                     },
                                 color = C.Surface.copy(alpha = 0.6f),
-                                onFocus = { focusProg = c.key to null },
+                                onFocus = { focusProg = c.key to null; vm.nav.focused(path, c.key, idx); vm.nav.guideOnProgram = true },
                                 onClick = { vm.selectChannel(c.key, PlayContext.GROUP) },
                             ) { Label("No guide information", size = 12.sp, modifier = Modifier.padding(horizontal = 10.dp)) }
                         } else {
@@ -351,6 +371,7 @@ fun GuideScreen(vm: AppViewModel) {
                                     focusedColor = C.Line,
                                     onFocus = {
                                         focusProg = c.key to p
+                                        vm.nav.focused(path, c.key, idx); vm.nav.guideOnProgram = true
                                         // Keep the remembered time if it falls in this program; otherwise it moves here.
                                         if (anchor < maxOf(p.start, winStart) || anchor >= minOf(p.end, winEnd)) anchor = maxOf(p.start, winStart)
                                     },

@@ -118,14 +118,17 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     var guideFocusTick by mutableStateOf(0)
     /** What the guide does on the next [guideFocusTick]: jump to the top, keep its place, or find the current channel. */
     var guideFocusMode = GuideFocus.CURRENT
-    /** Scroll position of the guide list, remembered per category: (category, first item, offset). */
-    var guideScroll: Triple<String?, Int, Int> = Triple(null, 0, 0)
-    /** Scroll position of the Movies / Series grid per kind: kind → (category, first item, offset). */
-    val vodScroll = HashMap<String, Triple<String, Int, Int>>()
+    /** Where the highlight and scroll were in each guide category and Movies/Series category (by item key). */
+    val nav = NavStore()
+    /** The guide's place for a category of the playlist being watched. */
+    fun guidePath(group: String?) = "guide/${activePlaylist()?.id}/$group"
+    /** The Movies / Series grid's place for a category and search. */
+    fun vodPath(kind: String, category: String, query: String) = "vod/$kind/$category|$query"
+    /** Set when a title's page closes: the grid puts the highlight back on that title. */
+    var vodFocusBack by mutableStateOf(0); private set
 
-    /** Movies / Series category: a different category starts at the top; the same one keeps its place. */
+    /** Movies / Series category: each category keeps its own place (a new one starts at the top). */
     fun chooseVodCategory(kind: String, name: String) {
-        if ((vodCategory[kind] ?: "All") != name) vodScroll[kind] = Triple(name, 0, 0)
         vodCategory = vodCategory + (kind to name)
     }
     var selectedGroup by mutableStateOf<String?>(null)
@@ -2154,7 +2157,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             return
         }
         if (s == Screen.DISCOVER) { ensureVod(); openDiscover(); navMode = NavMode.COLLAPSED; return }
-        if (s == Screen.MOVIES || s == Screen.SERIES) { closeVodDetail(); ensureVod() }
+        if (s == Screen.MOVIES || s == Screen.SERIES) { closeVodDetail(returnFocus = false); ensureVod() }
         if (s == Screen.SPORTS) openSportsScreen() else {
             when (s) {
                 Screen.SETTINGS -> { settingsSection = "playlists"; screen = s }
@@ -2190,9 +2193,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             val same = raw == selectedGroup && pid == activePlaylist()?.id
             switchPlaylist(pid)
-            // A newly chosen category starts at its first channel; choosing the same one keeps the scroll position.
-            guideFocusMode = if (same) GuideFocus.KEEP else GuideFocus.TOP
-            if (!same) guideScroll = Triple(raw, 0, 0)
+            // A category seen before comes back on the channel it was on; a new one starts at its first channel.
+            guideFocusMode = if (same || nav.has(guidePath(raw))) GuideFocus.KEEP else GuideFocus.TOP
             selectedGroup = raw
             navMode = NavMode.GROUPS
             guideFocusTick++
@@ -2416,7 +2418,12 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    fun closeVodDetail() { vodDetail = null; vodInfo = null; detailEpisodes = null }
+    /** Closes a title's page; [returnFocus] puts the highlight back on its poster (not when leaving via the menu). */
+    fun closeVodDetail(returnFocus: Boolean = true) {
+        val had = vodDetail != null
+        vodDetail = null; vodInfo = null; detailEpisodes = null
+        if (had && returnFocus) vodFocusBack++
+    }
 
     fun playDetailEpisode(e: Episode, fromStart: Boolean = false) {
         val s = vodDetail ?: return

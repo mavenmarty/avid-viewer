@@ -493,6 +493,57 @@ class UsabilityTest {
         assertTrue("couldn't get to channel 60 (focus: ${focused()})", focused().contains("BIG Channel 60 with"))
     }
 
+    // ---------------------------------------------------------------- navigation store (audit work plan 2.1)
+
+    @Test
+    fun aCategorySeenBeforeComesBackOnTheSameChannelEvenAfterAChannelAboveIsHidden() {
+        goDeepInBig()
+        rule.runOnIdle { vm.chooseGroup(TestData.P1, "KIDS") }
+        waitFor("KIDS starts at its first channel (focus: ${focused()})") { focused().contains("KIDS Channel 1 with") }
+        rule.runOnIdle { vm.chooseGroup(TestData.P1, "BIG") }
+        waitFor("BIG comes back on channel 60, not the top (focus: ${focused()})") { focused().contains("BIG Channel 60 with") }
+        // Hide channels above it: the same channel keeps the highlight (positions are by key, not by index).
+        rule.runOnIdle { vm.setChannelsHidden(listOf("${TestData.P1}:big3", "${TestData.P1}:big4"), true) }
+        rule.runOnIdle { vm.chooseGroup(TestData.P1, "KIDS") }
+        waitFor("KIDS again (focus: ${focused()})") { focused().contains("KIDS Channel") }
+        rule.runOnIdle { vm.chooseGroup(TestData.P1, "BIG") }
+        waitFor("still channel 60 after hiding two above it (focus: ${focused()})") { focused().contains("BIG Channel 60 with") }
+    }
+
+    @Test
+    fun backFromFullScreenKeepsTheChosenTimeAndProgramme() {
+        rule.runOnIdle { vm.chooseGroup(TestData.P1, "NEWS") }
+        waitFor("NEWS") { focused().contains("NEWS Channel 1 with") }
+        press(listOf(Key.DirectionDown, Key.DirectionDown))
+        // Into the programmes, then far enough right that the guide's window moves on.
+        repeat(9) { press(listOf(Key.DirectionRight)) }
+        val programme = focused()
+        assertTrue("should be on a programme later in the day (focus: $programme)", programme.contains("Program") && vm.nav.guideWindowStart > (vm.now / (30 * 60_000L)) * (30 * 60_000L))
+        val window = vm.nav.guideWindowStart
+        press(listOf(Key.DirectionCenter)) // preview
+        press(listOf(Key.DirectionCenter)) // full screen
+        waitFor("full screen") { vm.screen == Screen.PLAYER }
+        press(listOf(Key.Back))
+        waitFor("back on the same programme, same time window (focus: ${focused()}, wanted $programme)") {
+            vm.screen == Screen.GUIDE && focused() == programme && vm.nav.guideWindowStart == window
+        }
+    }
+
+    @Test
+    fun backFromATitlePageReturnsToItsPoster() {
+        go(Screen.MOVIES)
+        waitFor("movies") { vm.vodOf("movie").isNotEmpty() }
+        rule.runOnIdle { vm.chooseVodCategory("movie", "Action") }
+        settle()
+        press(listOf(Key.DirectionRight, Key.DirectionDown, Key.DirectionRight))
+        val poster = focused()
+        assertTrue("should be on a poster (focus: $poster)", poster.contains("Action Movie"))
+        press(listOf(Key.DirectionCenter))
+        waitFor("the title's page") { vm.vodDetail != null }
+        press(listOf(Key.Back))
+        waitFor("back on the same poster (focus: ${focused()}, wanted $poster)") { vm.vodDetail == null && focused() == poster }
+    }
+
     @Test
     fun theMainMenuShowsAsIconsAtLaunchOnTheGuide() {
         settle()
