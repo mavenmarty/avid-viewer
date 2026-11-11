@@ -1021,15 +1021,12 @@ private fun EditorColumns(vm: AppViewModel, tab: LeTab, modifier: Modifier) {
         if (live) liveData = vm.playlists.filter { it.liveOn }.associate { it.id to vm.editorChannels(it.id) }
         else vm.ensureVod()
     }
-    val vodAll = if (live) emptyList() else vm.vodAll(kind)
     // Sections: one per playlist, with its categories.
     val sections: List<Pair<com.avidviewer.tv.data.Playlist, List<LeCat>>> = vm.playlists.map { p ->
         p to if (live) {
             liveData[p.id]?.let { chs -> vm.editorGroups(chs).map { (raw, n) -> LeCat("L|${p.id}|$raw", p.id, raw, vm.groupName(raw), n) } } ?: emptyList()
         } else {
-            val counts = LinkedHashMap<String, Int>()
-            vodAll.filter { it.playlistId == p.id }.forEach { val c = it.category.ifBlank { "Other" }; counts[c] = (counts[c] ?: 0) + 1 }
-            vm.orderVodCats(kind, counts.keys.toList()).map { LeCat(vm.vodCatKey(kind, p.id, it), p.id, it, vm.vodCatName(kind, it), counts[it] ?: 0) }
+            vm.vodEditorCategories(kind, p.id).map { (c, n) -> LeCat(vm.vodCatKey(kind, p.id, c), p.id, c, vm.vodCatName(kind, c), n) }
         }
     }
     fun hidden(c: LeCat) = if (live) vm.isGroupHidden(c.pid, c.raw) else c.key in vm.prefs.vodHiddenCats
@@ -1055,7 +1052,7 @@ private fun EditorColumns(vm: AppViewModel, tab: LeTab, modifier: Modifier) {
                 TvButton("Show $n", modifier = Modifier.testTag("le-cats-show")) { setHidden(allShown, false) }
                 TvButton("Hide $n", modifier = Modifier.testTag("le-cats-hide")) { setHidden(allShown, true) }
             }
-            if (!live && vm.vodLoading && vodAll.isEmpty()) Label("Loading movies and series…", size = 13.sp)
+            if (!live && vm.vodLoading && vm.vod.isEmpty()) Label("Loading movies and series…", size = 13.sp)
             LazyColumn(Modifier.weight(1f).testTag("le-cats"), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 filtered.forEach { (p, cats) ->
                     item(key = "h-" + p.id) {
@@ -1085,13 +1082,13 @@ private fun EditorColumns(vm: AppViewModel, tab: LeTab, modifier: Modifier) {
                 return@Column
             }
             val chs = if (live) vm.editorChannelsIn(liveData[sel.pid] ?: emptyList(), sel.raw) else emptyList()
-            val titles = if (live) emptyList() else vodAll.filter { it.playlistId == sel.pid && it.category.ifBlank { "Other" } == sel.raw }
+            val titles = if (live) emptyList() else remember(sel.key, vm.vodVersion) { vm.vodEditorTitles(kind, sel.pid, sel.raw) }
             val total = if (live) chs.size else titles.size
             val hiddenN = if (live) chs.count { it.key in vm.prefs.hiddenChannels } else titles.count { it.key in vm.prefs.vodHiddenTitles }
             Label(sel.name.uppercase() + " · $total" + (if (hiddenN > 0) " · $hiddenN hidden" else ""), size = 12.sp, weight = FontWeight.Bold, lines = 2)
             TvField(if (live) "Filter channels" else "Filter titles", itemQ, modifier = Modifier.fillMaxWidth()) { itemQ = it }
             val shownChs = chs.filter { itemQ.isBlank() || vm.channelName(it).contains(itemQ, ignoreCase = true) }
-            val shownTitles = titles.filter { itemQ.isBlank() || it.name.contains(itemQ, ignoreCase = true) }
+            val shownTitles = if (live || itemQ.isBlank()) titles else remember(sel.key, itemQ, vm.vodVersion) { vm.vodEditorTitles(kind, sel.pid, sel.raw, itemQ) }
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
                 val n = if (itemQ.isBlank()) "all" else "${if (live) shownChs.size else shownTitles.size}"
                 TvButton("Show $n", modifier = Modifier.testTag("le-items-show")) {

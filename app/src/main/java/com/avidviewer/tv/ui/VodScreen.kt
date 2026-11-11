@@ -82,7 +82,7 @@ fun VodScreen(vm: AppViewModel, kind: String) {
     val specials = listOf("All" to all.size, "Recently added" to -1, "Continue watching" to -1, "My List" to -1)
     val cats = vm.vodCategories(kind)
     val vq = (vm.vodQuery[kind] ?: "").trim()
-    val items = if (vq.isNotBlank()) vm.vodOf(kind).filter { it.name.contains(vq, ignoreCase = true) } else vm.vodItems(kind)
+    val items = if (vq.isNotBlank()) vm.vodSearch(kind, vq) else vm.vodItems(kind)
 
     val catState = androidx.compose.foundation.lazy.rememberLazyListState()
     val catWrap = rememberListWrap(catState)

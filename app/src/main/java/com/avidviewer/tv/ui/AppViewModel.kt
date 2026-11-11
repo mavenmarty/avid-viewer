@@ -18,6 +18,7 @@ import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import com.avidviewer.tv.data.Channel
+import com.avidviewer.tv.data.Catalog
 import com.avidviewer.tv.data.EpgSource
 import com.avidviewer.tv.data.GuideChannel
 import com.avidviewer.tv.data.ChannelList
@@ -91,6 +92,10 @@ data class PlaylistHits(val playlist: Playlist, val stations: List<Hit>, val pro
 @OptIn(UnstableApi::class)
 class AppViewModel(app: Application) : AndroidViewModel(app) {
     val store = Store(app)
+    /** Movies and series of every playlist, on the device; screens read pages from it. */
+    val catalog = com.avidviewer.tv.data.Catalog(app)
+    /** Bumped whenever the catalog's contents or hidden flags change, so lists are read again. */
+    var vodVersion by mutableStateOf(0); private set
 
     var playlists by mutableStateOf(store.loadPlaylists()); private set
     var prefs by mutableStateOf(store.loadPrefs()); private set
@@ -142,10 +147,6 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     var availableServices by mutableStateOf<List<WatchProvider>>(emptyList()); private set
     var tmdbStatus by mutableStateOf<String?>(null); private set
     private var discoverLoadedAt = HashMap<String, Long>()
-    private var vodIndexFor: List<VodItem>? = null
-    /** Provider titles by normalized name, for Discover's "On your provider" badge. Built in the background. */
-    private var vodIndex by mutableStateOf<Map<String, VodItem>>(emptyMap())
-    private var vodIndexJob: kotlinx.coroutines.Job? = null
     var vodCategory by mutableStateOf(mapOf("movie" to "All", "series" to "All"))
     /** The player is actually playing right now (false while buffering or paused); screens redraw when it changes. */
     var playing by mutableStateOf(false); private set
@@ -378,6 +379,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             }
             otherLive.clear(); otherVod.clear(); playlistGroups = emptyMap()
             vod = emptyList(); vodLoadedFor = null
+            withContext(Dispatchers.IO) { catalog.retainOnly(c.playlists.map { it.id }) }
+            vodVersion++
             // Point favorites, lists etc. at the right channels even if the provider's list has changed since the backup.
             placeRestoredRefs(c.refs)
             pendingRestore = null
@@ -425,6 +428,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     private val vodOfMemo = HashMap<String, Memo<List<VodItem>>>()
     private val vodCatsMemo = HashMap<String, Memo<List<Pair<String, Int>>>>()
     private val vodItemsMemo = HashMap<String, Memo<List<VodItem>>>()
+    private val vodAllMemo = HashMap<String, Memo<List<VodItem>>>()
+    private val matchCache = HashMap<String, VodItem?>()
+    private var matchCacheFor = -1
 
     init {
         if (prefs.clearCacheOnExit) store.clearCache() // catches exits Android didn't report
@@ -599,52 +605,69 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         if (!refresh && vodLoadedFor == sig) return
         vodLoadedFor = sig
         viewModelScope.launch {
-            val parts = LinkedHashMap<String, List<VodItem>>()
             for (p in pls) {
-                parts[p.id] = loadVodSource(p, refresh, sig)
+                loadVodSource(p, refresh, sig)
                 if (vodLoadedFor != sig) return@launch
-                vod = parts.values.flatten()
+                vod = allTitles(pls.map { it.id })
+                vodVersion++
             }
             vodLoading = false
         }
     }
 
+    /** Every title of these playlists (movies, episodes and series), read from the catalog a page at a time. */
+    private fun allTitles(pids: List<String>): List<VodItem> {
+        val a = com.avidviewer.tv.data.PagedTitles(catalog, com.avidviewer.tv.data.Catalog.Query("movie", pids, includeHidden = true))
+        val b = com.avidviewer.tv.data.PagedTitles(catalog, com.avidviewer.tv.data.Catalog.Query("series", pids, includeHidden = true))
+        return object : AbstractList<VodItem>(), RandomAccess {
+            override val size get() = a.size + b.size
+            override fun get(index: Int) = if (index < a.size) a[index] else b[index - a.size]
+        }
+    }
+
+    /** Hidden flag for a title being saved to the catalog. */
+    private fun vodHiddenNow(v: VodItem) = isVodHidden(v)
+
     /** Loads (and downloads when needed) one playlist's movies & series; returns them. */
-    private suspend fun loadVodSource(p: Playlist, refresh: Boolean, sig: String): List<VodItem> {
+    private suspend fun loadVodSource(p: Playlist, refresh: Boolean, sig: String) {
         vodLoading = true
-        val savedVod = withContext(Dispatchers.IO) { store.loadVod(p.id).distinctBy { it.key } }
-        if (vodLoadedFor != sig) return savedVod
-        var result = savedVod
+        // Titles saved by versions before the catalog database: move them in once.
+        var oldFormat = false
+        withContext(Dispatchers.IO) {
+            if (!catalog.has(p.id)) {
+                val saved = store.loadVod(p.id).distinctBy { it.key }
+                if (saved.isNotEmpty()) {
+                    oldFormat = saved.all { it.category.isBlank() }
+                    catalog.replace(p.id, saved.asSequence()) { vodHiddenNow(it) }
+                }
+                store.deleteVodFile(p.id)
+            }
+        }
+        if (vodLoadedFor != sig) return
+        val empty = withContext(Dispatchers.IO) { !catalog.has(p.id) }
         // An M3U playlist with live TV off: its movies come from the same file, so read it just for them.
-        if (!p.isXtream && (refresh || savedVod.isEmpty()) && !p.liveOn) {
+        if (!p.isXtream && (refresh || empty) && !p.liveOn) {
             status = "Loading movies from ${p.name}…"
             runCatching {
                 val m3uVod = ArrayList<VodItem>()
                 withContext(Dispatchers.IO) { M3u.channels(p, m3uVod) }; commitVod(p.id, m3uVod)
-                result = m3uVod.distinctBy { it.key }
                 status = "Loaded ${m3uVod.size} movies and series."
             }.onFailure { vodError = "Movies couldn't load: ${it.message}" }
         }
         // Re-download when asked, when nothing is saved, or when the saved list predates categories.
-        val oldFormat = savedVod.isNotEmpty() && savedVod.all { it.category.isBlank() }
-        if (p.isXtream && (refresh || savedVod.isEmpty() || oldFormat)) {
+        if (p.isXtream && (refresh || empty || oldFormat)) {
             status = "Loading movies from ${p.name}…"
             val movies = withContext(Dispatchers.IO) { runCatching { XtreamVod.movies(p) } }
             status = "Loading series…"
             val series = withContext(Dispatchers.IO) { runCatching { XtreamVod.series(p) } }
             val list = (movies.getOrDefault(emptyList()) + series.getOrDefault(emptyList())).distinctBy { it.key }
-            if (list.isNotEmpty()) {
-                commitVod(p.id, list)
-                result = list
-                otherVod.remove(p.id)
-            }
+            if (list.isNotEmpty()) commitVod(p.id, list)
             vodError = listOfNotNull(
                 movies.exceptionOrNull()?.let { "Movies couldn't load: ${it.message}" },
                 series.exceptionOrNull()?.let { "Series couldn't load: ${it.message}" },
             ).joinToString("\n").ifBlank { null }
             status = vodError ?: "Loaded ${movies.getOrDefault(emptyList()).size} movies and ${series.getOrDefault(emptyList()).size} series."
         }
-        return result
     }
 
     /** Forget loaded movies & series (after a playlist change); they load again when a VOD screen opens. */
@@ -773,6 +796,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         playlists = playlists.filterNot { it.id == id }
         store.savePlaylists(playlists)
         store.deletePlaylistData(id)
+        catalog.delete(id); vodVersion++
         otherLive.remove(id); otherVod.remove(id)
         playlistGroups = playlistGroups - id
         if (wasActive || prefs.activePlaylist == id) reloadAfterActiveChange()
@@ -792,8 +816,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         if (p.vodOn && p.isXtream) {
             // Download the movies & series again, then show them if a VOD screen is open.
             viewModelScope.launch {
-                withContext(Dispatchers.IO) { store.saveVod(id, emptyList()) }
-                otherVod.remove(id); vodLoadedFor = null
+                withContext(Dispatchers.IO) { catalog.markStale(id) }
+                vodLoadedFor = null
                 if (screen == Screen.MOVIES || screen == Screen.SERIES || screen == Screen.DISCOVER) ensureVod(refresh = true)
                 else syncAllPlaylists(force = false)
             }
@@ -917,13 +941,17 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     private suspend fun commitVod(playlistId: String, list: List<VodItem>) {
         val (m, leftover) = withContext(Dispatchers.IO) {
             val refs = store.loadKeyRefs(playlistId)
-            val old = store.loadVod(playlistId).map { com.avidviewer.tv.data.ChannelKeys.Ref.of(it) } + refs.filter { it.isVod }
-            val map = com.avidviewer.tv.data.ChannelKeys.remap(old, list.map { com.avidviewer.tv.data.ChannelKeys.Ref.of(it) })
-            store.saveVod(playlistId, list)
+            // Only titles the user's choices point at need following to their new keys.
+            val wanted = with(com.avidviewer.tv.data.ChannelKeys) { prefs.referencedKeys(resume, history) }.filter { it.startsWith("$playlistId:") }
+            val old = (if (wanted.isEmpty()) emptyList() else catalog.refs(playlistId, wanted)) + refs.filter { it.isVod }
+            val map = if (old.isEmpty()) emptyMap() else com.avidviewer.tv.data.ChannelKeys.remap(old, list.map { com.avidviewer.tv.data.ChannelKeys.Ref.of(it) })
+            catalog.replace(playlistId, list.asSequence().distinctBy { it.key }) { vodHiddenNow(it) }
+            store.deleteVodFile(playlistId)
             map to refs.filter { !it.isVod }
         }
         withContext(Dispatchers.IO) { store.saveKeyRefs(playlistId, leftover) }
         applyKeyRemap(m)
+        vodVersion++
     }
 
     /** Moves every saved choice from old keys to new ones. */
@@ -944,7 +972,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         for (p in playlists) {
             if (wanted.none { it.startsWith(p.id + ":") }) continue
             store.loadChannels(p.id).forEach { c -> if (c.key in wanted) out.add(com.avidviewer.tv.data.ChannelKeys.Ref.of(c)) }
-            store.loadVod(p.id).forEach { v -> if (v.key in wanted) out.add(com.avidviewer.tv.data.ChannelKeys.Ref.of(v)) }
+            out.addAll(catalog.refs(p.id, wanted.filter { it.startsWith(p.id + ":") }))
         }
         return out
     }
@@ -955,7 +983,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         withContext(Dispatchers.IO) {
             refs.groupBy { it.key.substringBefore(':') }.forEach { (pid, rs) ->
                 val chs = store.loadChannels(pid).map { com.avidviewer.tv.data.ChannelKeys.Ref.of(it) }
-                val vds = store.loadVod(pid).map { com.avidviewer.tv.data.ChannelKeys.Ref.of(it) }
+                val vds = catalog.refs(pid)
                 val (rv, rc) = rs.partition { it.isVod }
                 if (chs.isNotEmpty()) m.putAll(com.avidviewer.tv.data.ChannelKeys.remap(rc, chs))
                 if (vds.isNotEmpty()) m.putAll(com.avidviewer.tv.data.ChannelKeys.remap(rv, vds))
@@ -1160,7 +1188,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                     }
                 }
                 if (p.vodOn && p.isXtream) runCatching {
-                    val at = withContext(Dispatchers.IO) { store.savedAt("vod", p.id) }
+                    val at = withContext(Dispatchers.IO) { catalog.savedAt(p.id) }
                     if (force || at == 0L || nowMs - at > dayMs) {
                         val list = withContext(Dispatchers.IO) {
                             (runCatching { XtreamVod.movies(p) }.getOrDefault(emptyList()) + runCatching { XtreamVod.series(p) }.getOrDefault(emptyList())).distinctBy { it.key }
@@ -1227,6 +1255,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         val before = prefs
         prefs = f(prefs)
         store.savePrefs(prefs)
+        if (before.vodHiddenCats !== prefs.vodHiddenCats || before.vodHiddenTitles !== prefs.vodHiddenTitles) {
+            val cats = prefs.vodHiddenCats; val titles = prefs.vodHiddenTitles
+            viewModelScope.launch { withContext(Dispatchers.IO) { catalog.applyHidden(cats, titles) }; vodVersion++ }
+        }
         if (before.favorites !== prefs.favorites || before.lists !== prefs.lists) {
             // A channel from another playlist was added to a list: reload that playlist's small cache.
             val added = listedKeys(prefs) - listedKeys(before)
@@ -1695,7 +1727,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Blends what you watch here (My List, titles you started) with trending titles in the same genres. */
     private fun forYou(key: String): List<Title> {
-        val seeds = (prefs.myList + vod.filter { resumeOf(it.key) > 0 }).distinctBy { it.key }.take(6)
+        val seeds = (prefs.myList + catalog.byKeys(resume.keys.filter { resumeOf(it) > 0 })).distinctBy { it.key }.take(6)
         val trending = Tmdb.trending(key)
         if (seeds.isEmpty()) {
             discoverNote = "Add titles to My List or start watching movies and series, and these picks will follow your taste. Showing what's trending for now."
@@ -1736,25 +1768,14 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     /** The same title in the user's own provider catalog, if there is one. */
     fun matchVod(t: Title): VodItem? {
-        val current = vod
-        if (vodIndexFor !== current) {
-            // Building this for a big catalog takes seconds on a Fire TV Stick: never on the screen's thread.
-            vodIndexFor = current
-            vodIndexJob?.cancel()
-            vodIndexJob = viewModelScope.launch {
-                val built = withContext(Dispatchers.Default) {
-                    HashMap<String, VodItem>(current.size * 2).apply {
-                        var n = 0
-                        for (v in current) {
-                            if (++n % 2000 == 0) kotlinx.coroutines.yield()
-                            putIfAbsent((if (v.kind == "series") "tv|" else "movie|") + Tmdb.normalize(v.name), v)
-                        }
-                    }
-                }
-                vodIndex = built
-            }
-        }
-        return vodIndex[t.type + "|" + Tmdb.normalize(t.name)]
+        // One indexed lookup per title in the catalog database, remembered until the catalog changes.
+        if (matchCacheFor != vodVersion) { matchCache.clear(); matchCacheFor = vodVersion }
+        val k = t.type + "|" + Tmdb.normalize(t.name)
+        if (matchCache.containsKey(k)) return matchCache[k]
+        val pids = vodPlaylists.map { it.id }
+        val found = runCatching { catalog.findByName(if (t.type == "tv") "series" else "movie", Tmdb.normalize(t.name), pids) }.getOrNull()
+        matchCache[k] = found
+        return found
     }
 
     fun playMatched(v: VodItem) { if (v.kind == "series") openVodDetail(v) else playVod(v) }
@@ -1928,14 +1949,6 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         return t
     }
 
-    /** Movies & series of a playlist; nothing when they're off. Only search uses other playlists' catalogs. */
-    private suspend fun vodFor(p: Playlist): List<VodItem> {
-        if (!p.vodOn || !p.enabled) return emptyList()
-        if (vodLoadedFor?.split(',')?.contains(p.id) == true) return vod.filter { it.playlistId == p.id }
-        // Read for this search only; not kept.
-        return withContext(Dispatchers.IO) { store.loadVod(p.id).distinctBy { it.key } }
-    }
-
     fun search(query: String) {
         val q = query.trim()
         searchQuery = query
@@ -1948,7 +1961,11 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             for (p in shownPlaylists) {
                 if (!p.liveOn && !p.vodOn) continue
                 val (chs, g) = liveFor(p)
-                val v = vodFor(p)
+                // Titles: searched in the catalog database, not loaded.
+                val vodHitList = if (!p.vodOn || !p.enabled) emptyList() else withContext(Dispatchers.IO) {
+                    catalog.page(Catalog.Query("movie", listOf(p.id), nameContains = q), 0, 100) +
+                        catalog.page(Catalog.Query("series", listOf(p.id), nameContains = q), 0, 50)
+                }
                 val res = withContext(Dispatchers.Default) {
                     val names = if (p.id == activePlaylist()?.id) chs.associate { it.key to channelName(it) } else chs.associate { it.key to it.name }
                     val stations = chs.filter { (names[it.key] ?: it.name).lowercase().contains(needle) }.take(50)
@@ -1964,7 +1981,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                             }
                         }
                     }
-                    val vodHits = v.filter { !isVodHidden(it) && it.name.lowercase().contains(needle) }
+                    val vodHits = vodHitList
                     PlaylistHits(
                         playlist = p,
                         stations = stations,
@@ -2151,7 +2168,32 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** Every movie (or series) of the switched-on playlists, hidden ones included. */
-    fun vodAll(kind: String): List<VodItem> = vod.filter { if (kind == "series") it.kind == "series" else it.kind == "movie" || it.kind == "episode" }
+    /** Playlists whose titles the Movies and Series screens show, in order. */
+    private fun vodPids(): List<String> = vodPlaylists.map { it.id }
+
+    private fun titles(q: com.avidviewer.tv.data.Catalog.Query): List<VodItem> = com.avidviewer.tv.data.PagedTitles(catalog, q)
+
+    /** Every movie (or series) of the switched-on playlists, hidden ones included; read a page at a time. */
+    fun vodAll(kind: String): List<VodItem> = vodAllMemo.getOrPut(kind) { Memo() }.get(vodVersion, vodPids().joinToString(",")) {
+        titles(com.avidviewer.tv.data.Catalog.Query(vodKindKey(kind), vodPids(), includeHidden = true))
+    }
+
+    /** Titles whose name contains [q] (the Movies / Series search). */
+    fun vodSearch(kind: String, q: String): List<VodItem> =
+        titles(com.avidviewer.tv.data.Catalog.Query(vodKindKey(kind), vodPids(), nameContains = q.trim()))
+
+    /** List Editor: one playlist's categories of this kind with counts, hidden ones included. */
+    fun vodEditorCategories(kind: String, pid: String): List<Pair<String, Int>> {
+        @Suppress("UNUSED_VARIABLE") val v = vodVersion
+        val rows = catalog.categories(vodKindKey(kind), listOf(pid), includeHidden = true)
+        return orderVodCats(kind, rows.map { it.second }).map { c -> c to (rows.firstOrNull { it.second == c }?.third ?: 0) }
+    }
+
+    /** List Editor: the titles of one playlist's category, hidden ones included. */
+    fun vodEditorTitles(kind: String, pid: String, cat: String, q: String = ""): List<VodItem> {
+        @Suppress("UNUSED_VARIABLE") val v = vodVersion
+        return titles(com.avidviewer.tv.data.Catalog.Query(vodKindKey(kind), listOf(pid), includeHidden = true, category = cat, nameContains = q.trim().ifBlank { null }))
+    }
 
     /** "movie" or "series": the editor's name for a VOD kind. */
     fun vodKindKey(kind: String) = if (kind == "series") "series" else "movie"
@@ -2163,7 +2205,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun isVodHidden(v: VodItem) = v.key in prefs.vodHiddenTitles || isVodCatHidden(v.kind, v.playlistId, v.category.ifBlank { "Other" })
 
     /** What the Movies / Series screens show: hidden titles and categories left out. */
-    fun vodOf(kind: String): List<VodItem> = vodOfMemo.getOrPut(kind) { Memo() }.get(vod, prefs) { vodAll(kind).filter { !isVodHidden(it) } }
+    fun vodOf(kind: String): List<VodItem> = vodOfMemo.getOrPut(kind) { Memo() }.get(vodVersion, vodPids().joinToString(",")) {
+        titles(com.avidviewer.tv.data.Catalog.Query(vodKindKey(kind), vodPids()))
+    }
 
     fun vodCatName(kind: String, cat: String) = prefs.vodCatNames[vodKindKey(kind) + "|" + cat] ?: cat
 
@@ -2173,11 +2217,12 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         return ord.filter { it in names } + names.filterNot { it in ord }
     }
 
-    fun vodCategories(kind: String): List<Pair<String, Int>> = vodCatsMemo.getOrPut(kind) { Memo() }.get(vod, prefs) { computeVodCategories(kind) }
+    fun vodCategories(kind: String): List<Pair<String, Int>> = vodCatsMemo.getOrPut(kind) { Memo() }.get(vodVersion, vodPids().joinToString(","), prefs) { computeVodCategories(kind) }
 
     private fun computeVodCategories(kind: String): List<Pair<String, Int>> {
+        // Same category name in several playlists: one entry, counts added, first appearance first.
         val counts = LinkedHashMap<String, Int>()
-        vodOf(kind).forEach { counts[it.category.ifBlank { "Other" }] = (counts[it.category.ifBlank { "Other" }] ?: 0) + 1 }
+        catalog.categories(vodKindKey(kind), vodPids(), includeHidden = false).forEach { (_, c, n) -> counts[c] = (counts[c] ?: 0) + n }
         return orderVodCats(kind, counts.keys.toList()).map { it to (counts[it] ?: 0) }
     }
 
@@ -2206,7 +2251,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Hides a category everywhere it appears (in every playlist that has it). */
     fun hideVodCatEverywhere(kind: String, cat: String) {
-        val keys = vodAll(kind).filter { it.category.ifBlank { "Other" } == cat }.map { vodCatKey(kind, it.playlistId, cat) }.toSet()
+        val keys = catalog.playlistsWithCategory(vodKindKey(kind), cat).map { vodCatKey(kind, it, cat) }.toSet()
         updatePrefs { it.copy(vodHiddenCats = it.vodHiddenCats + keys) }
         if (vodCategory[kind] == cat) vodCategory = vodCategory + (kind to "All")
     }
@@ -2220,16 +2265,16 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         updatePrefs { it.copy(vodHiddenTitles = if (hidden) it.vodHiddenTitles + keys else it.vodHiddenTitles - keys.toSet()) }
 
     fun vodItems(kind: String): List<VodItem> =
-        vodItemsMemo.getOrPut(kind) { Memo() }.get(vod, prefs, vodCategory[kind] ?: "All", resume) { computeVodItems(kind) }
+        vodItemsMemo.getOrPut(kind) { Memo() }.get(vodVersion, vodPids().joinToString(","), prefs, vodCategory[kind] ?: "All", resume) { computeVodItems(kind) }
 
     private fun computeVodItems(kind: String): List<VodItem> {
-        val all = vodOf(kind)
+        val g = vodKindKey(kind)
         return when (val c = vodCategory[kind] ?: "All") {
-            "All" -> all
-            "Recently added" -> all.sortedByDescending { it.added }.take(200)
+            "All" -> vodOf(kind)
+            "Recently added" -> titles(com.avidviewer.tv.data.Catalog.Query(g, vodPids(), newestFirst = true, limit = 200))
             "My List" -> prefs.myList.filter { if (kind == "series") it.kind == "series" else it.kind != "series" }
-            "Continue watching" -> all.filter { resume.containsKey(it.key) }
-            else -> all.filter { it.category.ifBlank { "Other" } == c }
+            "Continue watching" -> catalog.byKeys(resume.keys).filter { Catalog.group(it.kind) == g && !isVodHidden(it) }
+            else -> titles(com.avidviewer.tv.data.Catalog.Query(g, vodPids(), category = c))
         }
     }
 

@@ -187,6 +187,9 @@ class Store(private val context: Context) {
 
     fun loadVod(playlistId: String): List<VodItem> = readArray(File(dataDir, "vod_$playlistId.json")) { VodItem.fromJson(it) }
 
+    /** The old movies & series file, once its titles are in the catalog database. */
+    fun deleteVodFile(playlistId: String) { File(dataDir, "vod_$playlistId.json").delete() }
+
     fun deletePlaylistData(playlistId: String) {
         File(dataDir, "vod_$playlistId.json").delete()
         File(dataDir, "channels_$playlistId.json").delete()
