@@ -70,7 +70,7 @@ object ChannelKeys {
         return out
     }
 
-    private fun norm(s: String) = s.lowercase().replace(Regex("[^a-z0-9]"), "")
+    internal fun norm(s: String) = s.lowercase().replace(Regex("[^a-z0-9]"), "")
 
     /** Moves every saved choice that names a channel or title from old keys to new ones. */
     fun Prefs.remapped(m: Map<String, String>): Prefs {

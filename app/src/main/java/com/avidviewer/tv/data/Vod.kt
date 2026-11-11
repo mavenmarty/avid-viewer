@@ -74,11 +74,15 @@ object XtreamVod {
     }
 
     /** Reads the movie list as a stream, so very large catalogs don't run out of memory. */
-    fun movies(p: Playlist): List<VodItem> {
+    fun movies(p: Playlist): List<VodItem> = ArrayList<VodItem>().also { l -> movies(p) { l.add(it) } }
+
+    /** Hands each movie to [emit] as it's read; returns how many. */
+    fun movies(p: Playlist, emit: (VodItem) -> Unit): Int {
+        var n = 0
+        val add: (VodItem) -> Unit = { emit(it); n++ }
         val cats = categories(p, "get_vod_categories")
         val base = p.xtreamBase()
         return Net.open(api(p, "get_vod_streams")) { input ->
-            val out = ArrayList<VodItem>()
             JsonReader(InputStreamReader(input, Charsets.UTF_8)).use { r ->
                 if (r.peek() != JsonToken.BEGIN_ARRAY) return@use
                 r.beginArray()
@@ -99,7 +103,7 @@ object XtreamVod {
                         }
                     }
                     r.endObject()
-                    if (id.isNotBlank()) out.add(
+                    if (id.isNotBlank()) add(
                         VodItem(
                             key = "${p.id}:m$id", playlistId = p.id, kind = "movie", name = name.trim(), logo = icon.ifBlank { null },
                             url = "$base/movie/${p.username}/${p.password}/$id.$ext",
@@ -109,14 +113,18 @@ object XtreamVod {
                 }
                 r.endArray()
             }
-            out
+            n
         }
     }
 
-    fun series(p: Playlist): List<VodItem> {
+    fun series(p: Playlist): List<VodItem> = ArrayList<VodItem>().also { l -> series(p) { l.add(it) } }
+
+    /** Hands each series to [emit] as it's read; returns how many. */
+    fun series(p: Playlist, emit: (VodItem) -> Unit): Int {
+        var n = 0
+        val add: (VodItem) -> Unit = { emit(it); n++ }
         val cats = categories(p, "get_series_categories")
         return Net.open(api(p, "get_series")) { input ->
-            val out = ArrayList<VodItem>()
             JsonReader(InputStreamReader(input, Charsets.UTF_8)).use { r ->
                 if (r.peek() != JsonToken.BEGIN_ARRAY) return@use
                 r.beginArray()
@@ -136,7 +144,7 @@ object XtreamVod {
                         }
                     }
                     r.endObject()
-                    if (id.isNotBlank()) out.add(
+                    if (id.isNotBlank()) add(
                         VodItem(
                             key = "${p.id}:s$id", playlistId = p.id, kind = "series", name = name.trim(), logo = cover.ifBlank { null },
                             url = "", seriesId = id, category = cats[cat] ?: "Other", added = added, rating = rating, year = year,
@@ -145,7 +153,7 @@ object XtreamVod {
                 }
                 r.endArray()
             }
-            out
+            n
         }
     }
 
