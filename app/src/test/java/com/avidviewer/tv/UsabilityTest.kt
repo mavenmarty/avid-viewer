@@ -420,7 +420,11 @@ class UsabilityTest {
         val key = vm.channelsIn("KIDS")[1].key
         rule.runOnIdle { vm.listPickerKey = key }
         settle()
-        rule.onAllNodesWithText("＋  Kids night", substring = true).onFirst().performClick() // the row in the picker, not the category list behind it
+        // The row in the picker ("＋  …Kids night"), not the category list behind it.
+        val rows = rule.onAllNodesWithText("Kids night", substring = true)
+        val idx = rows.fetchSemanticsNodes().indexOfFirst { n -> n.config.getOrNull(androidx.compose.ui.semantics.SemanticsProperties.Text)?.any { it.text.startsWith("＋") } == true }
+        assertTrue("the list is in the picker", idx >= 0)
+        rows[idx].performClick()
         settle()
         assertEquals("the picker closes once a list is chosen", null, vm.listPickerKey)
         assertTrue(vm.listsFor(key).contains("Kids night"))
