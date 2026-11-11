@@ -259,6 +259,12 @@ class AuditHarnessTest {
             report("parse", "xmltv_stream_to_db_ms", (System.nanoTime() - t3) / 1_000_000)
             report("parse", "xmltv_stream_live_peak_mb", gstream)
             report("parse", "xmltv_stream_programmes", gi.added)
+            // Split the streamed guide's cost: reading alone (nothing kept), and writing alone (no download).
+            val (_, readOnly) = peakLiveMb { var n = 0; com.avidviewer.tv.data.Xmltv.read("http://$host/guide.xml.gz", wanted, from, to, 0L, null) { _, _ -> n++ }; n }
+            report("parse", "xmltv_read_only_live_peak_mb", readOnly)
+            val (_, writeOnly) = peakLiveMb { live.replacingGuide("fx-w") { add -> for (i in 0 until 22_000) add("ch${i % 500}", com.avidviewer.tv.data.Program(from + i * 60_000L, from + i * 60_000L + 1_800_000L, "Programme $i", null, false)) } }
+            report("parse", "guide_write_only_live_peak_mb", writeOnly)
+            live.delete("fx-w")
             val t4 = System.nanoTime()
             val (win, wpk) = peakLiveMb { live.guide("fx", null, from, to) }
             report("parse", "guide_window_read_ms", (System.nanoTime() - t4) / 1_000_000)
