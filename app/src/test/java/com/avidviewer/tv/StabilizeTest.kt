@@ -148,6 +148,7 @@ class StabilizeTest {
         assertFalse(vm.numbers().containsKey(hidden))
         // Re-order: numbers follow the new order.
         val last = k2.last().key
+        vm.selectedGroup = "KIDS" // re-order works on the category the guide is showing
         vm.moveChannelTo(last, 0)
         assertEquals(last, vm.channelsIn("KIDS").first().key)
         assertTrue(vm.numbers()[last]!! < vm.numbers()[k2.first().key]!!)
