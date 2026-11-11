@@ -520,17 +520,12 @@ fun OptionRow(label: String, onClick: () -> Unit) {
 /** TV Guide search: matching channels, then matching programs (on now or later), in this playlist and Favorites. */
 @Composable
 private fun GuideSearchResults(vm: AppViewModel, modifier: Modifier) {
-    val q = vm.guideQuery.lowercase()
-    LaunchedEffect(Unit) { vm.loadSearchPool() }
-    // Search over: let go of the other playlists' channels and guides.
-    androidx.compose.runtime.DisposableEffect(Unit) { onDispose { vm.dropSearchPool() } }
-    val pool = remember(vm.searchPool, vm.channels, vm.favDataTick) { (vm.searchPool + vm.channels).distinctBy { it.key }.filter { it.key !in vm.prefs.hiddenChannels } }
-    val chHits = remember(q, pool) { pool.filter { vm.channelName(it).lowercase().contains(q) }.take(60) }
-    val progHits = remember(q, pool, vm.guide) {
-        val now = System.currentTimeMillis()
-        pool.flatMap { c -> vm.programs(c).filter { it.end > now && (it.title.lowercase().contains(q) || it.subtitle?.lowercase()?.contains(q) == true) }.map { c to it } }
-            .sortedBy { it.second.start }.take(80)
-    }
+    // Searched in the view model: this playlist in memory, the others in the database (only matches kept).
+    LaunchedEffect(vm.guideQuery, vm.channels, vm.guide) { vm.runGuideSearch(vm.guideQuery) }
+    // Search over: let go of the other playlists' matches.
+    androidx.compose.runtime.DisposableEffect(Unit) { onDispose { vm.endGuideSearch() } }
+    val chHits = vm.guideSearchHits.channels
+    val progHits = vm.guideSearchHits.programs
     LazyColumn(modifier, verticalArrangement = Arrangement.spacedBy(5.dp)) {
         item { SectionTitle("Channels (${chHits.size})", Modifier.padding(start = 4.dp, top = 4.dp)) }
         if (chHits.isEmpty()) item { Label("No channels match.", size = 13.sp, modifier = Modifier.padding(start = 4.dp)) }

@@ -139,6 +139,7 @@ class ChannelKeysTest {
             // Later the provider adds a channel near the top, and the app is installed fresh on another TV.
             names = listOf("Channel 100", "Channel 101", "Channel 102", "Channel 103", "Channel 104")
             app.filesDir.deleteRecursively(); app.filesDir.mkdirs()
+            vm.catalog.close(); app.deleteDatabase("catalog.db") // a fresh install has no database either
             val vm2 = track(AppViewModel(app))
             vm2.offerRestore(text)
             var ok = false

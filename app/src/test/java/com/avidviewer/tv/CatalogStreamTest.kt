@@ -103,6 +103,10 @@ class CatalogStreamTest {
         assertEquals(listOf("p:a"), keys())
         catalog.replacing("p", { false }) { add -> add(movie("p:b", "Alpha", "http://y/movie/1.mp4")) }
         assertEquals(listOf("p:b"), keys())
+        // Version 3's live tables were added too.
+        val live = com.avidviewer.tv.data.LiveDb(catalog)
+        live.replacingChannels("p") { add -> add(com.avidviewer.tv.data.Channel("p:c", "One", "News", null, "http://x/live/1.ts", null)) }
+        assertEquals(1, live.channelCount("p"))
     }
 
     @Test
