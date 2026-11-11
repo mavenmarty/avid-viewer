@@ -50,6 +50,7 @@ import com.avidviewer.tv.data.Xmltv
 import com.avidviewer.tv.data.Xtream
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -96,6 +97,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     val catalog = com.avidviewer.tv.data.Catalog(app)
     /** Live channels and guide programmes of every playlist, in the same database. */
     val live = com.avidviewer.tv.data.LiveDb(catalog)
+    /** One guide download per playlist at a time (declared before init, which can start one). */
+    private val guideLocks = HashMap<String, kotlinx.coroutines.sync.Mutex>()
     /** Bumped whenever the catalog's contents or hidden flags change, so lists are read again. */
     var vodVersion by mutableStateOf(0); private set
 
@@ -1075,7 +1078,13 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
      * Sources are read in order and the first one with programmes for a channel wins. Every source's
      * channel list is saved too, for matching channels by hand.
      */
-    private suspend fun downloadGuide(p: Playlist, wanted: Set<String>): Int? {
+    private suspend fun downloadGuide(p: Playlist, wanted: Set<String>): Int? =
+        guideLocks.getOrPut(p.id) { kotlinx.coroutines.sync.Mutex() }.withLock {
+            // One download per playlist at a time, each with the sources as they are when it starts,
+            // so a quick second change can't be overwritten by an older download finishing last.
+            downloadGuideNow(playlists.firstOrNull { it.id == p.id } ?: p, wanted)
+        }
+    private suspend fun downloadGuideNow(p: Playlist, wanted: Set<String>): Int? {
         val sources = guideSourcesOf(p)
         if (sources.isEmpty()) return null
         val from = guideFrom()
