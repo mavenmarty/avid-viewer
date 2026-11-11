@@ -2,7 +2,7 @@
 
 <!-- The version below and the Release notes section are updated automatically after each published build
      (.github/workflows/user-guide.yml). Feature descriptions are written by hand. -->
-This guide covers **Avid Viewer 1.0.94**, the current public release. Avid Viewer is an IPTV player for Android TV and Fire TV. You bring your own provider (an Xtream Codes login or an M3U link); the app doesn't include any channels.
+This guide covers **Avid Viewer 1.0.97**, the current public release. Avid Viewer is an IPTV player for Android TV and Fire TV. You bring your own provider (an Xtream Codes login or an M3U link); the app doesn't include any channels.
 
 **Contents:** [Getting started](#1-getting-started) · [Main menu](#2-main-menu) · [TV Guide](#3-tv-guide) · [Full-screen playback](#4-full-screen-playback) · [Search](#5-search) · [Discover](#6-discover) · [Sports](#7-sports) · [Movies and Series](#8-movies-and-series) · [Settings](#9-settings) · [Privacy](#10-privacy) · [Troubleshooting](#11-troubleshooting) · [Release notes](#release-notes)
 
@@ -305,7 +305,14 @@ Every public release since 1.0.35, newest first. Releases are published on GitHu
 
 <!-- new-releases: entries for new builds are added automatically below this line -->
 
-### 1.0.94 — November 10, 2026, 7:27 PM CT (current)
+### 1.0.97 — November 10, 2026, 9:00 PM CT (current)
+
+**Change log**
+
+- Settings: section list scrolls (Updates & about reachable); Up/Down stay inside a section; refresh frequency in Guide sources
+- TV Guide header: richer details panel (number, title, New, time left with progress, about, next), no instructions or category label; search moves into the category lists (guide, Movies, Series)
+
+### 1.0.94 — November 10, 2026, 7:27 PM CT
 
 **Change log**
 
