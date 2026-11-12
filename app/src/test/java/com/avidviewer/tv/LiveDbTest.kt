@@ -46,7 +46,7 @@ class LiveDbTest {
         assertEquals(listOf("Beta", "Gamma"), live.channels("p").map { it.name })
         assertEquals(listOf("News" to 1, "Sports" to 1), live.groupCounts("p"))
         assertEquals(listOf("p:c"), live.searchChannels("p", "gam", 10).map { it.key })
-        assertTrue(live.searchChannels("p", "a_", 10).isEmpty())   // LIKE wildcards are taken literally
+        assertEquals(2, live.searchChannels("p", "a_", 10).size)   // punctuation is ignored ("a_" looks for "a"), not a wildcard
         assertTrue(live.searchChannels("p", "%", 10).isEmpty())
         assertTrue(live.channelsSavedAt("p") > 0)
     }

@@ -2216,6 +2216,25 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     var searchedFor by mutableStateOf(""); private set
     private var searchJob: Job? = null
 
+    private var typingJob: Job? = null
+
+    /** The Search box changed: search after a short pause in typing. */
+    fun typeSearch(text: String) {
+        searchQuery = text
+        typingJob?.cancel()
+        typingJob = viewModelScope.launch { delay(450); search(text) }
+    }
+
+    /** The TV Guide's search box changed: show its results after a short pause in typing. */
+    fun typeGuideQuery(text: String) {
+        typingJob?.cancel()
+        typingJob = viewModelScope.launch {
+            delay(450)
+            val t = text.trim()
+            if (t != guideQuery && (t.length >= 2 || t.isEmpty())) guideQuery = t
+        }
+    }
+
     fun search(query: String) {
         val q = query.trim()
         searchQuery = query

@@ -39,13 +39,8 @@ fun SearchScreen(vm: AppViewModel) {
             TvField(
                 "TV stations, shows, movies or series", vm.searchQuery, modifier = Modifier.width(420.dp).entryFocus(vm, Screen.SEARCH),
                 imeAction = ImeAction.Search, onSubmit = { vm.search(vm.searchQuery) },
-            ) { vm.searchQuery = it }
+            ) { vm.typeSearch(it) } // results come as you type, after a short pause
             TvButton(if (vm.searching) "Searching…" else "Search", primary = true) { vm.search(vm.searchQuery) }
-        }
-        // Results come as you type (after a short pause), not only on Search.
-        LaunchedEffect(vm.searchQuery) {
-            kotlinx.coroutines.delay(450)
-            vm.search(vm.searchQuery)
         }
         val results = vm.searchResults
         when {

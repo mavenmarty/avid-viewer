@@ -878,14 +878,14 @@ class UsabilityTest {
     @Test
     fun searchFindsPartOfAWordAsYouType() {
         go(Screen.SEARCH)
-        rule.runOnIdle { vm.searchQuery = "farg" } // typed, Search not pressed
+        rule.runOnIdle { vm.typeSearch("farg") } // typed, Search not pressed
         waitFor("results for farg (searched=${vm.searchedFor})") { vm.searchedFor == "farg" && vm.searchResults?.any { it.stations.isNotEmpty() } == true }
         assertTrue(vm.searchResults!!.flatMap { it.stations }.all { it.title.contains("Fargo") })
-        rule.runOnIdle { vm.searchQuery = "fargo wday 3" }
+        rule.runOnIdle { vm.typeSearch("fargo wday 3") }
         waitFor("words in any order") { vm.searchedFor == "fargo wday 3" && vm.searchResults?.flatMap { it.stations }?.any { it.title.contains("WDAY ABC 3 Fargo") } == true }
-        rule.runOnIdle { vm.searchQuery = "movie drama 1" }
+        rule.runOnIdle { vm.typeSearch("movie drama 1") }
         waitFor("movies too") { vm.searchedFor == "movie drama 1" && vm.searchResults?.flatMap { it.movies }?.any { it.title == "Drama Movie 1" } == true }
-        rule.runOnIdle { vm.searchQuery = "zzzz" }
+        rule.runOnIdle { vm.typeSearch("zzzz") }
         waitFor("nothing found names what was searched") { vm.searchedFor == "zzzz" }
         rule.onNodeWithText("Nothing found for “zzzz”", substring = true).assertExists()
         // The TV Guide's own search, too.
