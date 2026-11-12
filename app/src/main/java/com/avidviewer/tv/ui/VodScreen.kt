@@ -267,8 +267,9 @@ private fun VodDetail(vm: AppViewModel, v: VodItem) {
                 (info?.rating?.ifBlank { null } ?: v.rating).takeIf { it.isNotBlank() && it != "0" }?.let { "★ $it" } ?: "",
                 info?.genre ?: "",
                 v.category,
+                vm.playlists.firstOrNull { it.id == v.playlistId }?.name.orEmpty(),
             ).filter { it.isNotBlank() }.joinToString("  ·  ")
-            if (meta.isNotBlank()) Label(meta, size = 14.sp, color = C.Soft)
+            if (meta.isNotBlank()) Label(meta, size = 14.sp, color = C.Soft, lines = 1)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 if (!isSeries) {
                     val r = vm.resumeOf(v.key)
@@ -285,9 +286,13 @@ private fun VodDetail(vm: AppViewModel, v: VodItem) {
             }
             if (info == null) Label("Loading details…", size = 13.sp)
             info?.plot?.takeIf { it.isNotBlank() }?.let { Label(it, size = 14.sp, color = C.Text, lines = if (isSeries) 3 else 7) }
-            info?.cast?.takeIf { it.isNotBlank() }?.let { Label("Cast: $it", size = 13.sp, lines = 2) }
-            info?.director?.takeIf { it.isNotBlank() }?.let { Label("Director: $it", size = 13.sp) }
-            if (isSeries) SeasonsAndEpisodes(vm, episodeFocus) { onEpisode = it }
+            info?.cast?.takeIf { it.isNotBlank() }?.let { Label("Cast: $it", size = 13.sp, lines = if (isSeries) 1 else 2) }
+            info?.director?.takeIf { it.isNotBlank() }?.let { Label("Director: $it", size = 13.sp, lines = 1) }
+            // Seasons and episodes get the rest of the page. Placed after the text without a share of
+            // their own, a long description left them no room, and Down had nothing to move to.
+            if (isSeries) Column(Modifier.weight(1f).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                SeasonsAndEpisodes(vm, episodeFocus) { onEpisode = it }
+            }
         }
     }
 }

@@ -771,7 +771,7 @@ class UsabilityTest {
     }
 
     /** A tiny Xtream Codes provider on this machine: a login, and a series with two seasons of episodes. */
-    private class FakeProvider : AutoCloseable {
+    private class FakeProvider(private val plot: String = "A show for testing.") : AutoCloseable {
         private val socket = java.net.ServerSocket(0, 50, java.net.InetAddress.getByName("127.0.0.1"))
         val port get() = socket.localPort
         private val thread = Thread {
@@ -785,7 +785,7 @@ class UsabilityTest {
                         val target = requestLine.split(" ").getOrElse(1) { "/" }
                         val body = when {
                             target.contains("xmltv") -> "<tv></tv>"
-                            target.contains("action=get_series_info") -> """{"info":{"name":"Test Show","plot":"A show for testing."},"episodes":{
+                            target.contains("action=get_series_info") -> """{"info":{"name":"Test Show","plot":"$plot"},"episodes":{
                                 "1":[{"id":"101","episode_num":1,"title":"Pilot","container_extension":"mp4","info":{"duration":"00:42:00"}},
                                      {"id":"102","episode_num":2,"title":"Second","container_extension":"mp4","info":{}}],
                                 "2":[{"id":"201","episode_num":1,"title":"Season Two Opener","container_extension":"mkv","info":{}}]}}"""
@@ -800,6 +800,25 @@ class UsabilityTest {
             }
         }.apply { isDaemon = true; start() }
         override fun close() { runCatching { socket.close() } }
+    }
+
+    @Test
+    fun aLongDescriptionStillLeavesRoomForSeasonsAndEpisodes() {
+        val longPlot = List(40) { "A very long description of the show that goes on and on, sentence $it." }.joinToString(" ")
+        FakeProvider(longPlot).use { server ->
+            rule.runOnIdle { vm.addPlaylist("Fake provider", "xtream", "http://127.0.0.1:${server.port}", "u", "", "", "", liveOn = false, vodOn = true) }
+            waitFor("the provider to be added (status=${vm.status})") { vm.playlists.any { it.name == "Fake provider" } }
+            val pid = vm.playlists.first { it.name == "Fake provider" }.id
+            go(Screen.SERIES)
+            rule.runOnIdle { vm.openVodDetail(com.avidviewer.tv.data.VodItem("$pid:s78", pid, "series", "Long Show", null, "", seriesId = "78", category = "Shows")) }
+            waitFor("episodes to load") { vm.detailEpisodes?.isNotEmpty() == true }
+            var tries = 0
+            while (!focused().contains("Season 1") && tries < 10) { press(listOf(Key.DirectionDown)); tries++ }
+            assertTrue("couldn't reach the season buttons below a long description (focus: ${focused()})", focused().contains("Season 1"))
+            tries = 0
+            while (!focused().contains("Pilot") && tries < 6) { press(listOf(Key.DirectionDown)); tries++ }
+            assertTrue("couldn't reach an episode below a long description (focus: ${focused()})", focused().contains("Pilot"))
+        }
     }
 
     @Test
