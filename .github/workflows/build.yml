@@ -71,6 +71,19 @@ jobs:
           path: app/build/reports/tests/testDebugUnitTest
           if-no-files-found: ignore
 
+      # Pictures of the main screens (sample data only) on the "screens" branch, to check how things look
+      # without a device. Test builds only; adds a commit, never rewrites the branch.
+      - name: Save screenshots
+        if: always() && github.ref == 'refs/heads/next'
+        run: |
+          d=app/build/reports/tests/testDebugUnitTest/screens
+          ls $d/*.png >/dev/null 2>&1 || exit 0
+          tmp=$(mktemp -d); cp $d/*.png "$tmp"/
+          git config user.name "github-actions"; git config user.email "github-actions@users.noreply.github.com"
+          wt=$(mktemp -d)
+          if git fetch -q origin screens; then git worktree add -q "$wt" FETCH_HEAD; else git worktree add -q --detach "$wt"; (cd "$wt" && git checkout -q --orphan screens-new && git rm -rqf .); fi
+          cd "$wt" && cp "$tmp"/*.png . && git add *.png && (git commit -qm "Screens from build ${{ github.run_number }} (${GITHUB_SHA::7})" || true) && git push -q origin HEAD:refs/heads/screens
+
       - name: Build release APK
         if: github.ref != 'refs/heads/ci-check'
         env:
