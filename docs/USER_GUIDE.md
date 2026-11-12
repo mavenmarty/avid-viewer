@@ -2,15 +2,23 @@
 
 <!-- The version below and the Release notes section are updated automatically after each published build
      (.github/workflows/user-guide.yml). Feature descriptions are written by hand. -->
-This guide covers **Avid Viewer 1.0.80**, the current public release. Avid Viewer is an IPTV player for Android TV and Fire TV. You bring your own provider (an Xtream Codes login or an M3U link); the app doesn't include any channels.
+This guide covers **Avid Viewer 1.0.141**, the current public release. Avid Viewer is an IPTV player for Android TV and Fire TV. You bring your own provider (an Xtream Codes login or an M3U link); the app doesn't include any channels.
 
-**Contents:** [Getting started](#1-getting-started) · [Main menu](#2-main-menu) · [TV Guide](#3-tv-guide) · [Full-screen playback](#4-full-screen-playback) · [Search](#5-search) · [Discover](#6-discover) · [Sports](#7-sports) · [Movies and Series](#8-movies-and-series) · [Settings](#9-settings) · [Privacy](#10-privacy) · [Troubleshooting](#11-troubleshooting) · [Release notes](#release-notes)
+**Contents:** [Getting started](#1-getting-started) · [Main menu](#2-main-menu) · [TV Guide](#3-tv-guide) · [Full-screen playback](#4-full-screen-playback) · [Search](#5-search) · [Discover](#6-discover) · [Sports](#7-sports) · [Movies and Series](#8-movies-and-series) · [Settings](#9-settings) · [Privacy](#10-privacy) · [Troubleshooting](#11-troubleshooting) · [Control4](#12-control4) · [Release notes](#release-notes)
 
 ## 1. Getting started
 
+### Installing the Downloader app
+
+1. Install the **Downloader** app from the Google Play Store or the Amazon Appstore.
+2. Put the device into Developer Mode: go to **Settings › My Fire TV › About**, highlight your device's name and press **OK** 7 times.
+3. Press **Back** and choose **Developer Options**.
+4. Turn on **ADB debugging**.
+5. Turn on **Install unknown apps** for Downloader.
+
 ### Install
 
-1. On your TV box, download **AvidViewer.apk** from the project's GitHub Releases page (the latest is always at `github.com/mavenmarty/avid-viewer/releases/latest`).
+1. Download **AvidViewer.apk**: on your TV box, open the Downloader app and enter the code **2895338** in the URL box, or download it directly from `github.com/mavenmarty/avid-viewer/releases/latest`.
 2. Open the file and install it. You may need to allow installs from unknown sources for your browser or file manager.
 3. Every version is signed with the same key, so a new version installs over the old one and keeps your playlists, favorites and settings.
 
@@ -29,64 +37,83 @@ Your password is stored encrypted on the device (Android Keystore) and is never 
 - **Arrows** move the highlight. **Hold an arrow** to speed up (3, then 6, then 12 items per repeat).
 - **OK** selects. Text boxes open the keyboard only when you press OK on them.
 - **Menu** (or **hold OK**) opens options for the highlighted item.
-- **Back** goes up one level. Pressing Back on the full menu while on the TV Guide exits the app.
+- **Back** goes up one level, landing on the item that led there. On the full menu while on the TV Guide, Back shows **Press Back again to exit**; a second Back within about 2.5 seconds closes the app.
 - **Channel Up / Channel Down** (or Page Up / Page Down) move a page at a time in the TV Guide and change channels in full screen.
-- **Lists wrap around.** In channel and category lists, a single press past the last item goes to the first, and the reverse. Holding a button stops at the end, so a fast scroll doesn't fly past.
+- **Channel and category lists wrap around.** A single press past the last item goes to the first, and the reverse. Holding a button stops at the end, so a fast scroll doesn't fly past. Other lists (the main menu, the playlist list, Settings and poster grids) stop at the end.
 - If a press ever finds nothing highlighted, the app puts the highlight back.
 
 ## 2. Main menu
 
-The menu on the left lists **Search, Discover, TV Guide, Sports, Movies, Series** and **Settings**. Picking a screen highlights its first item. Once you've chosen a screen, the menu shrinks to icons, and the labels come back when you move onto it.
+The menu on the left lists **Search, Discover, TV Guide, Sports, Movies, Series** and **Settings**. Picking a screen highlights its first item. The menu is always on screen: once you've chosen a screen it shrinks to icons on the far left, and the labels come back when you move onto it.
 
 At the bottom of the menu you'll see:
 
 - The **clock and date** (if Show clock is on).
 - **Current weather** (if a postal code is set and Show weather is on).
-- An **Update** button when a new version is available.
+- An **Update x.y.z** button when a new version is available.
 
-The app opens on the TV Guide at the last channel you watched.
+The app opens on the TV Guide with the menu shown as icons, on:
+
+1. the last channel you watched, in its own category;
+2. if that channel is in ★ Favorites or one of your lists, that list (the channel can belong to another playlist);
+3. otherwise your first favorite, with ★ Favorites open;
+4. with no favorites, the first channel of the first category.
 
 ## 3. TV Guide
 
-The TV Guide is the home screen for live TV. It has three levels, and Back walks up through them:
+The TV Guide is the home screen for live TV. Next to the main menu it has:
 
-1. **Main menu.**
-2. **Playlist tree**: ★ Favorites, your own lists, then every playlist with live TV switched on. Press OK on a playlist to expand it into its categories.
-3. **Category view**: the menu is hidden and the playlist's categories become the left navigation, with **‹ Menu**, ★ Favorites, your lists and **＋ New list** at the top.
+- **Playlist list**: ★ Favorites, your own lists, then every playlist with live TV switched on. Press OK on a playlist to open its categories.
+- **Category list**: the playlist's categories, with **‹ Menu**, ★ Favorites, your lists, **＋ New list** and **🔍 Search** at the top.
+- **The guide**: the preview window and details panel at the top, the channel grid below.
+
+**Back and Left step back one layer at a time:** from a channel to your current category in the category list, then to the playlist list (on that same category), then to the main menu. Holding Left doesn't skip layers, and inside the grid Left still moves through programs and time.
 
 ### The guide grid
 
-- The top shows a **preview window** and details of the highlighted show: time, title, "New" tag and description.
+- The top shows a **preview window** and a **details panel** for the highlighted channel or program: channel number and name (plus the playlist name when you have more than one), the program title with a **New** tag for new episodes, the times with **N min left** and a progress bar (or **starts in …** for a later program), up to two lines about the show, and what's **Next**.
 - Below it is a **timeline grid**: two-line channel names on the left, programs across a 2.5-hour window, with a line marking "now".
 - **Left/Right** move between programs. Going past the last program in view scrolls the guide forward by half hours, up to **12 hours ahead**. Left on the first program scrolls back, and at the start it moves to the channel name.
 - **Up/Down** move one channel and land on the program airing at the same time, so the highlighted time stays put as you move between rows.
 - **Up on the first channel** moves to the preview window; **Up again** jumps to the last channel. **Down on the last channel** goes back to the first.
 - **CH+/CH−** (Page Up/Down) move a full page and wrap around at the ends.
 - **OK** on a channel or program starts it in the preview. **OK again**, or OK on the preview window, opens it full screen.
-- Choosing a new category starts at the top, with its first channel highlighted. Coming back to the same category keeps your place.
-- **Back from full screen** returns to the channel you were watching, even far down a long category.
+- **Each category remembers where you were.** A category you haven't opened yet starts at its first channel. Coming back to one you've visited highlights the channel you left, even if channels above it were hidden or the list refreshed; if that channel is gone, the nearest one is highlighted, not the top.
+- **The guide keeps its time.** If you scroll ahead (to tonight, say), the guide stays on that time when you open full screen or another screen and come back.
+- **Back from full screen** returns to the same channel and program, even far down a long category.
 - In the category list, **Up on ‹ Menu** jumps to the last category, and **Down on the last category** returns to ‹ Menu.
 
 ### Search in the guide
 
-Use the **Search channels and programs** box above the grid. Results show **Channels** (with what's on now, and **▶ Preview** / **▶ Full screen**) and **Programs** on now or later (**▶ Tune in** / **▶ Channel**). Search covers every playlist. **✕ Clear** empties the box.
+Highlight **🔍 Search** in the category list (just below ＋ New list) and press OK to type. Results replace the guide: **Channels** (with what's on now, and **▶ Preview** / **▶ Full screen**) and **Programs** on now or later (**▶ Tune in** / **▶ Channel**). Search covers every playlist; choosing a result from another playlist moves the guide there. **✕ Clear search**, just below, brings the guide back.
 
 ### Channel options (Menu or hold OK on a channel)
 
-- **＋ Add to List…**: add it to ★ Favorites or one of your lists, or make a **New list**. The menu shows which lists it's already in.
+- **＋ Add to List…**: choose ★ Favorites or one of your lists, and the picker adds the channel and closes. Lists it's already in are marked ✓; choosing one of those takes it out. **＋ New list…** makes a list with the channel in it.
 - **− Remove from [list]**: when you're viewing Favorites or a list.
 - **✎ Rename**: give the channel your own name.
 - **⇅ Re-order**: move the channel within its category (see *Re-ordering* below).
 - **⊘ Hide channel**: hide it everywhere. You can bring it back in Settings › List Editor.
+- **Match guide…**: pick the guide listings for this channel (see *Matching a channel to the guide* below).
+
+Saving a **Rename** (channels, categories, lists, movie and series categories) closes the dialog.
+
+### Matching a channel to the guide
+
+If a channel shows the wrong listings, or none, press **Menu** on it and choose **Match guide…**:
+
+- The guide channels with the closest names come first. Type in **Search guide channels** to find others.
+- Choose one to use its listings. ✓ marks the current match, and the dialog says whether it came from your provider or was matched by hand.
+- **Use provider's match** undoes a hand match. **No guide** shows no listings for the channel.
+- The guide downloads again a few seconds after a change. The list comes from the last guide download, so if it's empty, download the guide first (Settings › TV guide) or add a guide source.
 
 ### Category options (Menu on a category in the left navigation)
 
 - **✎ Rename**, **⇅ Re-order**, **⊘ Hide category**.
-- **🏆 Add to Sports tab / Remove from Sports tab**: show this category's channels on the Sports screen.
 
 ### Re-ordering
 
-When you choose Re-order, a help panel appears at the bottom of the screen:
+When you choose Re-order, a small help panel appears at the top right, over the preview window, so the list stays in view:
 
 - **▲ ▼** move the item up or down (hold to move faster).
 - **◀** moves it to the top; **▶** moves it to the bottom.
@@ -96,7 +123,7 @@ While you're moving it, the item has a blue outline. A category shows its positi
 
 ### Favorites and your lists
 
-- **★ Favorites** gathers channels from every playlist in one place and is always shown.
+- **★ Favorites** gathers channels from every playlist in one place and is always shown. Favorites, lists, renames, hidden channels and guide matches stay on the right channels when your provider adds, removes or reorders channels, and after restoring a backup.
 - **Your lists** (for example "Kids" or "News") can also hold channels from any playlist. Make one with **＋ New list** or from Add to List.
 - Press **Menu on a list** to **Rename**, **Move up / Move down** or **Delete** it. Deleting asks you to confirm; the channels stay in your playlists.
 - **Suggested near [your town]**: at the top of Favorites, the app suggests channels from your playlists that look local to your postal code. Press **＋ Add to List** to keep one, or **Hide suggestions**. Dismissed channels aren't suggested again unless you restore them in Settings.
@@ -126,38 +153,54 @@ The **Search** screen searches **every playlist** at once: TV stations, programs
 - **+ Add to List** for a channel (shows **✓ In a list** once added).
 - **+ My List** for a movie or series (shows **✓ My List**).
 
+After you play a channel, program, movie or episode from Search, **Back** returns to the results with that result highlighted.
+
 ## 6. Discover
 
 Discover shows what's new and popular, and where to watch it, using TMDB and JustWatch data.
 
 - **Tabs**: New, Trending, For you, In theaters.
 - **My services**: only show titles on the streaming services you've picked.
-- Titles your provider carries are tagged **▶ ON YOUR PROVIDER**. Open one to **Play on your provider** (or see **Episodes**), add it to **My List**, or **Search my playlists**.
+- Titles your provider carries are tagged **▶ ON YOUR PROVIDER** (with a large catalog, the tag may appear a moment after the posters). Open one to **Play on your provider** (or see **Episodes**), add it to **My List**, or **Search my playlists**.
 - **Where to watch** lists Stream, Free, Rent and Buy options for your region.
 
 Discover needs a free **TMDB API key**. Enter it in **Settings › Discover**; it's stored encrypted on the device.
 
 ## 7. Sports
 
-The Sports screen finds games and events in your TV guide.
+Sports lists real games from **ESPN's schedules** for today and the next 2 days, plus recent finals, then finds the channels in your playlists that carry them. Leagues: NFL, NBA, NHL, MLB, WNBA, CFL, college football (FBS) and men's college basketball (Division I).
 
-- **Categories** across the top: All, plus your Sports categories. The built-ins are NFL, NHL, NBA, MLB, NCAA, ESPN+, PPV and Soccer.
-- Events are grouped into **Live now**, **Upcoming** and **Final**, with times in your time zone and scores where available (from ESPN's public scoreboard).
-- The **preview window** shows the selected event, tagged LIVE, FINAL or STARTS [time]. Choose **Watch full screen**. If the event is on more than one channel, the screen tells you how many.
-- To change what appears here, use **Settings › Sports tab** or press Menu on a category in the TV Guide.
+- **Top:** the preview window and the highlighted game. It shows the league, the status (**LIVE** with the period and clock, **FINAL**, or the start time), both teams with logos, records and the score, the venue, and the national TV or streaming service.
+- **Left:**
+  - **League filters:** **All**, then each league you've switched on.
+  - **Games:** grouped as **Live now**, **Later today**, the next days and **Final**. Each card shows the matchup, its networks, its time or score, and how many channels were found. Games with no channel found are greyed out.
+- **Right: Where to watch.** The game's channels, best first, each with why it matched:
+  - **National TV / Streaming:** a channel named for the network ESPN lists (TNT, ESPN2, Fox, Prime Video…).
+  - **In the guide:** a listing during the game that names both teams.
+  - **Event channel:** the channel's name has both teams, for example "NHL 03: Red Wings @ Blues".
+  - **Local TV:** a team's regional network (FanDuel Sports Network, MSG, Altitude…).
+- **OK on a game** moves to its channels. **OK on a channel** plays it in the preview; **OK** again opens full screen. In full screen, **Channel Up/Down** moves between live games.
+- **Every playlist:** Sports searches every switched-on playlist with live TV. Hidden channels and categories are skipped.
+- **North America only:**
+  - US channels come first; Canadian channels are the backup.
+  - Channels marked for other countries are left out, for example "UK |" in the name, or a category for another country.
+- **Games further ahead:** your guide covers about 36 hours, so guide listings and event channels for later games appear closer to the start. **Search the guide for "[team]"** jumps to the TV Guide's search.
+- **Updates:** every minute while a game is live, every 5 minutes otherwise while Sports is open, and every 30 minutes in the background. If ESPN can't be reached, Sports says so and keeps the last list.
 
 ## 8. Movies and Series
 
 - **Left side**: Playlists, then categories: **All**, **Recently added**, **Continue watching**, **My List**, and your provider's categories.
-- **Right side**: posters for the chosen category, with a search box (**Search movies** / **Search series**).
+- **Right side**: posters for the chosen category.
+- **🔍 Search movies / 🔍 Search series** is in the category list, below My List. Results replace the poster grid; **✕ Clear search** ends the search.
 - **OK on a poster** opens its page: plot, cast, director, **▶ Play**, or **▶ Resume from [time]** and **Start over**, plus **+ My List**. Series pages list episodes by **Season**, with resume points. From the page's buttons, **Down** goes to the season buttons, then to the episodes; **Up** from the first episode goes back to the seasons. After you watch an episode and press **Back**, that episode is highlighted.
-- **Category list wraps around**: Up on **All** jumps to the last category, and Down on the last returns to All.
+- **Each category (and each search) keeps its own place.** Back from a title's page highlights that title's poster.
+- **Category list wraps around**: Up on **All** jumps to the last category, and Down on the last returns to All. The poster grid stops at the end.
 - **Menu on a category**: **Rename**, **Re-order** or **Hide** it. Hidden categories come back in Settings › List Editor.
 - If you have more than one playlist, movies and series from all of them are merged.
 
 ## 9. Settings
 
-Settings has sections on the left; highlighting one shows its options on the right.
+Settings has sections on the left and the open section's options on the right. **Up/Down** move through the sections; the section list scrolls to keep the highlighted one in view. **OK** opens the highlighted section and moves into it, on its first option (**Right** also moves into the open section). Inside a section, Up and Down stop at the first and last option. **Left** at the left edge of a section, or **Back**, returns to that section in the list; **Back** again opens the main menu.
 
 ### Playlists
 
@@ -166,10 +209,26 @@ Settings has sections on the left; highlighting one shows its options on the rig
   - **✎ Edit**: change its details. If you change the server, login or links, its channels and guide are downloaded again, and you're asked to confirm first.
   - **↻ Refresh**: replace the saved channels, guide, movies and series with what your provider has now.
   - **✕ Remove**: delete the playlist and its login from the device. To keep it for later, turn it off instead.
+  - **▤ Guide sources**: where this playlist's TV guide comes from (see below).
   - Switches: **Playlist on** (off hides it everywhere without deleting anything), **Live TV & guide**, and **Movies & series**.
 - **Details** shows the type, server, username, playlist link, TV guide source and status.
 
-**Background downloads.** About 10 seconds after the app opens, it updates each switched-on playlist in turn, fetching only what's out of date: channels older than a day, the guide older than 8 hours, and movies & series older than a day. Content that's switched off is never loaded. The first download of a large movie catalog can make a Fire TV Stick feel slower for a minute or two.
+**Guide sources** (Settings › Playlists › choose a playlist › ▤ Guide sources)
+
+- **Download from these sources every 4 / 8 / 12 / 24 h**: the same setting as in Settings › TV guide; it applies to every playlist.
+- **Provider's guide** (on/off): the guide that comes with an Xtream login, or the M3U file's own guide link.
+- **＋ Add guide source**: a name, an XMLTV address (`.xml` or `.xml.gz`) and a **time offset** (−12 to +12 hours) for a guide that's consistently early or late.
+- Each source has **Turn off / Turn on**, **✎ Edit**, **▲ ▼** to change the order, and **✕ Delete** (asks first). Each one shows when it last downloaded and how many channels it covered, or why it failed.
+- **Order matters:** sources are read top to bottom, and for each channel the first source with listings is used.
+- **Download now** gets this playlist's guide again.
+
+**Background downloads.** About 10 seconds after the app opens, it updates each switched-on playlist in turn, fetching only what's out of date: channels older than a day, the guide when it's older than your guide setting (8 hours by default), and movies & series older than a day. Content that's switched off is never loaded. The first download of a large movie catalog can make a Fire TV Stick feel slower for a minute or two.
+
+### TV guide
+
+- **Download the guide every**: 4, 8, 12 or 24 hours (8 is the default). The app also follows this while it stays open.
+- **Last downloaded**: when each playlist's guide last downloaded and how many sources it has. **Download the guide now** gets every guide again.
+- **Channels matched by hand**: how many there are, with **Clear all matches** (asks first).
 
 ### List Editor
 
@@ -199,10 +258,12 @@ Rename, re-order and Add to List are done with Menu on the item itself in the TV
 
 ### Sports tab
 
-- Turn categories on or off and set their order (the order of the filters on the Sports screen).
-- **Remove** a built-in category, or bring it back with **Restore all**.
-- **Add your own category by words**: give it a name and match words, separated by commas.
-- **Add a category from your playlist**: everything on that category's channels shows on the Sports screen.
+- **Leagues**: **OK** switches a league on or off.
+  - **Menu** on a league re-orders it: ▲▼ move, ◀ top, ▶ bottom, OK done. The order is the order of the filters on the Sports screen.
+- **Games with no channel found**: Show (greyed out, with ESPN's networks) or Hide.
+- **Finished games stay for**: 6, 12 or 24 hours.
+- **Scores**: Show or Hide. Hiding them avoids spoilers: live games show only the period.
+- Soccer, rugby, cricket, golf, motor racing and combat sports aren't included yet.
 
 ### Discover
 
@@ -228,13 +289,19 @@ Everything here stays on the device; nothing is uploaded or backed up to the clo
 
 ### Updates & about
 
-- **App updates**: the installed version, **Check now**, **Download and install**, and **Auto-check** on/off. When an update is found, the app asks before installing (**Update now** / **Later**) and never interrupts full-screen viewing.
+- **App updates**: the installed version, **Check now**, **Download and install**, and **Auto-check** on/off.
+  - The **Update available** dialog (**Update now** / **Later**) opens by itself only when the app starts, before you press anything. If a new version is found later, the main menu shows **Update x.y.z** instead, so nothing pops up while you're browsing or watching.
+  - The download shows its progress. If the connection stalls, the app waits 15 seconds and continues from where it stopped (up to 8 tries). The finished file is checked before installing, and a damaged download is refused.
+  - If Android's installer doesn't appear within about 25 seconds, an **Open installer** button opens Android's own install screen for the same file.
 - **Last crash**: if the app closed unexpectedly, the details are kept here on the device (nothing is sent anywhere), with **Clear crash report**.
+- **Report a bug**: email **bugs@avidviewer.app** with what happened and the steps that lead to it. The section lists the details to include, read from the TV (app version, device model, Android and Fire OS versions, and the last crash's error). Scan the **QR code** with a phone camera to start that email with the details filled in; **Open email app** appears only on TVs that have one. No playlists, logins or provider addresses are included.
+- **User guide and Control4 driver**: two QR codes to scan with a phone. **User guide (PDF)** opens the latest version of this guide; **Control4 mini driver** downloads `um_avid_viewer.c4z` (see [Control4](#12-control4)).
+- **Moving through this section:** opening it (OK on Updates & about) highlights **Report a bug** first; **Down** moves to the QR codes, then to Backup & restore and App updates. Blocks without buttons (Report a bug on TVs without an email app, and the QR codes) take the highlight themselves, with a ring around the whole block, so the page scrolls each one fully into view.
 - **Credits**: TMDB, JustWatch, Open-Meteo and ESPN.
 
 #### Backup & restore
 
-A backup saves your playlists (with their logins), ★ Favorites and your lists, renamed and re-ordered channels and categories, hidden items, Sports categories, location, the TMDB key, network-share settings, all other settings, watch history and resume points. Channels, guides and movie catalogs aren't included; they download again after a restore.
+A backup saves your playlists (with their logins), ★ Favorites and your lists, renamed and re-ordered channels and categories, hidden items, Sports leagues and options, location, the TMDB key, network-share settings, all other settings, watch history and resume points. Channels, guides and movie catalogs aren't included; they download again after a restore.
 
 Because it holds your provider logins, every backup is locked with a **PIN** you choose (4 or more digits). The PIN can't be recovered if you forget it.
 
@@ -277,8 +344,14 @@ The share password is stored encrypted on the TV and is included in your PIN-loc
 - **No channels or guide**: check that the playlist, and its Live TV switch, are on in Settings › Playlists, then choose Refresh.
 - **No movies or series**: turn on Movies & series for the playlist and Refresh.
 - **Discover is empty**: add a TMDB API key in Settings › Discover, or turn off "My services".
-- **Sports is empty**: wait for the TV guide to load, or adjust your categories in Settings › Sports tab.
+- **Sports is empty**: check the leagues in Settings › Sports tab; off-season leagues have no games. "Couldn't reach ESPN" means the schedules couldn't be downloaded, so the last list is shown.
+- **A game shows "No channel yet"**: your playlists have no channel named for its network, and no guide listing or event channel for it yet. Those often appear closer to the start. You can also use **Search the guide** on the game.
+- **Discover froze or the app closed after about 20 seconds** (1.0.137 and earlier, with large movie catalogs): update the app.
 - **A channel or category disappeared**: it may be hidden. Check Settings › List Editor.
+- **A guide row ends early and Right won't go further**: fixed in 1.0.133 for guides that list overlapping programmes; update the app.
+- **A channel shows the wrong listings, or none**: press Menu on it and choose **Match guide…**. If a whole guide is consistently early or late, set a **time offset** on its source in Settings › Playlists › ▤ Guide sources.
+- **Favorites landed one channel off after a restore** (on a version before 1.0.94): that backup can't fix them automatically. Set them once, then make a new backup; newer backups record which channel each favorite points to.
+- **An update hangs at about 95%** (updating from 1.0.82 or earlier, which have the old updater): try again. If it still hangs, install the new version once by hand with the Downloader app; later updates resume stalled downloads.
 
 ### Backup questions
 
@@ -297,6 +370,36 @@ The share password is stored encrypted on the TV and is included in your PIN-loc
 
 Every build runs automated usability tests before it's released: the real app screens on a TV-sized screen, driven by simulated remote presses. They cover every screen and Settings section, re-ordering, List Editor bulk actions, search, hold-to-scroll, backups (including a real network share) and a 600-press random-key crash hunt. A failing test stops the release.
 
+## 12. Control4
+
+The **Avid Viewer** Control4 driver (`um_avid_viewer.c4z`) adds Avid Viewer to the Watch menu. Picking it switches the room to your Fire TV and opens Avid Viewer. Your Control4 installer adds it in Composer.
+
+**Download:** [Control4 drivers folder](https://drive.google.com/drive/folders/1PeYs-U4YgndrVZm6PN-uAF-hgRGoIr9d) on Google Drive, or the [driver file directly](https://drive.google.com/file/d/10XxPywvX456lPTmou6xsqERmbTfhOJul/view?usp=drivesdk). Anyone with the link can download it. You can also scan the QR code in **Settings › Updates & about** with a phone.
+
+### What you need
+
+- Avid Viewer installed on the Fire TV.
+- A Fire TV driver in your Control4 system that works with Control4's universal app drivers. Its connections include an **App Switcher** with App or MiniApp inputs.
+
+### Setup in Composer
+
+1. Add the Avid Viewer driver to the room.
+2. Under **Connections**, connect the driver's **Avid Viewer** output to a free **App / MiniApp** input on the Fire TV driver's App Switcher.
+3. In **System Design**, select the room and check that it shows **Audio Path = Yes** for Avid Viewer.
+4. Refresh Navigators.
+
+### Using it
+
+- Choose **Avid Viewer** under **Watch** on a Control4 remote, touchscreen or the app.
+- Remote keys pass through to the Fire TV, so the D-pad, OK, Back and Menu work in Avid Viewer as usual.
+- If the Fire TV driver's **Passthrough Mode** is Off, the Fire TV takes over as the selected device once Avid Viewer opens.
+
+### Control4 troubleshooting
+
+- **The remote stops working after choosing Avid Viewer:** the room has no audio path for Avid Viewer. Fix the connections until System Design shows Audio Path = Yes.
+- **The Fire TV switches on but Avid Viewer doesn't open:** check that the app is installed. Some third-party Fire TV drivers only launch apps from their own list and can't use this driver.
+- **To see what the driver sends:** turn on its **Debug Mode** property. Its **Fire TV Package** property shows `com.avidviewer.tv`.
+
 ---
 
 ## Release notes
@@ -305,7 +408,140 @@ Every public release since 1.0.35, newest first. Releases are published on GitHu
 
 <!-- new-releases: entries for new builds are added automatically below this line -->
 
-### 1.0.80 — November 10, 2026, 9:39 AM CT (current)
+### 1.0.141 — November 11, 2026, 4:51 PM CT (current)
+
+**Release notes**
+
+- **Sports, rebuilt around ESPN's schedules:** real games for today and the next 2 days, plus recent finals, for the NFL, NBA, NHL, MLB, WNBA, CFL, college football and men's college basketball. Each game shows where to watch it in your playlists, best first: national TV, guide listings, event channels, then local networks. US channels come first and Canadian ones as a backup; channels for other countries are left out. Before, Sports guessed events from guide listings and often showed promos (and lately nothing).
+- **Settings › Sports tab:** choose leagues and their order, whether to show games with no channel found, how long finished games stay, and whether to show scores. Custom keyword and playlist categories, and Add to Sports tab in the category Menu, are gone.
+- **Discover no longer freezes or closes** with a large movie and series catalog (the remote stopped responding and the app closed after about 20 seconds). Movies and Series could stall the same way.
+
+**Change log**
+
+- Sports from ESPN's scoreboard feed: 8 North American leagues, today−1 to today+2 (day by day if a range is refused), last answer kept
+- Channel matching across playlists: national networks by name, guide listings naming both teams, event channels, local networks; US first, Canada next, other countries left out
+- New Sports screen and Settings › Sports tab
+- Discover / Movies: paged title lists compared by identity (Compose compared them item by item, reading whole catalogs on the main thread)
+- Tests: ESPN parsing, network and country names, matching order, Sports screen with a stand-in ESPN, ESPN unreachable, settings, paged-list comparison
+
+### 1.0.137 — November 11, 2026, 2:12 PM CT
+
+**Release notes**
+
+- **Settings › Updates & about shows every block in full.** On Fire TV, Report a bug and the user guide / Control4 QR codes were cut off at the top of the screen. They can now be highlighted, so the page scrolls them into view: opening the section lands on Report a bug, and Down moves to the QR codes. On TVs with an email app, **Open email app** takes the highlight instead.
+
+**Change log**
+
+- Updates & about: Report a bug and the QR code block can take the highlight, so they're scrolled into view whole (the page used to skip past them to the first button, pushing their tops off screen)
+- Tests: opening Updates & about lands on Report a bug; both blocks are reachable with Down and Up and shown whole
+
+### 1.0.133 — November 11, 2026, 12:37 PM CT
+
+**Release notes**
+
+- **Much lighter on Fire TV Stick with big playlists:** channels, the TV guide, movies and series are now kept in a small database on the TV. Screens read only what they show, and downloads go straight into storage instead of being held in memory. Saved channels, guides and catalogs move in on the first launch, so nothing downloads again.
+- **The app remembers where you were:** each TV Guide category comes back on the channel you left, the guide keeps the time you scrolled to (Back from full screen lands on the same show), and Movies and Series keep their place in each category, with Back from a title's page landing on its poster.
+- **Starts on your last channel**, even a favorite from another playlist; without one, on your first favorite.
+- **Settings:** a section opens when you press **OK**, not when you highlight it, and **Left** and **Back** return to the section you were in.
+- **Back at the top asks before closing:** "Press Back again to exit".
+- **Back after Search** returns to your results, on the result you chose.
+- **Settings › Updates & about:** QR codes for the latest user guide and the Control4 driver.
+- **TV guide fixes:** guides that list overlapping programmes no longer push the end of a row off screen; changing guide sources quickly no longer lets an older download overwrite a newer one; a failed or empty download keeps the channels and guide you already had.
+
+**Change log**
+
+- On-device database (SQLite) for movies & series, live channels and guide programmes; screens read pages, and search, favorites, category counts and the guide's search box look things up instead of loading whole playlists
+- Downloads (M3U, Xtream live/movies/series, XMLTV) stream straight into the database in one transaction; failed or empty downloads keep the saved data; saved choices follow changed keys; old files moved in on first use
+- Guide downloads for a playlist run one at a time
+- Navigation memory: per-category channel and scroll, guide time and programme, poster after a title page
+- Highlight placement retries until it lands (replaces fixed delays); Left-as-Back only in the guide
+- Settings: OK opens a section; Left/Back return to its row; entry on the first option
+- Back at the top: press again to exit; Back after Search returns to the result
+- Start on the last channel, else from Favorites or a list, else the first favorite
+- QR codes for the user guide PDF and the Control4 mini driver
+- Tests: database (rollback, upgrades, remapping, guide windows), navigation memory, Settings Left/Back/OK, exit, search return, wrap limits, startup channel, QR codes
+
+### 1.0.109 — November 11, 2026, 7:21 AM CT
+
+**Release notes**
+
+- **Steadier on Fire TV Stick with large playlists:** Xtream channel lists download using far less memory, other playlists no longer stay fully loaded in the background, and moving the highlight in a big guide or movie category no longer recalculates the whole list each time. Screens look and behave the same.
+- **Favorites from other playlists** are still kept ready, so ★ Favorites and your lists show them instantly. Search still covers every playlist.
+- **The "Update available" dialog no longer pops up while you're browsing.** It opens by itself only when the app starts. Otherwise, use **Update** in the main menu or Settings › Updates & about.
+
+**Change log**
+
+- Xtream live channels read one at a time (about 60% less memory for the same list); a guide id sent as null is no longer treated as the text "null"
+- Other playlists keep only favorite and list channels in memory; search, local suggestions and category counts read playlists one at a time
+- Channel numbers, categories, category channel lists, lookups and movie/series filters are computed once per change instead of on every highlight move
+- The guide makes focus handles only for rows on screen
+- Update dialog only before the first button press after launch
+- Tests: streamed parsing with messy provider data, favorites-only memory, cached lists stay current, update dialog timing
+
+### 1.0.97 — November 10, 2026, 9:00 PM CT
+
+**Release notes**
+
+- **Cleaner top of the TV Guide:** a new details panel shows the channel number, a New tag, time left with a progress bar, two lines about the show, and what's next. The key instructions and category label are gone, leaving room for one more guide row.
+- **Search moved into the category lists** of the TV Guide (below ＋ New list), Movies and Series (below My List).
+- **Settings fixes:** the list of sections scrolls, so Updates & about is reachable again; Up and Down no longer jump out of the section you're in; the guide download frequency also shows in each playlist's Guide sources.
+
+**Change log**
+
+- TV Guide header: new details panel; key instructions and category label removed; one more guide row
+- Search in the guide's category list (below ＋ New list) and in the Movies and Series category lists (below My List); grid search box removed
+- Settings: scrollable section list; Up/Down stay within a section (Playlists columns too); frequency setting in Guide sources
+- Tests: search placement and header contents; every section reachable; Down at the end of Playlists stays put
+
+### 1.0.94 — November 10, 2026, 7:27 PM CT
+
+**Release notes**
+
+- **TV guide management:** choose how often the guide downloads (4, 8, 12 or 24 hours), add, edit and delete guide sources for each playlist with a time offset, and match a channel to the right listings by hand (**Menu › Match guide…**).
+- **Favorites stay on the right channels** when a provider changes its list, including after restoring a backup. Before, they could land one channel off.
+- **Back and Left step back one layer at a time:** channels → your category → the playlist list → the main menu.
+- **The main menu is always on screen**, as icons, next to the TV Guide.
+- **Quicker dialogs:** choosing a list in Add to List, or saving a rename, closes the dialog.
+- **Re-order instructions** sit over the preview window, so the list stays in view.
+
+**Change log**
+
+- Settings › TV guide: refresh every 4/8/12/24 h (also while the app runs), last download per playlist, download now, matched-channel count
+- Guide sources per playlist: provider on/off; add/edit/turn off/re-order/delete with time offset; sources merged in order; the old single guide address becomes the first source (also in backups)
+- Menu › Match guide…: name-ranked guide channels, search, provider's match, no guide
+- Stable M3U channel keys from the stream address; old keys remapped on every download; backup references used on restore
+- Layered Back and Left; main menu always visible (icons); current category kept when going back
+- Add to List and Rename close on the action; smaller re-order panel at the top
+- Tests: guide sources, stable keys and restore after a changed list, layer navigation, quick dialogs
+
+### 1.0.86 — November 10, 2026, 5:42 PM CT
+
+**Release notes**
+
+- **Report a bug** in Settings › Updates & about: the address, the details to include, and a QR code that starts the email on your phone.
+- **In-app updates no longer hang around 95%:** a slow or stalled download picks up where it stopped, and if Android's installer doesn't respond, **Open installer** finishes the update. *(Updating from 1.0.82 or earlier still uses the old updater; if it hangs, try again or install 1.0.86 once by hand.)*
+
+**Change log**
+
+- Settings › Updates & about: Report a bug (bugs@avidviewer.app, device details, QR code)
+- In-app update: stall detection and resume (up to 8 tries), size and APK checks, installer fallback via Android's install screen
+- Tests: Report a bug section and email link; update download that stalls at 95%, server without resume support, damaged file
+
+### 1.0.82 — November 10, 2026, 3:45 PM CT
+
+**Release notes**
+
+- **Discover no longer crashes on Fire TV** after 10–15 seconds of browsing.
+- **Less memory and smoother navigation with large catalogs** on every screen that loads movies, series or channels. With a large catalog, the "▶ On your provider" tags on Discover may appear a moment after the posters. Nothing needs to download again after updating.
+
+**Change log**
+
+- Channel and movie & series files are saved and loaded one item at a time instead of as one large block (older files still load; a damaged file loads as empty)
+- Discover's "On your provider" matching runs in the background instead of on the screen's thread
+- Title-name cleaning patterns are prepared once instead of for every title
+- Tests: 60,000-title save/load, older files, damaged file, 120,000-title matching without blocking
+
+### 1.0.80 — November 10, 2026, 9:39 AM CT
 
 **Release notes**
 

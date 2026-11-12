@@ -521,8 +521,6 @@ fun GroupOptionsDialog(vm: AppViewModel) {
                 Label("Category ${pos + 1} of ${all.size} · ${all.getOrNull(pos)?.count ?: 0} channels", size = 13.sp, lines = Int.MAX_VALUE, color = C.Soft)
                 OptionRow("✎  Rename") { renaming = true }
                 OptionRow("⇅  Re-order") { vm.groupMenu = null; vm.movingGroup = raw }
-                if (vm.isSportsGroup(raw)) OptionRow("🏆  Remove from Sports tab") { vm.removeGroupFromSports(raw) }
-                else OptionRow("🏆  Add to Sports tab") { vm.addGroupToSports(raw) }
                 OptionRow("⊘  Hide category") { vm.toggleHidden(raw); vm.groupMenu = null }
             }
         },

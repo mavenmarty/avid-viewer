@@ -245,6 +245,22 @@ class LiveDb(private val catalog: Catalog) {
     /** How many channels have programmes saved. */
     fun guideChannelCount(pid: String): Int = db.rawQuery("SELECT COUNT(DISTINCT e) FROM prog WHERE p = ?", arrayOf(pid)).use { if (it.moveToFirst()) it.getInt(0) else 0 }
 
+    // ---------------------------------------------------------------- passes (Sports matching)
+
+    /** Every channel of a playlist, one at a time: key, name, category, guide id. */
+    fun forEachChannel(pid: String, fn: (String, String, String, String?) -> Unit) {
+        db.rawQuery("SELECT k, n, g, e FROM channel WHERE p = ?", arrayOf(pid)).use { c ->
+            while (c.moveToNext()) fn(c.getString(0), c.getString(1), c.getString(2), c.getString(3))
+        }
+    }
+
+    /** Every programme of a playlist overlapping [from]..[to], one at a time: guide id, start, end, title, subtitle. */
+    fun forEachProgram(pid: String, from: Long, to: Long, fn: (String, Long, Long, String, String?) -> Unit) {
+        db.rawQuery("SELECT e, s, x, t, st FROM prog WHERE p = ? AND x > ? AND s < ?", arrayOf(pid, from.toString(), to.toString())).use { c ->
+            while (c.moveToNext()) fn(c.getString(0), c.getLong(1), c.getLong(2), c.getString(3), c.getString(4))
+        }
+    }
+
     // ---------------------------------------------------------------- housekeeping
 
     fun delete(pid: String) {

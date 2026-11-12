@@ -9,6 +9,8 @@ on:
       - "**.md"
       - ".github/workflows/user-guide.yml"
       - ".github/scripts/update_user_guide.py"
+      - ".github/scripts/build_guide_pdf.py"
+      - ".github/scripts/guide-pdf.css"
   workflow_dispatch:
 
 permissions:

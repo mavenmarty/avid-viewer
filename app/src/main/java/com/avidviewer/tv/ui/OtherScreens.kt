@@ -2,9 +2,20 @@
 
 package com.avidviewer.tv.ui
 
+import androidx.compose.ui.graphics.Color
+
+import androidx.compose.ui.input.key.type
+
+import androidx.compose.ui.input.key.key
+
+import androidx.compose.ui.input.key.Key
+
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+
 import kotlinx.coroutines.launch
 
 import androidx.compose.foundation.focusable
+import androidx.compose.foundation.border
 
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.foundation.focusGroup
@@ -594,12 +605,14 @@ private fun FirstControlStop(fr: FocusRequester, on: androidx.compose.runtime.Mu
     androidx.compose.foundation.layout.Box(
         // Full width and 1 dp high: never "to the left" of a control, so Left from the page can't land here.
         Modifier.fillMaxWidth().height(1.dp).focusRequester(fr)
-            .onFocusChanged { if (it.isFocused) scope.launch { fm.moveFocus(androidx.compose.ui.focus.FocusDirection.Down) } }
+            // "Next" follows the page's order, so this is its first control (the leftmost of a row of buttons),
+            // where "Down" picked whichever was nearest the middle.
+            .onFocusChanged { if (it.isFocused) scope.launch { fm.moveFocus(androidx.compose.ui.focus.FocusDirection.Next) } }
             .focusable(),
     )
 }
 
-/** Settings: sections on the left (highlighting one shows it), options on the right. */
+/** Settings: sections on the left (OK opens one), options on the right. */
 @Composable
 fun SettingsScreen(vm: AppViewModel) {
     val p = vm.prefs
@@ -615,6 +628,12 @@ fun SettingsScreen(vm: AppViewModel) {
     // The first control of a section (a hidden stop at the top of the page that hands the highlight down).
     val firstFr = remember(section) { FocusRequester() }
     val firstOn = remember(section) { mutableStateOf(false) }
+    // OK on a section: once its page is on screen, step into it (as Right does: its first control).
+    var openTick by remember { mutableStateOf(0) }
+    val fm = androidx.compose.ui.platform.LocalFocusManager.current
+    LaunchedEffect(openTick) {
+        if (openTick > 0) focusWhenReady(vm, frames = 60, isFocused = { vm.settingsInContent }) { fm.moveFocus(androidx.compose.ui.focus.FocusDirection.Right) }
+    }
     // Back inside a section goes up one level, to its row in the section list (NAV-07); Back there opens the menu.
     LaunchedEffect(vm.settingsBackTick) {
         if (vm.settingsBackTick > 0) focusWhenReady(vm) { runCatching { sectionFrs[section]?.requestFocus() }.isSuccess }
@@ -637,8 +656,8 @@ fun SettingsScreen(vm: AppViewModel) {
                     modifier = Modifier.fillMaxWidth().height(42.dp).focusRequester(sectionFrs.getValue(sec.id))
                         .then(if (sec == SECTIONS.first()) Modifier.entryFocus(vm, Screen.SETTINGS) else Modifier),
                     color = if (on) C.Surface2 else androidx.compose.ui.graphics.Color.Transparent,
-                    onFocus = { vm.settingsSection = sec.id },
-                    onClick = { vm.settingsSection = sec.id },
+                    // Highlighting a section only shows its summary; OK opens it and moves into it (NAV-08).
+                    onClick = { vm.settingsSection = sec.id; openTick++ },
                 ) {
                     androidx.compose.material3.Icon(sec.icon, contentDescription = sec.title, tint = if (on) C.Accent else C.Muted, modifier = Modifier.padding(start = if (compact) 12.dp else 10.dp).width(20.dp).height(20.dp))
                     if (!compact) Column(Modifier.padding(start = 12.dp).weight(1f)) {
@@ -718,6 +737,7 @@ fun SettingsScreen(vm: AppViewModel) {
                                 }
                             }
                             item { BugReportBlock(vm) }
+                            item { GuideAndDriverBlock() }
                             item { BackupBlock(vm) }
                             item {
                                 SettingBlock("App updates", "Installed: version ${vm.installed.second}" + (vm.update?.let { " · version ${it.versionName} available" } ?: "")) {
@@ -751,7 +771,7 @@ private fun sectionSummary(vm: AppViewModel, id: String): String? = when (id) {
     "guide" -> "Every ${vm.prefs.guideRefreshHours} h" + (vm.epgMatchCount().takeIf { it > 0 }?.let { " · $it matched" } ?: "")
     "location" -> vm.prefs.postalCode.ifBlank { null }?.let { "$it · ${vm.prefs.placeName.substringBefore(',')}" } ?: "Not set"
     "display" -> vm.zoneLabel()
-    "sports" -> "${vm.prefs.sportCats.count { it.on }} categories on"
+    "sports" -> "${vm.sportLeagues().count { it.on }} leagues on"
     "discover" -> if (vm.prefs.tmdbKeyEnc.isBlank()) "Needs TMDB key" else "${vm.prefs.myServices.size} services"
     "privacy" -> if (vm.prefs.historyPaused) "History paused" else "History on"
     "about" -> vm.update?.let { "Update ${it.versionName} available" } ?: "Version ${vm.installed.second}"
@@ -840,6 +860,7 @@ private fun BugReportBlock(vm: AppViewModel) {
         "Report a bug",
         "Something not working? Email ${com.avidviewer.tv.data.BugReport.ADDRESS}. Say what happened and the steps that lead to it, and include the details below." +
             if (crash != null) " If the app closed unexpectedly, a photo of the crash report above helps too." else "",
+        focusable = !canEmail, // with an email button, that button takes the highlight instead
     ) {
         Row(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
             QrCode(link, Modifier.size(132.dp).testTag("bug-qr"))
@@ -852,6 +873,28 @@ private fun BugReportBlock(vm: AppViewModel) {
                     runCatching { ctx.startActivity(com.avidviewer.tv.data.BugReport.emailIntent(version, crash)) }
                 }
             }
+        }
+    }
+}
+
+/** QR codes for the user guide and the Control4 driver: a TV can't open them, a phone can. */
+@Composable
+private fun GuideAndDriverBlock() {
+    SettingBlock("User guide and Control4 driver", "Scan with your phone's camera to open them.", focusable = true) {
+        Row(horizontalArrangement = Arrangement.spacedBy(28.dp)) {
+            LinkQr("User guide (PDF)", "The latest version, with setup, every screen and release notes.", com.avidviewer.tv.data.Links.USER_GUIDE, "guide-qr")
+            LinkQr("Control4 mini driver", "Puts Avid Viewer in the Control4 Watch menu (um_avid_viewer.c4z). Setup is in the user guide, section 12.", com.avidviewer.tv.data.Links.CONTROL4_DRIVER, "control4-qr")
+        }
+    }
+}
+
+@Composable
+private fun androidx.compose.foundation.layout.RowScope.LinkQr(title: String, note: String, url: String, tag: String) {
+    Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+        QrCode(url, Modifier.size(120.dp).testTag(tag))
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Label(title, size = 14.sp, color = C.Accent, weight = FontWeight.Bold)
+            Label(note, size = 12.sp, color = C.Soft, lines = Int.MAX_VALUE)
         }
     }
 }
@@ -898,9 +941,15 @@ private fun ToggleRow(title: String, desc: String, on: Boolean, onToggle: () -> 
 }
 
 @Composable
-internal fun SettingBlock(title: String, desc: String, content: @Composable () -> Unit) {
+internal fun SettingBlock(title: String, desc: String, focusable: Boolean = false, content: @Composable () -> Unit) {
+    // A block with nothing to press (a QR code, details) can still take the highlight when [focusable],
+    // so the remote can reach it and the page scrolls it fully into view instead of skipping past it.
+    var focused by remember { mutableStateOf(false) }
     Column(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(C.Surface).padding(14.dp),
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(C.Surface)
+            .then(if (focusable) Modifier.testTag("block-$title").onFocusChanged { focused = it.isFocused }.focusable()
+                .border(2.dp, if (focused) C.AccentFocus else androidx.compose.ui.graphics.Color.Transparent, RoundedCornerShape(10.dp)) else Modifier)
+            .padding(14.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Label(title, size = 15.sp, color = C.Text, weight = FontWeight.SemiBold, lines = 2)
@@ -911,79 +960,80 @@ internal fun SettingBlock(title: String, desc: String, content: @Composable () -
 
 // ---------------------------------------------------------------- Sports tab settings
 private fun androidx.compose.foundation.lazy.LazyListScope.sportsSettings(vm: AppViewModel) {
-    item {
-        Label("Choose which categories appear on the Sports screen. Each one matches your provider's channel groups and channel names, plus guide listings that mention it. The order here is the order of the filter buttons.", size = 12.sp, lines = Int.MAX_VALUE)
-    }
-    val cats = vm.prefs.sportCats
-    cats.forEachIndexed { i, c ->
-        item(key = "cat-" + c.id) {
-            Row(
-                Modifier.fillMaxWidth().heightIn(min = 54.dp).clip(RoundedCornerShape(10.dp)).background(C.Surface).padding(horizontal = 8.dp, vertical = 6.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
-                TvButton(if (c.on) "On" else "Off", selected = c.on) {
-                    vm.updateSportCats(cats.mapIndexed { j, x -> if (j == i) x.copy(on = !x.on) else x })
-                }
-                Column(Modifier.weight(1f).padding(horizontal = 6.dp)) {
-                    Label(c.name + if (c.builtin) "  · built-in" else "", size = 15.sp, color = C.Text, weight = FontWeight.SemiBold, lines = 2)
-                    Label(if (c.groups.isNotEmpty()) "Playlist category: " + c.groups.joinToString(", ") { vm.groupName(it) } else "Matches: " + c.keywords.joinToString(", "), size = 12.sp, lines = Int.MAX_VALUE)
-                }
-                TvButton("▲") { if (i > 0) vm.updateSportCats(cats.toMutableList().apply { add(i - 1, removeAt(i)) }) }
-                TvButton("▼") { if (i < cats.size - 1) vm.updateSportCats(cats.toMutableList().apply { add(i + 1, removeAt(i)) }) }
-                TvButton("Remove") { vm.updateSportCats(cats.filterIndexed { j, _ -> j != i }) }
-            }
-        }
-    }
-    // Built-in categories can be removed; bring any of them back here.
-    val missing = com.avidviewer.tv.data.SportCat.DEFAULTS.filter { d -> cats.none { it.id == d.id } }
-    if (missing.isNotEmpty()) item(key = "cat-restore") {
-        SettingBlock("Removed built-in categories", missing.joinToString(", ") { it.name }) {
-            androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                missing.forEach { d -> TvButton("+ " + d.name) { vm.updateSportCats(vm.prefs.sportCats + d) } }
-                if (missing.size > 1) TvButton("Restore all") { vm.updateSportCats(vm.prefs.sportCats + missing) }
-            }
-        }
-    }
-    item(key = "cat-add") {
-        var name by remember { mutableStateOf("") }
-        var kw by remember { mutableStateOf("") }
-        var msg by remember { mutableStateOf<String?>(null) }
-        SettingBlock("Add your own category by words", "For example, name \"Vikings\" and match \"vikings, minnesota\". Separate words with commas. Either field is enough.") {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                TvField("Name", name, modifier = Modifier.width(180.dp)) { name = it }
-                TvField("Match words", kw, modifier = Modifier.width(280.dp)) { kw = it }
-                TvButton("Add", primary = true) {
-                    val words = kw.ifBlank { name }.split(',').map { it.trim().lowercase() }.filter { it.isNotEmpty() }
-                    val n = name.trim().ifBlank { kw.split(',').first().trim().replaceFirstChar { it.uppercase() } }
-                    if (words.isEmpty() || n.isEmpty()) { msg = "Enter a name or some words to match." }
-                    else {
-                        vm.updateSportCats(cats + com.avidviewer.tv.data.SportCat("c" + System.currentTimeMillis(), n, words, true, false))
-                        msg = "Added “$n”. It now appears on the Sports screen."
-                        name = ""; kw = ""
+    item(key = "leagues") {
+        val leagues = vm.sportLeagues()
+        var moving by remember { mutableStateOf<String?>(null) }
+        SettingBlock(
+            "Leagues",
+            "Games come from ESPN's schedules. Choose the leagues to show; their order is the order of the filters on the Sports screen. OK switches a league on or off; Menu on a league: Re-order.",
+        ) {
+            leagues.forEachIndexed { i, s ->
+                val l = com.avidviewer.tv.data.League.of(s.id) ?: return@forEachIndexed
+                val isMoving = moving == s.id
+                val fr = remember(s.id) { FocusRequester() }
+                // The moving row keeps the highlight as it changes place.
+                LaunchedEffect(isMoving, i) { if (isMoving) focusWhenReady(vm, frames = 30) { runCatching { fr.requestFocus() }.isSuccess } }
+                Focusable(
+                    modifier = Modifier.fillMaxWidth().height(46.dp).focusRequester(fr)
+                        .then(if (isMoving) Modifier.border(2.dp, C.Accent, RoundedCornerShape(8.dp)) else Modifier)
+                        .onPreviewKeyEvent { e ->
+                            if (!isMoving || e.type != androidx.compose.ui.input.key.KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                            fun moveTo(j: Int) { if (j != i && j in leagues.indices) vm.updateSportLeagues(leagues.toMutableList().apply { add(j, removeAt(i)) }) }
+                            when (e.key) {
+                                Key.DirectionUp -> { moveTo(i - 1); true }
+                                Key.DirectionDown -> { moveTo(i + 1); true }
+                                Key.DirectionLeft -> { moveTo(0); true }
+                                Key.DirectionRight -> { moveTo(leagues.size - 1); true }
+                                Key.DirectionCenter, Key.Enter, Key.Back, Key.Escape -> { moving = null; true }
+                                else -> false
+                            }
+                        },
+                    color = C.Surface2,
+                    onMenu = { moving = if (isMoving) null else s.id },
+                    onClick = { if (isMoving) moving = null else vm.updateSportLeagues(leagues.mapIndexed { j, x -> if (j == i) x.copy(on = !x.on) else x }) },
+                ) {
+                    Row(Modifier.fillMaxSize().padding(horizontal = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Label(l.tag, size = 10.sp, color = Color.White, weight = FontWeight.Bold,
+                            modifier = Modifier.width(48.dp).clip(RoundedCornerShape(4.dp)).background(Color(l.color)).padding(vertical = 2.dp))
+                        Column(Modifier.weight(1f)) {
+                            Label(l.name, size = 14.sp, color = C.Text, weight = FontWeight.SemiBold)
+                            Label(if (isMoving) "▲ ▼ move · ◀ top · ▶ bottom · OK done" else l.season, size = 11.sp, color = if (isMoving) C.AccentFocus else C.Muted)
+                        }
+                        Label(if (s.on) "On" else "Off", size = 12.sp, weight = FontWeight.Bold, color = if (s.on) C.OnAccent else C.Soft,
+                            modifier = Modifier.clip(RoundedCornerShape(12.dp)).background(if (s.on) C.Accent else C.Surface).padding(horizontal = 12.dp, vertical = 3.dp))
                     }
                 }
             }
-            msg?.let { Label(it, size = 12.sp, color = C.Soft) }
         }
     }
-    item(key = "from-playlist") {
-        var filter by remember { mutableStateOf("") }
-        val groups = vm.groups().filter { filter.isBlank() || it.name.contains(filter, ignoreCase = true) }
-        SettingBlock("Add a category from your playlist", "Everything on that category's channels shows on the Sports screen. Tip: you can also press Menu on a category in the TV Guide.") {
-            TvField("Filter categories", filter, modifier = Modifier.width(320.dp)) { filter = it }
-            groups.take(40).forEach { g ->
-                val added = vm.isSportsGroup(g.raw)
-                Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).background(C.Surface2).padding(horizontal = 10.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
-                        Label(g.name, size = 14.sp, color = C.Text, weight = FontWeight.SemiBold, lines = 2)
-                        Label("${g.count} channels", size = 12.sp)
-                    }
-                    TvButton(if (added) "✓ In Sports" else "+ Add", selected = added) { if (added) vm.removeGroupFromSports(g.raw) else vm.addGroupToSports(g.raw) }
-                }
+    item(key = "games") {
+        val p = vm.prefs
+        SettingBlock("Games", "") {
+            Label("Games with no channel found", size = 13.sp, color = C.Text)
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                TvButton("Show", selected = p.sportsShowUnmatched) { vm.updateSportsOptions(showUnmatched = true) }
+                TvButton("Hide", selected = !p.sportsShowUnmatched) { vm.updateSportsOptions(showUnmatched = false) }
             }
-            if (groups.size > 40) Label("Showing 40 of ${groups.size}. Type in the filter to narrow the list.", size = 12.sp, lines = Int.MAX_VALUE)
+            Label("Shown greyed out, with the networks ESPN lists.", size = 11.sp, color = C.Muted)
+            Label("Finished games stay for", size = 13.sp, color = C.Text)
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                listOf(6, 12, 24).forEach { h -> TvButton("$h h", selected = p.sportsFinalHours == h) { vm.updateSportsOptions(finalHours = h) } }
+            }
+            Label("Then they drop off the list.", size = 11.sp, color = C.Muted)
+            Label("Scores", size = 13.sp, color = C.Text)
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                TvButton("Show", selected = p.sportsShowScores) { vm.updateSportsOptions(showScores = true) }
+                TvButton("Hide", selected = !p.sportsShowScores) { vm.updateSportsOptions(showScores = false) }
+            }
+            Label("Hide them to avoid spoilers: live games show only the period.", size = 11.sp, color = C.Muted)
         }
+    }
+    item(key = "not-yet") {
+        SettingBlock(
+            "Not included yet",
+            "Soccer, rugby, cricket, golf, motor racing and combat sports. Schedules, scores and TV networks: ESPN (unofficial public feed). If ESPN can't be reached, Sports says so and keeps the last list.",
+            focusable = true,
+        ) {}
     }
 }
 

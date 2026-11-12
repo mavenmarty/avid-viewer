@@ -204,6 +204,19 @@ class Store(private val context: Context) {
     /** The old movies & series file, once its titles are in the catalog database. */
     fun deleteVodFile(playlistId: String) { File(dataDir, "vod_$playlistId.json").delete() }
 
+    /** ESPN's last answer per league and day, for when it can't be reached. */
+    fun saveSportsCache(league: String, day: String, text: String) = runCatching { File(dataDir, "sports_${league}_$day.json").writeText(text) }
+    fun loadSportsCache(league: String, day: String): String? =
+        runCatching { File(dataDir, "sports_${league}_$day.json").takeIf { it.exists() }?.readText() }.getOrNull()
+
+    /** Drops saved ESPN days no longer shown (and the one-file-per-league cache of 1.0.141). */
+    fun pruneSportsCache(keepDays: Set<String>) {
+        dataDir.listFiles { f -> f.name.startsWith("sports_") && f.name.endsWith(".json") }?.forEach { f ->
+            val day = f.name.removeSuffix(".json").substringAfterLast('_')
+            if (day.length != 8 || day !in keepDays) f.delete()
+        }
+    }
+
     /** Deletes a playlist's saved files (its rows in the database are removed separately). */
     fun deletePlaylistData(playlistId: String) {
         File(dataDir, "vod_$playlistId.json").delete()

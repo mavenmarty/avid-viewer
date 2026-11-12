@@ -130,7 +130,11 @@ data class Prefs(
     val lon: Double = 0.0,
     val units: String = "F",
     val showWeather: Boolean = true,
-    val sportCats: List<SportCat> = SportCat.DEFAULTS,
+    /** Sports leagues to show, in order (missing ones are added, on: [LeagueSetting.complete]). */
+    val sportLeagues: List<LeagueSetting> = emptyList(),
+    val sportsShowUnmatched: Boolean = true,
+    val sportsFinalHours: Int = 12,
+    val sportsShowScores: Boolean = true,
     val autoUpdateCheck: Boolean = true,
     val myList: List<VodItem> = emptyList(),
     val tmdbKeyEnc: String = "",
@@ -178,7 +182,8 @@ data class Prefs(
         o.put("lastChannel", lastChannel ?: "")
         o.put("postalCode", postalCode).put("placeName", placeName).put("placeTz", placeTz)
         o.put("lat", lat).put("lon", lon).put("units", units).put("showWeather", showWeather)
-        o.put("sportCats", JSONArray().apply { sportCats.forEach { put(it.toJson()) } })
+        o.put("sportLeagues", JSONArray().apply { sportLeagues.forEach { put(it.toJson()) } })
+        o.put("sportsShowUnmatched", sportsShowUnmatched); o.put("sportsFinalHours", sportsFinalHours); o.put("sportsShowScores", sportsShowScores)
         o.put("autoUpdateCheck", autoUpdateCheck)
         o.put("myList", JSONArray().apply { myList.forEach { put(it.toJson()) } })
         o.put("tmdbKeyEnc", tmdbKeyEnc)
@@ -225,7 +230,11 @@ data class Prefs(
                 lon = o.optDouble("lon", 0.0),
                 units = o.optString("units", "F"),
                 showWeather = o.optBoolean("showWeather", true),
-                sportCats = o.optJSONArray("sportCats")?.let { a -> List(a.length()) { SportCat.fromJson(a.getJSONObject(it)) } } ?: SportCat.DEFAULTS,
+                // Older versions' keyword categories ("sportCats") aren't used any more.
+                sportLeagues = o.optJSONArray("sportLeagues")?.let { a -> List(a.length()) { LeagueSetting.fromJson(a.getJSONObject(it)) } } ?: emptyList(),
+                sportsShowUnmatched = o.optBoolean("sportsShowUnmatched", true),
+                sportsFinalHours = o.optInt("sportsFinalHours", 12).let { if (it in listOf(6, 12, 24)) it else 12 },
+                sportsShowScores = o.optBoolean("sportsShowScores", true),
                 autoUpdateCheck = o.optBoolean("autoUpdateCheck", true),
                 myList = o.optJSONArray("myList")?.let { a -> List(a.length()) { VodItem.fromJson(a.getJSONObject(it)) } } ?: emptyList(),
                 tmdbKeyEnc = o.optString("tmdbKeyEnc"),
