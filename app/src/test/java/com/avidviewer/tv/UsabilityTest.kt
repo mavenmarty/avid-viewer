@@ -872,6 +872,34 @@ class UsabilityTest {
         waitFor("back in the guide on channel 60 (focus: ${focused()})") { vm.screen == Screen.GUIDE && focused().contains("BIG Channel 60 with") }
     }
 
+    /** Presses sent back to back, faster than the screen redraws (a quick thumb on the remote). */
+    private fun burst(k: Key, n: Int) { repeat(n) { key(k) }; settle() }
+
+    /** Nov 12: tapping Up/Down fast in the TV Guide froze and closed the app after a wrap-around. */
+    @Test
+    fun fastTapsInTheChannelListLandOnTheRightChannel() {
+        rule.runOnIdle { vm.chooseGroup(TestData.P1, "BIG") }
+        waitFor("BIG channel 1 highlighted") { focused().contains("BIG Channel 1 with") }
+        burst(Key.DirectionDown, 10)
+        waitFor("10 fast presses down reach channel 11 (focus: ${focused()})") { focused().contains("BIG Channel 11 with") }
+        burst(Key.DirectionDown, 25)
+        waitFor("25 more reach channel 36 (focus: ${focused()})") { focused().contains("BIG Channel 36 with") }
+        burst(Key.DirectionUp, 30)
+        waitFor("30 fast presses up reach channel 6 (focus: ${focused()})") { focused().contains("BIG Channel 6 with") }
+        // Up past the top goes to the preview, then wraps to the bottom; fast presses carry on from there.
+        burst(Key.DirectionUp, 5); press(listOf(Key.DirectionUp))
+        if (!focused().contains("BIG Channel 80 ")) press(listOf(Key.DirectionUp))
+        waitFor("wrapped to the last channel (focus: ${focused()})") { focused().contains("BIG Channel 80 ") }
+        burst(Key.DirectionUp, 4)
+        waitFor("4 up from the bottom reach channel 76 (focus: ${focused()})") { focused().contains("BIG Channel 76 with") }
+        burst(Key.DirectionDown, 4); burst(Key.DirectionDown, 1)
+        waitFor("Down past the bottom wraps to channel 1 (focus: ${focused()})") { focused().contains("BIG Channel 1 with") }
+        // Mixed fast taps never lose the highlight.
+        val rnd = Random(1112)
+        repeat(30) { burst(if (rnd.nextBoolean()) Key.DirectionDown else Key.DirectionUp, 1 + rnd.nextInt(8)) }
+        assertTrue("highlight lost (focus: ${focused()})", focused() != "(nothing focused)")
+    }
+
     @Test
     fun channelAndCategoryListsWrapAround() {
         rule.runOnIdle { vm.chooseGroup(TestData.P1, "KIDS") }
