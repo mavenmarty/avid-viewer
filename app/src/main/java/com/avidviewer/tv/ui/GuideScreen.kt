@@ -1,6 +1,8 @@
 package com.avidviewer.tv.ui
 
 import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.background
@@ -429,6 +431,7 @@ fun GuideScreen(vm: AppViewModel) {
                                 Focusable(
                                     modifier = Modifier.width(((((b - a) / 60000f) * DP_PER_MIN).dp - 3.dp).coerceAtLeast(4.dp)).fillMaxHeight()
                                         .then(if (p === target) Modifier.focusRequester(progFr(idx)!!) else Modifier)
+                                        .then(if (aired) Modifier.semantics { stateDescription = "Already aired" } else Modifier)
                                         .onPreviewKeyEvent { e ->
                                             if (e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
                                             when (e.key) {

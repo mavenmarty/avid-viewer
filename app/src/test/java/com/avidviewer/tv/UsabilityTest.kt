@@ -238,7 +238,9 @@ class UsabilityTest {
         var lefts = 0
         while (vm.nav.guideWindowStart != base - 2 * 3600_000L && lefts < 10) { press(listOf(Key.DirectionLeft)); lefts++ }
         assertEquals("window 2 h back (focus: ${focused()})", base - 2 * 3600_000L, vm.nav.guideWindowStart)
-        waitFor("an aired programme highlighted and marked (focus: ${focused()})") { rule.onAllNodesWithText("already aired", substring = true).fetchSemanticsNodes().isNotEmpty() }
+        waitFor("an aired programme highlighted and marked (focus: ${focused()})") {
+            rule.onAllNodes(androidx.compose.ui.test.isFocused()).fetchSemanticsNodes().any { it.config.getOrNull(androidx.compose.ui.semantics.SemanticsProperties.StateDescription) == "Already aired" }
+        }
         press(listOf(Key.DirectionLeft)) // to the channel name: the window stays
         assertEquals("never more than 2 h back", base - 2 * 3600_000L, vm.nav.guideWindowStart)
         // Now, in the day strip, comes back.

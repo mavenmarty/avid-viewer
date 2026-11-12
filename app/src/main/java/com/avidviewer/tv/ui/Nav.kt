@@ -361,7 +361,7 @@ fun GroupNav(vm: AppViewModel) {
                 onMenu = { if (!isMoving) vm.groupMenu = g.raw },
                 onClick = { if (isMoving) vm.movingGroup = null else vm.chooseGroup(vm.activePlaylist()?.id ?: "", g.raw) },
             ) {
-                if (isMoving) Glyph("⇅", C.Accent, 14.sp, Modifier.padding(start = 10.dp))
+                if (isMoving) Label("⇅", size = 14.sp, color = C.Accent, weight = FontWeight.Bold, modifier = Modifier.padding(start = 10.dp))
                 Label(g.name, size = 14.sp, color = if (on || isMoving) C.Text else C.Soft, weight = if (on || isMoving) FontWeight.Bold else FontWeight.Normal, modifier = Modifier.padding(start = 10.dp).weight(1f))
                 Label(if (isMoving) "${groups.indexOf(g) + 1}/${groups.size}" else "${g.count}", size = 12.sp, color = if (isMoving) C.Accent else C.Muted, modifier = Modifier.padding(end = 10.dp))
             }

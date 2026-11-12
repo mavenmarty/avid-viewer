@@ -112,7 +112,7 @@ fun VodScreen(vm: AppViewModel, kind: String) {
                     onClick = { if (isMoving) vm.vodMovingCat = null else vm.chooseVodCategory(kind, name) },
                 ) {
                     val shown = if (special) name else vm.vodCatName(kind, name)
-                    if (isMoving) Glyph("⇅", C.Accent, 13.sp, Modifier.padding(start = 10.dp))
+                    if (isMoving) Label("⇅", size = 13.sp, color = C.Accent, weight = FontWeight.Bold, modifier = Modifier.padding(start = 10.dp))
                     Label(shown, size = 13.sp, color = if (on || isMoving) C.Text else C.Soft, weight = if (on || isMoving) FontWeight.Bold else FontWeight.Normal, lines = 2, modifier = Modifier.padding(start = 10.dp, top = 4.dp, bottom = 4.dp).weight(1f))
                     if (isMoving) Label("${cats.indexOfFirst { it.first == name } + 1}/${cats.size}", size = 12.sp, color = C.Accent, modifier = Modifier.padding(end = 10.dp))
                     else if (count >= 0) Label("$count", size = 12.sp, modifier = Modifier.padding(end = 10.dp))
