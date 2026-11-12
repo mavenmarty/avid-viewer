@@ -18,7 +18,7 @@ import org.robolectric.annotation.GraphicsMode
 import java.io.File
 
 /**
- * Pictures of the main screens on a TV-sized screen, saved with the test report (screens/*.png), so a change to
+ * Pictures of the main screens on a TV-sized screen, saved with the test report (the screens folder), so a change to
  * how things look can be checked without a device. Nothing is asserted beyond the screens drawing.
  */
 @RunWith(RobolectricTestRunner::class)
