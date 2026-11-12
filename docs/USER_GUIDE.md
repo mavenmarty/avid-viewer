@@ -185,7 +185,7 @@ Discover shows what's new and popular, and where to watch it, using TMDB and Jus
 - **Tabs**: New, Trending, For you, In theaters.
 - **My services**: only show titles on the streaming services you've picked.
 - Titles your provider carries are tagged **▶ ON YOUR PROVIDER** (with a large catalog, the tag may appear a moment after the posters). Open one to play it (**▶ Play**, or **▶ Episodes** for a series), add it to **My List**, or **Search my playlists**.
-- **Every version on your provider:** when your playlists have the title more than once (other languages, qualities or playlists), its page lists **N versions on your provider**, English first, each with its language, category and playlist. **OK** on one plays that movie or opens that series. The main button plays the first and says which ("Plays: English · EN | Drama · My provider").
+- **Every version on your provider:** when your playlists have the title more than once (other languages, qualities or playlists), its page lists **N versions on your provider**, English first, each with its language, category and playlist. The page scrolls as one: **Down** from the buttons moves through the versions and then **Where to watch**. **OK** on a version plays that movie or opens that series. The main button plays the first and says which ("Plays: English · EN | Drama · My provider").
 - **Where to watch** lists Stream, Free, Rent and Buy options for your region.
 
 Discover needs a free **TMDB API key**. Enter it in **Settings › Discover**; it's stored encrypted on the device.
@@ -441,9 +441,14 @@ Every public release since 1.0.35, newest first. Releases are published on GitHu
 
 ### 1.0.167 — November 12, 2026, 10:50 AM CT (current)
 
+**Release notes**
+
+- **Discover: every version of a title can be reached.** On a Discover title page, the versions on your provider had no room left on a TV screen below the description and Where to watch, so Down couldn't reach them. The page now scrolls as one: the buttons, the description, each version, then Where to watch.
+
 **Change log**
 
-- Discover: the title page scrolls as one, so Down reaches every version (and Where to watch)
+- Discover title page scrolls as one list; Where to watch can be highlighted
+- Tests: a long description and three versions, each reached with Down and playable
 
 ### 1.0.165 — November 12, 2026, 9:30 AM CT
 
