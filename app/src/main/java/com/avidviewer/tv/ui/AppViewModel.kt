@@ -74,6 +74,9 @@ enum class NavMode { FULL, COLLAPSED, GROUPS }
 /** The combined Favorites category shown first in the TV Guide. */
 enum class GuideFocus { TOP, KEEP, CURRENT }
 
+/** How many days of guide a download keeps (the guide scrolls as far as its data goes, up to this). */
+const val GUIDE_DAYS = 7
+
 const val FAV_GROUP = "\u2605favorites"
 /** Group id prefix for the user's own channel lists: LIST_PREFIX + list id. */
 const val LIST_PREFIX = "\u2605list:"
@@ -888,6 +891,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             if (p.liveOn) {
                 val (savedGuide, savedAt) = withContext(Dispatchers.IO) { guideWindow(p.id, null) to live.guideSavedAt(p.id) }
                 if (savedGuide.isNotEmpty()) guide = savedGuide
+                refreshGuideEnd()
                 val stale = System.currentTimeMillis() - savedAt > guideMs()
                 if (refresh || download || stale || savedGuide.isEmpty()) refreshGuide(p)
             }
@@ -943,6 +947,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         try {
             val n = downloadGuide(p, channels.mapNotNull { epgIdOf(it) }.toHashSet()) ?: return
             guide = withContext(Dispatchers.IO) { guideWindow(p.id, null) }
+            refreshGuideEnd()
             rematchSports()
             status = "Guide loaded for $n channels."
         } catch (e: Exception) {
@@ -951,9 +956,60 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     // ---------------- stable channel keys (saved choices follow a changed list) ----------------
-    /** The guide times kept and shown: from 3 hours ago to 36 hours ahead. */
+    /**
+     * The guide times held in memory for every channel: from 3 hours ago to 36 hours ahead. Downloads keep
+     * up to [GUIDE_DAYS] days in the database; later times are read for the category on screen (GUIDE-01).
+     */
     private fun guideFrom() = System.currentTimeMillis() - 3 * 3600 * 1000L
     private fun guideTo() = System.currentTimeMillis() + 36 * 3600 * 1000L
+    private fun guideKeepTo() = System.currentTimeMillis() + GUIDE_DAYS * 24 * 3600 * 1000L
+
+    /** Where the saved guide of the active playlist ends (0 = no guide), at most [GUIDE_DAYS] days ahead. */
+    var guideLastEnd by mutableStateOf(0L); private set
+    private suspend fun refreshGuideEnd() {
+        val p = activePlaylist() ?: run { guideLastEnd = 0L; return }
+        val end = withContext(Dispatchers.IO) { runCatching { live.guideEnd(p.id) }.getOrDefault(0L) }
+        guideLastEnd = minOf(end, guideKeepTo())
+        guideLaterSpan = 0L to 0L // a new download: read the later times again
+    }
+
+    /** Programmes for times past what is held in memory, by "playlist|guide id", and the span they cover. */
+    private var guideLater by mutableStateOf<Map<String, List<Program>>>(emptyMap())
+    private var guideLaterSpan = 0L to 0L
+    private var guideLaterIds: Set<String> = emptySet()
+    private var guideLaterJob: Job? = null
+
+    /**
+     * The guide on screen shows [from]–[to] for [shown] channels: if that runs past the times held in memory,
+     * read those channels' programmes for a few hours around it (in the background) so the guide can scroll days ahead.
+     */
+    fun guideViewing(shown: List<Channel>, from: Long, to: Long) {
+        if (to <= guideTo() - 30 * 60 * 1000L) return
+        val ids = shown.mapNotNull { c -> epgIdOf(c)?.let { c.key.substringBefore(':') + "|" + it } }.toHashSet()
+        val (a, b) = guideLaterSpan
+        if (from >= a && to <= b && guideLaterIds.containsAll(ids)) return
+        val spanFrom = from - 3 * 3600 * 1000L
+        val spanTo = to + 6 * 3600 * 1000L
+        guideLaterJob?.cancel()
+        guideLaterJob = viewModelScope.launch {
+            val out = HashMap<String, List<Program>>()
+            withContext(Dispatchers.IO) {
+                liveReady()
+                ids.groupBy({ it.substringBefore('|') }, { it.substringAfter('|') }).forEach { (pid, eids) ->
+                    live.guide(pid, eids, spanFrom, spanTo).forEach { (e, list) -> out["$pid|$e"] = list }
+                }
+            }
+            guideLater = out; guideLaterSpan = spanFrom to spanTo; guideLaterIds = ids
+        }
+    }
+
+    /** A channel's programmes overlapping [from]–[to]: from memory, or (days ahead) from what [guideViewing] read. */
+    fun programsAt(c: Channel?, from: Long, to: Long): List<Program> {
+        if (c == null) return emptyList()
+        if (to <= guideTo() - 30 * 60 * 1000L) return programs(c)
+        val id = epgIdOf(c) ?: return emptyList()
+        return guideLater[c.key.substringBefore(':') + "|" + id] ?: programs(c)
+    }
 
     /** A playlist's saved programmes for [ids] (null = every channel) in the guide's time window. */
     private fun guideWindow(pid: String, ids: Collection<String>?) = live.guide(pid, ids, guideFrom(), guideTo())
@@ -1146,7 +1202,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         val sources = guideSourcesOf(p)
         if (sources.isEmpty()) return null
         val from = guideFrom()
-        val to = guideTo()
+        val to = guideKeepTo()
         val directory = ArrayList<GuideChannel>()
         val statuses = HashMap(guideSourceStatus)
         val covered = HashSet<String>()
@@ -2445,6 +2501,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         NavMode.GROUPS -> {
             if (!inGroupNav && (screen == Screen.GUIDE || screen == Screen.LIVE) && selectedGroup != null) {
                 navFocusKey = selectedGroup
+            } else if ((screen == Screen.GUIDE || screen == Screen.LIVE) && livePlaylists.size <= 1) {
+                // With one playlist the playlist list only repeats the same name, so Back from the categories goes
+                // straight to the main menu: every Back press now visibly moves up a level (BUG-019, #7).
+                inGroupNav = false; inPlaylistTree = false; navFocusKey = null; navMode = NavMode.FULL
             } else {
                 inGroupNav = false
                 navMode = NavMode.COLLAPSED

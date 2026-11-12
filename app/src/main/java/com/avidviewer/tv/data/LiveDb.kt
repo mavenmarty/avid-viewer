@@ -52,6 +52,9 @@ class LiveDb(private val catalog: Catalog) {
     fun channelsSavedAt(pid: String) = savedAt(pid, "ch")
     fun guideSavedAt(pid: String) = savedAt(pid, "guide")
 
+    /** When the last saved programme of a playlist ends (0 = none). */
+    fun guideEnd(pid: String): Long = db.rawQuery("SELECT MAX(x) FROM prog WHERE p = ?", arrayOf(pid)).use { c -> if (c.moveToFirst() && !c.isNull(0)) c.getLong(0) else 0L }
+
     private fun markSaved(d: SQLiteDatabase, pid: String, kind: String, at: Long = System.currentTimeMillis()) {
         d.insertWithOnConflict("live_saved", null, ContentValues().apply { put("p", pid); put("kind", kind); put("saved", at) }, SQLiteDatabase.CONFLICT_REPLACE)
     }

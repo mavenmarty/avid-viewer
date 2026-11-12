@@ -174,6 +174,84 @@ class UsabilityTest {
         assertNotEquals("Back should leave the category list", NavMode.GROUPS, vm.navMode)
     }
 
+    private fun focusKidsProgramme() {
+        rule.onAllNodes(androidx.compose.ui.test.hasText("Program KIDS Chann", substring = true) and androidx.compose.ui.test.hasClickAction()).onFirst().requestFocus()
+        settle()
+    }
+
+    @Test
+    fun guideColumnsSitOnLocalHalfHours() {
+        // Kathmandu is UTC+5:45: the columns must be at local :00 and :30, not UTC's (:15 / :45 there).
+        val ktm = java.util.TimeZone.getTimeZone("Asia/Kathmandu")
+        val t = java.util.GregorianCalendar(ktm).apply { set(2026, 10, 12, 20, 14, 0) }.timeInMillis
+        val base = com.avidviewer.tv.ui.localHalfHour(t, ktm)
+        val local = java.util.GregorianCalendar(ktm).apply { timeInMillis = base }
+        assertEquals(20, local.get(java.util.Calendar.HOUR_OF_DAY)); assertEquals(0, local.get(java.util.Calendar.MINUTE))
+        // Across a daylight-saving change (US Central, 2 Nov 2026 01:00 CST is after the fall-back).
+        val chi = java.util.TimeZone.getTimeZone("America/Chicago")
+        val d = java.util.GregorianCalendar(chi).apply { set(2026, 10, 1, 1, 40, 0) }.timeInMillis + 3600_000L // second 1:40
+        val b2 = java.util.GregorianCalendar(chi).apply { timeInMillis = com.avidviewer.tv.ui.localHalfHour(d, chi) }
+        assertEquals(1, b2.get(java.util.Calendar.HOUR_OF_DAY)); assertEquals(30, b2.get(java.util.Calendar.MINUTE))
+        assertEquals(10 * 60_000L, d - com.avidviewer.tv.ui.localHalfHour(d, chi))
+    }
+
+    @Test
+    fun guideScrollsDaysAheadWithTheDayStripAndTwoHoursBackDimmed() {
+        rule.runOnIdle { vm.chooseGroup(TestData.P1, "KIDS") }
+        settle()
+        waitFor("the guide to know it runs past tomorrow") { vm.guideLastEnd > System.currentTimeMillis() + 48 * 3600_000L }
+        // Where you are: the category is named over the times (NAV-14).
+        waitFor("the category named in the time row") { rule.onAllNodesWithText("KIDS · Today", substring = true).fetchSemanticsNodes().isNotEmpty() }
+        waitFor("the day strip") { rule.onAllNodesWithText("Tomorrow").fetchSemanticsNodes().isNotEmpty() }
+        val base = com.avidviewer.tv.ui.localHalfHour(vm.now, vm.timeZone)
+        rule.onAllNodesWithText("Tomorrow").onFirst().performClick()
+        settle()
+        waitFor("the window on tomorrow (start ${vm.nav.guideWindowStart})") { vm.nav.guideWindowStart >= base + 20 * 3600_000L }
+        waitFor("tomorrow's programmes read for the category") {
+            rule.onAllNodesWithText("Program KIDS Chann", substring = true).fetchSemanticsNodes().isNotEmpty() &&
+                rule.onAllNodesWithText("No guide information").fetchSemanticsNodes().isEmpty()
+        }
+        waitFor("the time row says Tomorrow") { rule.onAllNodesWithText("KIDS · Tomorrow", substring = true).fetchSemanticsNodes().isNotEmpty() }
+        // Two days ahead is past what is held in memory: those programmes are read for the category on screen.
+        val d2 = vm.dayLabel(vm.now + 48 * 3600_000L)
+        rule.onAllNodesWithText(d2).onFirst().performClick()
+        settle()
+        waitFor("the window two days ahead") { vm.nav.guideWindowStart >= base + 44 * 3600_000L }
+        waitFor("programmes two days ahead") {
+            rule.onAllNodesWithText("Program KIDS Chann", substring = true).fetchSemanticsNodes().isNotEmpty() &&
+                rule.onAllNodesWithText("No guide information").fetchSemanticsNodes().isEmpty()
+        }
+        // Holding Left on a later window jumps back to now (NAV-15).
+        focusKidsProgramme()
+        hold(Key.DirectionLeft, 6)
+        waitFor("held Left back at now (start ${vm.nav.guideWindowStart}, base $base)") { vm.nav.guideWindowStart == base }
+        // Left from the first programme goes back up to 2 hours, no further; aired programmes say so.
+        focusKidsProgramme()
+        repeat(10) { press(listOf(Key.DirectionLeft)); if (vm.nav.guideWindowStart == base - 2 * 3600_000L) return@repeat }
+        assertEquals("window 2 h back (focus: ${focused()})", base - 2 * 3600_000L, vm.nav.guideWindowStart)
+        press(listOf(Key.DirectionLeft, Key.DirectionLeft))
+        assertTrue("never more than 2 h back", vm.nav.guideWindowStart >= base - 2 * 3600_000L)
+        waitFor("an aired programme highlighted and marked (focus: ${focused()})") { rule.onAllNodesWithText("already aired", substring = true).fetchSemanticsNodes().isNotEmpty() }
+        // Now, in the day strip, comes back.
+        rule.onAllNodesWithText("Now").onFirst().performClick()
+        settle()
+        assertEquals(base, vm.nav.guideWindowStart)
+    }
+
+    @Test
+    fun withOnePlaylistBackFromTheCategoriesGoesStraightToTheMainMenu() {
+        rule.runOnIdle { vm.setPlaylistEnabled(TestData.P2, false) }
+        waitFor("one live playlist") { vm.livePlaylists.size == 1 }
+        rule.runOnIdle { vm.chooseGroup(TestData.P1, "NEWS") }
+        settle()
+        rule.onAllNodes(androidx.compose.ui.test.hasText("NEWS Channel 1 with", substring = true) and androidx.compose.ui.test.hasClickAction()).onFirst().requestFocus()
+        settle()
+        press(listOf(Key.Back))
+        waitFor("Back from a channel highlights the category") { vm.inGroupNav && focused().contains("NEWS") }
+        press(listOf(Key.Back))
+        assertEquals("Back from the categories opens the main menu (no playlist-list step)", NavMode.FULL, vm.navMode)
+    }
+
     @Test
     fun menuReorderMovesTheChannelAndBackOnlyEndsReordering() {
         rule.runOnIdle { vm.chooseGroup(TestData.P1, "KIDS") }
@@ -1099,8 +1177,9 @@ class UsabilityTest {
         rule.runOnIdle { vm.chooseGroup(TestData.P1, "KIDS") }
         waitFor("KIDS channel 1 highlighted") { focused().contains("KIDS Channel 1 with") }
         // Down on the last channel goes to the first; Up from the top (past the header) to the last.
-        press(listOf(Key.DirectionUp))
-        if (!focused().contains("KIDS Channel 12 ")) press(listOf(Key.DirectionUp))
+        // (Up from the first channel goes to the day strip, then the preview, then wraps.)
+        var ups = 0
+        while (!focused().contains("KIDS Channel 12 ") && ups < 3) { press(listOf(Key.DirectionUp)); ups++ }
         waitFor("Up wraps to the last channel (focus: ${focused()})") { focused().contains("KIDS Channel 12 ") }
         press(listOf(Key.DirectionDown))
         waitFor("Down wraps to the first channel (focus: ${focused()})") { focused().contains("KIDS Channel 1 with") }
