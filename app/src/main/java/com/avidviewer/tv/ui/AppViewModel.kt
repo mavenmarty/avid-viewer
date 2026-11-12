@@ -1955,15 +1955,29 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
      * first, then unmarked, multi-language and other languages; titles you've hidden are left out.
      * One indexed lookup per title, remembered until the catalog changes.
      */
-    fun versionsOf(t: Title): List<VodItem> {
+    fun versionsOf(t: Title): List<VodItem> = versionsByName(if (t.type == "tv") "series" else "movie", t.name)
+
+    /** The other copies of a Movies / Series title (each listed once): its languages, qualities and playlists. */
+    fun versionsOfItem(v: VodItem): List<VodItem> = versionsByName(Catalog.group(v.kind), v.name).ifEmpty { listOf(v) }
+
+    private fun versionsByName(group: String, name: String): List<VodItem> {
         if (matchCacheFor != vodVersion) { versionsCache.clear(); matchCache.clear(); matchCacheFor = vodVersion }
-        val k = t.type + "|" + Tmdb.normalize(t.name)
+        val k = group + "|" + Tmdb.normalize(name)
         versionsCache[k]?.let { return it }
         val pids = vodPlaylists.map { it.id }
-        val found = runCatching { catalog.findAllByName(if (t.type == "tv") "series" else "movie", Tmdb.normalize(t.name), pids) }.getOrDefault(emptyList())
+        val found = runCatching { catalog.findAllByName(group, Tmdb.normalize(name), pids) }.getOrDefault(emptyList())
             .sortedBy { com.avidviewer.tv.data.Language.rank(com.avidviewer.tv.data.Language.of(it.name, it.category)) } // stable: list order within a language
         versionsCache[k] = found
         return found
+    }
+
+    /** The title page's "versions" list is open for this title. */
+    var versionPicker by mutableStateOf<VodItem?>(null)
+
+    /** Another copy chosen on the title page: the page shows that one (its episodes, resume point, My List). */
+    fun chooseVersion(v: VodItem) {
+        versionPicker = null
+        if (v.key != vodDetail?.key) openVodDetail(v)
     }
 
     fun playMatched(v: VodItem) { if (v.kind == "series") openVodDetail(v) else playVod(v) }
@@ -2448,7 +2462,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Titles whose name contains [q] (the Movies / Series search). */
     fun vodSearch(kind: String, q: String): List<VodItem> =
-        titles(com.avidviewer.tv.data.Catalog.Query(vodKindKey(kind), vodPids(), nameContains = q.trim()))
+        titles(com.avidviewer.tv.data.Catalog.Query(vodKindKey(kind), vodPids(), nameContains = q.trim(), grouped = true))
 
     /** List Editor: one playlist's categories of this kind with counts, hidden ones included. */
     fun vodEditorCategories(kind: String, pid: String): List<Pair<String, Int>> {
@@ -2474,7 +2488,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     /** What the Movies / Series screens show: hidden titles and categories left out. */
     fun vodOf(kind: String): List<VodItem> = vodOfMemo.getOrPut(kind) { Memo() }.get(vodVersion, vodPids().joinToString(",")) {
-        titles(com.avidviewer.tv.data.Catalog.Query(vodKindKey(kind), vodPids()))
+        titles(com.avidviewer.tv.data.Catalog.Query(vodKindKey(kind), vodPids(), grouped = true))
     }
 
     fun vodCatName(kind: String, cat: String) = prefs.vodCatNames[vodKindKey(kind) + "|" + cat] ?: cat
@@ -2539,10 +2553,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         val g = vodKindKey(kind)
         return when (val c = vodCategory[kind] ?: "All") {
             "All" -> vodOf(kind)
-            "Recently added" -> titles(com.avidviewer.tv.data.Catalog.Query(g, vodPids(), newestFirst = true, limit = 200))
+            "Recently added" -> titles(com.avidviewer.tv.data.Catalog.Query(g, vodPids(), newestFirst = true, limit = 200, grouped = true))
             "My List" -> prefs.myList.filter { if (kind == "series") it.kind == "series" else it.kind != "series" }
             "Continue watching" -> catalog.byKeys(resume.keys).filter { Catalog.group(it.kind) == g && !isVodHidden(it) }
-            else -> titles(com.avidviewer.tv.data.Catalog.Query(g, vodPids(), category = c))
+            else -> titles(com.avidviewer.tv.data.Catalog.Query(g, vodPids(), category = c, grouped = true))
         }
     }
 

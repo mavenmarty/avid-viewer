@@ -58,8 +58,8 @@ fun PlayerScreen(vm: AppViewModel) {
         delay(5000)
         showInfo = false
     }
-    BackHandler { vm.closeFullScreen() }
-    BackHandler(enabled = vm.avPanel) { vm.avPanel = false } // Back closes the panel first
+    // Back closes the Picture & sound panel first, then full screen.
+    BackHandler { if (vm.avPanel) vm.avPanel = false else vm.closeFullScreen() }
 
     Box(
         Modifier

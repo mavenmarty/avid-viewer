@@ -193,7 +193,7 @@ private fun TitleDetail(vm: AppViewModel, t: Title) {
 }
 
 /** "English · EN | Netflix Series · Main": the language, category and playlist of a version. */
-private fun versionLabel(vm: AppViewModel, v: com.avidviewer.tv.data.VodItem): String =
+internal fun versionLabel(vm: AppViewModel, v: com.avidviewer.tv.data.VodItem): String =
     listOfNotNull(com.avidviewer.tv.data.Language.of(v.name, v.category) ?: "Language not marked", v.category.ifBlank { null }, vm.playlists.firstOrNull { it.id == v.playlistId }?.name)
         .joinToString(" · ")
 

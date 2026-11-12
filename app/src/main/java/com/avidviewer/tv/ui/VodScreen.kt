@@ -232,6 +232,8 @@ private fun VodDetail(vm: AppViewModel, v: VodItem) {
     var inside by remember { mutableStateOf(false) }
     var onEpisode by remember { mutableStateOf(false) }
     val isSeries = v.kind == "series"
+    val versions = vm.versionsOfItem(v)
+    vm.versionPicker?.let { VersionPickerDialog(vm, it, versions) }
     // Opening the page, coming back from the player, or episodes arriving: put the highlight
     // on the episode that was playing, else the main button. Retried per frame until it lands,
     // and dropped as soon as the user presses a key.
@@ -282,8 +284,11 @@ private fun VodDetail(vm: AppViewModel, v: VodItem) {
                 }
                 val inList = vm.inMyList(v.key)
                 TvButton(if (inList) "✓ In My List" else "+ My List", selected = inList, modifier = if (isSeries) Modifier.focusRequester(playFocus) else Modifier) { vm.toggleMyList(v) }
+                if (versions.size > 1) TvButton("⇄ ${versions.size} versions", modifier = Modifier.testTag("versions-button")) { vm.versionPicker = v }
                 TvButton("Back") { vm.closeVodDetail() }
             }
+            // Movies and Series list each title once; this says which copy the page is on.
+            if (versions.size > 1) Label("This version: " + versionLabel(vm, v), size = 13.sp, color = C.Accent, lines = 1)
             if (info == null) Label("Loading details…", size = 13.sp)
             info?.plot?.takeIf { it.isNotBlank() }?.let { Label(it, size = 14.sp, color = C.Text, lines = if (isSeries) 3 else 7) }
             info?.cast?.takeIf { it.isNotBlank() }?.let { Label("Cast: $it", size = 13.sp, lines = if (isSeries) 1 else 2) }
@@ -333,4 +338,40 @@ private fun SeasonsAndEpisodes(vm: AppViewModel, episodeFocus: FocusRequester, o
 private fun fmtPos(ms: Long): String {
     val s = ms / 1000
     return if (s >= 3600) "%d:%02d:%02d".format(s / 3600, (s / 60) % 60, s % 60) else "%d:%02d".format(s / 60, s % 60)
+}
+
+/** The title page's "⇄ N versions": every copy of the title (language, category, playlist), English first. */
+@Composable
+private fun VersionPickerDialog(vm: AppViewModel, current: VodItem, versions: List<VodItem>) {
+    val first = remember { FocusRequester() }
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = { vm.versionPicker = null },
+        containerColor = C.Surface,
+        title = { Text("Versions of “${com.avidviewer.tv.data.Tmdb.cleanName(current.name)}”", color = C.Text, fontWeight = FontWeight.Bold) },
+        text = {
+            androidx.compose.foundation.lazy.LazyColumn(Modifier.heightIn(max = 320.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                items(versions.size, key = { versions[it].key }) { i ->
+                    val o = versions[i]
+                    val here = o.key == current.key
+                    Focusable(
+                        modifier = Modifier.fillMaxWidth().height(48.dp).testTag("version-" + o.key).then(if (here || (i == 0 && versions.none { it.key == current.key })) Modifier.focusRequester(first) else Modifier),
+                        color = if (here) C.Surface2 else C.Bg,
+                        onClick = { vm.chooseVersion(o) },
+                    ) {
+                        Row(Modifier.fillMaxSize().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            val lang = com.avidviewer.tv.data.Language.of(o.name, o.category)
+                            Label(lang ?: "Language not marked", size = 13.sp, weight = FontWeight.Bold, color = if (lang == "English") C.AccentFocus else C.Text, modifier = Modifier.width(150.dp))
+                            Column(Modifier.weight(1f)) {
+                                Label(o.name, size = 13.sp, color = C.Text)
+                                Label(listOf(o.category, vm.playlists.firstOrNull { it.id == o.playlistId }?.name.orEmpty()).filter { it.isNotBlank() }.joinToString(" · "), size = 11.sp, color = C.Muted)
+                            }
+                            Label(if (here) "✓ Showing" else "Choose ›", size = 12.sp, color = C.Accent, weight = FontWeight.Bold)
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = { TvButton("Close") { vm.versionPicker = null } },
+    )
+    LaunchedEffect(current.key) { focusWhenReady(vm) { runCatching { first.requestFocus() }.isSuccess } }
 }

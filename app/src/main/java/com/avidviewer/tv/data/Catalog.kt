@@ -17,15 +17,17 @@ data class Ingest<T>(val result: T, val added: Int, val committed: Boolean)
  * episodes, "series" for series), c category ("Other" when blank), n name, nn normalized name (for
  * search and matching), l logo, u url, s series id, a added, r rating, y year, o position in the
  * provider's list, h hidden (1 when the title or its category is hidden by the user), tk the
- * stream address token (ChannelKeys.token), to follow saved choices when keys change.
+ * stream address token (ChannelKeys.token), to follow saved choices when keys change, lr the
+ * language rank (Language.rank: 0 English … 3 other), so a title listed once shows its English copy.
  */
-class Catalog(context: Context) : SQLiteOpenHelper(context.applicationContext, "catalog.db", null, 3) {
+class Catalog(context: Context) : SQLiteOpenHelper(context.applicationContext, "catalog.db", null, 4) {
 
     override fun onCreate(db: SQLiteDatabase) {
         db.execSQL(
             """CREATE TABLE title (k TEXT PRIMARY KEY, p TEXT NOT NULL, t TEXT NOT NULL, g TEXT NOT NULL, c TEXT NOT NULL,
                n TEXT NOT NULL, nn TEXT NOT NULL, l TEXT, u TEXT NOT NULL, s TEXT, a INTEGER NOT NULL DEFAULT 0,
-               r TEXT NOT NULL DEFAULT '', y TEXT NOT NULL DEFAULT '', o INTEGER NOT NULL, h INTEGER NOT NULL DEFAULT 0, tk TEXT)""",
+               r TEXT NOT NULL DEFAULT '', y TEXT NOT NULL DEFAULT '', o INTEGER NOT NULL, h INTEGER NOT NULL DEFAULT 0, tk TEXT,
+               lr INTEGER NOT NULL DEFAULT 1)""",
         )
         db.execSQL("CREATE INDEX title_list ON title (g, h, c, p, o)")
         db.execSQL("CREATE INDEX title_all ON title (g, h, p, o)")
@@ -45,6 +47,17 @@ class Catalog(context: Context) : SQLiteOpenHelper(context.applicationContext, "
         }
         // 3: live channels and guide programmes (LiveDb).
         if (oldVersion < 3) LiveDb.create(db)
+        // 4: language rank, so Movies and Series list each title once with its English copy.
+        if (oldVersion < 4) {
+            db.execSQL("ALTER TABLE title ADD COLUMN lr INTEGER NOT NULL DEFAULT 1")
+            val st = db.compileStatement("UPDATE title SET lr = ? WHERE rowid = ?")
+            db.rawQuery("SELECT rowid, n, c FROM title", null).use { c ->
+                while (c.moveToNext()) {
+                    val r = langRank(c.getString(1), c.getString(2))
+                    if (r != 1) { st.clearBindings(); st.bindLong(1, r.toLong()); st.bindLong(2, c.getLong(0)); st.executeUpdateDelete() }
+                }
+            }
+        }
     }
 
     override fun onConfigure(db: SQLiteDatabase) { db.enableWriteAheadLogging() }
@@ -52,6 +65,12 @@ class Catalog(context: Context) : SQLiteOpenHelper(context.applicationContext, "
     companion object {
         fun group(kind: String) = if (kind == "series") "series" else "movie"
         fun cat(v: VodItem) = v.category.ifBlank { "Other" }
+        fun langRank(name: String, category: String?) = Language.rank(Language.of(name, category))
+        /** Language rank × this + position orders a title's copies: English first, then list order. */
+        private const val RANK = 100_000_000_000_000L
+        private const val PER_PLAYLIST = 10_000_000_000L
+        /** What folds copies together: the normalized name (a title with no usable name stays on its own). */
+        private const val GROUP_KEY = "(CASE WHEN nn = '' THEN k ELSE nn END)"
         private const val COLS = "k, p, t, c, n, l, u, s, a, r, y"
         fun read(c: Cursor) = VodItem(
             key = c.getString(0), playlistId = c.getString(1), kind = c.getString(2), category = c.getString(3),
@@ -90,7 +109,7 @@ class Catalog(context: Context) : SQLiteOpenHelper(context.applicationContext, "
         db.beginTransaction()
         try {
             db.delete("title", "p = ?", arrayOf(pid))
-            val st = db.compileStatement("INSERT OR IGNORE INTO title (k, p, t, g, c, n, nn, l, u, s, a, r, y, o, h, tk) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
+            val st = db.compileStatement("INSERT OR IGNORE INTO title (k, p, t, g, c, n, nn, l, u, s, a, r, y, o, h, tk, lr) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
             var o = 0L
             var added = 0
             val result = fill { v ->
@@ -102,6 +121,7 @@ class Catalog(context: Context) : SQLiteOpenHelper(context.applicationContext, "
                 if (v.seriesId != null) st.bindString(10, v.seriesId) else st.bindNull(10)
                 st.bindLong(11, v.added); st.bindString(12, v.rating); st.bindString(13, v.year); st.bindLong(14, o++); st.bindLong(15, if (hidden(v)) 1 else 0)
                 st.bindString(16, ChannelKeys.token(v.url))
+                st.bindLong(17, langRank(v.name, cat(v)).toLong())
                 if (st.executeInsert() != -1L) added++
             }
             if (!keep(result, added)) return Ingest(result, added, committed = false)
@@ -225,6 +245,8 @@ class Catalog(context: Context) : SQLiteOpenHelper(context.applicationContext, "
         val limit: Int? = null,
         /** Only this exact kind (e.g. "episode" within the movie group). */
         val kind: String? = null,
+        /** Each title once (copies with the same name in other languages, qualities or playlists folded in). */
+        val grouped: Boolean = false,
     ) {
         fun where(): Pair<String, Array<String>> {
             val sb = StringBuilder("g = ?")
@@ -237,13 +259,17 @@ class Catalog(context: Context) : SQLiteOpenHelper(context.applicationContext, "
             return sb.toString() to args.toTypedArray()
         }
         // Playlists in the user's order, then the provider's order within each.
-        fun order(): String = if (newestFirst) "a DESC, o" else "CASE p ${playlists.mapIndexed { i, p -> "WHEN '${p.replace("'", "''")}' THEN $i" }.joinToString(" ")} END, o"
+        fun order(): String = if (newestFirst) "a DESC, o" else "${plIndex()}, o"
+        private fun plIndex() = "CASE p ${playlists.mapIndexed { i, p -> "WHEN '${p.replace("'", "''")}' THEN $i" }.joinToString(" ")} END"
+        /** For [grouped]: picks each title's copy (English first) and keeps the list's order. */
+        fun pick(): String = "MIN(lr * $RANK + ${plIndex()} * $PER_PLAYLIST + o)"
+        fun groupedOrder(): String = if (newestFirst) "a DESC, pick" else "pick % $RANK"
     }
 
     fun count(q: Query): Int {
         if (q.playlists.isEmpty()) return 0
         val (w, a) = q.where()
-        val n = readableDatabase.rawQuery("SELECT COUNT(*) FROM title WHERE $w", a).use { if (it.moveToFirst()) it.getInt(0) else 0 }
+        val n = readableDatabase.rawQuery(if (q.grouped) "SELECT COUNT(DISTINCT $GROUP_KEY) FROM title WHERE $w" else "SELECT COUNT(*) FROM title WHERE $w", a).use { if (it.moveToFirst()) it.getInt(0) else 0 }
         return q.limit?.let { minOf(it, n) } ?: n
     }
 
@@ -252,7 +278,10 @@ class Catalog(context: Context) : SQLiteOpenHelper(context.applicationContext, "
         val (w, a) = q.where()
         val lim = q.limit?.let { minOf(size, it - offset) } ?: size
         if (lim <= 0) return emptyList()
-        return readableDatabase.rawQuery("SELECT $COLS FROM title WHERE $w ORDER BY ${q.order()} LIMIT $lim OFFSET $offset", a).use { c ->
+        // Grouped: SQLite takes the other columns from the row that gives the MIN, i.e. the copy picked.
+        val sql = if (q.grouped) "SELECT $COLS, ${q.pick()} AS pick FROM title WHERE $w GROUP BY $GROUP_KEY ORDER BY ${q.groupedOrder()} LIMIT $lim OFFSET $offset"
+            else "SELECT $COLS FROM title WHERE $w ORDER BY ${q.order()} LIMIT $lim OFFSET $offset"
+        return readableDatabase.rawQuery(sql, a).use { c ->
             val out = ArrayList<VodItem>(c.count); while (c.moveToNext()) out.add(read(c)); out
         }
     }
