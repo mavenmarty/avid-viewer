@@ -26,14 +26,11 @@ class EspnProbeTest {
         val z = TimeZone.getTimeZone("America/Chicago")
         val t = System.currentTimeMillis()
         val from = EspnFeed.day(t - 86_400_000L, z); val to = EspnFeed.day(t + 2 * 86_400_000L, z); val today = EspnFeed.day(t, z)
-        val tomorrow = EspnFeed.day(t + 86_400_000L, z)
-        probe("nhl today", base + "hockey/nhl/scoreboard?dates=$today")
-        probe("nhl today limit500", base + "hockey/nhl/scoreboard?dates=$today&limit=500")
-        probe("nfl sunday", base + "football/nfl/scoreboard?dates=" + EspnFeed.day(t + 4 * 86_400_000L, z) + "&limit=500")
-        probe("ncaam tomorrow g50 l500", base + "basketball/mens-college-basketball/scoreboard?dates=$tomorrow&limit=500&groups=50")
-        probe("ncaam tomorrow g50", base + "basketball/mens-college-basketball/scoreboard?dates=$tomorrow&groups=50")
-        probe("ncaaf sat g80 l500", base + "football/college-football/scoreboard?dates=" + EspnFeed.day(t + 3 * 86_400_000L, z) + "&limit=500&groups=80")
-        probe("nba today l500", base + "basketball/nba/scoreboard?dates=$today&limit=500")
-        probe("cfl today l500", base + "football/cfl/scoreboard?dates=$today&limit=500")
+        for (l in League.ALL) for (d in EspnFeed.days(t, z)) {
+            val r = runCatching { EspnFeed.parse(l.id, EspnFeed.fetchDay(l, d)) }
+            println("ESPNPROBE|${l.id} $d|" + r.fold({ g ->
+                "OK ${g.size} games; " + g.take(2).joinToString(" ; ") { "${it.away.name} @ ${it.home.name} ${it.state} '${it.detail}' nat=" + it.national.joinToString(",") { b -> b.name } + " local=" + it.broadcasts.filter { b -> b.market != "national" }.joinToString(",") { b -> b.name } }
+            }, { "FAIL ${it.message}" }))
+        }
     }
 }
