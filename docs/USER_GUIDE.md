@@ -376,6 +376,7 @@ The share password is stored encrypted on the TV and is included in your PIN-loc
 - **Channels and the guide took minutes to appear after updating to 1.0.160** (with a big movie and series catalog): update to 1.0.162 or later. If you're still on 1.0.160, leave the app open until they appear; it only happens once.
 - **The app froze or closed while pressing Up/Down quickly in the TV Guide** (1.0.147 and earlier, mostly in big categories after wrapping from the top to the bottom): update to 1.0.160 or later.
 - **No audio tracks or captions to choose in Picture & sound**: the stream doesn't carry them. Many live channels have one audio track and no captions; try another channel, or set captions to **On (when available)** so they show when a program has them.
+- **Movies or Series were slow, or the app stopped responding on Series** (1.0.160 to 1.0.162, with a big catalog): update to 1.0.165 or later.
 - **A title is missing from Movies or Series**: it may be listed once under another copy. Open it and use **⇄ N versions**.
 - **A channel or category disappeared**: it may be hidden. Check Settings › List Editor.
 - **A guide row ends early and Right won't go further**: fixed in 1.0.133 for guides that list overlapping programmes; update the app.
@@ -440,10 +441,15 @@ Every public release since 1.0.35, newest first. Releases are published on GitHu
 
 ### 1.0.165 — November 12, 2026, 9:30 AM CT (current)
 
+**Release notes**
+
+- **Movies and Series are quick again, and no longer freeze.** Since 1.0.160, a big catalog made Movies take about 10 seconds to open, with pauses of several seconds when moving to the posters, and opening Series could freeze the app until Fire TV closed it. The "each title once" lists re-grouped the whole catalog for every page; that's now worked out once in the background (a few seconds after start-up, after a download, and after hiding or showing titles), so lists open as quickly as before. Right after start-up or a download, a title may appear twice for a few seconds.
+
 **Change log**
 
-- Fix: Movies and Series froze (app not responding) — titles were grouped inside every page read
-- Titles shown again count as their own pick until the background regroup (lists aren't empty meanwhile)
+- Each title's copy is stored, worked out in one background pass; list pages read it with no grouping
+- Titles shown again in the List Editor appear right away
+- Tests: 60,000 titles, 20 pages in under 2 seconds; categories keep their own copy; Hide all / Show all
 
 ### 1.0.162 — November 12, 2026, 8:47 AM CT
 
