@@ -373,6 +373,7 @@ The share password is stored encrypted on the TV and is included in your PIN-loc
 - **Sports is empty**: check the leagues in Settings › Sports tab; off-season leagues have no games. "Couldn't reach ESPN" means the schedules couldn't be downloaded, so the last list is shown. On 1.0.141 this appeared for every league; update to 1.0.147 or later.
 - **A game shows "No channel yet"**: your playlists have no channel named for its network, and no guide listing or event channel for it yet. Those often appear closer to the start. You can also use **Search the guide** on the game.
 - **Discover froze or the app closed after about 20 seconds** (1.0.137 and earlier, with large movie catalogs): update the app.
+- **Channels and the guide took minutes to appear after updating to 1.0.160** (with a big movie and series catalog): update to 1.0.162 or later. If you're still on 1.0.160, leave the app open until they appear; it only happens once.
 - **The app froze or closed while pressing Up/Down quickly in the TV Guide** (1.0.147 and earlier, mostly in big categories after wrapping from the top to the bottom): update to 1.0.160 or later.
 - **No audio tracks or captions to choose in Picture & sound**: the stream doesn't carry them. Many live channels have one audio track and no captions; try another channel, or set captions to **On (when available)** so they show when a program has them.
 - **A title is missing from Movies or Series**: it may be listed once under another copy. Open it and use **⇄ N versions**.
@@ -439,9 +440,15 @@ Every public release since 1.0.35, newest first. Releases are published on GitHu
 
 ### 1.0.162 — November 12, 2026, 8:47 AM CT (current)
 
+**Release notes**
+
+- **Playlists load right away after updating.** On the first launch after updating to 1.0.160, a big movie and series catalog held up the channels and the guide for minutes while the app worked out each title's language; if the app was closed meanwhile, the work started over. The upgrade now takes a moment, and the language work happens in the background about 8 seconds after start-up. Until it's done, a title in Movies or Series may briefly show a copy other than the English one.
+
 **Change log**
 
-- Fix: playlists didn't load after updating to 1.0.160 — the catalog upgrade held the database for minutes
+- Catalog upgrade only adds the language column; languages are filled in the background in short batches
+- Language detection is much faster
+- Tests: a 60,000-title catalog from 1.0.147 upgrades in under 3 seconds with channels available at once
 
 ### 1.0.160 — November 12, 2026, 7:05 AM CT
 
