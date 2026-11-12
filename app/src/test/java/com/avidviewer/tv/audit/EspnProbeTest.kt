@@ -26,14 +26,14 @@ class EspnProbeTest {
         val z = TimeZone.getTimeZone("America/Chicago")
         val t = System.currentTimeMillis()
         val from = EspnFeed.day(t - 86_400_000L, z); val to = EspnFeed.day(t + 2 * 86_400_000L, z); val today = EspnFeed.day(t, z)
-        probe("plain nfl", base + "football/nfl/scoreboard")
-        probe("one day nfl", base + "football/nfl/scoreboard?dates=$today")
-        probe("range nfl", base + "football/nfl/scoreboard?dates=$from-$to")
-        probe("range nfl limit500", base + "football/nfl/scoreboard?dates=$from-$to&limit=500")
-        probe("range nfl limit100", base + "football/nfl/scoreboard?dates=$from-$to&limit=100")
-        for (l in League.ALL) {
-            probe("app ${l.id}", EspnFeed.url(l, from, to))
-            println("ESPNPROBE|fetchText ${l.id}|" + runCatching { EspnFeed.fetchText(l, from, to) }.fold({ "OK games=" + EspnFeed.parse(l.id, it).size }, { "FAIL ${it.message}" }))
-        }
+        val tomorrow = EspnFeed.day(t + 86_400_000L, z)
+        probe("nhl today", base + "hockey/nhl/scoreboard?dates=$today")
+        probe("nhl today limit500", base + "hockey/nhl/scoreboard?dates=$today&limit=500")
+        probe("nfl sunday", base + "football/nfl/scoreboard?dates=" + EspnFeed.day(t + 4 * 86_400_000L, z) + "&limit=500")
+        probe("ncaam tomorrow g50 l500", base + "basketball/mens-college-basketball/scoreboard?dates=$tomorrow&limit=500&groups=50")
+        probe("ncaam tomorrow g50", base + "basketball/mens-college-basketball/scoreboard?dates=$tomorrow&groups=50")
+        probe("ncaaf sat g80 l500", base + "football/college-football/scoreboard?dates=" + EspnFeed.day(t + 3 * 86_400_000L, z) + "&limit=500&groups=80")
+        probe("nba today l500", base + "basketball/nba/scoreboard?dates=$today&limit=500")
+        probe("cfl today l500", base + "football/cfl/scoreboard?dates=$today&limit=500")
     }
 }
