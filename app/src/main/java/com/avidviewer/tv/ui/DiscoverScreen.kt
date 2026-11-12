@@ -36,7 +36,6 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import coil.compose.AsyncImage
 import com.avidviewer.tv.data.Title
 import kotlinx.coroutines.delay
 
@@ -59,11 +58,8 @@ fun DiscoverScreen(vm: AppViewModel) {
         }
         Spacer(Modifier.padding(top = 10.dp))
         if (vm.tmdbKey().isBlank()) {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Label("Discover needs your free TMDB API key.", size = 16.sp, color = C.Text, weight = FontWeight.Bold)
-                Label("Enter it in Settings › Discover. It's stored encrypted on this device only.", size = 14.sp, color = C.Soft, lines = Int.MAX_VALUE)
-                TvButton("Open Settings", primary = true) { vm.settingsSection = "discover"; vm.navSelect(Screen.SETTINGS); vm.settingsSection = "discover" }
-            }
+            StateMessage(StateKind.EMPTY, "Discover needs your free TMDB API key.", "Enter it in Settings › Discover. It's stored encrypted on this device only.",
+                action = "Open Settings" to { vm.settingsSection = "discover"; vm.navSelect(Screen.SETTINGS); vm.settingsSection = "discover" })
             return@Column
         }
         val all = vm.discoverLists[vm.discoverTab]
@@ -74,9 +70,9 @@ fun DiscoverScreen(vm: AppViewModel) {
         }
         vm.discoverNote?.takeIf { vm.discoverTab == "foryou" }?.let { Label(it, size = 13.sp, color = C.Soft, lines = 2, modifier = Modifier.padding(bottom = 8.dp)) }
         when {
-            vm.discoverError != null && all == null -> Label("Couldn't load: ${vm.discoverError}", size = 14.sp, color = C.Soft, lines = 3)
-            list == null -> Label("Loading…", size = 14.sp, color = C.Soft)
-            list.isEmpty() -> Label(if (vm.onlyMyServices) "Nothing here on your services yet. Turn off “My services” to see everything." else "Nothing to show right now.", size = 14.sp, color = C.Soft, lines = 2)
+            vm.discoverError != null && all == null -> StateMessage(StateKind.ERROR, "Couldn't load Discover", vm.discoverError, retry = { vm.loadDiscover(vm.discoverTab, force = true) })
+            list == null -> StateMessage(StateKind.LOADING, "Loading…")
+            list.isEmpty() -> StateMessage(StateKind.EMPTY, "Nothing to show", if (vm.onlyMyServices) "Nothing here on your services yet. Turn off “My services” to see everything." else "Nothing to show right now.")
             else -> LazyVerticalGrid(
                 columns = GridCells.Fixed(6),
                 modifier = Modifier.weight(1f),
@@ -105,7 +101,7 @@ private fun TitleCard(vm: AppViewModel, t: Title) {
         Column(Modifier.fillMaxWidth().padding(3.dp)) {
             Box(Modifier.fillMaxWidth().aspectRatio(2f / 3f).clip(RoundedCornerShape(6.dp)).background(badgeColor(t.name))) {
                 Text(t.name, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold, maxLines = 4, modifier = Modifier.align(Alignment.BottomStart).padding(8.dp))
-                if (t.poster != null) AsyncImage(model = t.poster, contentDescription = t.name, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                if (t.poster != null) TvImage(model = t.poster, contentDescription = t.name, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
                 if (match != null) {
                     Text(
                         "▶ ON YOUR PROVIDER", color = C.OnAccent, fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 1,
@@ -132,7 +128,7 @@ private fun TitleDetail(vm: AppViewModel, t: Title) {
     Row(Modifier.fillMaxSize().padding(24.dp), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
         Box(Modifier.width(210.dp).aspectRatio(2f / 3f).clip(RoundedCornerShape(10.dp)).background(badgeColor(t.name))) {
             Text(t.name, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold, modifier = Modifier.align(Alignment.BottomStart).padding(10.dp))
-            if (t.poster != null) AsyncImage(model = t.poster, contentDescription = t.name, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+            if (t.poster != null) TvImage(model = t.poster, contentDescription = t.name, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
         }
         // One scrolling column: the buttons, the description, every version and Where to watch can all be
         // reached with Down. (The versions used to get only the height left over below a fixed layout;

@@ -33,7 +33,6 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import coil.compose.AsyncImage
 import com.avidviewer.tv.data.Game
 import com.avidviewer.tv.data.League
 import com.avidviewer.tv.data.Team
@@ -228,7 +227,7 @@ private fun WhereToWatch(vm: AppViewModel, sg: AppViewModel.SportGame?, firstFr:
                 ) {
                     Row(Modifier.fillMaxSize().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         Box(Modifier.size(34.dp).clip(RoundedCornerShape(6.dp)).background(C.Rail), contentAlignment = Alignment.Center) {
-                            if (c?.logo != null) AsyncImage(model = c.logo, contentDescription = null, modifier = Modifier.size(30.dp))
+                            if (c?.logo != null) TvImage(model = c.logo, contentDescription = null, modifier = Modifier.size(30.dp))
                             else Label(m.name.take(3).uppercase(), size = 10.sp, color = C.Soft, weight = FontWeight.Bold)
                         }
                         Column(Modifier.weight(1f)) {
@@ -283,7 +282,7 @@ private fun TeamDot(t: Team) {
 private fun TeamBadge(t: Team) {
     Box(Modifier.size(40.dp).clip(CircleShape).background(t.color?.let { Color(it) } ?: C.Line), contentAlignment = Alignment.Center) {
         Label(t.abbr, size = 11.sp, color = Color.White, weight = FontWeight.Bold)
-        if (t.logo != null) AsyncImage(model = t.logo, contentDescription = t.fullName, modifier = Modifier.size(32.dp))
+        if (t.logo != null) TvImage(model = t.logo, contentDescription = t.fullName, modifier = Modifier.size(32.dp))
     }
 }
 

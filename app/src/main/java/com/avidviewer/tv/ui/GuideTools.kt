@@ -155,6 +155,7 @@ private fun SourceForm(src: EpgSource?, onCancel: () -> Unit, onSave: (name: Str
     var url by remember(src?.id) { mutableStateOf(src?.url ?: "") }
     var offset by remember(src?.id) { mutableStateOf(src?.offsetHours ?: 0) }
     var problem by remember(src?.id) { mutableStateOf<String?>(null) }
+    DiscardGuard(name != (src?.name ?: "") || url != (src?.url ?: "") || offset != (src?.offsetHours ?: 0)) { onCancel() }
     Column(
         Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(C.Bg).padding(10.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),

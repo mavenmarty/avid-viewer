@@ -23,6 +23,7 @@ object TestData {
         context.filesDir.mkdirs()
         val store = Store(context)
         val dead = "http://127.0.0.1:9/none" // nothing listens here: any accidental download fails fast
+        com.avidviewer.tv.data.Net.backoffMs = longArrayOf(5L, 5L) // retries of failed downloads: no real waits in tests
         com.avidviewer.tv.data.EspnFeed.base = "$dead/espn/" // Sports: no real ESPN in tests (SportsTest serves its own)
         store.savePlaylists(
             listOf(

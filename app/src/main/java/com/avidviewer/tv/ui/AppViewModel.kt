@@ -46,6 +46,7 @@ import com.avidviewer.tv.data.VodItem
 import com.avidviewer.tv.data.XtreamVod
 import com.avidviewer.tv.data.Weather
 import com.avidviewer.tv.data.WeatherService
+import com.avidviewer.tv.data.Net
 import com.avidviewer.tv.data.Xmltv
 import com.avidviewer.tv.data.Xtream
 import kotlinx.coroutines.Dispatchers
@@ -181,6 +182,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** The episode last started from a series page, so Back from the player lands on it again. */
     var lastEpisode: Episode? = null
     private var resume: Map<String, Long> = store.loadResume()
+    /** Episodes (and movies) played to the end, oldest first. */
+    private var watched: LinkedHashSet<String> = LinkedHashSet(store.loadWatched())
     var searchQuery by mutableStateOf("")
     var searchResults by mutableStateOf<List<PlaylistHits>?>(null); private set
     var searching by mutableStateOf(false); private set
@@ -1206,6 +1209,20 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         val directory = ArrayList<GuideChannel>()
         val statuses = HashMap(guideSourceStatus)
         val covered = HashSet<String>()
+        // DATA-05: when every source says it hasn't changed since the last download (and the same channels are
+        // wanted), the saved guide is kept and nothing is downloaded again.
+        val wantedSig = wanted.sorted().hashCode().toString()
+        val known = sources.map { guideValidators(p.id, it.url) }
+        if (known.all { it != null && it.first.any && it.second == wantedSig } && live.guideSavedAt(p.id) > 0) {
+            val same = withContext(Dispatchers.IO) { sources.zip(known).all { (src, k) -> runCatching { Net.unchanged(src.url, k!!.first) }.getOrDefault(false) } }
+            if (same) {
+                withContext(Dispatchers.IO) { live.guideChecked(p.id) }
+                sources.forEach { statuses[p.id + "|" + it.id] = "Checked ${fmtTime(System.currentTimeMillis())} · unchanged" }
+                guideSourceStatus = statuses
+                return known.first()!!.third
+            }
+        }
+        val got = HashMap<String, Net.Validators>()
         // Programmes go straight into the database as each source is read; nothing is collected here.
         val done = withContext(Dispatchers.IO) {
             live.replacingGuide(p.id, keep = { ok: Boolean, _ -> ok }) { add ->
@@ -1214,7 +1231,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                     val dir = ArrayList<Pair<String, String>>()
                     val seen = HashSet<String>()
                     runCatching {
-                        Xmltv.read(src.url, wanted, from, to, src.offsetHours * 3600 * 1000L, dir) { id, pr ->
+                        Xmltv.read(src.url, wanted, from, to, src.offsetHours * 3600 * 1000L, dir, onResponse = { r -> got[src.url] = Net.Validators.of(r) }) { id, pr ->
                             if (id !in covered) { add(id, pr); seen.add(id) }
                         }
                     }.onSuccess {
@@ -1231,9 +1248,23 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
         guideSourceStatus = statuses
         if (!done.committed) throw java.io.IOException("no guide source could be downloaded")
+        // Remember what each source said, for asking "changed?" next time (only when every source was read).
+        sources.forEach { src -> saveGuideValidators(p.id, src.url, got[src.url]?.takeIf { got.size == sources.size }, wantedSig, covered.size) }
         withContext(Dispatchers.IO) { store.saveGuideChannels(p.id, directory.distinctBy { it.id }) }
         guideChannelCache.remove(p.id)
         return covered.size
+    }
+
+    private val validatorPrefs by lazy { getApplication<Application>().getSharedPreferences("guide_validators", android.content.Context.MODE_PRIVATE) }
+    /** A guide source's ETag / Last-Modified from its last download, the channels asked for then, and how many got programmes. */
+    private fun guideValidators(pid: String, url: String): Triple<Net.Validators, String, Int>? =
+        validatorPrefs.getString("$pid|$url", null)?.split('\n')?.takeIf { it.size == 4 }?.let { (e, m, w, n) ->
+            Triple(Net.Validators(e.ifBlank { null }, m.ifBlank { null }), w, n.toIntOrNull() ?: 0)
+        }
+    private fun saveGuideValidators(pid: String, url: String, v: Net.Validators?, wanted: String, count: Int) {
+        val e = validatorPrefs.edit()
+        if (v == null || !v.any) e.remove("$pid|$url") else e.putString("$pid|$url", listOf(v.etag ?: "", v.lastModified ?: "", wanted, count.toString()).joinToString("\n"))
+        e.apply()
     }
 
     /** The guide ids a playlist needs: its channels' own, plus any matched by hand. */
@@ -2579,6 +2610,29 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         if (pos > 60_000 && (dur <= 0 || pos < dur * 0.95)) m[item.key] = pos else m.remove(item.key)
         resume = m
         store.saveResume(m)
+        // Played to (nearly) the end: watched, so the series page opens on the next episode (BUG-020, #8).
+        if (dur > 0 && pos >= dur * 0.95) { watched.remove(item.key); watched.add(item.key); store.saveWatched(watched) }
+    }
+
+    /** The key an episode of [series] is played (and remembered) under. */
+    fun episodeKey(series: VodItem, e: Episode) = e.key.ifBlank { "${series.key}:${e.season}:${e.number}" }
+
+    fun isWatched(key: String) = key in watched
+
+    /** For tests: marks an episode watched to the end, as the player does. */
+    internal fun markWatched(key: String) { watched.add(key); store.saveWatched(watched) }
+
+    /**
+     * Where a series page starts: Season 1, Episode 1 if nothing has been watched; otherwise the episode after
+     * the last one watched to the end, or the one part-watched if that came later.
+     */
+    fun nextUpEpisode(series: VodItem, eps: List<Episode>): Episode? {
+        if (eps.isEmpty()) return null
+        var at = -1
+        eps.forEachIndexed { i, e -> val k = episodeKey(series, e); if (k in watched || resumeOf(k) > 0) at = i }
+        if (at < 0) return eps.first()
+        val e = eps[at]
+        return if (episodeKey(series, e) in watched) eps.getOrNull(at + 1) ?: e else e
     }
 
     /** Every movie (or series) of the switched-on playlists, hidden ones included. */
@@ -2690,9 +2744,32 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             "Recently added" -> titles(com.avidviewer.tv.data.Catalog.Query(g, vodPids(), newestFirst = true, limit = 200, grouped = true))
             "My List" -> prefs.myList.filter { if (kind == "series") it.kind == "series" else it.kind != "series" }
             "Continue watching" -> catalog.byKeys(resume.keys).filter { Catalog.group(it.kind) == g && !isVodHidden(it) }
-            else -> titles(com.avidviewer.tv.data.Catalog.Query(g, vodPids(), category = c, grouped = true))
+            else -> vodPrefetched.remove(prefetchKey(kind, c)) ?: titles(com.avidviewer.tv.data.Catalog.Query(g, vodPids(), category = c, grouped = true))
         }
     }
+
+    // DATA-06: a category that keeps the highlight for a moment has its count and first page of posters read in the
+    // background, so OK shows it at once. Moving on cancels it; only the last few are kept.
+    private val vodPrefetched = object : LinkedHashMap<String, List<VodItem>>() {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, List<VodItem>>?) = size > 3
+    }
+    private var vodPrefetchJob: Job? = null
+    private fun prefetchKey(kind: String, cat: String) = "$kind|$cat|$vodVersion|${vodPids().joinToString(",")}|${prefs.vodHiddenTitles.size}"
+
+    fun prefetchVodCategory(kind: String, cat: String) {
+        vodPrefetchJob?.cancel()
+        val key = prefetchKey(kind, cat)
+        if (key in vodPrefetched) return
+        val q = com.avidviewer.tv.data.Catalog.Query(vodKindKey(kind), vodPids(), category = cat, grouped = true)
+        vodPrefetchJob = viewModelScope.launch {
+            delay(250)
+            val list = withContext(Dispatchers.IO) { titles(q).also { if (it.size > 0) it[0] } }
+            if (prefetchKey(kind, cat) == key) vodPrefetched[key] = list
+        }
+    }
+
+    /** For tests: whether a category's first page has been read ahead. */
+    internal fun vodPrefetchedFor(kind: String, cat: String) = prefetchKey(kind, cat) in vodPrefetched
 
     fun openVodDetail(item: VodItem) {
         screen = if (item.kind == "series") Screen.SERIES else Screen.MOVIES
@@ -2704,7 +2781,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             try {
                 if (item.kind == "series") {
                     val (info, eps) = withContext(Dispatchers.IO) { XtreamVod.seriesInfo(p, item.seriesId ?: "") }
-                    vodInfo = info; detailEpisodes = eps; detailSeason = eps.firstOrNull()?.season
+                    vodInfo = info; detailEpisodes = eps
+                    // Coming back from an episode keeps its season; opening the page goes to the next one up.
+                    val back = lastEpisode?.takeIf { l -> eps.any { it.key == l.key && it.season == l.season && it.number == l.number } }
+                    detailSeason = (back ?: nextUpEpisode(item, eps))?.season ?: eps.firstOrNull()?.season
                 } else {
                     vodInfo = withContext(Dispatchers.IO) { XtreamVod.movieInfo(p, item.streamId ?: "") }
                 }
@@ -2725,7 +2805,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun playDetailEpisode(e: Episode, fromStart: Boolean = false) {
         val s = vodDetail ?: return
         lastEpisode = e
-        playVod(VodItem(e.key.ifBlank { "${s.key}:${e.season}:${e.number}" }, s.playlistId, "episode", "${s.name} · S${e.season} E${e.number} · ${e.title}", s.logo, e.url), fromStart)
+        playVod(VodItem(episodeKey(s, e), s.playlistId, "episode", "${s.name} · S${e.season} E${e.number} · ${e.title}", s.logo, e.url), fromStart)
     }
 
     fun seek(ms: Long) {

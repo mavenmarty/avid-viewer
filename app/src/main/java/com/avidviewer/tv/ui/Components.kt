@@ -9,6 +9,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.padding
@@ -37,7 +39,6 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import coil.compose.AsyncImage
 
 /** Palette taken from the Avid Viewer icon: deep navy, electric blue and silver. */
 object C {
@@ -138,7 +139,7 @@ fun ChannelBadge(name: String, logo: String?, size: Dp = 32.dp) {
     ) {
         Text(initials(name), color = Color.White, fontSize = (size.value * 0.36f).coerceAtLeast(11f).sp, fontWeight = FontWeight.Bold)
         if (logo != null) {
-            AsyncImage(
+            TvImage(
                 model = logo,
                 contentDescription = null,
                 modifier = Modifier
@@ -323,4 +324,38 @@ fun Modifier.wrapEnds(wrap: ListWrap, isFirst: Boolean, isLast: Boolean): Modifi
                 else -> false
             }
         }
+}
+
+
+/** What a screen is waiting for or missing (DATA-07): the same look everywhere. */
+enum class StateKind { LOADING, EMPTY, ERROR }
+
+/**
+ * Loading, empty and error messages, one style on every screen: a title, a line or two, then buttons the
+ * remote can reach. An error always offers Try again ([retry]); [action] is the screen's own way out
+ * (Add a playlist, Open Settings…). The first button takes the highlight.
+ */
+@Composable
+fun StateMessage(
+    kind: StateKind,
+    title: String,
+    body: String? = null,
+    retry: (() -> Unit)? = null,
+    action: Pair<String, () -> Unit>? = null,
+    modifier: Modifier = Modifier,
+) {
+    val first = remember { FocusRequester() }
+    Column(modifier.padding(vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            if (kind == StateKind.LOADING) androidx.compose.material3.CircularProgressIndicator(color = C.Accent, strokeWidth = 2.dp, modifier = Modifier.size(18.dp))
+            if (kind == StateKind.ERROR) Text("!", color = C.OnAccent, fontSize = 13.sp, fontWeight = FontWeight.Bold,
+                modifier = Modifier.clip(RoundedCornerShape(10.dp)).background(C.Accent).padding(horizontal = 8.dp, vertical = 1.dp))
+            Text(title, color = C.Text, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+        }
+        body?.takeIf { it.isNotBlank() }?.let { Label(it, size = 14.sp, color = C.Soft, lines = 4) }
+        val buttons = listOfNotNull(retry?.takeIf { kind == StateKind.ERROR }?.let { "Try again" to it }, action)
+        if (buttons.isNotEmpty()) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            buttons.forEachIndexed { i, (label, go) -> TvButton(label, primary = i == 0, modifier = if (i == 0) Modifier.focusRequester(first) else Modifier) { go() } }
+        }
+    }
 }

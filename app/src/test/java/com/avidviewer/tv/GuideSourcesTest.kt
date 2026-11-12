@@ -140,6 +140,49 @@ class GuideSourcesTest {
         assertEquals("extra.us", Store(app).loadPrefs().epgMap["${TestData.P1}:big3"])
     }
 
+    /** DATA-05: a guide that hasn't changed (ETag) isn't downloaded again; the saved one is kept. */
+    @Test
+    fun anUnchangedGuideIsNotDownloadedAgain() {
+        TestData.seed(app)
+        val vm = track(AppViewModel(app))
+        idleUntil("channels") { vm.channels.isNotEmpty() }
+        val bodies = java.util.concurrent.atomic.AtomicInteger()
+        val notModified = java.util.concurrent.atomic.AtomicInteger()
+        val s = ServerSocket(0)
+        thread(isDaemon = true) {
+            while (!s.isClosed) {
+                val c = runCatching { s.accept() }.getOrNull() ?: break
+                c.use { conn ->
+                    val r = conn.getInputStream().bufferedReader()
+                    r.readLine() ?: return@use
+                    var cond = false
+                    while (true) { val l = r.readLine() ?: break; if (l.isEmpty()) break; if (l.startsWith("If-None-Match:", true) && l.contains("\"v1\"")) cond = true }
+                    val out = conn.getOutputStream()
+                    if (cond) { notModified.incrementAndGet(); out.write("HTTP/1.1 304 Not Modified\r\nETag: \"v1\"\r\nConnection: close\r\n\r\n".toByteArray()) }
+                    else {
+                        bodies.incrementAndGet()
+                        val body = guideA.toByteArray()
+                        out.write("HTTP/1.1 200 OK\r\nETag: \"v1\"\r\nContent-Length: ${body.size}\r\nConnection: close\r\n\r\n".toByteArray()); out.write(body)
+                    }
+                    out.flush()
+                }
+            }
+        }
+        s.use { srv ->
+            val p1 = vm.playlists.first { it.id == TestData.P1 }
+            vm.removeEpgSource(TestData.P1, p1.epgSources.first().id)
+            vm.addEpgSource(TestData.P1, "Source A", "http://127.0.0.1:${srv.localPort}/a.xml", 0)
+            val src = { vm.playlists.first { it.id == TestData.P1 }.epgSources.first() }
+            idleUntil("first download (${vm.guideSourceStatus})") { vm.guideBusy == null && vm.guideSourceStatus[TestData.P1 + "|" + src().id]?.startsWith("Updated") == true }
+            assertEquals(1, bodies.get())
+            vm.refreshGuideNow(TestData.P1)
+            idleUntil("checked again (${vm.guideSourceStatus})") { vm.guideBusy == null && vm.guideSourceStatus[TestData.P1 + "|" + src().id]?.contains("unchanged") == true }
+            assertTrue("asked whether it changed", notModified.get() >= 1)
+            assertEquals("not downloaded again", 1, bodies.get())
+            assertEquals("the saved guide is kept", "From A", vm.programs(vm.channel("${TestData.P1}:big1")).single().title)
+        }
+    }
+
     @Test
     fun refreshEveryIsSavedAndUsed() {
         TestData.seed(app)

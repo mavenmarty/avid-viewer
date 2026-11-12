@@ -262,6 +262,14 @@ class Store(private val context: Context) {
 
     fun saveResume(m: Map<String, Long>) = writeAtomic(File(dir, "resume.json"), JSONObject(m).toString())
 
+    // ---- episodes watched to the end (the series page opens on the next one) ----
+    fun loadWatched(): Set<String> = runCatching {
+        val f = File(dir, "watched.json")
+        if (!f.exists()) emptySet() else org.json.JSONArray(f.readText()).let { a -> (0 until a.length()).map { a.getString(it) }.toHashSet() }
+    }.getOrDefault(emptySet())
+
+    fun saveWatched(keys: Collection<String>) = writeAtomic(File(dir, "watched.json"), org.json.JSONArray(keys.toList().takeLast(5000)).toString())
+
     fun clearCache() {
         context.cacheDir.listFiles()?.forEach { it.deleteRecursively() }
     }

@@ -47,7 +47,11 @@ fun AppRoot(vm: AppViewModel) {
     Box(
         Modifier.fillMaxSize().background(C.Bg)
             .onFocusChanged { vm.anyFocus = it.hasFocus }
-            .onPreviewKeyEvent { if (it.type == KeyEventType.KeyDown) vm.lastKeyAt = android.os.SystemClock.uptimeMillis(); false }
+            .onPreviewKeyEvent {
+                if (it.type == KeyEventType.KeyDown) { vm.lastKeyAt = android.os.SystemClock.uptimeMillis(); Images.holding = it.nativeKeyEvent.repeatCount > 0 }
+                else if (it.type == KeyEventType.KeyUp) Images.holding = false
+                false
+            }
             .leftGoesBack(vm)
             .holdToAccelerate(),
     ) {

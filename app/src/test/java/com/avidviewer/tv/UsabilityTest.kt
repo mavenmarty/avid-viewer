@@ -21,6 +21,7 @@ import androidx.compose.ui.test.printToString
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.pressKey
@@ -187,9 +188,9 @@ class UsabilityTest {
         val base = com.avidviewer.tv.ui.localHalfHour(t, ktm)
         val local = java.util.GregorianCalendar(ktm).apply { timeInMillis = base }
         assertEquals(20, local.get(java.util.Calendar.HOUR_OF_DAY)); assertEquals(0, local.get(java.util.Calendar.MINUTE))
-        // Across a daylight-saving change (US Central, 2 Nov 2026 01:00 CST is after the fall-back).
+        // Across a daylight-saving change (US Central falls back on 1 Nov 2026: 1:00–2:00 happens twice).
         val chi = java.util.TimeZone.getTimeZone("America/Chicago")
-        val d = java.util.GregorianCalendar(chi).apply { set(2026, 10, 1, 1, 40, 0) }.timeInMillis + 3600_000L // second 1:40
+        val d = java.util.GregorianCalendar(java.util.TimeZone.getTimeZone("UTC")).apply { clear(); set(2026, 10, 1, 7, 40, 0) }.timeInMillis // 1:40 CST, the second 1:40 that night
         val b2 = java.util.GregorianCalendar(chi).apply { timeInMillis = com.avidviewer.tv.ui.localHalfHour(d, chi) }
         assertEquals(1, b2.get(java.util.Calendar.HOUR_OF_DAY)); assertEquals(30, b2.get(java.util.Calendar.MINUTE))
         assertEquals(10 * 60_000L, d - com.avidviewer.tv.ui.localHalfHour(d, chi))
@@ -229,9 +230,9 @@ class UsabilityTest {
         focusKidsProgramme()
         repeat(10) { press(listOf(Key.DirectionLeft)); if (vm.nav.guideWindowStart == base - 2 * 3600_000L) return@repeat }
         assertEquals("window 2 h back (focus: ${focused()})", base - 2 * 3600_000L, vm.nav.guideWindowStart)
-        press(listOf(Key.DirectionLeft, Key.DirectionLeft))
-        assertTrue("never more than 2 h back", vm.nav.guideWindowStart >= base - 2 * 3600_000L)
         waitFor("an aired programme highlighted and marked (focus: ${focused()})") { rule.onAllNodesWithText("already aired", substring = true).fetchSemanticsNodes().isNotEmpty() }
+        press(listOf(Key.DirectionLeft)) // to the channel name: the window stays
+        assertEquals("never more than 2 h back", base - 2 * 3600_000L, vm.nav.guideWindowStart)
         // Now, in the day strip, comes back.
         rule.onAllNodesWithText("Now").onFirst().performClick()
         settle()
@@ -250,6 +251,45 @@ class UsabilityTest {
         waitFor("Back from a channel highlights the category") { vm.inGroupNav && focused().contains("NEWS") }
         press(listOf(Key.Back))
         assertEquals("Back from the categories opens the main menu (no playlist-list step)", NavMode.FULL, vm.navMode)
+    }
+
+    /** FOCUS-02: closing a dialog (Done, Cancel, Save or Back) puts the highlight back on what opened it. */
+    @Test
+    fun theHighlightComesBackToTheChannelAfterItsMenuAndRename() {
+        rule.runOnIdle { vm.chooseGroup(TestData.P1, "KIDS") }
+        settle()
+        fun onCh3() = focused().contains("KIDS Channel 3 with")
+        rule.onAllNodes(androidx.compose.ui.test.hasText("KIDS Channel 3 with", substring = true) and androidx.compose.ui.test.hasClickAction()).onFirst().requestFocus()
+        settle()
+        assertTrue(focused(), onCh3())
+        for (close in listOf("Done", "Back")) {
+            press(listOf(Key.Menu))
+            waitFor("channel options") { vm.channelMenu != null }
+            if (close == "Done") rule.onAllNodesWithText("Done").onFirst().performClick() else press(listOf(Key.Back))
+            waitFor("the highlight back on channel 3 after $close (focus: ${focused()})") { vm.channelMenu == null && onCh3() }
+        }
+        for (close in listOf("Cancel", "Save")) {
+            press(listOf(Key.Menu))
+            waitFor("channel options") { vm.channelMenu != null }
+            rule.onAllNodesWithText("Rename", substring = true).onFirst().performClick()
+            waitFor("the rename box") { rule.onAllNodesWithText(close).fetchSemanticsNodes().isNotEmpty() }
+            rule.onAllNodesWithText(close).onFirst().performClick()
+            waitFor("the highlight back on channel 3 after Rename › $close (focus: ${focused()})") { vm.channelMenu == null && onCh3() }
+        }
+    }
+
+    /** DATA-06: a highlighted movie category has its first page read ahead; OK then shows it straight away. */
+    @Test
+    fun aHighlightedMovieCategoryIsReadAhead() {
+        go(Screen.MOVIES)
+        waitFor("movies") { vm.vodOf("movie").isNotEmpty() }
+        val drama = vm.vodCategories("movie").first { it.first == "Drama" }.first
+        rule.onAllNodes(androidx.compose.ui.test.hasText(vm.vodCatName("movie", drama), substring = true) and androidx.compose.ui.test.hasClickAction()).onFirst().requestFocus()
+        settle()
+        waitFor("Drama read ahead") { vm.vodPrefetchedFor("movie", drama) }
+        press(listOf(Key.DirectionCenter))
+        waitFor("Drama shown") { vm.vodCategory["movie"] == drama && vm.vodItems("movie").size == 20 }
+        assertTrue("the read-ahead list was used", !vm.vodPrefetchedFor("movie", drama))
     }
 
     @Test
@@ -627,6 +667,22 @@ class UsabilityTest {
         rule.onNodeWithTag("guide-src-add").performClick()
         settle()
         assertTrue(rule.onAllNodesWithText("New guide source").fetchSemanticsNodes().isNotEmpty())
+        // Back with something typed asks before throwing it away (SET-02); Keep editing is highlighted.
+        rule.onNodeWithTag("guide-src-url").performClick()
+        settle()
+        rule.onAllNodes(androidx.compose.ui.test.hasSetTextAction()).onFirst().performTextInput("http://example.invalid/guide.xml")
+        settle()
+        press(listOf(Key.Back)) // closes the keyboard
+        if (rule.onAllNodesWithText("Discard changes?").fetchSemanticsNodes().isEmpty()) press(listOf(Key.Back))
+        waitFor("Discard changes? (focus: ${focused()})") { rule.onAllNodesWithText("Discard changes?").fetchSemanticsNodes().isNotEmpty() }
+        waitFor("Keep editing highlighted (focus: ${focused()})") { focused().contains("Keep editing") }
+        press(listOf(Key.DirectionCenter))
+        waitFor("still editing") { rule.onAllNodesWithText("Discard changes?").fetchSemanticsNodes().isEmpty() && rule.onAllNodesWithText("New guide source").fetchSemanticsNodes().isNotEmpty() }
+        press(listOf(Key.Back))
+        waitFor("asked again") { rule.onAllNodesWithText("Discard").fetchSemanticsNodes().isNotEmpty() }
+        rule.onAllNodesWithText("Discard").onFirst().performClick()
+        waitFor("the form closed without saving") { rule.onAllNodesWithText("New guide source").fetchSemanticsNodes().isEmpty() }
+        assertTrue(vm.playlists.first { it.id == TestData.P1 }.epgSources.none { it.url.contains("example.invalid") })
         // Deleting asks first.
         rule.onAllNodesWithTag("guide-src-delete").onFirst().performClick()
         settle()
@@ -892,7 +948,12 @@ class UsabilityTest {
             go(Screen.SERIES)
             rule.runOnIdle { vm.openVodDetail(com.avidviewer.tv.data.VodItem("$pid:s78", pid, "series", "Long Show", null, "", seriesId = "78", category = "Shows")) }
             waitFor("episodes to load") { vm.detailEpisodes?.isNotEmpty() == true }
+            // Nothing watched yet: the page opens on Season 1, Episode 1 (#8). Up goes back to the buttons.
+            waitFor("the page opens on episode 1 (focus: ${focused()})") { focused().contains("Pilot") }
             var tries = 0
+            while (!focused().contains("My List") && tries < 12) { press(listOf(Key.DirectionUp)); tries++ }
+            assertTrue("couldn't go Up to the buttons (focus: ${focused()})", focused().contains("My List"))
+            tries = 0
             while (!focused().contains("Season 1") && tries < 10) { press(listOf(Key.DirectionDown)); tries++ }
             assertTrue("couldn't reach the season buttons below a long description (focus: ${focused()})", focused().contains("Season 1"))
             tries = 0
@@ -948,7 +1009,11 @@ class UsabilityTest {
             rule.runOnIdle { vm.openVodDetail(vm.prefs.myList.first { it.key == en.key }) }
             waitFor("episodes and versions") { vm.detailEpisodes?.isNotEmpty() == true && vm.versionsOfItem(en).size == 3 }
             rule.onNodeWithText("This version: English", substring = true).assertExists()
+            waitFor("the page opens on episode 1 (focus: ${focused()})") { focused().contains("Pilot") }
             var tries = 0
+            while (!focused().contains("My List") && tries < 12) { press(listOf(Key.DirectionUp)); tries++ }
+            assertTrue("couldn't go Up to the buttons (focus: ${focused()})", focused().contains("My List"))
+            tries = 0
             while (!focused().contains("Pilot") && tries < 12) { press(listOf(Key.DirectionDown)); tries++ }
             assertTrue("couldn't reach episode 1 from My List (focus: ${focused()})", focused().contains("Pilot"))
             press(listOf(Key.DirectionCenter))
@@ -987,6 +1052,30 @@ class UsabilityTest {
             tries = 0
             while (!focused().contains("Season Two Opener") && tries < 10) { press(listOf(Key.DirectionDown)); tries++ }
             assertTrue("couldn't reach a season 2 episode (focus: ${focused()})", focused().contains("Season Two Opener"))
+        }
+    }
+
+    /** #8: the series page opens on the next episode to watch, in its season. */
+    @Test
+    fun aSeriesPageOpensOnTheNextUnwatchedEpisode() {
+        FakeProvider().use { server ->
+            rule.runOnIdle { vm.addPlaylist("Fake provider", "xtream", "http://127.0.0.1:${server.port}", "u", "", "", "", liveOn = false, vodOn = true) }
+            waitFor("the provider to be added (status=${vm.status})") { vm.playlists.any { it.name == "Fake provider" } }
+            val pid = vm.playlists.first { it.name == "Fake provider" }.id
+            val show = com.avidviewer.tv.data.VodItem("$pid:s77", pid, "series", "Test Show", null, "", seriesId = "77", category = "Shows")
+            go(Screen.SERIES)
+            fun open(what: String, want: String) {
+                rule.runOnIdle { vm.closeVodDetail(false); vm.openVodDetail(show) }
+                waitFor("episodes ($what)") { vm.detailEpisodes?.isNotEmpty() == true }
+                waitFor("$what: the page opens on “$want” (focus: ${focused()}, season ${vm.detailSeason})") { focused().contains(want) }
+            }
+            open("nothing watched", "Pilot")
+            val eps = vm.detailEpisodes!!
+            rule.runOnIdle { vm.markWatched(vm.episodeKey(show, eps[0])) }
+            open("episode 1 watched", "Second")
+            rule.runOnIdle { vm.markWatched(vm.episodeKey(show, eps[1])) }
+            open("season 1 watched", "Season Two Opener")
+            assertEquals("2", vm.detailSeason)
         }
     }
 

@@ -489,6 +489,27 @@ private class PlaylistFields(
     val m3u: String, val epg: String, val liveOn: Boolean, val vodOn: Boolean,
 )
 
+/**
+ * Back on a form with changes that aren't saved asks first (SET-02): "Keep editing" has the highlight, so a
+ * stray Back loses nothing; Discard drops the changes and does what Back would have done ([onDiscard]).
+ */
+@Composable
+fun DiscardGuard(dirty: Boolean, onDiscard: () -> Unit) {
+    var asking by remember { mutableStateOf(false) }
+    BackHandler(enabled = dirty && !asking) { asking = true }
+    if (!asking) return
+    val keep = remember { FocusRequester() }
+    AlertDialog(
+        onDismissRequest = { asking = false },
+        containerColor = C.Surface,
+        title = { Text("Discard changes?", color = C.Text, fontWeight = FontWeight.Bold) },
+        text = { Label("What you typed here hasn't been saved.", size = 14.sp, color = C.Soft, lines = Int.MAX_VALUE) },
+        confirmButton = { TvButton("Keep editing", primary = true, modifier = Modifier.focusRequester(keep)) { asking = false } },
+        dismissButton = { TvButton("Discard") { asking = false; onDiscard() } },
+    )
+    LaunchedEffect(Unit) { focusWhenReady { runCatching { keep.requestFocus() }.isSuccess } }
+}
+
 /** The add form, or the edit form when [existing] is given. */
 @Composable
 private fun PlaylistForm(vm: AppViewModel, existing: com.avidviewer.tv.data.Playlist?, onCancel: (() -> Unit)?, onSubmit: (PlaylistFields) -> Unit) {
@@ -502,6 +523,13 @@ private fun PlaylistForm(vm: AppViewModel, existing: com.avidviewer.tv.data.Play
     var epg by remember(k) { mutableStateOf(existing?.epgUrl ?: "") }
     var liveOn by remember(k) { mutableStateOf(true) }
     var vodOn by remember(k) { mutableStateOf(true) }
+    val dirty = type != (existing?.type ?: "xtream") || name != (existing?.name ?: "") || server != (existing?.server ?: "") ||
+        user != (existing?.username ?: "") || pass.isNotEmpty() || m3u != (existing?.m3uUrl ?: "") || epg != (existing?.epgUrl ?: "")
+    DiscardGuard(dirty) {
+        type = existing?.type ?: "xtream"; name = existing?.name ?: ""; server = existing?.server ?: ""; user = existing?.username ?: ""
+        pass = ""; m3u = existing?.m3uUrl ?: ""; epg = existing?.epgUrl ?: ""
+        if (onCancel != null) onCancel() else vm.navBack()
+    }
     LazyColumn(
         Modifier.fillMaxSize(),
         contentPadding = PaddingValues(16.dp),
@@ -788,7 +816,9 @@ private fun androidx.compose.foundation.lazy.LazyListScope.locationSettings(vm: 
             else "${p.postalCode} · ${p.placeName}",
         ) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                TvField("Postal code", code, modifier = Modifier.width(220.dp)) { code = it.take(8) }
+                // Done on the keyboard saves too; Back with an unsaved code asks first (SET-02).
+                TvField("Postal code", code, modifier = Modifier.width(220.dp), onSubmit = { if (code != p.postalCode) vm.setPostalCode(code) }) { code = it.take(8) }
+                DiscardGuard(code != p.postalCode) { code = p.postalCode; vm.navBack() }
                 TvButton("Save", primary = true) { vm.setPostalCode(code) }
             }
             vm.postalStatus?.let { Label(it, size = 12.sp, color = C.Soft) }
@@ -1047,7 +1077,8 @@ private fun androidx.compose.foundation.lazy.LazyListScope.discoverSettings(vm: 
             if (p.tmdbKeyEnc.isBlank()) "Free from themoviedb.org (Settings › API). Stored encrypted on this device only." else "Saved (encrypted on this device). Enter a new key to replace it.",
         ) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                TvField("API key", key, modifier = Modifier.width(360.dp), password = p.tmdbKeyEnc.isNotBlank() && key.isEmpty()) { key = it.trim() }
+                TvField("API key", key, modifier = Modifier.width(360.dp), password = p.tmdbKeyEnc.isNotBlank() && key.isEmpty(), onSubmit = { if (key.isNotBlank()) { vm.setTmdbKey(key); key = "" } }) { key = it.trim() }
+                DiscardGuard(key.isNotBlank()) { key = ""; vm.navBack() }
                 TvButton("Save", primary = true) { vm.setTmdbKey(key); key = "" }
                 if (p.tmdbKeyEnc.isNotBlank()) TvButton("Remove") { vm.setTmdbKey("") }
             }

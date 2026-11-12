@@ -52,6 +52,9 @@ class LiveDb(private val catalog: Catalog) {
     fun channelsSavedAt(pid: String) = savedAt(pid, "ch")
     fun guideSavedAt(pid: String) = savedAt(pid, "guide")
 
+    /** The saved guide was found still current (its sources hadn't changed): counts as freshly downloaded. */
+    fun guideChecked(pid: String) = markSaved(db, pid, "guide")
+
     /** When the last saved programme of a playlist ends (0 = none). */
     fun guideEnd(pid: String): Long = db.rawQuery("SELECT MAX(x) FROM prog WHERE p = ?", arrayOf(pid)).use { c -> if (c.moveToFirst() && !c.isNull(0)) c.getLong(0) else 0L }
 

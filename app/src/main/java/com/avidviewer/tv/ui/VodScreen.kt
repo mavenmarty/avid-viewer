@@ -48,7 +48,6 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import coil.compose.AsyncImage
 import com.avidviewer.tv.data.VodItem
 import kotlinx.coroutines.delay
 
@@ -67,16 +66,13 @@ fun VodScreen(vm: AppViewModel, kind: String) {
     if (all.isEmpty()) {
         Column(Modifier.fillMaxSize().padding(30.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text(title, color = C.Text, fontSize = 24.sp, fontWeight = FontWeight.Bold)
-            Label(
-                when {
-                    src == null -> "Movies & series are switched off for every playlist. Turn them on for a playlist in Settings › Playlists."
-                    vm.vodLoading -> vm.status ?: "Loading ${title.lowercase()}…"
-                    vm.vodError != null -> vm.vodError!!
-                    else -> "No ${title.lowercase()} in your playlists yet. If your provider offers them, choose Refresh in Settings › Playlists."
-                },
-                size = 15.sp, color = C.Soft, lines = 4,
-            )
-            TvButton("Playlists", primary = true) { vm.navSelect(Screen.PLAYLISTS) }
+            val playlists = "Playlists" to { vm.navSelect(Screen.PLAYLISTS) }
+            when {
+                src == null -> StateMessage(StateKind.EMPTY, "Movies & series are off", "Turn them on for a playlist in Settings › Playlists.", action = playlists)
+                vm.vodLoading -> StateMessage(StateKind.LOADING, "Loading ${title.lowercase()}…", vm.status)
+                vm.vodError != null -> StateMessage(StateKind.ERROR, "Couldn't load ${title.lowercase()}", vm.vodError, retry = { vm.ensureVod(refresh = true) }, action = playlists)
+                else -> StateMessage(StateKind.EMPTY, "No ${title.lowercase()} yet", "If your provider offers them, choose Refresh in Settings › Playlists.", action = playlists)
+            }
         }
         return
     }
@@ -102,7 +98,7 @@ fun VodScreen(vm: AppViewModel, kind: String) {
                     if (isMoving) focusWhenReady(vm, frames = 30, isFocused = { hasFocus }) { runCatching { fr.requestFocus() }.isSuccess }
                 }
                 Focusable(
-                    modifier = Modifier.fillMaxWidth().heightIn(min = 36.dp).focusRequester(fr).onFocusChanged { hasFocus = it.isFocused }
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 36.dp).focusRequester(fr).onFocusChanged { hasFocus = it.isFocused; if (it.isFocused && !special && !on) vm.prefetchVodCategory(kind, name) }
                         .then(if (!isMoving) Modifier.wrapEnds(catWrap, isFirst = name == allCats.first().first, isLast = name == allCats.last().first) else Modifier)
                         .then(if (name == "All") Modifier.entryFocus(vm, if (kind == "series") Screen.SERIES else Screen.MOVIES) else Modifier)
                         .then(if (isMoving) Modifier.border(2.dp, C.AccentFocus, androidx.compose.foundation.shape.RoundedCornerShape(8.dp)) else Modifier)
@@ -228,7 +224,7 @@ private fun Poster(vm: AppViewModel, v: VodItem, modifier: Modifier = Modifier, 
                     modifier = Modifier.align(Alignment.BottomStart).padding(8.dp),
                 )
                 if (v.logo != null) {
-                    AsyncImage(model = v.logo, contentDescription = v.name, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                    TvImage(model = v.logo, contentDescription = v.name, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
                 }
                 if (vm.inMyList(v.key)) {
                     Text("✓", color = C.OnAccent, fontSize = 12.sp, fontWeight = FontWeight.Bold,
@@ -264,8 +260,11 @@ private fun VodDetail(vm: AppViewModel, v: VodItem) {
         for (frame in 0 until 120) {
             androidx.compose.runtime.withFrameNanos { }
             if (vm.lastKeyAt > started) break
-            val ep = vm.lastEpisode
-            val wantEpisode = isSeries && frame < 60 && ep != null && vm.detailEpisodes?.any { it.key == ep.key && it.season == ep.season } == true
+            // The episode that was playing, else (BUG-020) the next one to watch.
+            val eps = vm.detailEpisodes
+            val ep = vm.lastEpisode?.takeIf { l -> eps?.any { it.key == l.key && it.season == l.season && it.number == l.number } == true }
+                ?: eps?.let { vm.nextUpEpisode(v, it) }
+            val wantEpisode = isSeries && frame < 60 && ep != null && (vm.detailSeason ?: ep.season) == ep.season
             val ok = if (wantEpisode) onEpisode else inside
             // Done once the highlight has stayed for a few frames (the menu may grab it right after).
             if (ok) { if (++held >= 12) break; continue }
@@ -278,7 +277,7 @@ private fun VodDetail(vm: AppViewModel, v: VodItem) {
         Box(Modifier.width(200.dp).aspectRatio(2f / 3f).clip(RoundedCornerShape(10.dp)).background(badgeColor(v.name))) {
             Text(v.name, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold, modifier = Modifier.align(Alignment.BottomStart).padding(10.dp))
             val img = v.logo ?: info?.image
-            if (img != null) AsyncImage(model = img, contentDescription = v.name, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+            if (img != null) TvImage(model = img, contentDescription = v.name, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
         }
         // One scrolling list: the details, then the seasons and every episode, so Down always reaches
         // them. (Given only the height left under the text, the episodes could get none: a long
@@ -318,13 +317,13 @@ private fun VodDetail(vm: AppViewModel, v: VodItem) {
             info?.cast?.takeIf { it.isNotBlank() }?.let { Label("Cast: $it", size = 13.sp, lines = if (isSeries) 1 else 2) }
             info?.director?.takeIf { it.isNotBlank() }?.let { Label("Director: $it", size = 13.sp, lines = 1) }
           } }
-          if (isSeries) seasonsAndEpisodes(vm, seasonFr, episodeFocus) { onEpisode = it }
+          if (isSeries) seasonsAndEpisodes(vm, v, seasonFr, episodeFocus) { onEpisode = it }
         }
     }
 }
 
 /** The season buttons, then the chosen season's episodes, as items of the title page's list. */
-private fun androidx.compose.foundation.lazy.LazyListScope.seasonsAndEpisodes(vm: AppViewModel, seasonFr: FocusRequester, episodeFocus: FocusRequester, onLastFocused: (Boolean) -> Unit) {
+private fun androidx.compose.foundation.lazy.LazyListScope.seasonsAndEpisodes(vm: AppViewModel, series: VodItem, seasonFr: FocusRequester, episodeFocus: FocusRequester, onLastFocused: (Boolean) -> Unit) {
     val eps = vm.detailEpisodes
     when {
         eps == null -> item(key = "eps-loading") { Label("Loading episodes…", size = 13.sp) }
@@ -338,15 +337,17 @@ private fun androidx.compose.foundation.lazy.LazyListScope.seasonsAndEpisodes(vm
                 }
             }
             val shown = eps.filter { it.season == season }
+            // The episode the page opens on: the one that was playing, else the next one to watch.
+            val target = vm.lastEpisode?.takeIf { l -> eps.any { it.key == l.key && it.season == l.season && it.number == l.number } } ?: vm.nextUpEpisode(series, eps)
             items(shown, key = { "e:" + it.season + ":" + it.number + ":" + it.key }) { e ->
-                val r = vm.resumeOf(e.key)
-                val last = vm.lastEpisode
-                val isLast = last != null && last.key == e.key && last.season == e.season && last.number == e.number
+                val ek = vm.episodeKey(series, e)
+                val r = vm.resumeOf(ek)
+                val isLast = target != null && target.key == e.key && target.season == e.season && target.number == e.number
                 Focusable(Modifier.fillMaxWidth().height(52.dp).then(if (e == shown.first()) Modifier.focusProperties { up = seasonFr } else Modifier).then(if (isLast) Modifier.focusRequester(episodeFocus).onFocusChanged { onLastFocused(it.isFocused) } else Modifier), onClick = { vm.playDetailEpisode(e) }) {
                     Label("E${e.number}", size = 13.sp, color = C.Accent, weight = FontWeight.Bold, modifier = Modifier.width(50.dp).padding(start = 12.dp))
                     Column(Modifier.weight(1f)) {
                         Label(e.title, size = 14.sp, color = C.Text, weight = FontWeight.SemiBold)
-                        Label(listOf(e.duration, if (r > 0) "Resume from ${fmtPos(r)}" else "", e.plot).filter { it.isNotBlank() }.joinToString(" · "), size = 12.sp)
+                        Label(listOf(e.duration, if (r > 0) "Resume from ${fmtPos(r)}" else if (vm.isWatched(ek)) "✓ Watched" else "", e.plot).filter { it.isNotBlank() }.joinToString(" · "), size = 12.sp)
                     }
                     Label("▶ Play", size = 13.sp, color = C.Accent, weight = FontWeight.Bold, modifier = Modifier.padding(end = 12.dp))
                 }
