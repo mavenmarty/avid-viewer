@@ -185,7 +185,7 @@ Sports lists real games from **ESPN's schedules** for today and the next 2 days,
   - US channels come first; Canadian channels are the backup.
   - Channels marked for other countries are left out, for example "UK |" in the name, or a category for another country.
 - **Games further ahead:** your guide covers about 36 hours, so guide listings and event channels for later games appear closer to the start. **Search the guide for "[team]"** jumps to the TV Guide's search.
-- **Updates:** every minute while a game is live, every 5 minutes otherwise while Sports is open, and every 30 minutes in the background. If ESPN can't be reached, Sports says so and keeps the last list.
+- **Updates:** each day is asked for separately. Today and yesterday are refreshed about every minute while Sports is open (scores while games are live), the next 2 days every 30 minutes. In the background Sports refreshes every 30 minutes. If ESPN can't be reached, Sports says so and shows the last list saved on the TV.
 
 ## 8. Movies and Series
 
@@ -344,7 +344,7 @@ The share password is stored encrypted on the TV and is included in your PIN-loc
 - **No channels or guide**: check that the playlist, and its Live TV switch, are on in Settings › Playlists, then choose Refresh.
 - **No movies or series**: turn on Movies & series for the playlist and Refresh.
 - **Discover is empty**: add a TMDB API key in Settings › Discover, or turn off "My services".
-- **Sports is empty**: check the leagues in Settings › Sports tab; off-season leagues have no games. "Couldn't reach ESPN" means the schedules couldn't be downloaded, so the last list is shown.
+- **Sports is empty**: check the leagues in Settings › Sports tab; off-season leagues have no games. "Couldn't reach ESPN" means the schedules couldn't be downloaded, so the last list is shown. On 1.0.141 this appeared for every league; update to 1.0.147 or later.
 - **A game shows "No channel yet"**: your playlists have no channel named for its network, and no guide listing or event channel for it yet. Those often appear closer to the start. You can also use **Search the guide** on the game.
 - **Discover froze or the app closed after about 20 seconds** (1.0.137 and earlier, with large movie catalogs): update the app.
 - **A channel or category disappeared**: it may be hidden. Check Settings › List Editor.
@@ -410,9 +410,15 @@ Every public release since 1.0.35, newest first. Releases are published on GitHu
 
 ### 1.0.147 — November 11, 2026, 9:41 PM CT (current)
 
+**Release notes**
+
+- **Sports shows games again.** In 1.0.141 every league showed "Couldn't reach ESPN…" and no games, because ESPN's feed refuses requests for several days at once. The app now asks one day at a time, and saves each day's games on the TV, so Sports keeps showing the last list when ESPN is slow or down.
+
 **Change log**
 
-- Sports: ask ESPN one day at a time (it now refuses date ranges with 400), keep each day's last answer
+- Sports: one request per league and day (ESPN refuses date ranges); today and yesterday refreshed after about a minute, the next 2 days every 30 minutes; each day saved on the device
+- Checked against ESPN's live feed: NFL, NBA, NHL, college football and men's college basketball games with their networks
+- Tests: no request uses a range; recently answered days aren't asked again; saved days shown after a restart with ESPN unreachable
 
 ### 1.0.141 — November 11, 2026, 4:51 PM CT
 
