@@ -27,7 +27,7 @@ class Catalog(context: Context) : SQLiteOpenHelper(context.applicationContext, "
             """CREATE TABLE title (k TEXT PRIMARY KEY, p TEXT NOT NULL, t TEXT NOT NULL, g TEXT NOT NULL, c TEXT NOT NULL,
                n TEXT NOT NULL, nn TEXT NOT NULL, l TEXT, u TEXT NOT NULL, s TEXT, a INTEGER NOT NULL DEFAULT 0,
                r TEXT NOT NULL DEFAULT '', y TEXT NOT NULL DEFAULT '', o INTEGER NOT NULL, h INTEGER NOT NULL DEFAULT 0, tk TEXT,
-               lr INTEGER NOT NULL DEFAULT 1)""",
+               lr INTEGER NOT NULL DEFAULT -1)""",
         )
         db.execSQL("CREATE INDEX title_list ON title (g, h, c, p, o)")
         db.execSQL("CREATE INDEX title_all ON title (g, h, p, o)")
@@ -48,17 +48,38 @@ class Catalog(context: Context) : SQLiteOpenHelper(context.applicationContext, "
         // 3: live channels and guide programmes (LiveDb).
         if (oldVersion < 3) LiveDb.create(db)
         // 4: language rank, so Movies and Series list each title once with its English copy.
-        if (oldVersion < 4) {
-            db.execSQL("ALTER TABLE title ADD COLUMN lr INTEGER NOT NULL DEFAULT 1")
-            val st = db.compileStatement("UPDATE title SET lr = ? WHERE rowid = ?")
-            db.rawQuery("SELECT rowid, n, c FROM title", null).use { c ->
-                while (c.moveToNext()) {
-                    val r = langRank(c.getString(1), c.getString(2))
-                    if (r != 1) { st.clearBindings(); st.bindLong(1, r.toLong()); st.bindLong(2, c.getLong(0)); st.executeUpdateDelete() }
-                }
+        // Only the column here (-1 = not worked out yet): [fillLanguages] fills it in the background.
+        // 1.0.160 worked out every title inside the upgrade, which held the database (live channels
+        // too) for minutes on a big catalog; Fire TV closed the app and the upgrade started over.
+        if (oldVersion < 4) db.execSQL("ALTER TABLE title ADD COLUMN lr INTEGER NOT NULL DEFAULT -1")
+    }
+
+    /**
+     * Works out the language of titles saved before version 4, a few hundred at a time in short
+     * transactions, so other reads (channels, the guide) never wait long. Returns how many were done.
+     * Call off the main thread.
+     */
+    fun fillLanguages(batch: Int = 400, pause: () -> Unit = { Thread.sleep(15) }): Int {
+        var done = 0
+        val db = writableDatabase
+        while (true) {
+            val rows = db.rawQuery("SELECT rowid, n, c FROM title WHERE lr < 0 LIMIT $batch", null).use { c ->
+                val l = ArrayList<Triple<Long, String, String?>>(batch); while (c.moveToNext()) l.add(Triple(c.getLong(0), c.getString(1), c.getString(2))); l
             }
+            if (rows.isEmpty()) return done
+            db.beginTransaction()
+            try {
+                val st = db.compileStatement("UPDATE title SET lr = ? WHERE rowid = ?")
+                for ((id, n, cat) in rows) { st.clearBindings(); st.bindLong(1, langRank(n, cat).toLong()); st.bindLong(2, id); st.executeUpdateDelete() }
+                db.setTransactionSuccessful()
+            } finally { db.endTransaction() }
+            done += rows.size
+            pause()
         }
     }
+
+    /** True while some titles still wait for [fillLanguages]. */
+    fun needsLanguages(): Boolean = readableDatabase.rawQuery("SELECT 1 FROM title WHERE lr < 0 LIMIT 1", null).use { it.moveToFirst() }
 
     override fun onConfigure(db: SQLiteDatabase) { db.enableWriteAheadLogging() }
 
@@ -267,7 +288,7 @@ class Catalog(context: Context) : SQLiteOpenHelper(context.applicationContext, "
         fun order(): String = if (newestFirst) "a DESC, o" else "${plIndex()}, o"
         private fun plIndex() = "CASE p ${playlists.mapIndexed { i, p -> "WHEN '${p.replace("'", "''")}' THEN $i" }.joinToString(" ")} END"
         /** For [grouped]: picks each title's copy (English first) and keeps the list's order. */
-        fun pick(): String = "MIN(lr * $RANK + ${plIndex()} * $PER_PLAYLIST + o)"
+        fun pick(): String = "MIN((CASE WHEN lr < 0 THEN 1 ELSE lr END) * $RANK + ${plIndex()} * $PER_PLAYLIST + o)"
         fun groupedOrder(): String = if (newestFirst) "a DESC, pick" else "pick % $RANK"
     }
 

@@ -450,6 +450,13 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     init {
         if (prefs.clearCacheOnExit) store.clearCache() // catches exits Android didn't report
+        // Titles saved before 1.0.160 get their language in the background, a few hundred at a time,
+        // a little after start-up (channels and the guide come first); then Movies & Series regroup.
+        viewModelScope.launch {
+            delay(8_000)
+            val n = withContext(Dispatchers.IO) { runCatching { if (catalog.needsLanguages()) catalog.fillLanguages() else 0 }.getOrDefault(0) }
+            if (n > 0) vodVersion++
+        }
         player.addListener(object : Player.Listener {
             override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) { paused = !playWhenReady }
             override fun onPlayerError(error: PlaybackException) {
