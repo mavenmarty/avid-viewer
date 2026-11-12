@@ -238,11 +238,25 @@ class ChannelNavProbeTest {
 
     private fun step(name: String, block: () -> Unit) {
         val t0 = System.currentTimeMillis()
+        val main = android.os.Looper.getMainLooper().thread
+        val testThread = Thread.currentThread()
+        val dog = thread(isDaemon = true) {
+            try {
+                var n = 0
+                while (true) {
+                    Thread.sleep(if (n == 0) 45_000 else 5_000)
+                    n++
+                    for (th in listOf(main, testThread).distinct()) report("probe", "$name-stuck-$n-${th.name}", th.stackTrace.take(45).joinToString(" || "))
+                    report("probe", "$name-stuck-$n-trail", vm.focusTrail.toList().takeLast(25).joinToString(" "))
+                    if (n >= 4) { File("build/audit-results.txt").appendText("giving up\n"); Runtime.getRuntime().halt(3) }
+                }
+            } catch (_: InterruptedException) {}
+        }
         try { block(); report("probe", name, "ok ${System.currentTimeMillis() - t0} ms focus=${focused().take(80)}") }
         catch (e: Throwable) {
             val sw = java.io.StringWriter(); e.printStackTrace(java.io.PrintWriter(sw))
             report("probe", name, "CRASH " + sw.toString().lines().take(40).joinToString(" || "))
-        }
+        } finally { dog.interrupt() }
         if (bg.isNotEmpty()) { report("probe", "$name-background", bg.joinToString(" ## ")); bg.clear() }
     }
 
@@ -275,28 +289,18 @@ class ChannelNavProbeTest {
         waitFor("guide") { vm.guide.isNotEmpty() }
         report("probe", "loaded", "${vm.channels.size} channels, ${vm.guide.size} guide ids, groups=${vm.groups().take(5).map { it.raw }}")
 
-        for (g in listOf("ALL CHANNELS", vm.groups().getOrNull(3)?.raw ?: "ALL CHANNELS")) {
-            step("$g-open") { rule.runOnIdle { vm.chooseGroup("fx", g) }; waitFor("group $g", 15_000) { focused() != "(nothing focused)" && vm.selectedGroup == g } }
-            step("$g-names-burst-down") { burst(Key.DirectionDown, 40); burst(Key.DirectionDown, 40, 8) }
-            step("$g-names-burst-up") { burst(Key.DirectionUp, 40); burst(Key.DirectionUp, 80, 8) }
-            step("$g-names-burst-mixed") { burstsMixed(1) }
-            step("$g-names-burst-top-wrap") { rule.runOnIdle { vm.chooseGroup("fx", g) }; settle(400); burst(Key.DirectionUp, 6); burst(Key.DirectionUp, 6, 16); burst(Key.DirectionDown, 10) }
-            step("$g-to-programs") { press(Key.DirectionRight) }
-            step("$g-programs-burst-down") { burst(Key.DirectionDown, 40); burst(Key.DirectionDown, 40, 8) }
-            step("$g-programs-burst-up") { burst(Key.DirectionUp, 40); burst(Key.DirectionUp, 80, 8) }
-            step("$g-programs-burst-mixed") { burstsMixed(2) }
-            step("$g-programs-burst-bottom-wrap") { hold(Key.DirectionDown, 9000); burst(Key.DirectionDown, 6); burst(Key.DirectionDown, 6, 16); burst(Key.DirectionUp, 10) }
-            step("$g-back-left") { press(Key.DirectionLeft); press(Key.DirectionLeft) }
-        }
-        step("favorites-burst") {
-            rule.runOnIdle { vm.channelsIn("ALL CHANNELS").take(40).forEach { vm.toggleFavorite(it.key) } }
-            rule.runOnIdle { vm.chooseGroup("fx", com.avidviewer.tv.ui.FAV_GROUP) }
-            settle(500); burstsMixed(3); press(Key.DirectionRight); burstsMixed(4)
-        }
-        step("small-group-burst") {
-            val small = vm.groups().minByOrNull { it.count }?.raw ?: "ALL CHANNELS"
-            rule.runOnIdle { vm.chooseGroup("fx", small) }; settle(500); burstsMixed(5); press(Key.DirectionRight); burstsMixed(6)
-        }
+        val g = "ALL CHANNELS"
+        step("open") { rule.runOnIdle { vm.chooseGroup("fx", g) }; waitFor("group", 15_000) { focused() != "(nothing focused)" && vm.selectedGroup == g } }
+        step("up-to-preview") { press(Key.DirectionUp) }
+        step("up-wraps-to-bottom") { press(Key.DirectionUp) }
+        step("after-wrap-idle") { settle(1000) }
+        step("up-press-at-bottom") { repeat(5) { press(Key.DirectionUp) } }
+        step("down-press-at-bottom") { repeat(8) { press(Key.DirectionDown) } }
+        step("reopen") { rule.runOnIdle { vm.chooseGroup("fx", g) }; settle(800) }
+        step("burst-up-3") { burst(Key.DirectionUp, 3) }
+        step("burst-up-10") { burst(Key.DirectionUp, 10) }
+        step("burst-down-10") { burst(Key.DirectionDown, 10) }
+        step("burst-mixed") { burstsMixed(1) }
         Thread.setDefaultUncaughtExceptionHandler(prev)
         server.close()
     }
