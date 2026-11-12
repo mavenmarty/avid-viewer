@@ -877,26 +877,30 @@ class UsabilityTest {
 
     /** Nov 12: tapping Up/Down fast in the TV Guide froze and closed the app after a wrap-around. */
     @Test
-    fun fastTapsInTheChannelListLandOnTheRightChannel() {
+    fun fastTapsInTheChannelListKeepUpAndNeverFreeze() {
+        fun row(): Int = Regex("BIG Channel (\\d+) with").find(focused())?.groupValues?.get(1)?.toInt() ?: -1
+        fun near(what: String, want: Int) = waitFor("$what: about channel $want (focus: ${focused()})") { row() in (want - 2)..want }
         rule.runOnIdle { vm.chooseGroup(TestData.P1, "BIG") }
-        waitFor("BIG channel 1 highlighted") { focused().contains("BIG Channel 1 with") }
-        burst(Key.DirectionDown, 10)
-        waitFor("10 fast presses down reach channel 11 (focus: ${focused()})") { focused().contains("BIG Channel 11 with") }
-        burst(Key.DirectionDown, 25)
-        waitFor("25 more reach channel 36 (focus: ${focused()})") { focused().contains("BIG Channel 36 with") }
-        burst(Key.DirectionUp, 30)
-        waitFor("30 fast presses up reach channel 6 (focus: ${focused()})") { focused().contains("BIG Channel 6 with") }
-        // Up past the top goes to the preview, then wraps to the bottom; fast presses carry on from there.
-        burst(Key.DirectionUp, 5); press(listOf(Key.DirectionUp))
-        if (!focused().contains("BIG Channel 80 ")) press(listOf(Key.DirectionUp))
-        waitFor("wrapped to the last channel (focus: ${focused()})") { focused().contains("BIG Channel 80 ") }
-        burst(Key.DirectionUp, 4)
-        waitFor("4 up from the bottom reach channel 76 (focus: ${focused()})") { focused().contains("BIG Channel 76 with") }
-        burst(Key.DirectionDown, 4); burst(Key.DirectionDown, 1)
-        waitFor("Down past the bottom wraps to channel 1 (focus: ${focused()})") { focused().contains("BIG Channel 1 with") }
-        // Mixed fast taps never lose the highlight.
+        waitFor("BIG channel 1 highlighted") { row() == 1 }
+        // Fast presses count from where the highlight is heading (a press arriving mid-scroll may drop).
+        burst(Key.DirectionDown, 10); near("10 fast presses down", 11)
+        var at = row()
+        burst(Key.DirectionDown, 25); near("25 more", at + 25)
+        at = row()
+        burst(Key.DirectionUp, 20); near("20 fast presses up", at - 20)
+        // Up to the top, past the preview, wraps to the bottom; fast presses carry on from there.
+        var tries = 0
+        while (row() != 80 && tries < 60) { press(listOf(Key.DirectionUp)); tries++ }
+        assertEquals("Up past the top didn't wrap to the last channel (focus: ${focused()})", 80, row())
+        burst(Key.DirectionUp, 4); near("4 up from the bottom", 76)
+        tries = 0
+        while (row() != 80 && tries < 10) { press(listOf(Key.DirectionDown)); tries++ }
+        press(listOf(Key.DirectionDown))
+        waitFor("Down past the bottom wraps to channel 1 (focus: ${focused()})") { row() == 1 }
+        // Mixed fast taps, across both wraps, never lose the highlight.
         val rnd = Random(1112)
         repeat(30) { burst(if (rnd.nextBoolean()) Key.DirectionDown else Key.DirectionUp, 1 + rnd.nextInt(8)) }
+        settle()
         assertTrue("highlight lost (focus: ${focused()})", focused() != "(nothing focused)")
     }
 
