@@ -23,6 +23,7 @@ object TestData {
         context.filesDir.mkdirs()
         val store = Store(context)
         val dead = "http://127.0.0.1:9/none" // nothing listens here: any accidental download fails fast
+        com.avidviewer.tv.data.EspnFeed.base = "$dead/espn/" // Sports: no real ESPN in tests (SportsTest serves its own)
         store.savePlaylists(
             listOf(
                 Playlist(id = P1, name = "My provider", type = "m3u", m3uUrl = "$dead/p1.m3u", epgUrl = "$dead/p1.xml"),

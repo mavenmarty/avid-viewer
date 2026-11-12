@@ -316,6 +316,13 @@ class Catalog(context: Context) : SQLiteOpenHelper(context.applicationContext, "
  */
 class PagedTitles(private val catalog: Catalog, val query: Catalog.Query, private val pageSize: Int = 100) : AbstractList<VodItem>(), RandomAccess {
     override val size: Int by lazy { runCatching { catalog.count(query) }.getOrDefault(0) }
+
+    // Compared by identity. A list's usual equals/hashCode walk every item, which here means reading
+    // every page from the database; Compose compares a state's old and new value with equals, so
+    // replacing one paged list with another (each catalog update, each screen recomposition) read
+    // whole catalogs on the main thread and froze the screen (Discover, Movies).
+    override fun equals(other: Any?) = this === other
+    override fun hashCode() = System.identityHashCode(this)
     private val pages = object : LinkedHashMap<Int, List<VodItem>>(16, 0.75f, true) {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<Int, List<VodItem>>?) = size > 12
     }

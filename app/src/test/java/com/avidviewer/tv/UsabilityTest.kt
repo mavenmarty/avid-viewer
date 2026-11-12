@@ -19,6 +19,7 @@ import androidx.compose.ui.test.printToString
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.pressKey
 import androidx.compose.ui.test.requestFocus
@@ -370,6 +371,92 @@ class UsabilityTest {
         vm.playlists.forEach { p -> assertTrue("leaks ${p.name}", !link.contains(p.name) && (p.server.isBlank() || !link.contains(p.server))) }
     }
 
+    @Test
+    fun aboutShowsQrCodesForTheUserGuideAndTheControl4Driver() {
+        go(Screen.SETTINGS)
+        rule.runOnIdle { vm.settingsSection = "about" }
+        settle()
+        rule.onAllNodes(androidx.compose.ui.test.hasScrollToNodeAction()).onFirst()
+            .performScrollToNode(androidx.compose.ui.test.hasTestTag("control4-qr"))
+        settle()
+        assertTrue(rule.onAllNodesWithText("User guide (PDF)").fetchSemanticsNodes().isNotEmpty())
+        assertTrue(rule.onAllNodesWithText("Control4 mini driver").fetchSemanticsNodes().isNotEmpty())
+        assertTrue(rule.onAllNodesWithTag("guide-qr").fetchSemanticsNodes().isNotEmpty())
+        assertTrue(rule.onAllNodesWithTag("control4-qr").fetchSemanticsNodes().isNotEmpty())
+        assertTrue(com.avidviewer.tv.data.Links.USER_GUIDE.endsWith("/releases/download/user-guide/AvidViewer-User-Guide.pdf"))
+    }
+
+    @Test
+    fun updatesAndAboutBlocksAreReachableAndShownWhole() {
+        go(Screen.SETTINGS)
+        var tries = 0
+        while (!focused().contains("Updates & about") && tries < 15) { press(listOf(Key.DirectionDown)); tries++ }
+        press(listOf(Key.DirectionCenter))
+        fun focusedTag(): String = rule.onAllNodes(androidx.compose.ui.test.isFocused()).fetchSemanticsNodes()
+            .joinToString { it.config.getOrNull(androidx.compose.ui.semantics.SemanticsProperties.TestTag) ?: focused() }
+        waitFor("OK opens Updates & about on its first block (focus: ${focusedTag()})") { vm.settingsSection == "about" && (focusedTag() == "block-Report a bug" || focused().contains("Open email app")) }
+        fun shownWhole(text: String) {
+            val root = rule.onRoot().fetchSemanticsNode().boundsInRoot
+            val b = rule.onAllNodesWithText(text).onFirst().fetchSemanticsNode().boundsInRoot
+            assertTrue("\"$text\" is cut off: $b (screen $root)", b.top >= root.top && b.bottom <= root.bottom)
+        }
+        shownWhole("Report a bug")
+        tries = 0
+        while (focusedTag() != "block-User guide and Control4 driver" && tries < 4) { press(listOf(Key.DirectionDown)); tries++ }
+        assertEquals("Down reaches the QR codes block", "block-User guide and Control4 driver", focusedTag())
+        shownWhole("User guide and Control4 driver")
+        shownWhole("Control4 mini driver")
+        // And back up: the bug report block shows whole again.
+        press(listOf(Key.DirectionUp))
+        shownWhole("Report a bug")
+    }
+
+    // ---------------------------------------------------------------- Sports, ESPN first
+
+    @Test
+    fun sportsListsEspnGamesAndOkGoesToTheirChannels() {
+        val now = System.currentTimeMillis()
+        val wings = FakeEspn.Companion.T("DET", "Red Wings", "Detroit", "e30526", "7-8-3", "2")
+        val blues = FakeEspn.Companion.T("STL", "Blues", "St. Louis", "0070b9", "7-8-2", "1")
+        val espn = FakeEspn(mapOf("hockey/nhl" to FakeEspn.board(
+            FakeEspn.event("401", now - 30 * 60_000L, "in", wings, blues, listOf(Triple("TNT", "national", "TV")), "3:44 - 2nd", 2, "3:44"),
+        )))
+        try {
+            com.avidviewer.tv.data.EspnFeed.base = espn.base
+            rule.runOnIdle {
+                vm.live.replacingChannels(TestData.P2) { add ->
+                    add(com.avidviewer.tv.data.Channel("${TestData.P2}:tnt", "US| TNT HD", "SPORTS", null, "http://127.0.0.1:9/tnt.ts", null))
+                }
+            }
+            go(Screen.SPORTS)
+            waitFor("the game from ESPN") { vm.sportGames.any { it.game.id == "NHL:401" && it.channels.isNotEmpty() } }
+            settle()
+            assertTrue(rule.onAllNodesWithText("Where to watch").fetchSemanticsNodes().isNotEmpty())
+            assertTrue(rule.onAllNodesWithText("LIVE NOW · 1").fetchSemanticsNodes().isNotEmpty())
+            assertTrue(rule.onAllNodesWithText("National TV · TNT").fetchSemanticsNodes().isNotEmpty())
+            // From the league filters down to the game, then OK: the highlight goes to its first channel.
+            var tries = 0
+            while (!focused().contains("Red Wings") && tries < 6) { press(listOf(Key.DirectionDown)); tries++ }
+            assertTrue("on the game card (focus: ${focused()})", focused().contains("Red Wings"))
+            press(listOf(Key.DirectionCenter))
+            waitFor("OK on a game moves to its channels (focus: ${focused()})") { focused().contains("US| TNT HD") }
+            press(listOf(Key.DirectionCenter))
+            waitFor("OK on a channel plays it in the preview") { vm.currentKey == "${TestData.P2}:tnt" }
+        } finally { espn.close() }
+    }
+
+    @Test
+    fun settingsSportsTabSwitchesLeaguesWithOk() {
+        go(Screen.SETTINGS)
+        rule.runOnIdle { vm.settingsSection = "sports" }
+        settle()
+        assertTrue(rule.onAllNodesWithText("Leagues").fetchSemanticsNodes().isNotEmpty())
+        assertTrue(rule.onAllNodesWithText("College basketball (men)").fetchSemanticsNodes().isNotEmpty())
+        rule.onAllNodesWithText("NFL").onFirst().performClick()
+        rule.waitForIdle()
+        assertEquals(false, vm.sportLeagues().first { it.id == "NFL" }.on)
+    }
+
     // ---------------------------------------------------------------- guide management and quick dialogs
 
     @Test
@@ -392,9 +479,36 @@ class UsabilityTest {
         go(Screen.SETTINGS)
         waitFor("Settings' first section highlighted (focus: ${focused()})") { focused().contains("Playlists") && vm.settingsSection == "playlists" }
         var tries = 0
-        while (vm.settingsSection != "about" && tries < 15) { press(listOf(Key.DirectionDown)); tries++ }
-        assertEquals("Down reaches Updates & about (focus: ${focused()})", "about", vm.settingsSection)
-        assertTrue("it's on screen and highlighted", focused().contains("Updates & about"))
+        while (!focused().contains("Updates & about") && tries < 15) { press(listOf(Key.DirectionDown)); tries++ }
+        assertTrue("Down reaches Updates & about, on screen and highlighted (focus: ${focused()})", focused().contains("Updates & about"))
+        assertEquals("moving the highlight doesn't open sections", "playlists", vm.settingsSection)
+        // The section list doesn't wrap: Down at the end stays on the last section.
+        press(listOf(Key.DirectionDown))
+        assertTrue("no wrap in the section list (focus: ${focused()})", focused().contains("Updates & about"))
+        press(listOf(Key.DirectionCenter))
+        waitFor("OK opens it (section=${vm.settingsSection})") { vm.settingsSection == "about" && vm.settingsInContent }
+    }
+
+    @Test
+    fun onlyCategoryAndChannelListsWrapAround() {
+        // The main menu: Down on its last item stays there.
+        press(listOf(Key.Back, Key.Back, Key.Back))
+        waitFor("the main menu") { vm.navMode == NavMode.FULL }
+        var tries = 0
+        while (!focused().contains("Settings") && tries < 12) { press(listOf(Key.DirectionDown)); tries++ }
+        press(listOf(Key.DirectionDown))
+        assertTrue("no wrap in the main menu (focus: ${focused()})", focused().contains("Settings"))
+        // The poster grid: Down on the last row stays on it.
+        go(Screen.MOVIES)
+        waitFor("movies") { vm.vodOf("movie").isNotEmpty() }
+        rule.runOnIdle { vm.chooseVodCategory("movie", "Action") }
+        settle()
+        press(listOf(Key.DirectionRight))
+        repeat(4) { press(listOf(Key.DirectionDown)) }
+        val last = focused()
+        press(listOf(Key.DirectionDown))
+        assertEquals("no wrap in the poster grid", last, focused())
+        assertTrue("on the grid's last row (focus: $last)", Regex("Action Movie (\\d+)").find(last)?.groupValues?.get(1)?.toInt()?.let { it > 12 } == true)
     }
 
     @Test
@@ -555,9 +669,12 @@ class UsabilityTest {
         go(Screen.SETTINGS)
         waitFor("Settings opens on its first section (focus: ${focused()})") { focused().contains("Playlists") }
         press(listOf(Key.DirectionDown, Key.DirectionDown, Key.DirectionDown, Key.DirectionDown))
-        waitFor("on TV guide (focus: ${focused()})") { vm.settingsSection == "guide" && focused().contains("TV guide") }
-        press(listOf(Key.DirectionRight))
-        waitFor("Right lands inside the section, on a control (focus: ${focused()})") { vm.settingsInContent && focused() != "(nothing focused)" }
+        waitFor("on TV guide (focus: ${focused()})") { focused().contains("TV guide") }
+        assertEquals("highlighting a section doesn't open it", "playlists", vm.settingsSection)
+        press(listOf(Key.DirectionCenter))
+        waitFor("OK opens it and lands on its first control (section=${vm.settingsSection}, focus: ${focused()})") {
+            vm.settingsSection == "guide" && vm.settingsInContent && focused().contains("4 hours")
+        }
         val steps = ArrayList<String>()
         repeat(6) { press(listOf(Key.DirectionDown)); steps.add(focused()) }
         press(listOf(Key.DirectionLeft)); steps.add("◀ " + focused())

@@ -39,9 +39,8 @@ import com.avidviewer.tv.data.WatchProvider
 import com.avidviewer.tv.data.WhereToWatch
 import com.avidviewer.tv.data.VodInfo
 import com.avidviewer.tv.data.Updater
-import com.avidviewer.tv.data.Scores
-import com.avidviewer.tv.data.SportCat
-import com.avidviewer.tv.data.SportEvent
+import com.avidviewer.tv.data.Game
+import com.avidviewer.tv.data.ChannelMatch
 import com.avidviewer.tv.data.VodItem
 import com.avidviewer.tv.data.XtreamVod
 import com.avidviewer.tv.data.Weather
@@ -178,8 +177,13 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     var searching by mutableStateOf(false); private set
     var seriesOpen by mutableStateOf<VodItem?>(null); private set
     var episodes by mutableStateOf<List<Episode>?>(null); private set
-    var sportEvents by mutableStateOf<List<SportEvent>>(emptyList()); private set
-    var sportCat by mutableStateOf<String?>(null) // null = All
+    /** Games from ESPN with the channels found for them (Sports screen). */
+    var sportGames by mutableStateOf<List<SportGame>>(emptyList()); private set
+    /** The league filter on the Sports screen (null = All). */
+    var sportLeague by mutableStateOf<String?>(null)
+    /** Why the list may be stale ("Couldn't reach ESPN…"), or null. */
+    var sportsNote by mutableStateOf<String?>(null); private set
+    var sportsLoading by mutableStateOf(false); private set
     var settingsSection by mutableStateOf("playlists")
     /** Search boxes on the TV Guide, Movies and Series screens (applied when OK/Search is pressed). */
     var guideQuery by mutableStateOf("")
@@ -197,9 +201,12 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
      */
     var updatePromptAllowed by mutableStateOf(false); private set
     val installed: Pair<Long, String> = runCatching { Updater.installedVersion(app) }.getOrDefault(0L to "")
-    var selectedEvent by mutableStateOf<String?>(null)
-    private var sportsPlayCat: String? = null
-    private var scoreCache: Map<String, List<Scores.Game>> = emptyMap()
+    /** The game highlighted on the Sports screen. */
+    var selectedGame by mutableStateOf<String?>(null)
+    private var sportsPlayLeague: String? = null
+    /** Matched channels of other playlists, so they can be shown and played (only those). */
+    private var sportsChannels: Map<String, Channel> = emptyMap()
+    private var sportsFetchedAt = 0L
     /**
      * Other playlists' channels that are in ★ Favorites or a list, with their guide: only those channels,
      * never whole playlists, so memory stays small however many playlists there are.
@@ -460,14 +467,14 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             }
         }
         viewModelScope.launch {
-            var n = 0
             while (true) {
-                // Scores every 90 s while Sports is on screen, otherwise every 6 minutes.
+                delay(30_000)
+                // Schedules and scores: every minute while Sports is on screen and a game is live, every
+                // 5 minutes otherwise while it's on screen; in the background only every 30 minutes.
                 val sportsVisible = screen == Screen.SPORTS || (screen == Screen.PLAYER && playContext == PlayContext.SPORTS)
-                if (sportsVisible || n % 4 == 0) refreshScores()
-                rebuildSportEvents()
-                n++
-                delay(90_000)
+                val age = System.currentTimeMillis() - sportsFetchedAt
+                val due = if (sportsVisible) (if (sportGames.any { it.game.live }) 60_000L else 5 * 60_000L) else 30 * 60_000L
+                if (sportsFetchedAt > 0 && age >= due) refreshSports()
             }
         }
         viewModelScope.launch {
@@ -630,6 +637,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         return object : AbstractList<VodItem>(), RandomAccess {
             override val size get() = a.size + b.size
             override fun get(index: Int) = if (index < a.size) a[index] else b[index - a.size]
+            // By identity, like PagedTitles: comparing items would read the whole catalog.
+            override fun equals(other: Any?) = this === other
+            override fun hashCode() = System.identityHashCode(this)
         }
     }
 
@@ -791,7 +801,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         if (activePlaylist() != null) loadActive(refresh = false)
     }
 
-    private fun rebuildSportEventsLater() { viewModelScope.launch { rebuildSportEvents() }; refreshSuggestions() }
+    private fun rebuildSportEventsLater() { viewModelScope.launch { rematchSports() }; refreshSuggestions() }
 
     fun removePlaylist(id: String) {
         val wasActive = activePlaylist()?.id == id
@@ -914,7 +924,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         try {
             val n = downloadGuide(p, channels.mapNotNull { epgIdOf(it) }.toHashSet()) ?: return
             guide = withContext(Dispatchers.IO) { guideWindow(p.id, null) }
-            rebuildSportEvents()
+            rematchSports()
             status = "Guide loaded for $n channels."
         } catch (e: Exception) {
             status = "Couldn't load the TV guide: ${e.message}"
@@ -1354,17 +1364,56 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         val list = raw.distinctBy { it.key }
         channels = list
         val gs = groups()
+        if (!startupPreviewDone && list.isNotEmpty()) {
+            startupPreviewDone = true
+            // At launch: the last channel watched, else the first favorite, else the first channel.
+            val shownHere = shownChannel(prefs.lastChannel, list, gs)
+            if (shownHere != null) {
+                currentKey = shownHere.key; selectedGroup = shownHere.group
+                preview(currentKey); guideFocusTick++
+            } else {
+                selectedGroup = selectedGroup?.takeIf { g -> gs.any { it.raw == g } } ?: gs.firstOrNull()?.raw
+                viewModelScope.launch { startOnListedChannel() }
+            }
+            return
+        }
         if (currentKey == null) currentKey = prefs.lastChannel?.takeIf { k -> list.any { it.key == k } } ?: list.firstOrNull()?.key
         // Open on the last channel's category in the guide.
         val lastGroup = channel(currentKey)?.group
         if (selectedGroup == null || gs.none { it.raw == selectedGroup }) {
             selectedGroup = lastGroup?.takeIf { g -> gs.any { it.raw == g } } ?: gs.firstOrNull()?.raw
         }
-        if (!startupPreviewDone && currentKey != null) {
-            startupPreviewDone = true
-            preview(currentKey) // the last channel plays in the guide's preview window
-            guideFocusTick++
+    }
+
+    /** [key] if it's a channel of [list] the guide shows (not hidden, in a shown category). */
+    private fun shownChannel(key: String?, list: List<Channel>, gs: List<GroupInfo>): Channel? {
+        if (key == null || key in prefs.hiddenChannels) return null
+        val c = list.firstOrNull { it.key == key } ?: return null
+        return c.takeIf { gs.any { g -> g.raw == c.group } }
+    }
+
+    /**
+     * Launch, when the last channel isn't in a shown category of this playlist: the last channel from
+     * ★ Favorites or a list (it may be another playlist's), else the first favorite that can play,
+     * else the first channel of the first category.
+     */
+    private suspend fun startOnListedChannel() {
+        val last = prefs.lastChannel
+        // Other playlists' favorites and list channels, so they can be found.
+        val pids = (listOf(last) + prefs.favorites).filterNotNull().map { it.substringBefore(':') }.distinct().filter { it != activePlaylist()?.id }
+        for (pid in pids) livePlaylists.firstOrNull { it.id == pid }?.let { runCatching { liveFavorites(it) } }
+        favDataTick++
+        fun ok(k: String?) = k != null && k !in prefs.hiddenChannels && channel(k) != null
+        val (key, group) = when {
+            ok(last) && last in prefs.favorites -> last to FAV_GROUP
+            ok(last) && prefs.lists.any { !it.hidden && last in it.keys } -> last to (LIST_PREFIX + prefs.lists.first { !it.hidden && last in it.keys }.id)
+            else -> prefs.favorites.firstOrNull { ok(it) }?.let { it to FAV_GROUP }
+                ?: groups().firstNotNullOfOrNull { g -> channelsIn(g.raw).firstOrNull()?.let { it.key to g.raw } } ?: return
         }
+        if (currentKey != null && lastKeyAt > 0) return // the viewer has already picked something
+        currentKey = key; selectedGroup = group
+        guideFocusMode = GuideFocus.CURRENT
+        preview(key); guideFocusTick++
     }
 
     // ---------------- prefs ----------------
@@ -1429,7 +1478,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     private fun afterHidingChanged(pid: String) {
         playlistGroups = playlistGroups - pid
         if (expandedPlaylist == pid) loadPlaylistGroups(pid)
-        viewModelScope.launch { rebuildSportEvents() }
+        viewModelScope.launch { rematchSports() }
     }
 
     /** All channels of a playlist, hidden ones included, for the List Editor. */
@@ -1479,7 +1528,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         channelIndexMemo.get(channels) { channels.associateBy { it.key } }[key]?.let { return it }
         val pid = key.substringBefore(':')
         if (livePlaylists.none { it.id == pid }) return null
-        return otherLive[pid]?.first?.firstOrNull { it.key == key } ?: searchLive[pid]?.first?.firstOrNull { it.key == key }
+        return otherLive[pid]?.first?.firstOrNull { it.key == key } ?: searchLive[pid]?.first?.firstOrNull { it.key == key } ?: sportsChannels[key]
     }
 
     fun playlistName(c: Channel?): String = c?.let { ch -> playlists.firstOrNull { ch.key.startsWith(it.id + ":") }?.name } ?: ""
@@ -1741,7 +1790,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun openFullScreen(key: String?, ctx: PlayContext) {
         val c = channel(key) ?: return
         playContext = ctx
-        if (ctx == PlayContext.SPORTS) sportsPlayCat = sportCat
+        if (ctx == PlayContext.SPORTS) sportsPlayLeague = sportLeague
         if (ctx == PlayContext.GROUP && !isListGroup(selectedGroup)) selectedGroup = c.group
         if (screen != Screen.PLAYER) lastScreen = screen
         if (currentKey != key || player.mediaItemCount == 0 || playerError != null) start(c)
@@ -1974,77 +2023,118 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     // ---------------- sports ----------------
-    fun enabledCats(): List<SportCat> = prefs.sportCats.filter { it.on }
+    /** A game from ESPN and the channels that carry it, best first. */
+    data class SportGame(val game: Game, val channels: List<ChannelMatch>)
 
-    private val noEvent = Regex("(?i)no event|off air|offline|no programming|to be announced|\\btba\\b|coming soon|stay tuned|event schedule|no games?")
-    private val matchup = Regex("(?i) at | vs\\.? | v\\. | @ ")
+    /** The leagues switched on, in the user's order. */
+    fun sportLeagues(): List<com.avidviewer.tv.data.LeagueSetting> = com.avidviewer.tv.data.LeagueSetting.complete(prefs.sportLeagues)
+    fun leaguesOn(): List<com.avidviewer.tv.data.League> = sportLeagues().filter { it.on }.mapNotNull { com.avidviewer.tv.data.League.of(it.id) }
 
-    private suspend fun refreshScores() {
-        val cats = enabledCats().map { it.id }.filter { Scores.supports(it) }
-        if (cats.isEmpty()) return
-        val m = HashMap<String, List<Scores.Game>>(scoreCache)
-        for (c in cats) {
-            runCatching { withContext(Dispatchers.IO) { Scores.fetch(c) } }.onSuccess { m[c] = it }
-        }
-        scoreCache = m
+    fun updateSportLeagues(list: List<com.avidviewer.tv.data.LeagueSetting>) {
+        updatePrefs { it.copy(sportLeagues = list) }
+        if (sportLeague != null && list.none { it.id == sportLeague && it.on }) sportLeague = null
+        viewModelScope.launch { refreshSports() }
     }
 
-    private suspend fun rebuildSportEvents() {
-        val cats = enabledCats(); val chs = channels; val g = guide; val scores = scoreCache
-        if (chs.isEmpty()) { sportEvents = emptyList(); return }
-        val names = chs.associate { it.key to channelName(it) }
-        val groupsByRaw = chs.associate { it.group to groupName(it.group) }
-        sportEvents = withContext(Dispatchers.Default) {
-            val t = System.currentTimeMillis()
-            val from = t - 12 * 3600 * 1000L; val to = t + 48 * 3600 * 1000L
-            val out = LinkedHashMap<String, SportEvent>()
-            for (cat in cats) {
-                val kws = cat.keywords.map { it.lowercase() }.filter { it.isNotBlank() }
-                if (kws.isEmpty() && cat.groups.isEmpty()) continue
-                fun hasKw(s: String) = kws.isNotEmpty() && kws.any { s.contains(it) }
-                for (c in chs) {
-                    val catChannel = c.group in cat.groups || hasKw(((groupsByRaw[c.group] ?: c.group) + " " + c.group + " " + (names[c.key] ?: c.name)).lowercase())
-                    val progs = epgIdOf(c)?.let { g[it] } ?: emptyList()
-                    if (catChannel && progs.isEmpty()) continue
-                    for (p in progs) {
-                        if (p.end <= from || p.start >= to) continue
-                        val text = (p.title + " " + (p.subtitle ?: "")).lowercase()
-                        val isEvent = if (catChannel) !noEvent.containsMatchIn(p.title) else hasKw(text) && (matchup.containsMatchIn(p.title) || matchup.containsMatchIn(p.subtitle ?: ""))
-                        if (!isEvent) continue
-                        val title = if (p.subtitle != null && matchup.containsMatchIn(p.subtitle) && !matchup.containsMatchIn(p.title)) p.subtitle else p.title
-                        val key = cat.id + "|" + title.lowercase().replace(Regex("[^a-z0-9]"), "") + "|" + p.start / 60000
-                        val prev = out[key]
-                        out[key] = if (prev == null) SportEvent(key, cat.id, title, p.start, p.end, listOf(c.key), scores[cat.id]?.let { Scores.match(title, it) })
-                        else prev.copy(channelKeys = prev.channelKeys + c.key)
-                    }
-                }
-            }
-            out.values.sortedBy { it.start }
-        }
+    fun updateSportsOptions(showUnmatched: Boolean = prefs.sportsShowUnmatched, finalHours: Int = prefs.sportsFinalHours, showScores: Boolean = prefs.sportsShowScores) {
+        updatePrefs { it.copy(sportsShowUnmatched = showUnmatched, sportsFinalHours = finalHours, sportsShowScores = showScores) }
+        sportGames = sportGames.toList() // re-filter on screen
     }
-
-    fun sportsVisibleEvents(): List<SportEvent> = sportEvents.filter { sportCat == null || it.catId == sportCat }
-
-    fun updateSportCats(list: List<SportCat>) {
-        updatePrefs { it.copy(sportCats = list) }
-        if (sportCat != null && list.none { it.id == sportCat && it.on }) sportCat = null
-        viewModelScope.launch { refreshScores(); rebuildSportEvents() }
-    }
-
-    /** Adds a playlist category (e.g. "FLO Sports") to the Sports tab. */
-    fun addGroupToSports(raw: String) {
-        if (prefs.sportCats.any { raw in it.groups }) return
-        updateSportCats(prefs.sportCats + SportCat("g:$raw", groupName(raw), emptyList(), true, false, listOf(raw)))
-    }
-
-    fun removeGroupFromSports(raw: String) = updateSportCats(prefs.sportCats.filterNot { raw in it.groups && !it.builtin })
-
-    fun isSportsGroup(raw: String) = prefs.sportCats.any { raw in it.groups }
 
     fun openSportsScreen() {
         screen = Screen.SPORTS
-        viewModelScope.launch { refreshScores(); rebuildSportEvents() }
+        // Recent enough (a minute) is fine; otherwise get the schedules again.
+        if (System.currentTimeMillis() - sportsFetchedAt > 60_000L || sportGames.isEmpty()) viewModelScope.launch { refreshSports() }
     }
+
+    private var sportsJob: Job? = null
+
+    /**
+     * Gets today's and the next 2 days' games (and yesterday's, for recent finals) from ESPN for each
+     * league switched on, then finds their channels. A league ESPN can't answer for keeps its last list.
+     */
+    suspend fun refreshSports() {
+        if (sportsJob?.isActive == true) { sportsJob?.join(); return }
+        val job = viewModelScope.launch {
+            sportsLoading = true
+            try {
+                val zone = timeZone
+                val t = System.currentTimeMillis()
+                val from = com.avidviewer.tv.data.EspnFeed.day(t - 24 * 3600_000L, zone)
+                val to = com.avidviewer.tv.data.EspnFeed.day(t + 2 * 24 * 3600_000L, zone)
+                val failed = ArrayList<String>()
+                val games = withContext(Dispatchers.IO) {
+                    leaguesOn().flatMap { l ->
+                        val text = runCatching { com.avidviewer.tv.data.EspnFeed.fetchText(l, from, to).also { store.saveSportsCache(l.id, it) } }
+                            .getOrElse { failed.add(l.name); store.loadSportsCache(l.id) }
+                        text?.let { runCatching { com.avidviewer.tv.data.EspnFeed.parse(l.id, it) }.getOrNull() }.orEmpty()
+                    }
+                }
+                sportsNote = if (failed.isEmpty()) null else "Couldn't reach ESPN for ${failed.joinToString()}; showing the last list."
+                sportsFetchedAt = System.currentTimeMillis()
+                matchSports(games)
+            } finally { sportsLoading = false }
+        }
+        sportsJob = job
+        job.join()
+    }
+
+    /** The guide or channels changed: find channels again for the games already listed. */
+    private suspend fun rematchSports() {
+        if (sportGames.isNotEmpty()) matchSports(sportGames.map { it.game })
+    }
+
+    private suspend fun matchSports(games: List<Game>) {
+        val zone = timeZone
+        val t = System.currentTimeMillis()
+        val endDay = java.util.Calendar.getInstance(zone).apply {
+            timeInMillis = t; add(java.util.Calendar.DAY_OF_YEAR, 2)
+            set(java.util.Calendar.HOUR_OF_DAY, 23); set(java.util.Calendar.MINUTE, 59); set(java.util.Calendar.SECOND, 59)
+        }.timeInMillis
+        val keepFinal = prefs.sportsFinalHours * 3600_000L
+        // Today and the next 2 days, games on now, and finals of the last hours.
+        val kept = games.distinctBy { it.id }.filter { g ->
+            when { g.live -> true; g.final -> t - g.likelyEnd() < keepFinal; else -> g.start <= endDay && g.likelyEnd() > t - 3600_000L }
+        }
+        if (kept.isEmpty()) { sportGames = emptyList(); return }
+        val hiddenKeys = prefs.hiddenChannels
+        val epgMap = prefs.epgMap
+        val pls = livePlaylists.filter { it.enabled }
+        val (matched, chans) = withContext(Dispatchers.IO) {
+            liveReady()
+            val m = com.avidviewer.tv.data.SportsMatcher(kept) { it in hiddenKeys }
+            val from = kept.minOf { it.start } - 2 * 3600_000L
+            val to = kept.maxOf { it.likelyEnd() } + 3600_000L
+            for (p in pls) {
+                live.forEachChannel(p.id) { key, name, group, epg ->
+                    if (!isGroupHidden(p.id, group)) m.addChannel(p.id, key, name, epg, epgMap[key], group)
+                }
+                live.forEachProgram(p.id, from, to) { e, s0, e0, title, sub -> m.addProgram(p.id, e, s0, e0, title, sub) }
+                m.nextPlaylist()
+            }
+            val r = m.result()
+            val keys = r.values.flatten().map { it.key }.distinct()
+            r to live.channelsByKeys(keys).associateBy { it.key }
+        }
+        sportsChannels = chans
+        sportGames = kept.sortedBy { it.start }.map { SportGame(it, matched[it.id].orEmpty()) }
+    }
+
+    /** The games the Sports screen lists (league filter, and the "no channel found" setting). */
+    fun sportsVisibleGames(): List<SportGame> = sportGames.filter { g ->
+        (sportLeague == null || g.game.league == sportLeague) && (prefs.sportsShowUnmatched || g.channels.isNotEmpty())
+    }
+
+    /** Sports' shortcut: the TV Guide's search, for a team. */
+    fun searchGuideFor(text: String) {
+        jumpedFrom = null
+        screen = Screen.GUIDE
+        navMode = NavMode.GROUPS
+        guideQuery = text
+    }
+
+    /** A matched channel of any playlist (another playlist's matches are kept just for Sports, see [channel]). */
+    fun sportsChannel(key: String?): Channel? = channel(key)
 
     // ---------------- search (all playlists) ----------------
     /** Live channels + guide of a playlist; nothing at all when its live TV is off. Never touches movies & series. */
@@ -2148,7 +2238,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         channels = chs; guide = g
         selectedGroup = null; currentKey = null
         applyChannels(chs)
-        rebuildSportEvents()
+        rematchSports()
     }
 
     // ---------------- left navigation ----------------
@@ -2487,16 +2577,17 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     private fun contextList(): List<Channel> =
         if (playContext == PlayContext.FAVORITES) favoriteChannels() else channelsIn(selectedGroup ?: channel(currentKey)?.group)
 
-    private fun liveEvents(cat: String?): List<SportEvent> =
-        sportEvents.filter { (cat == null || it.catId == cat) && now >= it.start && now < it.end && it.channelKeys.isNotEmpty() }
+    /** Live games with a channel, for Channel Up/Down in full screen from Sports. */
+    private fun liveGames(league: String?): List<SportGame> =
+        sportGames.filter { (league == null || it.game.league == league) && it.game.live && it.channels.isNotEmpty() }
 
-    fun catName(id: String?): String = if (id == null) "Sports" else prefs.sportCats.firstOrNull { it.id == id }?.name ?: "Sports"
+    private fun leagueLabel(id: String?): String = com.avidviewer.tv.data.League.of(id)?.name ?: "Sports"
 
     fun contextLabel(): String {
         if (playContext == PlayContext.SPORTS) {
-            val live = liveEvents(sportsPlayCat)
-            val i = live.indexOfFirst { currentKey in it.channelKeys }
-            return "Live in ${catName(sportsPlayCat)}" + if (i >= 0) " · ${i + 1} of ${live.size}" else ""
+            val live = liveGames(sportsPlayLeague)
+            val i = live.indexOfFirst { g -> g.channels.any { it.key == currentKey } }
+            return "Live ${leagueLabel(sportsPlayLeague)} games" + if (i >= 0) " · ${i + 1} of ${live.size}" else ""
         }
         val list = contextList()
         val i = list.indexOfFirst { it.key == currentKey }
@@ -2507,12 +2598,14 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** Remote Up / Channel Up = -1 (previous), Down / Channel Down = +1 (next). Wraps at both ends. */
     fun step(dir: Int) {
         if (playContext == PlayContext.SPORTS) {
-            val live = liveEvents(sportsPlayCat)
-            if (live.isEmpty()) { flashOsd("No live events in ${catName(sportsPlayCat)}"); return }
-            var i = live.indexOfFirst { currentKey in it.channelKeys }
+            // Channel Up/Down moves between live games (each on its best channel).
+            val live = liveGames(sportsPlayLeague)
+            if (live.isEmpty()) { flashOsd("No live ${leagueLabel(sportsPlayLeague)} games with a channel"); return }
+            var i = live.indexOfFirst { g -> g.channels.any { it.key == currentKey } }
             i = if (i < 0) 0 else (i + dir + live.size) % live.size
-            channel(live[i].channelKeys.first())?.let { start(it) }
-            flashOsd(contextLabel() + " · " + live[i].title)
+            val g = live[i]
+            sportsChannel(g.channels.first().key)?.let { start(it) }
+            flashOsd(contextLabel() + " · " + g.game.away.name + " at " + g.game.home.name)
             return
         }
         val list = contextList()
