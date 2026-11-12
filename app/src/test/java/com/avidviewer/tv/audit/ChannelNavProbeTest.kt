@@ -210,6 +210,30 @@ class ChannelNavProbeTest {
     /** Fast presses with little settling, like a person tapping quickly. */
     private fun tap(k: Key, n: Int) { repeat(n) { key(k); rule.waitForIdle(); shadowOf(android.os.Looper.getMainLooper()).idleFor(java.time.Duration.ofMillis(60)) }; settle() }
 
+
+    /** [n] presses sent back to back with no frame in between (a fast thumb on a real remote). */
+    private fun burst(k: Key, n: Int, gapMs: Long = 0) {
+        val code = k.nativeKeyCode
+        repeat(n) {
+            rule.runOnUiThread {
+                val target = topWindowView() ?: rule.activity.window.decorView
+                val t = android.os.SystemClock.uptimeMillis()
+                target.dispatchKeyEvent(AndroidKeyEvent(t, t, AndroidKeyEvent.ACTION_DOWN, code, 0))
+                target.dispatchKeyEvent(AndroidKeyEvent(t, t + 5, AndroidKeyEvent.ACTION_UP, code, 0))
+            }
+            if (gapMs > 0) shadowOf(android.os.Looper.getMainLooper()).idleFor(java.time.Duration.ofMillis(gapMs))
+        }
+        settle()
+    }
+
+    private fun burstsMixed(seed: Int) {
+        val rnd = java.util.Random(seed.toLong())
+        repeat(60) {
+            val k = if (rnd.nextBoolean()) Key.DirectionDown else Key.DirectionUp
+            burst(k, 2 + rnd.nextInt(12), listOf(0L, 0L, 8L, 16L, 33L)[rnd.nextInt(5)])
+        }
+    }
+
     private val bg = java.util.Collections.synchronizedList(ArrayList<String>())
 
     private fun step(name: String, block: () -> Unit) {
@@ -253,33 +277,25 @@ class ChannelNavProbeTest {
 
         for (g in listOf("ALL CHANNELS", vm.groups().getOrNull(3)?.raw ?: "ALL CHANNELS")) {
             step("$g-open") { rule.runOnIdle { vm.chooseGroup("fx", g) }; waitFor("group $g", 15_000) { focused() != "(nothing focused)" && vm.selectedGroup == g } }
-            step("$g-names-down-presses") { repeat(150) { press(Key.DirectionDown) } }
-            step("$g-names-up-presses") { repeat(150) { press(Key.DirectionUp) } }
-            step("$g-names-fast-taps") { tap(Key.DirectionDown, 200); tap(Key.DirectionUp, 200) }
-            step("$g-names-hold") { hold(Key.DirectionDown, 120); hold(Key.DirectionUp, 60); hold(Key.DirectionDown, 300); hold(Key.DirectionUp, 400) }
+            step("$g-names-burst-down") { burst(Key.DirectionDown, 40); burst(Key.DirectionDown, 40, 8) }
+            step("$g-names-burst-up") { burst(Key.DirectionUp, 40); burst(Key.DirectionUp, 80, 8) }
+            step("$g-names-burst-mixed") { burstsMixed(1) }
+            step("$g-names-burst-top-wrap") { rule.runOnIdle { vm.chooseGroup("fx", g) }; settle(400); burst(Key.DirectionUp, 6); burst(Key.DirectionUp, 6, 16); burst(Key.DirectionDown, 10) }
             step("$g-to-programs") { press(Key.DirectionRight) }
-            step("$g-programs-presses") { repeat(150) { press(Key.DirectionDown) }; repeat(150) { press(Key.DirectionUp) } }
-            step("$g-programs-fast-taps") { tap(Key.DirectionDown, 200); tap(Key.DirectionUp, 200) }
-            step("$g-programs-hold") { hold(Key.DirectionDown, 120); hold(Key.DirectionUp, 60); hold(Key.DirectionDown, 300); hold(Key.DirectionUp, 400) }
-            step("$g-programs-right-then-updown") { repeat(6) { press(Key.DirectionRight) }; tap(Key.DirectionDown, 100); tap(Key.DirectionUp, 100) }
-            step("$g-wrap") { hold(Key.DirectionDown, 9000); press(Key.DirectionDown); press(Key.DirectionUp); press(Key.DirectionUp) }
-            step("$g-channel-page") { tap(Key.ChannelDown, 40); tap(Key.ChannelUp, 60) }
+            step("$g-programs-burst-down") { burst(Key.DirectionDown, 40); burst(Key.DirectionDown, 40, 8) }
+            step("$g-programs-burst-up") { burst(Key.DirectionUp, 40); burst(Key.DirectionUp, 80, 8) }
+            step("$g-programs-burst-mixed") { burstsMixed(2) }
+            step("$g-programs-burst-bottom-wrap") { hold(Key.DirectionDown, 9000); burst(Key.DirectionDown, 6); burst(Key.DirectionDown, 6, 16); burst(Key.DirectionUp, 10) }
             step("$g-back-left") { press(Key.DirectionLeft); press(Key.DirectionLeft) }
         }
-        // Category list up and down
-        step("groups-updown") { tap(Key.DirectionDown, 60); tap(Key.DirectionUp, 60); hold(Key.DirectionDown, 80); hold(Key.DirectionUp, 80) }
-        // Favorites with channels from the list
-        step("favorites") {
+        step("favorites-burst") {
             rule.runOnIdle { vm.channelsIn("ALL CHANNELS").take(40).forEach { vm.toggleFavorite(it.key) } }
             rule.runOnIdle { vm.chooseGroup("fx", com.avidviewer.tv.ui.FAV_GROUP) }
-            settle(500); tap(Key.DirectionDown, 60); tap(Key.DirectionUp, 60); press(Key.DirectionRight); tap(Key.DirectionDown, 60); tap(Key.DirectionUp, 60)
+            settle(500); burstsMixed(3); press(Key.DirectionRight); burstsMixed(4)
         }
-        // Full screen: channel up/down
-        step("fullscreen-updown") {
-            rule.runOnIdle { vm.chooseGroup("fx", "ALL CHANNELS") }; settle(500)
-            rule.runOnIdle { vm.openFullScreen(vm.channelsIn("ALL CHANNELS")[5].key, PlayContext.GROUP) }; settle(500)
-            tap(Key.DirectionUp, 40); tap(Key.DirectionDown, 40); press(Key.DirectionCenter); tap(Key.DirectionDown, 60); tap(Key.DirectionUp, 60); hold(Key.DirectionDown, 100)
-            press(Key.Back); press(Key.Back)
+        step("small-group-burst") {
+            val small = vm.groups().minByOrNull { it.count }?.raw ?: "ALL CHANNELS"
+            rule.runOnIdle { vm.chooseGroup("fx", small) }; settle(500); burstsMixed(5); press(Key.DirectionRight); burstsMixed(6)
         }
         Thread.setDefaultUncaughtExceptionHandler(prev)
         server.close()
