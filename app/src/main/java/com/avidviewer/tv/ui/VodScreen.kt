@@ -4,6 +4,8 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.type
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.border
 import androidx.activity.compose.BackHandler
@@ -85,6 +87,8 @@ fun VodScreen(vm: AppViewModel, kind: String) {
     val items = if (vq.isNotBlank()) vm.vodSearch(kind, vq) else vm.vodItems(kind)
 
     val catState = androidx.compose.foundation.lazy.rememberLazyListState()
+    // The category rows' highlight handles, by name: Back or Left from the posters goes to the current one.
+    val catFrs = remember(kind) { HashMap<String, FocusRequester>() }
     val catWrap = rememberListWrap(catState)
     val allCats = specials + cats
     val catRow: @Composable (String, Int) -> Unit = { name, count ->
@@ -92,6 +96,7 @@ fun VodScreen(vm: AppViewModel, kind: String) {
                 val special = specials.any { it.first == name }
                 val isMoving = vm.vodMovingCat == (kind to name)
                 val fr = remember { androidx.compose.ui.focus.FocusRequester() }
+                catFrs[name] = fr
                 var hasFocus by remember { mutableStateOf(false) }
                 LaunchedEffect(isMoving, cats.indexOfFirst { it.first == name }) {
                     if (isMoving) focusWhenReady(vm, frames = 30, isFocused = { hasFocus }) { runCatching { fr.requestFocus() }.isSuccess }
@@ -116,9 +121,19 @@ fun VodScreen(vm: AppViewModel, kind: String) {
                     else if (count >= 0) Label("$count", size = 12.sp, modifier = Modifier.padding(end = 10.dp))
                 }
             }
+    // Back or Left from the posters: the highlight goes to the category being shown, scrolled into view
+    // (Left used to land on whichever category was level with the poster).
+    LaunchedEffect(vm.vodCatFocus) {
+        if (vm.vodCatFocus == 0) return@LaunchedEffect
+        val si = specials.indexOfFirst { it.first == current }
+        val row = if (si >= 0) 1 + si else cats.indexOfFirst { it.first == current }.let { if (it >= 0) 2 + specials.size + it else 1 }
+        val vis = catState.layoutInfo.visibleItemsInfo.map { it.index }
+        if (vis.isEmpty() || row <= vis.first() || row >= vis.last()) catState.scrollToItem((row - 2).coerceAtLeast(0))
+        focusWhenReady(vm) { runCatching { (catFrs[current] ?: catFrs["All"])!!.requestFocus() }.isSuccess }
+    }
     Row(Modifier.fillMaxSize()) {
         LazyColumn(
-            Modifier.width(220.dp).fillMaxHeight().background(C.Bg),
+            Modifier.width(220.dp).fillMaxHeight().background(C.Bg).onFocusChanged { if (it.hasFocus) vm.vodOnPoster = false },
             state = catState,
             contentPadding = PaddingValues(10.dp),
             verticalArrangement = Arrangement.spacedBy(3.dp),
@@ -137,7 +152,7 @@ fun VodScreen(vm: AppViewModel, kind: String) {
             items(cats, key = { "c-" + it.first }) { (name, count) -> catRow(name, count) }
             item { Label("Menu on a category: rename, re-order, hide", size = 11.sp, lines = Int.MAX_VALUE, modifier = Modifier.padding(start = 10.dp, top = 8.dp)) }
         }
-        Column(Modifier.weight(1f).fillMaxHeight().padding(start = 12.dp, end = 16.dp, top = 14.dp)) {
+        Column(Modifier.weight(1f).fillMaxHeight().padding(start = 12.dp, end = 16.dp, top = 14.dp).onFocusChanged { if (it.hasFocus) vm.vodOnPoster = true }) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(bottom = 10.dp)) {
                 Label(if (vq.isNotBlank()) "Results for “$vq”  ·  ${items.size} titles" else "${vm.vodCatName(kind, current)}  ·  ${items.size} titles", size = 14.sp, color = C.Soft, weight = FontWeight.Bold, modifier = Modifier.weight(1f))
             }
@@ -183,7 +198,11 @@ fun VodScreen(vm: AppViewModel, kind: String) {
                     contentPadding = PaddingValues(bottom = 24.dp),
                 ) {
                     itemsIndexed(items, key = { i, v -> "$i-${v.key}" }) { i, v ->
-                        Poster(vm, v, Modifier.then(if (v.key == backKey) Modifier.focusRequester(backFr) else Modifier)) { vm.nav.focused(path, v.key, i) }
+                        Poster(vm, v, Modifier.then(if (v.key == backKey) Modifier.focusRequester(backFr) else Modifier)
+                            // Left from the first column: the current category, not the one level with this poster.
+                            .then(if (i % 6 == 0) Modifier.onPreviewKeyEvent { e ->
+                                if (e.type == androidx.compose.ui.input.key.KeyEventType.KeyDown && e.key == androidx.compose.ui.input.key.Key.DirectionLeft) { vm.vodCatFocus++; true } else false
+                            } else Modifier)) { vm.nav.focused(path, v.key, i) }
                     }
                 }
             }

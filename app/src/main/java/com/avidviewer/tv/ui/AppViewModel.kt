@@ -5,6 +5,7 @@ import android.text.format.DateFormat
 import androidx.annotation.OptIn
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
@@ -130,6 +131,11 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun chooseVodCategory(kind: String, name: String) {
         vodCategory = vodCategory + (kind to name)
     }
+
+    /** Movies / Series: the highlight is on a poster (not the category list). */
+    var vodOnPoster = false
+    /** Movies / Series: put the highlight on the current category (Back or Left from the posters). */
+    var vodCatFocus by mutableIntStateOf(0)
     var selectedGroup by mutableStateOf<String?>(null)
     var currentKey by mutableStateOf<String?>(null); private set
     var playContext by mutableStateOf(PlayContext.GROUP)
@@ -2432,6 +2438,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
      */
     fun navBack(): Boolean = if (movingGroup != null || movingChannel != null || vodMovingCat != null) { movingGroup = null; movingChannel = null; vodMovingCat = null; true }
     else if (screen == Screen.SETTINGS && settingsInContent) { settingsBackTick++; true }
+    // Movies / Series: Back from the posters goes to the category list first (on the current category),
+    // then the main menu. (It used to skip the category list.)
+    else if ((screen == Screen.MOVIES || screen == Screen.SERIES) && vodDetail == null && vodOnPoster) { vodOnPoster = false; vodCatFocus++; true }
     else when (navMode) {
         NavMode.GROUPS -> {
             if (!inGroupNav && (screen == Screen.GUIDE || screen == Screen.LIVE) && selectedGroup != null) {

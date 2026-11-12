@@ -823,6 +823,35 @@ class UsabilityTest {
         }
     }
 
+    /** Issues #5 and #6: Back and Left from Series posters go to the current category, then the main menu. */
+    @Test
+    fun backAndLeftFromPostersGoToTheCurrentCategoryThenTheMainMenu() {
+        rule.runOnIdle { vm.navSelect(Screen.SERIES) }
+        waitFor("series") { vm.vodOf("series").isNotEmpty() }
+        rule.runOnIdle { vm.chooseVodCategory("series", "Crime") }
+        rule.runOnIdle { vm.vodCatFocus++ }
+        waitFor("on the Crime category (focus: ${focused()})") { focused().contains("Crime") && !focused().contains("Show") }
+        press(listOf(Key.DirectionRight))
+        waitFor("on a Crime poster (focus: ${focused()})") { focused().contains("Crime Show") }
+        press(listOf(Key.DirectionDown)); press(listOf(Key.DirectionRight)); press(listOf(Key.DirectionRight))
+        // #6: Left back out of the posters lands on Crime, not on whichever category is level with them.
+        var tries = 0
+        while (focused().contains("Show") && tries < 8) { press(listOf(Key.DirectionLeft)); tries++ }
+        assertTrue("Left from the posters didn't land on Crime (focus: ${focused()})", focused().contains("▶ Crime"))
+        // #5: title page → Back → its poster → Back → the category → Back → the main menu, on Series.
+        press(listOf(Key.DirectionRight))
+        waitFor("a poster again") { focused().contains("Crime Show") }
+        press(listOf(Key.DirectionCenter))
+        waitFor("the title page") { vm.vodDetail != null }
+        press(listOf(Key.Back))
+        waitFor("Back returns to the poster (focus: ${focused()})") { vm.vodDetail == null && focused().contains("Crime Show") }
+        press(listOf(Key.Back))
+        waitFor("Back goes to the Crime category (focus: ${focused()})") { focused().contains("▶ Crime") && vm.navMode != NavMode.FULL }
+        press(listOf(Key.Back))
+        waitFor("Back opens the main menu on Series (focus: ${focused()} mode=${vm.navMode})") { vm.navMode == NavMode.FULL && focused().contains("Series") }
+        assertEquals(Screen.SERIES, vm.screen)
+    }
+
     /** Nov 12: from My List, a series with several copies (versions line) left no room for its episodes. */
     @Test
     fun aSeriesFromMyListWithSeveralCopiesStillReachesItsEpisodes() {
