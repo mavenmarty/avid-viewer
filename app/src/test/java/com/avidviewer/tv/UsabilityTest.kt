@@ -823,6 +823,32 @@ class UsabilityTest {
         }
     }
 
+    /** Nov 12: from My List, a series with several copies (versions line) left no room for its episodes. */
+    @Test
+    fun aSeriesFromMyListWithSeveralCopiesStillReachesItsEpisodes() {
+        val longPlot = List(25) { "A long description of the show that goes on and on, sentence $it." }.joinToString(" ")
+        FakeProvider(longPlot).use { server ->
+            rule.runOnIdle { vm.addPlaylist("Fake provider", "xtream", "http://127.0.0.1:${server.port}", "u", "", "", "", liveOn = false, vodOn = true) }
+            waitFor("the provider to be added (status=${vm.status})") { vm.playlists.any { it.name == "Fake provider" } }
+            val pid = vm.playlists.first { it.name == "Fake provider" }.id
+            fun s(k: String, n: String, cat: String) = com.avidviewer.tv.data.VodItem("$pid:$k", pid, "series", n, null, "", seriesId = "80", category = cat)
+            val en = s("s80en", "EN | Copy Show", "EN | Drama")
+            rule.runOnIdle {
+                vm.catalog.replace(pid, sequenceOf(en, s("s80fr", "FR | Copy Show", "FR | Séries"), s("s80x", "Copy Show 4K", "Crime"))) { false }
+                vm.toggleMyList(en)
+            }
+            go(Screen.SERIES)
+            rule.runOnIdle { vm.openVodDetail(vm.prefs.myList.first { it.key == en.key }) }
+            waitFor("episodes and versions") { vm.detailEpisodes?.isNotEmpty() == true && vm.versionsOfItem(en).size == 3 }
+            rule.onNodeWithText("This version: English", substring = true).assertExists()
+            var tries = 0
+            while (!focused().contains("Pilot") && tries < 12) { press(listOf(Key.DirectionDown)); tries++ }
+            assertTrue("couldn't reach episode 1 from My List (focus: ${focused()})", focused().contains("Pilot"))
+            press(listOf(Key.DirectionCenter))
+            waitFor("episode 1 plays") { vm.screen == Screen.PLAYER && vm.vodPlaying?.name?.contains("S1 E1") == true }
+        }
+    }
+
     @Test
     fun seriesEpisodeCanBeReachedWithTheRemoteAndPlays() {
         FakeProvider().use { server ->

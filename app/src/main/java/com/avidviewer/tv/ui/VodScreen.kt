@@ -261,7 +261,12 @@ private fun VodDetail(vm: AppViewModel, v: VodItem) {
             val img = v.logo ?: info?.image
             if (img != null) AsyncImage(model = img, contentDescription = v.name, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
         }
-        Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        // One scrolling list: the details, then the seasons and every episode, so Down always reaches
+        // them. (Given only the height left under the text, the episodes could get none: a long
+        // description, or the versions line of a title with several copies, e.g. from My List.)
+        val seasonFr = remember { FocusRequester() }
+        LazyColumn(Modifier.weight(1f).fillMaxHeight().testTag("vod-detail"), verticalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(bottom = 20.dp)) {
+          item(key = "head") { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(v.name, color = C.Text, fontSize = 26.sp, fontWeight = FontWeight.Bold, maxLines = 2)
             val meta = listOf(
                 (info?.year?.ifBlank { null } ?: v.year),
@@ -293,42 +298,38 @@ private fun VodDetail(vm: AppViewModel, v: VodItem) {
             info?.plot?.takeIf { it.isNotBlank() }?.let { Label(it, size = 14.sp, color = C.Text, lines = if (isSeries) 3 else 7) }
             info?.cast?.takeIf { it.isNotBlank() }?.let { Label("Cast: $it", size = 13.sp, lines = if (isSeries) 1 else 2) }
             info?.director?.takeIf { it.isNotBlank() }?.let { Label("Director: $it", size = 13.sp, lines = 1) }
-            // Seasons and episodes get the rest of the page. Placed after the text without a share of
-            // their own, a long description left them no room, and Down had nothing to move to.
-            if (isSeries) Column(Modifier.weight(1f).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                SeasonsAndEpisodes(vm, episodeFocus) { onEpisode = it }
-            }
+          } }
+          if (isSeries) seasonsAndEpisodes(vm, seasonFr, episodeFocus) { onEpisode = it }
         }
     }
 }
 
-@Composable
-private fun SeasonsAndEpisodes(vm: AppViewModel, episodeFocus: FocusRequester, onLastFocused: (Boolean) -> Unit) {
+/** The season buttons, then the chosen season's episodes, as items of the title page's list. */
+private fun androidx.compose.foundation.lazy.LazyListScope.seasonsAndEpisodes(vm: AppViewModel, seasonFr: FocusRequester, episodeFocus: FocusRequester, onLastFocused: (Boolean) -> Unit) {
     val eps = vm.detailEpisodes
     when {
-        eps == null -> Label("Loading episodes…", size = 13.sp)
-        eps.isEmpty() -> Label("No episodes found for this series.", size = 13.sp)
+        eps == null -> item(key = "eps-loading") { Label("Loading episodes…", size = 13.sp) }
+        eps.isEmpty() -> item(key = "eps-none") { Label("No episodes found for this series.", size = 13.sp) }
         else -> {
             val seasons = eps.map { it.season }.distinct()
             val season = vm.detailSeason ?: seasons.first()
-            val seasonFr = remember { FocusRequester() }
-            LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                items(seasons) { s -> TvButton("Season $s", selected = s == season, modifier = if (s == season) Modifier.focusRequester(seasonFr) else Modifier) { vm.detailSeason = s } }
+            item(key = "seasons") {
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    items(seasons) { s -> TvButton("Season $s", selected = s == season, modifier = if (s == season) Modifier.focusRequester(seasonFr) else Modifier) { vm.detailSeason = s } }
+                }
             }
-            LazyColumn(verticalArrangement = Arrangement.spacedBy(4.dp), contentPadding = PaddingValues(bottom = 20.dp)) {
-                val shown = eps.filter { it.season == season }
-                items(shown) { e ->
-                    val r = vm.resumeOf(e.key)
-                    val last = vm.lastEpisode
-                    val isLast = last != null && last.key == e.key && last.season == e.season && last.number == e.number
-                    Focusable(Modifier.fillMaxWidth().height(52.dp).then(if (e == shown.first()) Modifier.focusProperties { up = seasonFr } else Modifier).then(if (isLast) Modifier.focusRequester(episodeFocus).onFocusChanged { onLastFocused(it.isFocused) } else Modifier), onClick = { vm.playDetailEpisode(e) }) {
-                        Label("E${e.number}", size = 13.sp, color = C.Accent, weight = FontWeight.Bold, modifier = Modifier.width(50.dp).padding(start = 12.dp))
-                        Column(Modifier.weight(1f)) {
-                            Label(e.title, size = 14.sp, color = C.Text, weight = FontWeight.SemiBold)
-                            Label(listOf(e.duration, if (r > 0) "Resume from ${fmtPos(r)}" else "", e.plot).filter { it.isNotBlank() }.joinToString(" · "), size = 12.sp)
-                        }
-                        Label("▶ Play", size = 13.sp, color = C.Accent, weight = FontWeight.Bold, modifier = Modifier.padding(end = 12.dp))
+            val shown = eps.filter { it.season == season }
+            items(shown, key = { "e:" + it.season + ":" + it.number + ":" + it.key }) { e ->
+                val r = vm.resumeOf(e.key)
+                val last = vm.lastEpisode
+                val isLast = last != null && last.key == e.key && last.season == e.season && last.number == e.number
+                Focusable(Modifier.fillMaxWidth().height(52.dp).then(if (e == shown.first()) Modifier.focusProperties { up = seasonFr } else Modifier).then(if (isLast) Modifier.focusRequester(episodeFocus).onFocusChanged { onLastFocused(it.isFocused) } else Modifier), onClick = { vm.playDetailEpisode(e) }) {
+                    Label("E${e.number}", size = 13.sp, color = C.Accent, weight = FontWeight.Bold, modifier = Modifier.width(50.dp).padding(start = 12.dp))
+                    Column(Modifier.weight(1f)) {
+                        Label(e.title, size = 14.sp, color = C.Text, weight = FontWeight.SemiBold)
+                        Label(listOf(e.duration, if (r > 0) "Resume from ${fmtPos(r)}" else "", e.plot).filter { it.isNotBlank() }.joinToString(" · "), size = 12.sp)
                     }
+                    Label("▶ Play", size = 13.sp, color = C.Accent, weight = FontWeight.Bold, modifier = Modifier.padding(end = 12.dp))
                 }
             }
         }
