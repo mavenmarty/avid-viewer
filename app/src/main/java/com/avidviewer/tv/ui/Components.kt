@@ -80,12 +80,17 @@ fun Focusable(
     content: @Composable RowScope.(focused: Boolean) -> Unit,
 ) {
     var focused by remember { mutableStateOf(false) }
+    val menuDown = remember { booleanArrayOf(false) }
     Row(
         modifier
             .onPreviewKeyEvent {
-                if (onMenu != null && it.key == Key.Menu && it.type == KeyEventType.KeyUp) {
-                    onMenu(); true
-                } else false
+                // Menu acts on release (so the same press doesn't reach what it opens). Its press is taken here
+                // too: left to the system it beeped as an unhandled key, and on 1.0.170 a tester saw only the beep
+                // (BUG-015 retest). A release without a press seen here (e.g. after a dialog closed) is ignored.
+                if (onMenu == null || it.key != Key.Menu) false
+                else if (it.type == KeyEventType.KeyDown) { if (it.nativeKeyEvent.repeatCount == 0) menuDown[0] = true; true }
+                else if (it.type == KeyEventType.KeyUp) { if (menuDown[0]) { menuDown[0] = false; onMenu() }; true }
+                else false
             }
             .onFocusChanged {
                 focused = it.isFocused
