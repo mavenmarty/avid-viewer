@@ -133,6 +133,23 @@ class CatalogStreamTest {
             assertEquals(mapOf(0 to n / 3, 1 to n / 3, 3 to n / 3), m)
         }
         assertEquals(0, catalog.fillLanguages(pause = {}))
+        // Each title once: worked out in one background pass, so reading a list page stays quick
+        // (1.0.160–162 grouped inside every page read: seconds per page on a Fire TV).
+        val t2 = System.currentTimeMillis()
+        catalog.regroup(listOf("p"))
+        val regroupMs = System.currentTimeMillis() - t2
+        assertTrue("regrouping took $regroupMs ms", regroupMs < 20_000)
+        val gq = Catalog.Query("series", listOf("p"), grouped = true)
+        val t3 = System.currentTimeMillis()
+        assertEquals(n, catalog.count(gq)) // every name is different here
+        repeat(20) { catalog.page(gq, it * 2_000, 100) }
+        val pageMs = System.currentTimeMillis() - t3
+        assertTrue("20 pages took $pageMs ms", pageMs < 2_000)
+        // The plan reads the list's index, with no grouping or temporary sort per page.
+        val plan = catalog.readableDatabase.rawQuery("EXPLAIN QUERY PLAN SELECT k FROM title WHERE g = 'series' AND h = 0 AND rep = 1 AND p IN ('p') ORDER BY CASE p WHEN 'p' THEN 0 END, o LIMIT 100 OFFSET 0", null).use { c ->
+            val l = ArrayList<String>(); while (c.moveToNext()) l.add(c.getString(c.columnCount - 1)); l.joinToString(" | ")
+        }
+        assertFalse("plan: $plan", plan.contains("GROUP BY"))
     }
 
     @Test

@@ -20,14 +20,14 @@ data class Ingest<T>(val result: T, val added: Int, val committed: Boolean)
  * stream address token (ChannelKeys.token), to follow saved choices when keys change, lr the
  * language rank (Language.rank: 0 English … 3 other), so a title listed once shows its English copy.
  */
-class Catalog(context: Context) : SQLiteOpenHelper(context.applicationContext, "catalog.db", null, 4) {
+class Catalog(context: Context) : SQLiteOpenHelper(context.applicationContext, "catalog.db", null, 5) {
 
     override fun onCreate(db: SQLiteDatabase) {
         db.execSQL(
             """CREATE TABLE title (k TEXT PRIMARY KEY, p TEXT NOT NULL, t TEXT NOT NULL, g TEXT NOT NULL, c TEXT NOT NULL,
                n TEXT NOT NULL, nn TEXT NOT NULL, l TEXT, u TEXT NOT NULL, s TEXT, a INTEGER NOT NULL DEFAULT 0,
                r TEXT NOT NULL DEFAULT '', y TEXT NOT NULL DEFAULT '', o INTEGER NOT NULL, h INTEGER NOT NULL DEFAULT 0, tk TEXT,
-               lr INTEGER NOT NULL DEFAULT -1)""",
+               lr INTEGER NOT NULL DEFAULT -1, rep INTEGER NOT NULL DEFAULT 1, repc INTEGER NOT NULL DEFAULT 1)""",
         )
         db.execSQL("CREATE INDEX title_list ON title (g, h, c, p, o)")
         db.execSQL("CREATE INDEX title_all ON title (g, h, p, o)")
@@ -52,6 +52,35 @@ class Catalog(context: Context) : SQLiteOpenHelper(context.applicationContext, "
         // 1.0.160 worked out every title inside the upgrade, which held the database (live channels
         // too) for minutes on a big catalog; Fire TV closed the app and the upgrade started over.
         if (oldVersion < 4) db.execSQL("ALTER TABLE title ADD COLUMN lr INTEGER NOT NULL DEFAULT -1")
+        // 5: the copy that stands for each title, worked out by [regroup] in the background (1 until then).
+        // 1.0.160–162 grouped titles inside every page read, on the screen's thread: a big catalog
+        // took seconds per page and froze Movies and Series.
+        if (oldVersion < 5) {
+            db.execSQL("ALTER TABLE title ADD COLUMN rep INTEGER NOT NULL DEFAULT 1")
+            db.execSQL("ALTER TABLE title ADD COLUMN repc INTEGER NOT NULL DEFAULT 1")
+        }
+    }
+
+    /**
+     * Marks the copy that stands for each title (rep: across everything; repc: within its category):
+     * English first, then unmarked, multi-language, other languages; then the playlists' order and the
+     * list order. Hidden titles and playlists not in [pids] are left out. Lists with [Query.grouped]
+     * then just read the marked rows. Takes a second or two on a big catalog: call off the main thread,
+     * after a download, a change of hidden titles, or when the languages have been filled in.
+     */
+    fun regroup(pids: List<String>) {
+        val db = writableDatabase
+        val pl = if (pids.isEmpty()) "0" else "CASE p ${pids.mapIndexed { i, p -> "WHEN '${p.replace("'", "''")}' THEN $i" }.joinToString(" ")} ELSE ${pids.size} END"
+        val pick = "MIN((CASE WHEN lr < 0 THEN 1 ELSE lr END) * $RANK + ($pl) * $PER_PLAYLIST + o)"
+        val inPids = if (pids.isEmpty()) "0" else "p IN (${pids.joinToString(",") { "'" + it.replace("'", "''") + "'" }})"
+        for (g in listOf("movie", "series")) {
+            db.beginTransaction()
+            try {
+                db.execSQL("UPDATE title SET rep = CASE WHEN rowid IN (SELECT r FROM (SELECT rowid AS r, $pick FROM title WHERE g = ? AND h = 0 AND $inPids GROUP BY $GROUP_KEY)) THEN 1 ELSE 0 END WHERE g = ?", arrayOf(g, g))
+                db.execSQL("UPDATE title SET repc = CASE WHEN rowid IN (SELECT r FROM (SELECT rowid AS r, $pick FROM title WHERE g = ? AND h = 0 AND $inPids GROUP BY c, $GROUP_KEY)) THEN 1 ELSE 0 END WHERE g = ?", arrayOf(g, g))
+                db.setTransactionSuccessful()
+            } finally { db.endTransaction() }
+        }
     }
 
     /**
@@ -273,6 +302,8 @@ class Catalog(context: Context) : SQLiteOpenHelper(context.applicationContext, "
             val sb = StringBuilder("g = ?")
             val args = ArrayList<String>(); args.add(group)
             if (!includeHidden) sb.append(" AND h = 0")
+            // Each title once: the copy [regroup] marked (within the category when one is chosen).
+            if (grouped) sb.append(if (category != null) " AND repc = 1" else " AND rep = 1")
             if (category != null) { sb.append(" AND c = ?"); args.add(category) }
             if (kind != null) { sb.append(" AND t = ?"); args.add(kind) }
             sb.append(" AND p IN (${playlists.joinToString(",") { "?" }})"); args.addAll(playlists)
@@ -287,15 +318,12 @@ class Catalog(context: Context) : SQLiteOpenHelper(context.applicationContext, "
         // Playlists in the user's order, then the provider's order within each.
         fun order(): String = if (newestFirst) "a DESC, o" else "${plIndex()}, o"
         private fun plIndex() = "CASE p ${playlists.mapIndexed { i, p -> "WHEN '${p.replace("'", "''")}' THEN $i" }.joinToString(" ")} END"
-        /** For [grouped]: picks each title's copy (English first) and keeps the list's order. */
-        fun pick(): String = "MIN((CASE WHEN lr < 0 THEN 1 ELSE lr END) * $RANK + ${plIndex()} * $PER_PLAYLIST + o)"
-        fun groupedOrder(): String = if (newestFirst) "a DESC, pick" else "pick % $RANK"
     }
 
     fun count(q: Query): Int {
         if (q.playlists.isEmpty()) return 0
         val (w, a) = q.where()
-        val n = readableDatabase.rawQuery(if (q.grouped) "SELECT COUNT(DISTINCT $GROUP_KEY) FROM title WHERE $w" else "SELECT COUNT(*) FROM title WHERE $w", a).use { if (it.moveToFirst()) it.getInt(0) else 0 }
+        val n = readableDatabase.rawQuery("SELECT COUNT(*) FROM title WHERE $w", a).use { if (it.moveToFirst()) it.getInt(0) else 0 }
         return q.limit?.let { minOf(it, n) } ?: n
     }
 
@@ -304,9 +332,7 @@ class Catalog(context: Context) : SQLiteOpenHelper(context.applicationContext, "
         val (w, a) = q.where()
         val lim = q.limit?.let { minOf(size, it - offset) } ?: size
         if (lim <= 0) return emptyList()
-        // Grouped: SQLite takes the other columns from the row that gives the MIN, i.e. the copy picked.
-        val sql = if (q.grouped) "SELECT $COLS, ${q.pick()} AS pick FROM title WHERE $w GROUP BY $GROUP_KEY ORDER BY ${q.groupedOrder()} LIMIT $lim OFFSET $offset"
-            else "SELECT $COLS FROM title WHERE $w ORDER BY ${q.order()} LIMIT $lim OFFSET $offset"
+        val sql = "SELECT $COLS FROM title WHERE $w ORDER BY ${q.order()} LIMIT $lim OFFSET $offset"
         return readableDatabase.rawQuery(sql, a).use { c ->
             val out = ArrayList<VodItem>(c.count); while (c.moveToNext()) out.add(read(c)); out
         }

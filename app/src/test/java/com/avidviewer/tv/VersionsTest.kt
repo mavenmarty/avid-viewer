@@ -55,6 +55,7 @@ class VersionsTest {
             s("a:4", "a", "DE | MobLand", "DE | Serien", added = 9),
         )) { it.key == "a:4" }
         catalog.replace("b", sequenceOf(s("b:1", "b", "MobLand 4K", "Crime", added = 3), s("b:2", "b", "Zeta Show", "Crime", added = 4))) { false }
+        catalog.regroup(listOf("a", "b")) // done in the background by the app
         val q = Catalog.Query("series", listOf("a", "b"), grouped = true)
         assertEquals(3, catalog.count(q))
         // Each title once, in the list's order of its English copy (MobLand is represented by a:3, after Alpha).
@@ -64,11 +65,15 @@ class VersionsTest {
         assertEquals(5, catalog.count(Catalog.Query("series", listOf("a", "b"))))
         // Recently added: newest copy order, but one entry per title (the English copy's date).
         assertEquals(listOf("b:2", "a:3", "a:2"), catalog.page(Catalog.Query("series", listOf("a", "b"), newestFirst = true, grouped = true), 0, 10).map { it.key })
+        // A language's own category still shows its copy (grouped within the category).
+        assertEquals(listOf("a:1"), catalog.page(Catalog.Query("series", listOf("a", "b"), category = "FR | Séries", grouped = true), 0, 10).map { it.key })
         // Inside one category, copies of the same title fold together too.
         catalog.replace("c", sequenceOf(s("c:1", "c", "Gamma HD", "Crime"), s("c:2", "c", "Gamma 4K", "Crime"), s("c:3", "c", "Delta", "Crime"))) { false }
+        catalog.regroup(listOf("c"))
         assertEquals(2, catalog.count(Catalog.Query("series", listOf("c"), category = "Crime", grouped = true)))
         // A title with no usable name doesn't swallow the others.
         catalog.replace("d", sequenceOf(s("d:1", "d", "EN |", "X"), s("d:2", "d", "FR |", "X"))) { false }
+        catalog.regroup(listOf("d"))
         assertEquals(2, catalog.count(Catalog.Query("series", listOf("d"), grouped = true)))
     }
 }

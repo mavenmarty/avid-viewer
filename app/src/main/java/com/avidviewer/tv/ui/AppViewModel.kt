@@ -453,9 +453,12 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         // Titles saved before 1.0.160 get their language in the background, a few hundred at a time,
         // a little after start-up (channels and the guide come first); then Movies & Series regroup.
         viewModelScope.launch {
-            delay(8_000)
+            // Which copy stands for each title, worked out in the background (not while a list is read).
+            delay(3_000)
+            regroupLater(0)
+            delay(5_000)
             val n = withContext(Dispatchers.IO) { runCatching { if (catalog.needsLanguages()) catalog.fillLanguages() else 0 }.getOrDefault(0) }
-            if (n > 0) vodVersion++
+            if (n > 0) regroupLater(0) // English copies first now that languages are known
         }
         player.addListener(object : Player.Listener {
             override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) { paused = !playWhenReady }
@@ -1008,7 +1011,33 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         withContext(Dispatchers.IO) { store.saveKeyRefs(playlistId, leftover!!) }
         applyKeyRemap(m)
         vodVersion++
+        regroupLater()
         return done
+    }
+
+    private var regroupJob: Job? = null
+    /** The playlists the catalog's "each title once" marks were last worked out for. */
+    private var groupedFor: List<String>? = null
+
+    /**
+     * Works out again, in the background, which copy stands for each title in Movies and Series
+     * (after a download, hidden titles changing, languages filled in, or the playlists changing),
+     * then refreshes the lists. Several calls close together do the work once.
+     */
+    fun regroupLater(delayMs: Long = 400) {
+        regroupJob?.cancel()
+        regroupJob = viewModelScope.launch {
+            delay(delayMs)
+            val pids = vodPlaylists.map { it.id }
+            val ok = withContext(Dispatchers.IO) { runCatching { catalog.regroup(pids) }.isSuccess }
+            if (ok) { groupedFor = pids; vodVersion++ }
+        }
+    }
+
+    /** The lists are about to be read: if the playlists changed since the last regroup, do it again. */
+    private fun ensureGrouped() {
+        val pids = vodPlaylists.map { it.id }
+        if (groupedFor != null && groupedFor != pids && regroupJob?.isActive != true) regroupLater(0)
     }
 
     /** Downloads an Xtream playlist's movies and series into the catalog (one save); null error when both loaded. */
@@ -1435,6 +1464,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             // Right away, so the lists on screen (and the next one read) are already correct.
             runCatching { catalog.applyHiddenChange(before.vodHiddenCats, prefs.vodHiddenCats, before.vodHiddenTitles, prefs.vodHiddenTitles) }
             vodVersion++
+            regroupLater() // a hidden copy may have stood for its title
         }
         if (before.favorites !== prefs.favorites || before.lists !== prefs.lists) {
             // A channel from another playlist was added to a list: reload that playlist's small cache.
@@ -2579,7 +2609,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun setVodTitlesHidden(keys: Collection<String>, hidden: Boolean) =
         updatePrefs { it.copy(vodHiddenTitles = if (hidden) it.vodHiddenTitles + keys else it.vodHiddenTitles - keys.toSet()) }
 
-    fun vodItems(kind: String): List<VodItem> =
+    fun vodItems(kind: String): List<VodItem> = vodItemsNow(kind).also { ensureGrouped() }
+
+    private fun vodItemsNow(kind: String): List<VodItem> =
         vodItemsMemo.getOrPut(kind) { Memo() }.get(vodVersion, vodPids().joinToString(","), prefs, vodCategory[kind] ?: "All", resume) { computeVodItems(kind) }
 
     private fun computeVodItems(kind: String): List<VodItem> {
