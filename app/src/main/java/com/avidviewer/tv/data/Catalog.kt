@@ -255,7 +255,12 @@ class Catalog(context: Context) : SQLiteOpenHelper(context.applicationContext, "
             if (category != null) { sb.append(" AND c = ?"); args.add(category) }
             if (kind != null) { sb.append(" AND t = ?"); args.add(kind) }
             sb.append(" AND p IN (${playlists.joinToString(",") { "?" }})"); args.addAll(playlists)
-            nameContains?.takeIf { it.isNotBlank() }?.let { sb.append(" AND n LIKE ? ESCAPE '\\'"); args.add("%" + it.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%") }
+            // Every word typed, in any order ("news fargo" finds "Fargo News").
+            nameContains?.takeIf { it.isNotBlank() }?.let { q ->
+                for (w in SearchText.words(q).ifEmpty { listOf(q.trim()) }) {
+                    sb.append(" AND n LIKE ? ESCAPE '\\'"); args.add("%" + w.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%")
+                }
+            }
             return sb.toString() to args.toTypedArray()
         }
         // Playlists in the user's order, then the provider's order within each.

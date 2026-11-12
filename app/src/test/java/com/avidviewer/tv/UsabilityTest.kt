@@ -874,6 +874,25 @@ class UsabilityTest {
         waitFor("back in the guide on channel 60 (focus: ${focused()})") { vm.screen == Screen.GUIDE && focused().contains("BIG Channel 60 with") }
     }
 
+    /** Nov 12: searching "Farg" found nothing; part of a word, in any order, now finds it — as you type. */
+    @Test
+    fun searchFindsPartOfAWordAsYouType() {
+        go(Screen.SEARCH)
+        rule.runOnIdle { vm.searchQuery = "farg" } // typed, Search not pressed
+        waitFor("results for farg (searched=${vm.searchedFor})") { vm.searchedFor == "farg" && vm.searchResults?.any { it.stations.isNotEmpty() } == true }
+        assertTrue(vm.searchResults!!.flatMap { it.stations }.all { it.title.contains("Fargo") })
+        rule.runOnIdle { vm.searchQuery = "fargo wday 3" }
+        waitFor("words in any order") { vm.searchedFor == "fargo wday 3" && vm.searchResults?.flatMap { it.stations }?.any { it.title.contains("WDAY ABC 3 Fargo") } == true }
+        rule.runOnIdle { vm.searchQuery = "movie drama 1" }
+        waitFor("movies too") { vm.searchedFor == "movie drama 1" && vm.searchResults?.flatMap { it.movies }?.any { it.title == "Drama Movie 1" } == true }
+        rule.runOnIdle { vm.searchQuery = "zzzz" }
+        waitFor("nothing found names what was searched") { vm.searchedFor == "zzzz" }
+        rule.onNodeWithText("Nothing found for “zzzz”", substring = true).assertExists()
+        // The TV Guide's own search, too.
+        rule.runOnIdle { vm.runGuideSearch("abc farg") }
+        waitFor("guide search finds the channels") { vm.guideSearchHits.channels.any { vm.channelName(it).contains("Fargo") } }
+    }
+
     /** Nov 12: Series / Movies list a title once; its page offers the other copies (languages, playlists). */
     @Test
     fun aTitleIsListedOnceAndItsPageOffersItsVersions() {

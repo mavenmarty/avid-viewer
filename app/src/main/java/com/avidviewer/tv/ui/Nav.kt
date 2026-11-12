@@ -333,6 +333,12 @@ fun GroupNav(vm: AppViewModel) {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 TvField("🔍  Search", text, modifier = Modifier.fillMaxWidth().testTag("nav-search"), imeAction = androidx.compose.ui.text.input.ImeAction.Search,
                     onSubmit = { vm.guideQuery = text.trim() }) { text = it }
+                // Results as you type, after a short pause (part of a word is enough: "farg" finds Fargo).
+                LaunchedEffect(text) {
+                    kotlinx.coroutines.delay(450)
+                    val t = text.trim()
+                    if (t != vm.guideQuery && (t.length >= 2 || t.isEmpty())) vm.guideQuery = t
+                }
                 if (vm.guideQuery.isNotBlank()) TvButton("✕  Clear search", modifier = Modifier.fillMaxWidth()) { text = ""; vm.guideQuery = "" }
             }
         }

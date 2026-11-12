@@ -22,6 +22,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -41,10 +42,15 @@ fun SearchScreen(vm: AppViewModel) {
             ) { vm.searchQuery = it }
             TvButton(if (vm.searching) "Searching…" else "Search", primary = true) { vm.search(vm.searchQuery) }
         }
+        // Results come as you type (after a short pause), not only on Search.
+        LaunchedEffect(vm.searchQuery) {
+            kotlinx.coroutines.delay(450)
+            vm.search(vm.searchQuery)
+        }
         val results = vm.searchResults
         when {
-            results == null -> Label("Searches every playlist: channel names, TV guide listings (now and upcoming), movies and series.", size = 13.sp, lines = Int.MAX_VALUE)
-            results.all { it.total == 0 } -> Label("Nothing found for “${vm.searchQuery.trim()}”.", size = 15.sp, color = C.Soft)
+            results == null -> Label(if (vm.searching) "Searching…" else "Searches every playlist as you type: channel names, TV guide listings (now and upcoming), movies and series. Part of a word is enough (“farg” finds Fargo), and words can come in any order.", size = 13.sp, lines = Int.MAX_VALUE)
+            results.all { it.total == 0 } -> Label(if (vm.searching) "Searching…" else "Nothing found for “${vm.searchedFor}”. Try fewer letters or another word.", size = 15.sp, color = C.Soft)
             else -> LazyColumn(verticalArrangement = Arrangement.spacedBy(5.dp), contentPadding = PaddingValues(bottom = 24.dp)) {
                 results.forEach { pr ->
                     item(key = "pl-" + pr.playlist.id) {

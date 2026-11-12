@@ -1298,7 +1298,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         guideSearchJob = viewModelScope.launch {
             delay(150) // typing: wait for a pause
             val nowMs = System.currentTimeMillis()
-            val needle = q.lowercase()
+            val words = com.avidviewer.tv.data.SearchText.words(q)
             val hidden = prefs.hiddenChannels
             val others = HashMap<String, Pair<List<Channel>, Map<String, List<Program>>>>()
             for (p in livePlaylists) {
@@ -1314,8 +1314,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                     val pid = c.key.substringBefore(':')
                     return (if (pid == activePlaylist()?.id) activeGuide[id] else others[pid]?.second?.get(id)).orEmpty()
                 }
-                val chHits = all.filter { channelName(it).lowercase().contains(needle) }.take(60)
-                val progHits = all.flatMap { c -> progs(c).filter { it.end > nowMs && (it.title.lowercase().contains(needle) || it.subtitle?.lowercase()?.contains(needle) == true) }.map { c to it } }
+                val chHits = all.filter { com.avidviewer.tv.data.SearchText.matches(channelName(it), words) }.take(60)
+                val progHits = all.flatMap { c -> progs(c).filter { it.end > nowMs && com.avidviewer.tv.data.SearchText.matches(it.title + " " + it.subtitle.orEmpty(), words) }.map { c to it } }
                     .sortedBy { it.second.start }.take(80)
                 GuideHits(query, chHits, progHits)
             }
@@ -1338,8 +1338,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
      */
     private fun liveHits(p: Playlist, q: String, maxChannels: Int, maxPrograms: Int, nowMs: Long): Pair<List<Channel>, Map<String, List<Program>>> {
         liveReady()
-        val needle = q.lowercase()
-        val renamed = prefs.channelNames.filter { (k, v) -> k.startsWith(p.id + ":") && v.lowercase().contains(needle) }.keys
+        val words = com.avidviewer.tv.data.SearchText.words(q)
+        val renamed = prefs.channelNames.filter { (k, v) -> k.startsWith(p.id + ":") && com.avidviewer.tv.data.SearchText.matches(v, words) }.keys
         val byName = live.searchChannels(p.id, q, maxChannels) + live.channelsByKeys(renamed)
         val progs = live.searchPrograms(p.id, q, nowMs, maxPrograms * 2)
         val ids = progs.map { it.first }.toHashSet()
@@ -2212,13 +2212,19 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         return t
     }
 
+    /** What the results on the Search screen are for (the box may already hold something newer). */
+    var searchedFor by mutableStateOf(""); private set
+    private var searchJob: Job? = null
+
     fun search(query: String) {
         val q = query.trim()
         searchQuery = query
-        if (q.length < 2) { searchResults = null; return }
-        viewModelScope.launch {
+        if (q.length < 2) { searchJob?.cancel(); searchResults = null; searchedFor = ""; searching = false; return }
+        if (q == searchedFor && searchResults != null && searchJob?.isActive != true) return
+        searchJob?.cancel()
+        searchJob = viewModelScope.launch {
             searching = true
-            val needle = q.lowercase()
+            val words = com.avidviewer.tv.data.SearchText.words(q)
             val nowMs = System.currentTimeMillis()
             val out = ArrayList<PlaylistHits>()
             for (p in shownPlaylists) {
@@ -2235,14 +2241,14 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 }
                 val res = withContext(Dispatchers.Default) {
                     val names = chs.associate { it.key to channelName(it) }
-                    val stations = chs.filter { (names[it.key] ?: it.name).lowercase().contains(needle) }.take(50)
+                    val stations = chs.filter { com.avidviewer.tv.data.SearchText.matches(names[it.key] ?: it.name, words) }.take(50)
                         .map { Hit("channel", p.id, names[it.key] ?: it.name, groupName(it.group), it.logo, channelKey = it.key) }
                     val progs = ArrayList<Pair<Long, Hit>>()
                     for (c in chs) {
                         val list = epgIdOf(c)?.let { g[it] } ?: continue
                         for (pr in list) {
                             if (pr.end <= nowMs) continue
-                            if (pr.title.lowercase().contains(needle) || pr.subtitle?.lowercase()?.contains(needle) == true) {
+                            if (com.avidviewer.tv.data.SearchText.matches(pr.title + " " + pr.subtitle.orEmpty(), words)) {
                                 val whenText = if (pr.start <= nowMs) "On now" else "${dayLabel(pr.start)} ${fmtTime(pr.start)}"
                                 progs.add(pr.start to Hit("program", p.id, pr.title + (pr.subtitle?.let { " · $it" } ?: ""), "${names[c.key] ?: c.name} · $whenText", c.logo, channelKey = c.key))
                             }
@@ -2260,6 +2266,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 out.add(res)
             }
             searchResults = out
+            searchedFor = q
             searching = false
         }
     }

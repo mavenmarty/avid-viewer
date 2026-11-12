@@ -114,10 +114,14 @@ class LiveDb(private val catalog: Catalog) {
     }
 
     /** Channels whose name contains [needle] (case-insensitive for plain letters), in list order. */
-    fun searchChannels(pid: String, needle: String, limit: Int): List<Channel> =
-        db.rawQuery("SELECT $CH_COLS FROM channel WHERE p = ? AND n LIKE ? ESCAPE '\\' ORDER BY o LIMIT $limit", arrayOf(pid, contains(needle))).use { c ->
+    fun searchChannels(pid: String, needle: String, limit: Int): List<Channel> {
+        // Every word typed, in any order.
+        val words = SearchText.words(needle).ifEmpty { listOf(needle.trim()) }
+        val where = words.joinToString(" AND ") { "n LIKE ? ESCAPE '\\'" }
+        return db.rawQuery("SELECT $CH_COLS FROM channel WHERE p = ? AND $where ORDER BY o LIMIT $limit", arrayOf(pid) + words.map { contains(it) }).use { c ->
             val l = ArrayList<Channel>(); while (c.moveToNext()) l.add(channel(c)); l
         }
+    }
 
     /** Channels that carry one of these guide ids (as saved by the provider). */
     fun channelsWithEpg(pid: String, ids: Collection<String>): List<Channel> {
@@ -235,10 +239,12 @@ class LiveDb(private val catalog: Catalog) {
 
     /** Programmes not yet over whose title or subtitle contains [needle], soonest first: (guide id, programme). */
     fun searchPrograms(pid: String, needle: String, after: Long, limit: Int): List<Pair<String, Program>> {
-        val like = contains(needle)
+        // Every word typed, in any order, in the title and subtitle together.
+        val words = SearchText.words(needle).ifEmpty { listOf(needle.trim()) }
+        val where = words.joinToString(" AND ") { "(t || ' ' || IFNULL(st, '')) LIKE ? ESCAPE '\\'" }
         return db.rawQuery(
-            "SELECT e, s, x, t, st, nw FROM prog WHERE p = ? AND x > ? AND (t LIKE ? ESCAPE '\\' OR st LIKE ? ESCAPE '\\') ORDER BY s LIMIT $limit",
-            arrayOf(pid, after.toString(), like, like),
+            "SELECT e, s, x, t, st, nw FROM prog WHERE p = ? AND x > ? AND $where ORDER BY s LIMIT $limit",
+            arrayOf(pid, after.toString()) + words.map { contains(it) },
         ).use { c -> val l = ArrayList<Pair<String, Program>>(); while (c.moveToNext()) l.add(c.getString(0) to program(c, 1)); l }
     }
 
