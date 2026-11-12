@@ -893,6 +893,34 @@ class UsabilityTest {
         waitFor("guide search finds the channels") { vm.guideSearchHits.channels.any { vm.channelName(it).contains("Fargo") } }
     }
 
+    /** Nov 12: on a Discover title page, the remote couldn't reach the versions below the description. */
+    @Test
+    fun discoverTitlePageReachesEveryVersionWithTheRemote() {
+        val p1 = TestData.P1
+        go(Screen.MOVIES)
+        waitFor("movies") { vm.vodOf("movie").isNotEmpty() }
+        rule.runOnIdle {
+            val c = vm.catalog
+            val have = c.page(com.avidviewer.tv.data.Catalog.Query("movie", listOf(p1), includeHidden = true), 0, 100_000) +
+                c.page(com.avidviewer.tv.data.Catalog.Query("series", listOf(p1), includeHidden = true), 0, 100_000)
+            fun m(k: String, n: String, cat: String) = com.avidviewer.tv.data.VodItem("$p1:$k", p1, "movie", n, null, "http://127.0.0.1:9/$k.mp4", category = cat)
+            c.replace(p1, (have + m("dfr", "FR | Mob Test", "FR | Films") + m("den", "EN | Mob Test", "EN | Action") + m("dx", "Mob Test 4K", "Crime")).asSequence()) { false }
+            vm.setVodTitlesHidden(listOf("$p1:none"), true); vm.setVodTitlesHidden(listOf("$p1:none"), false)
+        }
+        go(Screen.DISCOVER)
+        val long = List(30) { "A long description of the film that keeps going, sentence $it." }.joinToString(" ")
+        rule.runOnIdle { vm.discoverDetail = com.avidviewer.tv.data.Title(1, "movie", "Mob Test", "2025", long, null, null, 7.5, emptyList(), "") }
+        waitFor("the title page, on Play (focus: ${focused()})") { focused().contains("Play") && vm.versionsOf(vm.discoverDetail!!).size == 3 }
+        val seen = ArrayList<String>()
+        var tries = 0
+        while (!focused().contains("Where to watch") && tries < 12) { press(listOf(Key.DirectionDown)); seen.add(focused().take(40)); tries++ }
+        assertTrue("Down didn't reach every version and Where to watch: $seen", seen.any { it.contains("EN | Mob Test") } && seen.any { it.contains("FR | Mob Test") } && focused().contains("Where to watch"))
+        tries = 0
+        while (!focused().contains("FR | Mob Test") && tries < 6) { press(listOf(Key.DirectionUp)); tries++ }
+        press(listOf(Key.DirectionCenter))
+        waitFor("the French copy plays") { vm.screen == Screen.PLAYER && vm.vodPlaying?.key == "$p1:dfr" }
+    }
+
     /** Nov 12: Series / Movies list a title once; its page offers the other copies (languages, playlists). */
     @Test
     fun aTitleIsListedOnceAndItsPageOffersItsVersions() {

@@ -134,59 +134,67 @@ private fun TitleDetail(vm: AppViewModel, t: Title) {
             Text(t.name, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold, modifier = Modifier.align(Alignment.BottomStart).padding(10.dp))
             if (t.poster != null) AsyncImage(model = t.poster, contentDescription = t.name, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
         }
-        Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text(t.name, color = C.Text, fontSize = 26.sp, fontWeight = FontWeight.Bold, maxLines = 2)
-            Label(
-                listOf(if (t.type == "tv") "Series" else "Movie", t.year, if (t.rating > 0) "★ %.1f".format(t.rating) else "").filter { it.isNotBlank() }.joinToString("  ·  "),
-                size = 14.sp, color = C.Soft,
-            )
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (match != null) {
-                    TvButton(if (match.kind == "series") "▶ Episodes" else "▶ Play", primary = true, modifier = Modifier.focusRequester(first)) { vm.playMatched(match) }
-                    val inList = vm.inMyList(match.key)
-                    TvButton(if (inList) "✓ In My List" else "+ My List", selected = inList) { vm.toggleMyList(match) }
-                } else {
-                    TvButton("Search my playlists", primary = true, modifier = Modifier.focusRequester(first)) {
-                        vm.discoverDetail = null; vm.searchQuery = Title_clean(t.name); vm.navSelect(Screen.SEARCH); vm.search(vm.searchQuery)
-                    }
-                }
-                TvButton("Back") { vm.discoverDetail = null }
-            }
-            if (match != null) Label("Plays: " + versionLabel(vm, match), size = 12.sp, color = C.Soft)
-            if (t.overview.isNotBlank()) Label(t.overview, size = 14.sp, color = C.Text, lines = if (versions.size > 1) 3 else 6)
-            // Every version in your playlists (languages, qualities, playlists), English first: OK picks one.
-            if (versions.size > 1) {
-                Label("${versions.size} versions on your provider", size = 14.sp, color = C.Text, weight = FontWeight.Bold)
-                androidx.compose.foundation.lazy.LazyColumn(Modifier.weight(1f).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                    items(versions.size, key = { versions[it].key }) { i ->
-                        val v = versions[i]
-                        Focusable(Modifier.fillMaxWidth().height(44.dp).testTag("version-" + v.key), color = C.Surface2, onClick = { vm.playMatched(v) }) {
-                            Row(Modifier.fillMaxSize().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                                val lang = com.avidviewer.tv.data.Language.of(v.name, v.category)
-                                Label(lang ?: "Language not marked", size = 13.sp, weight = FontWeight.Bold, color = if (lang == "English") C.AccentFocus else C.Text, modifier = Modifier.width(150.dp))
-                                Column(Modifier.weight(1f)) {
-                                    Label(v.name, size = 13.sp, color = C.Text)
-                                    Label(listOf(v.category, vm.playlists.firstOrNull { it.id == v.playlistId }?.name.orEmpty()).filter { it.isNotBlank() }.joinToString(" · "), size = 11.sp, color = C.Muted)
-                                }
-                                Label(if (v.kind == "series") "Episodes ›" else "▶ Play", size = 12.sp, color = C.Accent, weight = FontWeight.Bold)
+        // One scrolling column: the buttons, the description, every version and Where to watch can all be
+        // reached with Down. (The versions used to get only the height left over below a fixed layout;
+        // on a 960×540 TV screen that was nothing, so no version could be highlighted.)
+        androidx.compose.foundation.lazy.LazyColumn(Modifier.weight(1f).fillMaxHeight().testTag("discover-detail"), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            item(key = "head") {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(t.name, color = C.Text, fontSize = 26.sp, fontWeight = FontWeight.Bold, maxLines = 2)
+                    Label(
+                        listOf(if (t.type == "tv") "Series" else "Movie", t.year, if (t.rating > 0) "★ %.1f".format(t.rating) else "").filter { it.isNotBlank() }.joinToString("  ·  "),
+                        size = 14.sp, color = C.Soft,
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        if (match != null) {
+                            TvButton(if (match.kind == "series") "▶ Episodes" else "▶ Play", primary = true, modifier = Modifier.focusRequester(first)) { vm.playMatched(match) }
+                            val inList = vm.inMyList(match.key)
+                            TvButton(if (inList) "✓ In My List" else "+ My List", selected = inList) { vm.toggleMyList(match) }
+                        } else {
+                            TvButton("Search my playlists", primary = true, modifier = Modifier.focusRequester(first)) {
+                                vm.discoverDetail = null; vm.searchQuery = Title_clean(t.name); vm.navSelect(Screen.SEARCH); vm.search(vm.searchQuery)
                             }
                         }
+                        TvButton("Back") { vm.discoverDetail = null }
+                    }
+                    if (match != null) Label("Plays: " + versionLabel(vm, match), size = 12.sp, color = C.Soft)
+                    if (t.overview.isNotBlank()) Label(t.overview, size = 14.sp, color = C.Text, lines = 4)
+                    // Every version in your playlists (languages, qualities, playlists), English first: OK picks one.
+                    if (versions.size > 1) Label("${versions.size} versions on your provider", size = 14.sp, color = C.Text, weight = FontWeight.Bold)
+                }
+            }
+            if (versions.size > 1) items(versions.size, key = { "v:" + versions[it].key }) { i ->
+                val v = versions[i]
+                Focusable(Modifier.fillMaxWidth().height(48.dp).testTag("version-" + v.key), color = C.Surface2, onClick = { vm.playMatched(v) }) {
+                    Row(Modifier.fillMaxSize().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        val lang = com.avidviewer.tv.data.Language.of(v.name, v.category)
+                        Label(lang ?: "Language not marked", size = 13.sp, weight = FontWeight.Bold, color = if (lang == "English") C.AccentFocus else C.Text, modifier = Modifier.width(150.dp))
+                        Column(Modifier.weight(1f)) {
+                            Label(v.name, size = 13.sp, color = C.Text)
+                            Label(listOf(v.category, vm.playlists.firstOrNull { it.id == v.playlistId }?.name.orEmpty()).filter { it.isNotBlank() }.joinToString(" · "), size = 11.sp, color = C.Muted)
+                        }
+                        Label(if (v.kind == "series") "Episodes ›" else "▶ Play", size = 12.sp, color = C.Accent, weight = FontWeight.Bold)
                     }
                 }
             }
-            Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(C.Surface).padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Label("Where to watch (${vm.region()})", size = 14.sp, color = C.Text, weight = FontWeight.Bold)
-                when {
-                    where == null -> Label("Loading…", size = 13.sp)
-                    else -> {
-                        val mine = vm.prefs.myServices.map { it.id }.toSet()
-                        listOf("Stream" to where.stream, "Free" to where.free, "Rent" to where.rent, "Buy" to where.buy).forEach { (label, l) ->
-                            if (l.isNotEmpty()) Label("$label: " + l.joinToString(", ") { if (it.id in mine) "${it.name} ✓" else it.name }, size = 13.sp, color = C.Soft, lines = 2)
+            item(key = "where") {
+                // Highlightable, so Down scrolls it into view after the versions.
+                Focusable(Modifier.fillMaxWidth().testTag("where-to-watch"), color = C.Surface, focusedColor = C.Surface2, onClick = {}) {
+                    Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Label("Where to watch (${vm.region()})", size = 14.sp, color = C.Text, weight = FontWeight.Bold)
+                        when {
+                            where == null -> Label("Loading…", size = 13.sp)
+                            else -> {
+                                val mine = vm.prefs.myServices.map { it.id }.toSet()
+                                listOf("Stream" to where.stream, "Free" to where.free, "Rent" to where.rent, "Buy" to where.buy).forEach { (label, l) ->
+                                    if (l.isNotEmpty()) Label("$label: " + l.joinToString(", ") { if (it.id in mine) "${it.name} ✓" else it.name }, size = 13.sp, color = C.Soft, lines = 2)
+                                }
+                                if (where.stream.isEmpty() && where.free.isEmpty() && where.rent.isEmpty() && where.buy.isEmpty()) Label("No streaming options listed yet.", size = 13.sp)
+                            }
                         }
-                        if (where.stream.isEmpty() && where.free.isEmpty() && where.rent.isEmpty() && where.buy.isEmpty()) Label("No streaming options listed yet.", size = 13.sp)
+                        Label("Streaming availability by JustWatch", size = 12.sp)
                     }
                 }
-                Label("Streaming availability by JustWatch", size = 12.sp)
             }
         }
     }
