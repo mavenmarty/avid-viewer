@@ -218,8 +218,10 @@ Sports lists real games from **ESPN's schedules** for today and the next 2 days,
 - **Each title is listed once.** When your playlists have the same title several times (other languages, qualities such as 4K or HD, or other playlists), it appears once, shown by its English copy (else one with no language marked). This applies to All, Recently added, every category and the search.
 - **🔍 Search movies / 🔍 Search series** is in the category list, below My List. Results replace the poster grid; **✕ Clear search** ends the search.
 - **OK on a poster** opens its page: plot, cast, director, **▶ Play**, or **▶ Resume from [time]** and **Start over**, plus **+ My List**.
-- **⇄ N versions** (on a title with several copies) lists each copy with its language, name, category and playlist; ✓ marks the one shown, and the line **This version: …** under the buttons says which one you're on. **OK** on another copy shows that one, with its own episodes, resume point and My List button. The language comes from codes on the name or category ("EN |", "FR -", "VF", "MULTI"…); copies without one show "Language not marked". Series pages list episodes by **Season**, with resume points. From the page's buttons, **Down** goes to the season buttons, then to the episodes, even below a long description; **Up** from the first episode goes back to the seasons. After you watch an episode and press **Back**, that episode is highlighted.
-- **Each category (and each search) keeps its own place.** Back from a title's page highlights that title's poster.
+- **⇄ N versions** (on a title with several copies) lists each copy with its language, name, category and playlist; ✓ marks the one shown, and the line **This version: …** under the buttons says which one you're on. **OK** on another copy shows that one, with its own episodes, resume point and My List button. The language comes from codes on the name or category ("EN |", "FR -", "VF", "MULTI"…); copies without one show "Language not marked". Series pages list episodes by **Season**, with resume points. The page scrolls as one: from the buttons, **Down** goes to the season buttons, then through every episode, however long the description; **Up** from the first episode goes back to the seasons. After you watch an episode and press **Back**, that episode is highlighted.
+- **Each category (and each search) keeps its own place.**
+- **Back** goes one step at a time: from a title's page to its poster, from a poster to the category you're in (highlighted), then to the main menu, on **Movies** or **Series**.
+- **Left** from the first column of posters goes to the category you're browsing.
 - **Category list wraps around**: Up on **All** jumps to the last category, and Down on the last returns to All. The poster grid stops at the end.
 - **Menu on a category**: **Rename**, **Re-order** or **Hide** it. Hidden categories come back in Settings › List Editor.
 - If you have more than one playlist, movies and series from all of them are merged.
@@ -441,10 +443,17 @@ Every public release since 1.0.35, newest first. Releases are published on GitHu
 
 ### 1.0.170 — November 12, 2026, 4:11 PM CT (current)
 
+**Release notes**
+
+- **Series pages always reach the episodes.** A series opened from My List, or with a long description, could leave the episode list no room, so Down jumped to the main menu. The whole title page now scrolls as one list: details, the season buttons, then every episode.
+- **Back steps through Movies and Series one level at a time:** title page → its poster → the category you were in → the main menu, on Movies or Series. Before, Back from a poster skipped the category list and opened the main menu on Discover.
+- **Left from the posters lands on your category**, not on whichever category was level with the poster.
+
 **Change log**
 
-- Title page scrolls as one list with the seasons and episodes, so Down always reaches them
-- Movies & Series: Back from the posters goes to the current category, then the main menu; Left from the first column lands on the current category (#5, #6)
+- Title page is one scrolling list with the seasons and episodes (GitHub #4)
+- Movies & Series: Back from the posters and Left from the first column go to the current category (#5, #6)
+- Tests: a series from My List with three copies reaches Episode 1; the whole Back chain and Left by remote
 
 ### 1.0.167 — November 12, 2026, 10:50 AM CT
 
