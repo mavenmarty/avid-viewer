@@ -74,7 +74,7 @@ The TV Guide is the home screen for live TV. Next to the main menu it has:
 - The top shows a **preview window** and a **details panel** for the highlighted channel or program: channel number and name (plus the playlist name when you have more than one), the program title with a **New** tag for new episodes, the times with **N min left** and a progress bar (or **starts in …** for a later program), up to two lines about the show, and what's **Next**.
 - Below it is a **timeline grid**: two-line channel names on the left, programs across a 2.5-hour window, with a line marking "now".
 - **Left/Right** move between programs. Going past the last program in view scrolls the guide forward by half hours, up to **12 hours ahead**. Left on the first program scrolls back, and at the start it moves to the channel name.
-- **Up/Down** move one channel and land on the program airing at the same time, so the highlighted time stays put as you move between rows.
+- **Up/Down** move one channel and land on the program airing at the same time, so the highlighted time stays put as you move between rows. Quick taps are counted, so a fast run of presses lands about where you'd expect, even in a category with thousands of channels.
 - **Up on the first channel** moves to the preview window; **Up again** jumps to the last channel. **Down on the last channel** goes back to the first.
 - **CH+/CH−** (Page Up/Down) move a full page and wrap around at the ends.
 - **OK** on a channel or program starts it in the preview. **OK again**, or OK on the preview window, opens it full screen.
@@ -85,7 +85,7 @@ The TV Guide is the home screen for live TV. Next to the main menu it has:
 
 ### Search in the guide
 
-Highlight **🔍 Search** in the category list (just below ＋ New list) and press OK to type. Results replace the guide: **Channels** (with what's on now, and **▶ Preview** / **▶ Full screen**) and **Programs** on now or later (**▶ Tune in** / **▶ Channel**). Search covers every playlist; choosing a result from another playlist moves the guide there. **✕ Clear search**, just below, brings the guide back.
+Highlight **🔍 Search** in the category list (just below ＋ New list) and press OK to type. Results appear as you type (after a short pause) and replace the guide. Part of a word is enough ("farg" finds Fargo), and words can come in any order. Results: **Channels** (with what's on now, and **▶ Preview** / **▶ Full screen**) and **Programs** on now or later (**▶ Tune in** / **▶ Channel**). Search covers every playlist; choosing a result from another playlist moves the guide there. **✕ Clear search**, just below, brings the guide back.
 
 ### Channel options (Menu or hold OK on a channel)
 
@@ -134,7 +134,7 @@ While you're moving it, the item has a blue outline. A category shows its positi
 
 - **Up / Channel Up**: previous channel. **Down / Channel Down**: next channel. Switching stays inside the current category, list or Favorites and wraps around at the ends.
 - **OK, Left, Right or Info**: show the info bar (channel number and name, ★ if it's a favorite, playlist, what's on now with times, and **Up next**). It hides after 5 seconds.
-- **Menu**: open **Add to List** for the channel you're watching.
+- **Menu**: open **Picture & sound** (below), which also has **＋ Add to List…** for the channel you're watching.
 - **Back**: return to the screen you came from.
 
 ### Movies and episodes
@@ -144,10 +144,33 @@ While you're moving it, the item has a blue outline. A category shows its positi
 - **Up, Down or Info**: show the progress bar.
 - The progress bar appears when playback starts or you press a button, and hides 5 seconds after the last press. It shows "Loading…" while the video starts, and stays up while paused ("Paused · …").
 - Stopping part-way saves your place for **Resume**.
+- **Menu**: open **Picture & sound** (below).
+
+### Picture & sound
+
+Press **Menu** while watching full screen. A panel opens on the right. **▲▼** move between rows, **◀▶** change a row's value (**OK** steps to the next value), and **Back** or **Menu** closes it.
+
+- **Screen format:** Auto (fit), Fill screen (stretch), Zoom (crop edges), 16:9 or 4:3.
+- **Audio track:** **Automatic** (the stream's own choice) or one of the stream's audio tracks, described in plain words, for example "English · Dolby Digital 5.1" or "Spanish · AAC Stereo · Secondary audio". Secondary audio (SAP) and described video are labeled when the channel sends them.
+- **Closed captions:** **Off**, or a caption track: TV captions (CC1–CC4), digital captions or subtitles. If none have been found yet, **On (when available)** shows them as soon as they appear.
+- **Caption style** (the same everywhere): **Text size** (Small, Medium, Large, Extra large), **Background** (None with outlined text, Dark box, Solid black) and **Position** (Bottom, Raised).
+- **Save changes for:**
+  - **This channel only:** for a movie, this movie; for an episode, the whole series.
+  - **All channels:** the setting for everything.
+  - A channel's own choices win over the ones for all channels. **Use the settings for all channels here** clears this channel's own choices.
+- **＋ Add to List…** (live TV): add the channel to ★ Favorites or one of your lists.
+
+Audio tracks and captions only appear when the stream carries them, so they vary from channel to channel.
 
 ## 5. Search
 
-The **Search** screen searches **every playlist** at once: TV stations, programs in the TV guide (now and upcoming), movies and series. Results are grouped by playlist and by kind, each with an action:
+The **Search** screen searches **every playlist** at once: TV stations, programs in the TV guide (now and upcoming), movies and series.
+
+- **Results appear as you type**, after a short pause. Pressing **Search** works too.
+- **Forgiving matching:** part of a word is enough ("farg" finds Fargo), every word you type must appear but in any order ("news fargo" finds "KVLY Fargo News HD"), and punctuation doesn't matter ("spider man" finds "Spider-Man: No Way Home").
+- **"Nothing found for …"** names what was searched; try fewer letters or another word.
+
+Results are grouped by playlist and by kind, each with an action:
 
 - **Tune in** for a program, **Play** for a movie, **Episodes** for a series (choose a season and episode).
 - **+ Add to List** for a channel (shows **✓ In a list** once added).
@@ -161,7 +184,8 @@ Discover shows what's new and popular, and where to watch it, using TMDB and Jus
 
 - **Tabs**: New, Trending, For you, In theaters.
 - **My services**: only show titles on the streaming services you've picked.
-- Titles your provider carries are tagged **▶ ON YOUR PROVIDER** (with a large catalog, the tag may appear a moment after the posters). Open one to **Play on your provider** (or see **Episodes**), add it to **My List**, or **Search my playlists**.
+- Titles your provider carries are tagged **▶ ON YOUR PROVIDER** (with a large catalog, the tag may appear a moment after the posters). Open one to play it (**▶ Play**, or **▶ Episodes** for a series), add it to **My List**, or **Search my playlists**.
+- **Every version on your provider:** when your playlists have the title more than once (other languages, qualities or playlists), its page lists **N versions on your provider**, English first, each with its language, category and playlist. **OK** on one plays that movie or opens that series. The main button plays the first and says which ("Plays: English · EN | Drama · My provider").
 - **Where to watch** lists Stream, Free, Rent and Buy options for your region.
 
 Discover needs a free **TMDB API key**. Enter it in **Settings › Discover**; it's stored encrypted on the device.
@@ -191,8 +215,10 @@ Sports lists real games from **ESPN's schedules** for today and the next 2 days,
 
 - **Left side**: Playlists, then categories: **All**, **Recently added**, **Continue watching**, **My List**, and your provider's categories.
 - **Right side**: posters for the chosen category.
+- **Each title is listed once.** When your playlists have the same title several times (other languages, qualities such as 4K or HD, or other playlists), it appears once, shown by its English copy (else one with no language marked). This applies to All, Recently added, every category and the search.
 - **🔍 Search movies / 🔍 Search series** is in the category list, below My List. Results replace the poster grid; **✕ Clear search** ends the search.
-- **OK on a poster** opens its page: plot, cast, director, **▶ Play**, or **▶ Resume from [time]** and **Start over**, plus **+ My List**. Series pages list episodes by **Season**, with resume points. From the page's buttons, **Down** goes to the season buttons, then to the episodes; **Up** from the first episode goes back to the seasons. After you watch an episode and press **Back**, that episode is highlighted.
+- **OK on a poster** opens its page: plot, cast, director, **▶ Play**, or **▶ Resume from [time]** and **Start over**, plus **+ My List**.
+- **⇄ N versions** (on a title with several copies) lists each copy with its language, name, category and playlist; ✓ marks the one shown, and the line **This version: …** under the buttons says which one you're on. **OK** on another copy shows that one, with its own episodes, resume point and My List button. The language comes from codes on the name or category ("EN |", "FR -", "VF", "MULTI"…); copies without one show "Language not marked". Series pages list episodes by **Season**, with resume points. From the page's buttons, **Down** goes to the season buttons, then to the episodes, even below a long description; **Up** from the first episode goes back to the seasons. After you watch an episode and press **Back**, that episode is highlighted.
 - **Each category (and each search) keeps its own place.** Back from a title's page highlights that title's poster.
 - **Category list wraps around**: Up on **All** jumps to the last category, and Down on the last returns to All. The poster grid stops at the end.
 - **Menu on a category**: **Rename**, **Re-order** or **Hide** it. Hidden categories come back in Settings › List Editor.
@@ -347,6 +373,9 @@ The share password is stored encrypted on the TV and is included in your PIN-loc
 - **Sports is empty**: check the leagues in Settings › Sports tab; off-season leagues have no games. "Couldn't reach ESPN" means the schedules couldn't be downloaded, so the last list is shown. On 1.0.141 this appeared for every league; update to 1.0.147 or later.
 - **A game shows "No channel yet"**: your playlists have no channel named for its network, and no guide listing or event channel for it yet. Those often appear closer to the start. You can also use **Search the guide** on the game.
 - **Discover froze or the app closed after about 20 seconds** (1.0.137 and earlier, with large movie catalogs): update the app.
+- **The app froze or closed while pressing Up/Down quickly in the TV Guide** (1.0.147 and earlier, mostly in big categories after wrapping from the top to the bottom): update to 1.0.160 or later.
+- **No audio tracks or captions to choose in Picture & sound**: the stream doesn't carry them. Many live channels have one audio track and no captions; try another channel, or set captions to **On (when available)** so they show when a program has them.
+- **A title is missing from Movies or Series**: it may be listed once under another copy. Open it and use **⇄ N versions**.
 - **A channel or category disappeared**: it may be hidden. Check Settings › List Editor.
 - **A guide row ends early and Right won't go further**: fixed in 1.0.133 for guides that list overlapping programmes; update the app.
 - **A channel shows the wrong listings, or none**: press Menu on it and choose **Match guide…**. If a whole guide is consistently early or late, set a **time offset** on its source in Settings › Playlists › ▤ Guide sources.
@@ -410,16 +439,25 @@ Every public release since 1.0.35, newest first. Releases are published on GitHu
 
 ### 1.0.160 — November 12, 2026, 7:05 AM CT (current)
 
+**Release notes**
+
+- **No more freezes with fast taps in the TV Guide.** Pressing Up/Down quickly in a big category could lock the app until Fire TV closed it, especially right after the list wrapped from the top to the bottom.
+- **Picture & sound in full screen.** **Menu** opens a panel with the screen format, audio track (including secondary audio), closed captions and caption style. Choices can be kept for one channel, or used for all. **Add to List** is in the panel too. See *Picture & sound*.
+- **Each title once in Movies and Series.** The same title in several languages, qualities or playlists is listed once, shown by its English copy. Its page has **⇄ N versions** to pick another copy.
+- **Discover lists every version.** A title's page shows each version on your provider, English first, with its language, category and playlist. Before, it opened only one, sometimes in another language.
+- **Series pages:** Down reaches the seasons and episodes even when the description is long.
+- **Forgiving search, as you type.** Part of a word is enough ("farg" finds Fargo), words can come in any order, and punctuation doesn't matter. Results appear while you type, on the Search screen and in the TV Guide's search. "Nothing found" now names what was actually searched.
+
+On first launch after updating, the app reads the language of each saved movie and series once. Nothing downloads again.
+
 **Change log**
 
-- Discover: list every version of a title (language, playlist), English first; series page keeps room for seasons
-- TV Guide: channel names move Up/Down themselves, so fast taps after a wrap can't freeze the app
-- Test: fast taps keep up and never freeze (a press arriving mid-scroll may drop)
-- Full screen › Menu: Picture & sound — screen format, audio track (secondary audio), closed captions, caption style, remembered per channel
-- Movies & Series list each title once (English copy first); the title page's ⇄ versions picks another copy. Panel: one Back handler
-- Panel: Back closes it even when Compose would take Back for focus; test: versions on the title page
-- Search: part of a word, words in any order, accents and punctuation ignored; results as you type
-- Search as you type: the pause lives in the view model; LiveDb test: punctuation is ignored, not a wildcard
+- TV Guide: channel names move Up/Down themselves and count fast presses from the channel they're heading to; checked with 8,000 channels
+- Full screen › Menu: Picture & sound panel (screen formats, audio and caption tracks from the stream, caption style), saved per channel, movie or series, or for all channels
+- Movies & Series: one entry per title, English copy first; ⇄ versions on the title page
+- Discover: every version on your provider, English first; hidden copies left out
+- Search: every word in any order, part of a word, punctuation ignored; results as you type
+- Tests: fast taps and wrap-around, the Picture & sound panel, track choices, grouped lists and versions, long series descriptions, search matching
 
 ### 1.0.147 — November 11, 2026, 9:41 PM CT
 
