@@ -43,7 +43,7 @@ import kotlinx.coroutines.delay
  *  Up / Channel Up     -> previous channel in the current group (or Favorites), wrapping to the bottom
  *  Down / Channel Down -> next channel, wrapping to the top
  *  OK                  -> show the info bar
- *  Menu                -> add / remove favorite
+ *  Menu                -> Picture & sound (screen format, audio track, captions; Add to List)
  *  Back                -> return to the screen you came from
  */
 @Composable
@@ -52,13 +52,14 @@ fun PlayerScreen(vm: AppViewModel) {
     var showInfo by remember { mutableStateOf(true) }
     var infoTick by remember { mutableIntStateOf(0) }
 
-    LaunchedEffect(vm.listPickerKey) { if (vm.listPickerKey == null) runCatching { focus.requestFocus() } }
+    LaunchedEffect(vm.listPickerKey, vm.avPanel) { if (vm.listPickerKey == null && !vm.avPanel) runCatching { focus.requestFocus() } }
     LaunchedEffect(infoTick) {
         showInfo = true
         delay(5000)
         showInfo = false
     }
     BackHandler { vm.closeFullScreen() }
+    BackHandler(enabled = vm.avPanel) { vm.avPanel = false } // Back closes the panel first
 
     Box(
         Modifier
@@ -67,6 +68,9 @@ fun PlayerScreen(vm: AppViewModel) {
             .focusRequester(focus)
             .onKeyEvent {
                 if (it.type != KeyEventType.KeyDown) return@onKeyEvent false
+                // The panel's own rows take the keys; nothing here may change channel underneath it.
+                if (vm.avPanel) return@onKeyEvent it.key == Key.Menu && run { vm.avPanel = false; true }
+                if (it.key == Key.Menu) { vm.avPanel = true; infoTick++; return@onKeyEvent true }
                 if (vm.vodPlaying != null) return@onKeyEvent when (it.key) {
                     Key.DirectionLeft, Key.MediaRewind -> { vm.seek(-10_000); infoTick++; true }
                     Key.DirectionRight, Key.MediaFastForward -> { vm.seek(30_000); infoTick++; true }
@@ -80,13 +84,12 @@ fun PlayerScreen(vm: AppViewModel) {
                     Key.DirectionUp, Key.ChannelUp -> { vm.step(-1); infoTick++; true }
                     Key.DirectionDown, Key.ChannelDown -> { vm.step(1); infoTick++; true }
                     Key.DirectionCenter, Key.Enter, Key.NumPadEnter, Key.DirectionLeft, Key.DirectionRight, Key.Info -> { infoTick++; true }
-                    Key.Menu -> { vm.listPickerKey = vm.currentKey; infoTick++; true }
                     else -> false
                 }
             }
             .focusable(),
     ) {
-        VideoSurface(vm, Modifier.fillMaxSize())
+        VideoSurface(vm, Modifier.fillMaxSize(), fullScreen = true)
 
         vm.playerError?.let {
             Text(it, color = C.Soft, fontSize = 15.sp, modifier = Modifier.align(Alignment.Center).padding(40.dp))
@@ -101,7 +104,8 @@ fun PlayerScreen(vm: AppViewModel) {
         }
 
         // Movies and episodes: the bar hides 3 s after the last button press, unless the viewer paused.
-        if (showInfo || (vm.vodPlaying != null && vm.paused)) {
+        if (vm.avPanel) AvPanel(vm)
+        else if (showInfo || (vm.vodPlaying != null && vm.paused)) {
             if (vm.vodPlaying != null) VodBar(vm, Modifier.align(Alignment.BottomCenter)) else InfoBar(vm, Modifier.align(Alignment.BottomCenter))
         }
     }

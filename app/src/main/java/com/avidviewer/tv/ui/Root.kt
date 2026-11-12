@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -173,22 +174,55 @@ fun PreviewWindow(
 
 @OptIn(UnstableApi::class)
 @Composable
-fun VideoSurface(vm: AppViewModel, modifier: Modifier = Modifier, fit: Boolean = true) {
-    AndroidView(
-        factory = { ctx ->
-            PlayerView(ctx).apply {
-                useController = false
-                setShutterBackgroundColor(android.graphics.Color.BLACK)
-                resizeMode = if (fit) AspectRatioFrameLayout.RESIZE_MODE_FIT else AspectRatioFrameLayout.RESIZE_MODE_ZOOM
-                isFocusable = false
-                isFocusableInTouchMode = false
-                player = vm.player
-            }
-        },
-        update = { if (it.player !== vm.player) it.player = vm.player },
-        onRelease = { it.player = null },
-        modifier = modifier.background(Color.Black),
-    )
+fun VideoSurface(vm: AppViewModel, modifier: Modifier = Modifier, fit: Boolean = true, fullScreen: Boolean = false) {
+    // Full screen: the viewer's screen format and captions. The preview window just fits (or fills).
+    val format = if (fullScreen) vm.screenFormat() else null
+    val style = vm.prefs.captionStyle
+    val ratio = format?.ratio
+    androidx.compose.foundation.layout.Box(modifier.background(Color.Black), contentAlignment = androidx.compose.ui.Alignment.Center) {
+        AndroidView(
+            factory = { ctx ->
+                PlayerView(ctx).apply {
+                    useController = false
+                    setShutterBackgroundColor(android.graphics.Color.BLACK)
+                    isFocusable = false
+                    isFocusableInTouchMode = false
+                    player = vm.player
+                }
+            },
+            update = { v ->
+                if (v.player !== vm.player) v.player = vm.player
+                v.resizeMode = when (format) {
+                    null -> if (fit) AspectRatioFrameLayout.RESIZE_MODE_FIT else AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+                    com.avidviewer.tv.data.ScreenFormat.AUTO -> AspectRatioFrameLayout.RESIZE_MODE_FIT
+                    com.avidviewer.tv.data.ScreenFormat.ZOOM -> AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+                    else -> AspectRatioFrameLayout.RESIZE_MODE_FILL // stretch, or fill a forced 16:9 / 4:3 frame
+                }
+                v.subtitleView?.apply {
+                    visibility = if (fullScreen) android.view.View.VISIBLE else android.view.View.GONE
+                    setApplyEmbeddedStyles(false)
+                    setApplyEmbeddedFontSizes(false)
+                    setFractionalTextSize(style.fraction)
+                    setBottomPaddingFraction(style.bottomPadding)
+                    setStyle(captionStyleOf(style))
+                }
+            },
+            onRelease = { it.player = null },
+            modifier = if (ratio != null) Modifier.fillMaxHeight().aspectRatio(ratio, matchHeightConstraintsFirst = true) else Modifier.fillMaxSize(),
+        )
+    }
+}
+
+/** The caption look for Media3's subtitle view. */
+@androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
+fun captionStyleOf(s: com.avidviewer.tv.data.CaptionStyle): androidx.media3.ui.CaptionStyleCompat {
+    val white = android.graphics.Color.WHITE
+    val clear = android.graphics.Color.TRANSPARENT
+    return when (s.background) {
+        "none" -> androidx.media3.ui.CaptionStyleCompat(white, clear, clear, androidx.media3.ui.CaptionStyleCompat.EDGE_TYPE_OUTLINE, android.graphics.Color.BLACK, null)
+        "solid" -> androidx.media3.ui.CaptionStyleCompat(white, android.graphics.Color.BLACK, clear, androidx.media3.ui.CaptionStyleCompat.EDGE_TYPE_NONE, clear, null)
+        else -> androidx.media3.ui.CaptionStyleCompat(white, 0xBF000000.toInt(), clear, androidx.media3.ui.CaptionStyleCompat.EDGE_TYPE_NONE, clear, null)
+    }
 }
 
 /** On-screen instructions while a category or channel is being re-ordered. */

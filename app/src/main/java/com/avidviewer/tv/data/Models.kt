@@ -163,6 +163,13 @@ data class Prefs(
     val guideRefreshHours: Int = 8,
     /** Channels matched to a guide channel by hand: channel key → guide channel id ("" = no guide). */
     val epgMap: Map<String, String> = emptyMap(),
+    /** Picture & sound for every channel and title (what the player panel's "All channels" changes). */
+    val avDefault: AvChoice = AvChoice(),
+    /** Picture & sound remembered per channel (or movie/episode) key, over [avDefault]. */
+    val avChannels: Map<String, AvChoice> = emptyMap(),
+    val captionStyle: CaptionStyle = CaptionStyle(),
+    /** The player panel saves changes for all channels (true) or only the one playing (false). */
+    val avForAll: Boolean = false,
 ) {
     fun toJson(): JSONObject {
         val o = JSONObject()
@@ -199,6 +206,10 @@ data class Prefs(
         o.put("epgMap", JSONObject(epgMap))
         o.put("showSuggestions", showSuggestions)
         o.put("dismissedSuggestions", JSONArray(dismissedSuggestions.toList()))
+        o.put("avDefault", avDefault.toJson())
+        o.put("avChannels", JSONObject().apply { avChannels.forEach { (k, v) -> if (!v.isEmpty) put(k, v.toJson()) } })
+        o.put("captionStyle", captionStyle.toJson())
+        o.put("avForAll", avForAll)
         return o
     }
 
@@ -250,6 +261,10 @@ data class Prefs(
                 showSuggestions = o.optBoolean("showSuggestions", true),
                 dismissedSuggestions = strList(o.optJSONArray("dismissedSuggestions")).toSet(),
                 myServices = o.optJSONArray("myServices")?.let { a -> List(a.length()) { a.getJSONObject(it).let { s -> WatchProvider(s.getInt("id"), s.optString("name"), s.optString("logo").ifBlank { null }) } } } ?: emptyList(),
+                avDefault = AvChoice.fromJson(o.optJSONObject("avDefault")),
+                avChannels = o.optJSONObject("avChannels")?.let { m -> m.keys().asSequence().associateWith { AvChoice.fromJson(m.optJSONObject(it)) }.filterValues { !it.isEmpty } } ?: emptyMap(),
+                captionStyle = CaptionStyle.fromJson(o.optJSONObject("captionStyle")),
+                avForAll = o.optBoolean("avForAll", false),
             )
         }
     }

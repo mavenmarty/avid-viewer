@@ -460,6 +460,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 playing = isPlaying
                 if (isPlaying) playerError = null
             }
+
+            override fun onTracksChanged(tracks: androidx.media3.common.Tracks) { tracksChanged(tracks) }
         })
         viewModelScope.launch {
             while (true) {
@@ -1801,6 +1803,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     fun closeFullScreen() {
         osd = null
+        avPanel = false
         if (vodPlaying != null) {
             saveResumePoint()
             player.stop()
@@ -2413,6 +2416,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         vodPlaying = item
         playerError = null
         player.setMediaItem(MediaItem.fromUri(item.url), if (fromStart) 0L else resumeOf(item.key))
+        tracksChanged(androidx.media3.common.Tracks.EMPTY)
         player.prepare()
         player.playWhenReady = true
         screen = Screen.PLAYER
@@ -2591,11 +2595,129 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             if (c.url.contains(".m3u8", ignoreCase = true)) setMimeType(MimeTypes.APPLICATION_M3U8)
         }.build()
         player.setMediaItem(item)
+        tracksChanged(androidx.media3.common.Tracks.EMPTY) // this channel's own choices (captions on/off) from the start
         player.prepare()
         player.playWhenReady = true
         watchKey = c.key; watchStart = System.currentTimeMillis()
         updatePrefs { it.copy(lastChannel = c.key) }
     }
+
+    // ---------------- picture & sound (Menu in full screen) ----------------
+    /** The full-screen Picture & sound panel is open. */
+    var avPanel by mutableStateOf(false)
+    /** Audio and caption tracks of what's playing (from the player). */
+    var audioTracks by mutableStateOf<List<com.avidviewer.tv.data.AvTrack>>(emptyList()); private set
+    var captionTracks by mutableStateOf<List<com.avidviewer.tv.data.AvTrack>>(emptyList()); private set
+    private var lastTracks: androidx.media3.common.Tracks = androidx.media3.common.Tracks.EMPTY
+
+    /** What the panel's choices are saved under: the movie playing, the series of an episode, else the channel. */
+    fun avKey(): String? = vodPlaying?.let { v -> if (v.kind == "episode") v.key.substringBeforeLast(':').substringBeforeLast(':') else v.key } ?: currentKey
+
+    /** The choices in force for [key]: its own, then the default for all. */
+    fun avFor(key: String?): com.avidviewer.tv.data.AvChoice =
+        (key?.let { prefs.avChannels[it] } ?: com.avidviewer.tv.data.AvChoice()).over(prefs.avDefault)
+
+    fun hasOwnAv(key: String?): Boolean = key != null && prefs.avChannels[key]?.isEmpty == false
+
+    fun screenFormat(): com.avidviewer.tv.data.ScreenFormat =
+        com.avidviewer.tv.data.ScreenFormat.of(avFor(avKey()).format) ?: com.avidviewer.tv.data.ScreenFormat.AUTO
+
+    /** Saves a change for the channel playing, or for all channels (the panel's "Save for" choice). */
+    private fun changeAv(f: (com.avidviewer.tv.data.AvChoice) -> com.avidviewer.tv.data.AvChoice) {
+        val key = avKey()
+        updatePrefs { p ->
+            if (p.avForAll || key == null) p.copy(avDefault = f(p.avDefault))
+            else {
+                val mine = f(p.avChannels[key] ?: com.avidviewer.tv.data.AvChoice())
+                p.copy(avChannels = if (mine.isEmpty) p.avChannels - key else p.avChannels + (key to mine))
+            }
+        }
+        applyTracks()
+    }
+
+    fun setScreenFormat(f: com.avidviewer.tv.data.ScreenFormat) {
+        changeAv { it.copy(format = f.id) }
+        flashOsd("Screen format: ${f.label}")
+    }
+
+    /** [t] null = the stream's own choice. */
+    fun setAudioTrack(t: com.avidviewer.tv.data.AvTrack?) {
+        changeAv { it.copy(audio = t?.let { com.avidviewer.tv.data.Av.signature(it) }) }
+        flashOsd("Audio: " + (t?.let { com.avidviewer.tv.data.Av.describe(it, audioTracks) } ?: "Automatic"))
+    }
+
+    /** Stands for "captions on, whichever track there is" (before any is found). */
+    val anyCaptions = com.avidviewer.tv.data.AvTrack(audio = false, group = -1, index = -1, lang = null, label = null, channels = 0, mime = null, roles = 0, selected = false)
+
+    /** [t] null = captions off; [anyCaptions] = on, the first track found. */
+    fun setCaptions(t: com.avidviewer.tv.data.AvTrack?) {
+        val sig = t?.takeIf { it !== anyCaptions }?.let { com.avidviewer.tv.data.Av.signature(it) }
+        changeAv { it.copy(captions = t != null, captionTrack = sig) }
+        flashOsd("Closed captions: " + when { t == null -> "Off"; t === anyCaptions -> "On"; else -> com.avidviewer.tv.data.Av.describe(t, captionTracks) })
+    }
+
+    fun setCaptionStyle(st: com.avidviewer.tv.data.CaptionStyle) = updatePrefs { it.copy(captionStyle = st) }
+
+    fun setAvForAll(all: Boolean) = updatePrefs { it.copy(avForAll = all) }
+
+    /** The channel playing goes back to the choices for all channels. */
+    fun resetAvForChannel() {
+        val key = avKey() ?: return
+        updatePrefs { it.copy(avChannels = it.avChannels - key) }
+        applyTracks()
+        flashOsd("Back to the settings for all channels")
+    }
+
+    /** Reads the player's audio and caption tracks, then applies the saved choices to them. */
+    internal fun tracksChanged(tracks: androidx.media3.common.Tracks) {
+        lastTracks = tracks
+        val audio = ArrayList<com.avidviewer.tv.data.AvTrack>()
+        val text = ArrayList<com.avidviewer.tv.data.AvTrack>()
+        tracks.groups.forEachIndexed { gi, g ->
+            val type = g.type
+            if (type != androidx.media3.common.C.TRACK_TYPE_AUDIO && type != androidx.media3.common.C.TRACK_TYPE_TEXT) return@forEachIndexed
+            for (i in 0 until g.length) {
+                if (!g.isTrackSupported(i)) continue
+                val f = g.getTrackFormat(i)
+                val t = com.avidviewer.tv.data.AvTrack(
+                    audio = type == androidx.media3.common.C.TRACK_TYPE_AUDIO, group = gi, index = i,
+                    lang = f.language, label = f.label, channels = f.channelCount, mime = f.sampleMimeType ?: f.codecs,
+                    roles = f.roleFlags, selected = g.isTrackSelected(i), cc = f.accessibilityChannel,
+                )
+                if (t.audio) audio.add(t) else text.add(t)
+            }
+        }
+        audioTracks = audio
+        captionTracks = text
+        applyTracks()
+    }
+
+    /** Puts the saved audio track and captions on the player (only when something would change). */
+    @OptIn(UnstableApi::class)
+    private fun applyTracks() {
+        val want = avFor(avKey())
+        val groups = lastTracks.groups
+        val b = player.trackSelectionParameters.buildUpon()
+            .clearOverridesOfType(androidx.media3.common.C.TRACK_TYPE_AUDIO)
+            .clearOverridesOfType(androidx.media3.common.C.TRACK_TYPE_TEXT)
+        com.avidviewer.tv.data.Av.pick(audioTracks, want.audio)?.let { t ->
+            groups.getOrNull(t.group)?.let { b.setOverrideForType(androidx.media3.common.TrackSelectionOverride(it.mediaTrackGroup, t.index)) }
+        }
+        if (want.captions == true) {
+            b.setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_TEXT, false)
+            val t = com.avidviewer.tv.data.Av.pick(captionTracks, want.captionTrack) ?: captionTracks.firstOrNull()
+            t?.let { groups.getOrNull(it.group)?.let { g -> b.setOverrideForType(androidx.media3.common.TrackSelectionOverride(g.mediaTrackGroup, it.index)) } }
+        } else b.setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_TEXT, true)
+        val next = b.build()
+        if (next != player.trackSelectionParameters) player.trackSelectionParameters = next
+    }
+
+    /** The audio track and captions playing now (for the panel). */
+    fun currentAudio(): com.avidviewer.tv.data.AvTrack? =
+        avFor(avKey()).audio?.let { com.avidviewer.tv.data.Av.pick(audioTracks, it) } ?: audioTracks.firstOrNull { it.selected }
+
+    fun currentCaptions(): com.avidviewer.tv.data.AvTrack? =
+        if (avFor(avKey()).captions != true) null else com.avidviewer.tv.data.Av.pick(captionTracks, avFor(avKey()).captionTrack) ?: captionTracks.firstOrNull()
 
     fun stop() {
         if (vodPlaying != null) saveResumePoint()

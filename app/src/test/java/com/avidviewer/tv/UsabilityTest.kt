@@ -12,6 +12,8 @@ import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.assertIsDisplayed
+import com.avidviewer.tv.ui.PlayContext
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.isRoot
 import androidx.compose.ui.test.onLast
@@ -870,6 +872,60 @@ class UsabilityTest {
         waitFor("full screen") { vm.screen == Screen.PLAYER }
         press(listOf(Key.Back))
         waitFor("back in the guide on channel 60 (focus: ${focused()})") { vm.screen == Screen.GUIDE && focused().contains("BIG Channel 60 with") }
+    }
+
+    /** Nov 12: Menu in full screen opens Picture & sound (screen format, audio, captions, Add to List). */
+    @Test
+    fun menuInFullScreenOpensPictureAndSound() {
+        val key = "${TestData.P1}:c1-3"
+        rule.runOnIdle { vm.openFullScreen(key, PlayContext.GROUP) }
+        waitFor("full screen") { vm.screen == Screen.PLAYER && vm.currentKey == key }
+        press(listOf(Key.Menu))
+        waitFor("the panel opens on Screen format (focus: ${focused()})") { vm.avPanel && focused().contains("Screen format") }
+        rule.onNodeWithText("Picture & sound").assertIsDisplayed()
+        // Right changes the format, saved for this channel only.
+        press(listOf(Key.DirectionRight))
+        assertEquals("fill", vm.prefs.avChannels[key]?.format)
+        assertEquals(null, vm.prefs.avDefault.format)
+        assertEquals(com.avidviewer.tv.data.ScreenFormat.FILL, vm.screenFormat())
+        press(listOf(Key.DirectionLeft)); press(listOf(Key.DirectionLeft))
+        assertEquals("4:3", vm.prefs.avChannels[key]?.format)
+        // Up/Down move through the rows and never change the channel underneath.
+        press(listOf(Key.DirectionDown)); press(listOf(Key.DirectionDown))
+        assertTrue("Down reaches Closed captions (focus: ${focused()})", focused().contains("Closed captions"))
+        assertEquals(key, vm.currentKey)
+        press(listOf(Key.DirectionRight)) // captions on (before any track is found)
+        assertEquals(true, vm.prefs.avChannels[key]?.captions)
+        press(listOf(Key.DirectionDown))
+        assertTrue("caption size row (focus: ${focused()})", focused().contains("Text size"))
+        press(listOf(Key.DirectionRight))
+        assertEquals("large", vm.prefs.captionStyle.size)
+        // "Save changes for" → all channels: the next change goes to the default.
+        var tries = 0
+        while (!focused().contains("Save changes for") && tries < 8) { press(listOf(Key.DirectionDown)); tries++ }
+        press(listOf(Key.DirectionRight))
+        assertTrue(vm.prefs.avForAll)
+        // Back closes the panel, not full screen; the channel's own format stays.
+        press(listOf(Key.Back))
+        waitFor("panel closed, still full screen") { !vm.avPanel && vm.screen == Screen.PLAYER }
+        assertEquals(com.avidviewer.tv.data.ScreenFormat.STANDARD, vm.screenFormat())
+        // Up/Down change channel again once it's closed.
+        press(listOf(Key.DirectionDown))
+        waitFor("Down changes channel after the panel closes") { vm.currentKey != key }
+        // Another channel uses the default; Reset brings a channel back to it.
+        assertEquals(com.avidviewer.tv.data.ScreenFormat.AUTO, vm.screenFormat())
+        rule.runOnIdle { vm.setAvForAll(false); vm.openFullScreen(key, PlayContext.GROUP) }
+        press(listOf(Key.Menu))
+        waitFor("panel again") { vm.avPanel && focused().contains("Screen format") }
+        tries = 0
+        while (!focused().contains("Use the settings for all channels") && tries < 12) { press(listOf(Key.DirectionDown)); tries++ }
+        press(listOf(Key.DirectionCenter))
+        assertEquals(null, vm.prefs.avChannels[key])
+        // Add to List is still in the panel.
+        tries = 0
+        while (!focused().contains("Add to List") && tries < 12) { press(listOf(Key.DirectionDown)); tries++ }
+        press(listOf(Key.DirectionCenter))
+        waitFor("the list picker opens") { vm.listPickerKey == key && !vm.avPanel }
     }
 
     /** Presses sent back to back, faster than the screen redraws (a quick thumb on the remote). */
