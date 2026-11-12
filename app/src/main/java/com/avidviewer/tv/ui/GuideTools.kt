@@ -61,7 +61,7 @@ fun LazyListScope.guideSettings(vm: AppViewModel, confirm: (title: String, messa
                     " · $sources source" + (if (sources == 1) "" else "s") + (if (vm.guideBusy == pl.id) " · downloading…" else ""),
                     size = 12.sp, color = C.Text, lines = Int.MAX_VALUE)
             }
-            TvButton(if (vm.guideBusy != null) "Downloading…" else "↻  Download the guide now", modifier = Modifier.testTag("guide-refresh-now")) { if (vm.guideBusy == null) vm.refreshGuideNow() }
+            TvButton(if (vm.guideBusy != null) "Downloading…" else "↻  Download the guide now", busy = vm.guideBusy != null, modifier = Modifier.testTag("guide-refresh-now")) { if (vm.guideBusy == null) vm.refreshGuideNow() }
         }
     }
     item {
@@ -138,7 +138,7 @@ fun GuideSourcesPane(vm: AppViewModel, pl: Playlist, confirm: (title: String, me
             if (editing == "new") SourceForm(null, onCancel = { editing = null }) { name, url, off -> vm.addEpgSource(pl.id, name, url, off); editing = null }
             else Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 TvButton("＋  Add guide source", primary = true, modifier = Modifier.testTag("guide-src-add")) { editing = "new" }
-                TvButton(if (vm.guideBusy == pl.id) "Downloading…" else "↻  Download now") { if (vm.guideBusy == null) vm.refreshGuideNow(pl.id) }
+                TvButton(if (vm.guideBusy == pl.id) "Downloading…" else "↻  Download now", busy = vm.guideBusy == pl.id) { if (vm.guideBusy == null) vm.refreshGuideNow(pl.id) }
             }
         }
         item {

@@ -504,8 +504,9 @@ fun ChannelOptionsDialog(vm: AppViewModel) {
     val key = vm.channelMenu ?: return
     val c = vm.channel(key) ?: run { vm.channelMenu = null; return }
     var renaming by remember(key) { mutableStateOf(false) }
+    // Cancel closes the menu too, like Save: the highlight goes back to the channel (FOCUS-02).
     if (renaming) {
-        RenameDialog("Rename channel", vm.channelName(c), onDismiss = { renaming = false }) { vm.renameChannel(key, it); renaming = false; vm.channelMenu = null }
+        RenameDialog("Rename channel", vm.channelName(c), onDismiss = { renaming = false; vm.channelMenu = null }) { vm.renameChannel(key, it); renaming = false; vm.channelMenu = null }
         return
     }
     val list = vm.channelsIn(vm.selectedGroup)

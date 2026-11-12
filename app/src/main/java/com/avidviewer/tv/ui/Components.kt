@@ -39,6 +39,13 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.composed
 
 /** Palette taken from the Avid Viewer icon: deep navy, electric blue and silver. */
 object C {
@@ -98,26 +105,52 @@ fun TvButton(
     modifier: Modifier = Modifier,
     primary: Boolean = false,
     selected: Boolean = false,
+    busy: Boolean = false,
     onClick: () -> Unit,
 ) {
-    val on = primary || selected
+    // STATE-02: the main action is filled; the current value of a choice is outlined with a check mark, so the
+    // two never look alike. STATE-04: a busy button shows a spinner, is dimmed and ignores OK; it keeps the
+    // highlight (taking it away would leave the remote with nothing highlighted) and TalkBack says "Busy".
+    val outline = selected && !primary
     Focusable(
-        modifier = modifier,
+        modifier = modifier
+            .then(if (outline) Modifier.border(2.dp, C.Accent, RoundedCornerShape(20.dp)) else Modifier)
+            .semantics { if (selected) this.selected = true; if (busy) stateDescription = "Busy" }
+            .alpha(if (busy) 0.6f else 1f),
         shape = RoundedCornerShape(20.dp),
-        color = if (on) C.Accent else C.Surface2,
-        focusedColor = if (on) C.AccentFocus else C.Line,
-        onClick = onClick,
+        color = if (primary) C.Accent else C.Surface2,
+        focusedColor = if (primary) C.AccentFocus else C.Line,
+        onClick = { if (!busy) onClick() },
     ) {
-        Text(
-            text,
-            color = if (on) C.OnAccent else C.Text,
-            fontSize = 13.sp,
-            fontWeight = FontWeight.SemiBold,
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp),
-            maxLines = 1,
-        )
+        Row(Modifier.padding(horizontal = 14.dp, vertical = 7.dp), verticalAlignment = Alignment.CenterVertically) {
+            if (busy) androidx.compose.material3.CircularProgressIndicator(color = if (primary) C.OnAccent else C.Accent, strokeWidth = 2.dp, modifier = Modifier.padding(end = 8.dp).size(13.dp))
+            else if (outline && !text.startsWith("✓")) Glyph("✓", C.Accent, 13.sp, Modifier.padding(end = 6.dp))
+            Text(text, color = if (primary) C.OnAccent else C.Text, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+        }
     }
 }
+
+/** A decorative symbol (✓ ★ ☰ ▸): drawn, but not read out by TalkBack (A11Y-01). */
+@Composable
+fun Glyph(g: String, color: Color, size: TextUnit = 14.sp, modifier: Modifier = Modifier) =
+    Text(g, color = color, fontSize = size, fontWeight = FontWeight.Bold, maxLines = 1, modifier = modifier.clearAndSetSemantics { })
+
+/** How much a list without the highlight is dimmed, so the column you're in stands out (STATE-05). */
+const val INACTIVE_ALPHA = 0.72f
+
+/** Dims a side list (categories, settings sections) while the highlight is elsewhere on the screen (STATE-05). */
+fun Modifier.dimWhenInactive(): Modifier = composed {
+    var has by remember { mutableStateOf(true) }
+    onFocusChanged { has = it.hasFocus }.alpha(if (has) 1f else INACTIVE_ALPHA)
+}
+
+/**
+ * STATE-01: the row you are in (the screen in the menu, the category, the settings section) looks the same in
+ * every list: a raised row with an accent bar down its left edge and a bold label. TalkBack hears "selected".
+ */
+fun Modifier.activePath(on: Boolean): Modifier = semantics { selected = on }.then(
+    if (on) Modifier.drawWithContent { drawContent(); drawRect(C.Accent, size = androidx.compose.ui.geometry.Size(3.dp.toPx(), size.height)) } else Modifier,
+)
 
 @Composable
 fun Label(text: String, size: TextUnit = 13.sp, color: Color = C.Muted, weight: FontWeight = FontWeight.Normal, modifier: Modifier = Modifier, lines: Int = 1) =

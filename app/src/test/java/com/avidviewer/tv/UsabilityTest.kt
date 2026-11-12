@@ -84,6 +84,13 @@ class UsabilityTest {
         }.ifBlank { "(nothing focused)" }
     }.getOrDefault("(unknown)")
 
+    /** Whether what has the highlight is the row you are in (the "active path": selected for TalkBack too). */
+    private fun focusedSelected(): Boolean = runCatching {
+        rule.onAllNodes(androidx.compose.ui.test.isFocused()).fetchSemanticsNodes().any { n ->
+            n.config.getOrNull(androidx.compose.ui.semantics.SemanticsProperties.Selected) == true
+        }
+    }.getOrDefault(false)
+
     /**
      * Presses a remote button the way the Fire TV does: a key down and key up delivered to the app's
      * window (or to an open dialog's window), so the app's own key handling and Back all run for real.
@@ -228,7 +235,8 @@ class UsabilityTest {
         waitFor("held Left back at now (start ${vm.nav.guideWindowStart}, base $base)") { vm.nav.guideWindowStart == base }
         // Left from the first programme goes back up to 2 hours, no further; aired programmes say so.
         focusKidsProgramme()
-        repeat(10) { press(listOf(Key.DirectionLeft)); if (vm.nav.guideWindowStart == base - 2 * 3600_000L) return@repeat }
+        var lefts = 0
+        while (vm.nav.guideWindowStart != base - 2 * 3600_000L && lefts < 10) { press(listOf(Key.DirectionLeft)); lefts++ }
         assertEquals("window 2 h back (focus: ${focused()})", base - 2 * 3600_000L, vm.nav.guideWindowStart)
         waitFor("an aired programme highlighted and marked (focus: ${focused()})") { rule.onAllNodesWithText("already aired", substring = true).fetchSemanticsNodes().isNotEmpty() }
         press(listOf(Key.DirectionLeft)) // to the channel name: the window stays
@@ -869,7 +877,7 @@ class UsabilityTest {
         goDeepInBig()
         press(listOf(Key.Back))
         waitFor("Back highlights the current category in the category list (focus: ${focused()}, nav=${vm.navMode})") {
-            vm.navMode == NavMode.GROUPS && vm.inGroupNav && focused().trim().startsWith("▶ BIG")
+            vm.navMode == NavMode.GROUPS && vm.inGroupNav && (focused().trim().startsWith("BIG") && focusedSelected())
         }
         press(listOf(Key.Back))
         waitFor("Back again highlights the same category in the playlist list, not the top (focus: ${focused()}, nav=${vm.navMode})") {
@@ -883,7 +891,7 @@ class UsabilityTest {
     fun leftWorksLikeBackBetweenTheLayers() {
         goDeepInBig()
         press(listOf(Key.DirectionLeft))
-        waitFor("Left from a channel name highlights the current category (focus: ${focused()})") { vm.inGroupNav && focused().trim().startsWith("▶ BIG") }
+        waitFor("Left from a channel name highlights the current category (focus: ${focused()})") { vm.inGroupNav && (focused().trim().startsWith("BIG") && focusedSelected()) }
         press(listOf(Key.DirectionLeft))
         waitFor("Left again goes to the playlist list on that category (focus: ${focused()}, nav=${vm.navMode})") {
             vm.navMode == NavMode.COLLAPSED && focused().trim().startsWith("BIG")
@@ -976,7 +984,7 @@ class UsabilityTest {
         // #6: Left back out of the posters lands on Crime, not on whichever category is level with them.
         var tries = 0
         while (focused().contains("Show") && tries < 8) { press(listOf(Key.DirectionLeft)); tries++ }
-        assertTrue("Left from the posters didn't land on Crime (focus: ${focused()})", focused().contains("▶ Crime"))
+        assertTrue("Left from the posters didn't land on Crime (focus: ${focused()})", (focused().contains("Crime") && !focused().contains("Show") && focusedSelected()))
         // #5: title page → Back → its poster → Back → the category → Back → the main menu, on Series.
         press(listOf(Key.DirectionRight))
         waitFor("a poster again") { focused().contains("Crime Show") }
@@ -985,7 +993,7 @@ class UsabilityTest {
         press(listOf(Key.Back))
         waitFor("Back returns to the poster (focus: ${focused()})") { vm.vodDetail == null && focused().contains("Crime Show") }
         press(listOf(Key.Back))
-        waitFor("Back goes to the Crime category (focus: ${focused()})") { focused().contains("▶ Crime") && vm.navMode != NavMode.FULL }
+        waitFor("Back goes to the Crime category (focus: ${focused()})") { (focused().contains("Crime") && !focused().contains("Show") && focusedSelected()) && vm.navMode != NavMode.FULL }
         press(listOf(Key.Back))
         waitFor("Back opens the main menu on Series (focus: ${focused()} mode=${vm.navMode})") { vm.navMode == NavMode.FULL && focused().contains("Series") }
         assertEquals(Screen.SERIES, vm.screen)

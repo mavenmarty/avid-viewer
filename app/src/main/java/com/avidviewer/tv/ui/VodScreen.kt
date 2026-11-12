@@ -98,7 +98,7 @@ fun VodScreen(vm: AppViewModel, kind: String) {
                     if (isMoving) focusWhenReady(vm, frames = 30, isFocused = { hasFocus }) { runCatching { fr.requestFocus() }.isSuccess }
                 }
                 Focusable(
-                    modifier = Modifier.fillMaxWidth().heightIn(min = 36.dp).focusRequester(fr).onFocusChanged { hasFocus = it.isFocused; if (it.isFocused && !special && !on) vm.prefetchVodCategory(kind, name) }
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 36.dp).focusRequester(fr).activePath(on && !isMoving).onFocusChanged { hasFocus = it.isFocused; if (it.isFocused && !special && !on) vm.prefetchVodCategory(kind, name) }
                         .then(if (!isMoving) Modifier.wrapEnds(catWrap, isFirst = name == allCats.first().first, isLast = name == allCats.last().first) else Modifier)
                         .then(if (name == "All") Modifier.entryFocus(vm, if (kind == "series") Screen.SERIES else Screen.MOVIES) else Modifier)
                         .then(if (isMoving) Modifier.border(2.dp, C.AccentFocus, androidx.compose.foundation.shape.RoundedCornerShape(8.dp)) else Modifier)
@@ -112,7 +112,8 @@ fun VodScreen(vm: AppViewModel, kind: String) {
                     onClick = { if (isMoving) vm.vodMovingCat = null else vm.chooseVodCategory(kind, name) },
                 ) {
                     val shown = if (special) name else vm.vodCatName(kind, name)
-                    Label((if (isMoving) "⇅ " else if (on) "▶ " else "") + shown, size = 13.sp, color = if (on || isMoving) C.Text else C.Soft, weight = if (on || isMoving) FontWeight.Bold else FontWeight.Normal, lines = 2, modifier = Modifier.padding(start = 10.dp, top = 4.dp, bottom = 4.dp).weight(1f))
+                    if (isMoving) Glyph("⇅", C.Accent, 13.sp, Modifier.padding(start = 10.dp))
+                    Label(shown, size = 13.sp, color = if (on || isMoving) C.Text else C.Soft, weight = if (on || isMoving) FontWeight.Bold else FontWeight.Normal, lines = 2, modifier = Modifier.padding(start = 10.dp, top = 4.dp, bottom = 4.dp).weight(1f))
                     if (isMoving) Label("${cats.indexOfFirst { it.first == name } + 1}/${cats.size}", size = 12.sp, color = C.Accent, modifier = Modifier.padding(end = 10.dp))
                     else if (count >= 0) Label("$count", size = 12.sp, modifier = Modifier.padding(end = 10.dp))
                 }
@@ -129,7 +130,7 @@ fun VodScreen(vm: AppViewModel, kind: String) {
     }
     Row(Modifier.fillMaxSize()) {
         LazyColumn(
-            Modifier.width(220.dp).fillMaxHeight().background(C.Bg).onFocusChanged { if (it.hasFocus) vm.vodOnPoster = false },
+            Modifier.width(220.dp).fillMaxHeight().background(C.Bg).onFocusChanged { if (it.hasFocus) vm.vodOnPoster = false }.dimWhenInactive(),
             state = catState,
             contentPadding = PaddingValues(10.dp),
             verticalArrangement = Arrangement.spacedBy(3.dp),

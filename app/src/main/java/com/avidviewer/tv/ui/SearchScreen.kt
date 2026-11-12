@@ -40,7 +40,7 @@ fun SearchScreen(vm: AppViewModel) {
                 "TV stations, shows, movies or series", vm.searchQuery, modifier = Modifier.width(420.dp).entryFocus(vm, Screen.SEARCH),
                 imeAction = ImeAction.Search, onSubmit = { vm.search(vm.searchQuery) },
             ) { vm.typeSearch(it) } // results come as you type, after a short pause
-            TvButton(if (vm.searching) "Searching…" else "Search", primary = true) { vm.search(vm.searchQuery) }
+            TvButton(if (vm.searching) "Searching…" else "Search", primary = true, busy = vm.searching) { vm.search(vm.searchQuery) }
         }
         val results = vm.searchResults
         when {

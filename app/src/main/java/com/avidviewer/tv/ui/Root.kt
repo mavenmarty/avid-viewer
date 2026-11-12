@@ -125,7 +125,7 @@ fun AppRoot(vm: AppViewModel) {
                     }
                 },
                 confirmButton = {
-                    TvButton(if (vm.updateBusy) "Updating…" else "Update now", primary = true) { if (!vm.updateBusy) vm.installUpdate() }
+                    TvButton(if (vm.updateBusy) "Updating…" else "Update now", primary = true, busy = vm.updateBusy) { if (!vm.updateBusy) vm.installUpdate() }
                 },
                 dismissButton = {
                     TvButton("Later") { vm.updatePromptDismissed = true }
