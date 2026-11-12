@@ -94,32 +94,17 @@ object EspnFeed {
         return "%04d%02d%02d".format(c.get(Calendar.YEAR), c.get(Calendar.MONTH) + 1, c.get(Calendar.DAY_OF_MONTH))
     }
 
-    fun url(l: League, from: String, to: String) = "$base${l.path}/scoreboard?dates=$from-$to&limit=500${l.query}"
-
     /**
-     * The league's games from [from] to [to] (YYYYMMDD); throws on a network failure. If the range is
-     * refused, asks one day at a time and merges the days' events.
+     * One day's games of a league ([day] YYYYMMDD). ESPN answers a single day only: a range
+     * ("20261110-20261113") is refused with 400 (checked against the live feed, Nov 2026).
      */
-    fun fetchText(l: League, from: String, to: String): String =
-        runCatching { Net.text(url(l, from, to)) }.getOrElse { first ->
-            val days = daysBetween(from, to)
-            if (days.size <= 1) throw first
-            val events = JSONArray()
-            var any = false
-            for (d in days) runCatching { JSONObject(Net.text(url(l, d, d))) }.getOrNull()?.let { o ->
-                any = true
-                o.optJSONArray("events")?.let { a -> for (i in 0 until a.length()) events.put(a.get(i)) }
-            }
-            if (!any) throw first
-            JSONObject().put("events", events).toString()
-        }
+    fun dayUrl(l: League, day: String) = "$base${l.path}/scoreboard?dates=$day&limit=500${l.query}"
 
-    private fun daysBetween(from: String, to: String): List<String> {
-        val f = java.text.SimpleDateFormat("yyyyMMdd", java.util.Locale.US).apply { timeZone = TimeZone.getTimeZone("UTC") }
-        val a = f.parse(from)?.time ?: return listOf(from)
-        val b = f.parse(to)?.time ?: return listOf(from)
-        return generateSequence(a) { it + 86_400_000L }.takeWhile { it <= b }.map { f.format(it) }.take(10).toList()
-    }
+    /** One day's games as ESPN sends them; throws on a network failure or a refusal. */
+    fun fetchDay(l: League, day: String): String = Net.text(dayUrl(l, day))
+
+    /** The days Sports shows: yesterday (late games and finals), today and the next 2 days, in [zone]. */
+    fun days(now: Long, zone: TimeZone): List<String> = (-1..2).map { day(now + it * 86_400_000L, zone) }
 
     fun parse(league: String, text: String): List<Game> {
         val root = JSONObject(text)

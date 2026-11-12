@@ -2049,9 +2049,14 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     private var sportsJob: Job? = null
 
+    /** Each league's games per day (key "league|YYYYMMDD"), with when ESPN last answered for it. */
+    private val sportsDays = HashMap<String, Pair<Long, List<Game>>>()
+
     /**
-     * Gets today's and the next 2 days' games (and yesterday's, for recent finals) from ESPN for each
-     * league switched on, then finds their channels. A league ESPN can't answer for keeps its last list.
+     * Gets yesterday's (late games, finals), today's and the next 2 days' games from ESPN, one day at a
+     * time (ESPN refuses ranges), for each league switched on, then finds their channels. Today is asked
+     * again every minute when needed, the other days every 30 minutes. A day ESPN can't answer keeps
+     * its last answer (saved on the device).
      */
     suspend fun refreshSports() {
         if (sportsJob?.isActive == true) { sportsJob?.join(); return }
@@ -2060,16 +2065,31 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             try {
                 val zone = timeZone
                 val t = System.currentTimeMillis()
-                val from = com.avidviewer.tv.data.EspnFeed.day(t - 24 * 3600_000L, zone)
-                val to = com.avidviewer.tv.data.EspnFeed.day(t + 2 * 24 * 3600_000L, zone)
-                val failed = ArrayList<String>()
+                val days = com.avidviewer.tv.data.EspnFeed.days(t, zone)
+                val today = days[1]
+                val failed = LinkedHashSet<String>()
+                val leagues = leaguesOn()
                 val games = withContext(Dispatchers.IO) {
-                    leaguesOn().flatMap { l ->
-                        val text = runCatching { com.avidviewer.tv.data.EspnFeed.fetchText(l, from, to).also { store.saveSportsCache(l.id, it) } }
-                            .getOrElse { failed.add(l.name); store.loadSportsCache(l.id) }
-                        text?.let { runCatching { com.avidviewer.tv.data.EspnFeed.parse(l.id, it) }.getOrNull() }.orEmpty()
+                    store.pruneSportsCache(days.toSet())
+                    leagues.flatMap { l ->
+                        days.flatMap { d ->
+                            val k = l.id + "|" + d
+                            val have = sportsDays[k]
+                            val maxAge = if (d == today || d == days[0]) 55_000L else 30 * 60_000L
+                            if (have != null && t - have.first < maxAge) return@flatMap have.second
+                            val fresh = runCatching { com.avidviewer.tv.data.EspnFeed.fetchDay(l, d) }
+                                .onSuccess { store.saveSportsCache(l.id, d, it) }
+                                .getOrNull()
+                                ?.let { runCatching { com.avidviewer.tv.data.EspnFeed.parse(l.id, it) }.getOrNull() }
+                            if (fresh != null) { sportsDays[k] = t to fresh; fresh }
+                            else {
+                                failed.add(l.name)
+                                have?.second ?: store.loadSportsCache(l.id, d)?.let { runCatching { com.avidviewer.tv.data.EspnFeed.parse(l.id, it) }.getOrNull() }.orEmpty()
+                            }
+                        }
                     }
                 }
+                sportsDays.keys.removeAll { k -> k.substringAfter('|') !in days || leagues.none { it.id == k.substringBefore('|') } }
                 sportsNote = if (failed.isEmpty()) null else "Couldn't reach ESPN for ${failed.joinToString()}; showing the last list."
                 sportsFetchedAt = System.currentTimeMillis()
                 matchSports(games)
