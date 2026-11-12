@@ -2,7 +2,7 @@
 
 <!-- The version below and the Release notes section are updated automatically after each published build
      (.github/workflows/user-guide.yml). Feature descriptions are written by hand. -->
-This guide covers **Avid Viewer 1.0.147**, the current public release. Avid Viewer is an IPTV player for Android TV and Fire TV. You bring your own provider (an Xtream Codes login or an M3U link); the app doesn't include any channels.
+This guide covers **Avid Viewer 1.0.160**, the current public release. Avid Viewer is an IPTV player for Android TV and Fire TV. You bring your own provider (an Xtream Codes login or an M3U link); the app doesn't include any channels.
 
 **Contents:** [Getting started](#1-getting-started) · [Main menu](#2-main-menu) · [TV Guide](#3-tv-guide) · [Full-screen playback](#4-full-screen-playback) · [Search](#5-search) · [Discover](#6-discover) · [Sports](#7-sports) · [Movies and Series](#8-movies-and-series) · [Settings](#9-settings) · [Privacy](#10-privacy) · [Troubleshooting](#11-troubleshooting) · [Control4](#12-control4) · [Release notes](#release-notes)
 
@@ -408,7 +408,20 @@ Every public release since 1.0.35, newest first. Releases are published on GitHu
 
 <!-- new-releases: entries for new builds are added automatically below this line -->
 
-### 1.0.147 — November 11, 2026, 9:41 PM CT (current)
+### 1.0.160 — November 12, 2026, 7:05 AM CT (current)
+
+**Change log**
+
+- Discover: list every version of a title (language, playlist), English first; series page keeps room for seasons
+- TV Guide: channel names move Up/Down themselves, so fast taps after a wrap can't freeze the app
+- Test: fast taps keep up and never freeze (a press arriving mid-scroll may drop)
+- Full screen › Menu: Picture & sound — screen format, audio track (secondary audio), closed captions, caption style, remembered per channel
+- Movies & Series list each title once (English copy first); the title page's ⇄ versions picks another copy. Panel: one Back handler
+- Panel: Back closes it even when Compose would take Back for focus; test: versions on the title page
+- Search: part of a word, words in any order, accents and punctuation ignored; results as you type
+- Search as you type: the pause lives in the view model; LiveDb test: punctuation is ignored, not a wildcard
+
+### 1.0.147 — November 11, 2026, 9:41 PM CT
 
 **Release notes**
 
