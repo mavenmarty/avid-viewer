@@ -1,5 +1,9 @@
 package com.avidviewer.tv.ui
 
+import androidx.compose.foundation.layout.height
+
+import androidx.compose.ui.platform.testTag
+
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -120,7 +124,8 @@ private fun TitleCard(vm: AppViewModel, t: Title) {
 @Composable
 private fun TitleDetail(vm: AppViewModel, t: Title) {
     BackHandler { vm.discoverDetail = null }
-    val match = vm.matchVod(t)
+    val versions = vm.versionsOf(t)
+    val match = versions.firstOrNull()
     val where = vm.whereCache[t.key]
     val first = remember { FocusRequester() }
     LaunchedEffect(t.key) { focusWhenReady(vm) { runCatching { first.requestFocus() }.isSuccess } }
@@ -137,7 +142,7 @@ private fun TitleDetail(vm: AppViewModel, t: Title) {
             )
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (match != null) {
-                    TvButton(if (match.kind == "series") "▶ Episodes on your provider" else "▶ Play on your provider", primary = true, modifier = Modifier.focusRequester(first)) { vm.playMatched(match) }
+                    TvButton(if (match.kind == "series") "▶ Episodes" else "▶ Play", primary = true, modifier = Modifier.focusRequester(first)) { vm.playMatched(match) }
                     val inList = vm.inMyList(match.key)
                     TvButton(if (inList) "✓ In My List" else "+ My List", selected = inList) { vm.toggleMyList(match) }
                 } else {
@@ -147,7 +152,28 @@ private fun TitleDetail(vm: AppViewModel, t: Title) {
                 }
                 TvButton("Back") { vm.discoverDetail = null }
             }
-            if (t.overview.isNotBlank()) Label(t.overview, size = 14.sp, color = C.Text, lines = 7)
+            if (match != null) Label("Plays: " + versionLabel(vm, match), size = 12.sp, color = C.Soft)
+            if (t.overview.isNotBlank()) Label(t.overview, size = 14.sp, color = C.Text, lines = if (versions.size > 1) 3 else 6)
+            // Every version in your playlists (languages, qualities, playlists), English first: OK picks one.
+            if (versions.size > 1) {
+                Label("${versions.size} versions on your provider", size = 14.sp, color = C.Text, weight = FontWeight.Bold)
+                androidx.compose.foundation.lazy.LazyColumn(Modifier.weight(1f).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                    items(versions.size, key = { versions[it].key }) { i ->
+                        val v = versions[i]
+                        Focusable(Modifier.fillMaxWidth().height(44.dp).testTag("version-" + v.key), color = C.Surface2, onClick = { vm.playMatched(v) }) {
+                            Row(Modifier.fillMaxSize().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                val lang = com.avidviewer.tv.data.Language.of(v.name, v.category)
+                                Label(lang ?: "Language not marked", size = 13.sp, weight = FontWeight.Bold, color = if (lang == "English") C.AccentFocus else C.Text, modifier = Modifier.width(150.dp))
+                                Column(Modifier.weight(1f)) {
+                                    Label(v.name, size = 13.sp, color = C.Text)
+                                    Label(listOf(v.category, vm.playlists.firstOrNull { it.id == v.playlistId }?.name.orEmpty()).filter { it.isNotBlank() }.joinToString(" · "), size = 11.sp, color = C.Muted)
+                                }
+                                Label(if (v.kind == "series") "Episodes ›" else "▶ Play", size = 12.sp, color = C.Accent, weight = FontWeight.Bold)
+                            }
+                        }
+                    }
+                }
+            }
             Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(C.Surface).padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Label("Where to watch (${vm.region()})", size = 14.sp, color = C.Text, weight = FontWeight.Bold)
                 when {
@@ -165,6 +191,11 @@ private fun TitleDetail(vm: AppViewModel, t: Title) {
         }
     }
 }
+
+/** "English · EN | Netflix Series · Main": the language, category and playlist of a version. */
+private fun versionLabel(vm: AppViewModel, v: com.avidviewer.tv.data.VodItem): String =
+    listOfNotNull(com.avidviewer.tv.data.Language.of(v.name, v.category) ?: "Language not marked", v.category.ifBlank { null }, vm.playlists.firstOrNull { it.id == v.playlistId }?.name)
+        .joinToString(" · ")
 
 @Suppress("FunctionName")
 private fun Title_clean(s: String) = s.replace(Regex("[:\\-–].*$"), "").trim().ifBlank { s }

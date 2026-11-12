@@ -190,6 +190,33 @@ fun GuideScreen(vm: AppViewModel) {
         pendingFocus = i
     }
 
+    // The row a quick press is heading to before the highlight gets there (-1 = none): fast presses
+    // count from it, not from the row that still has the highlight.
+    val aim = remember(path) { intArrayOf(-1) }
+
+    /**
+     * Up/Down on a channel name, done here rather than by Compose's focus search. After a jump (a wrap
+     * from the top to the bottom of 8,000 channels) the highlight can still sit on a row far off screen;
+     * Compose then laid out row after row across the gap looking for the next one, and the app froze.
+     */
+    fun moveName(idx: Int, dir: Int, steps: Int, fresh: Boolean): Boolean {
+        val from = aim[0].takeIf { it in list.indices } ?: idx
+        if (dir > 0 && from == list.lastIndex) { if (fresh && list.size > 1) { aim[0] = 0; wrapTo(0) }; return true }
+        if (dir < 0 && from == 0) {
+            if (idx == 0) { aim[0] = -1; return false } // Up from the first channel goes to the preview, as before
+            aim[0] = 0; wrapTo(0); return true
+        }
+        val target = (from + dir * steps).coerceIn(0, list.size - 1)
+        aim[0] = target
+        val visible = listState.layoutInfo.visibleItemsInfo.map { it.index }
+        if (visible.size > 2 && target > visible.first() && target < visible.last() && runCatching { rowFr(target)!!.requestFocus() }.isSuccess) return true
+        scope.launch {
+            listState.scrollToItem((if (dir > 0) target - (visible.size - 3).coerceAtLeast(0) else target - 1).coerceAtLeast(0))
+            pendingFocus = target
+        }
+        return true
+    }
+
     /** Up/Down from a program: go to the program airing at [anchor] in the row above or below. */
     fun moveRow(from: Int, dir: Int, steps: Int = 1, fresh: Boolean = false): Boolean {
         // Down on the last row (a fresh press) wraps to the first row, keeping the time; Up on the first row
@@ -255,7 +282,7 @@ fun GuideScreen(vm: AppViewModel) {
         ) {
             PreviewWindow(vm, Modifier.width(231.dp).fillMaxHeight().focusRequester(previewFr).onPreviewKeyEvent { e ->
                 // Up from the preview (the top of the screen) wraps to the last channel; a fresh press only.
-                if (e.type == KeyEventType.KeyDown && e.key == Key.DirectionUp && e.nativeKeyEvent.repeatCount == 0 && list.size > 1) { wrapTo(list.lastIndex); true } else false
+                if (e.type == KeyEventType.KeyDown && e.key == Key.DirectionUp && e.nativeKeyEvent.repeatCount == 0 && list.size > 1) { aim[0] = list.lastIndex; wrapTo(list.lastIndex); true } else false
             }, onOpen = { vm.openFullScreen(vm.currentKey, PlayContext.GROUP) })
             val fc = vm.channel(focusProg?.first ?: vm.currentKey)
             DetailsPanel(vm, fc, focusProg?.second, numbers[fc?.key], Modifier.weight(1f).fillMaxHeight())
@@ -293,7 +320,7 @@ fun GuideScreen(vm: AppViewModel) {
                                 .then(if (isMoving) Modifier.border(2.dp, C.AccentFocus, RoundedCornerShape(8.dp)) else Modifier)
                                 .onFocusChanged {
                                     if (isMoving) movingFocused = it.isFocused
-                                    if (it.isFocused) { focusedRow = idx; focusedKey = c.key; vm.nav.focused(path, c.key, idx); vm.nav.guideOnProgram = false }
+                                    if (it.isFocused) { focusedRow = idx; focusedKey = c.key; vm.nav.focused(path, c.key, idx); vm.nav.guideOnProgram = false; if (aim[0] == idx) aim[0] = -1 }
                                     else if (focusedKey == c.key) { focusedRow = -1; focusedKey = null }
                                 }
                                 .onPreviewKeyEvent { e ->
@@ -303,9 +330,9 @@ fun GuideScreen(vm: AppViewModel) {
                                     else if (e.type == KeyEventType.KeyDown && e.key == Key.DirectionLeft && e.nativeKeyEvent.repeatCount == 0 && vm.navMode == NavMode.GROUPS && vm.selectedGroup != null) {
                                         vm.navFocusKey = vm.selectedGroup; true
                                     }
-                                    // Down on the last channel (a fresh press, not a hold) goes back to the first.
-                                    else if (e.type == KeyEventType.KeyDown && e.key == Key.DirectionDown && idx == list.lastIndex && e.nativeKeyEvent.repeatCount == 0 && list.size > 1) {
-                                        wrapTo(0); true
+                                    // Up/Down move by channel (holding speeds up); Down on the last channel (a fresh press) goes back to the first.
+                                    else if (e.type == KeyEventType.KeyDown && (e.key == Key.DirectionDown || e.key == Key.DirectionUp)) {
+                                        moveName(idx, if (e.key == Key.DirectionDown) 1 else -1, holdSteps(e), e.nativeKeyEvent.repeatCount == 0)
                                     } else false
                                 },
                             color = if (isMoving) C.Surface2 else C.Surface,

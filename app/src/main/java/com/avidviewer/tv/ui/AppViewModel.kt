@@ -445,6 +445,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     private val vodItemsMemo = HashMap<String, Memo<List<VodItem>>>()
     private val vodAllMemo = HashMap<String, Memo<List<VodItem>>>()
     private val matchCache = HashMap<String, VodItem?>()
+    private val versionsCache = HashMap<String, List<VodItem>>()
     private var matchCacheFor = -1
 
     init {
@@ -1943,14 +1944,22 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** The same title in the user's own provider catalog, if there is one. */
-    fun matchVod(t: Title): VodItem? {
-        // One indexed lookup per title in the catalog database, remembered until the catalog changes.
-        if (matchCacheFor != vodVersion) { matchCache.clear(); matchCacheFor = vodVersion }
+    /** The version of a Discover title to play by default: the first of [versionsOf] (English first). */
+    fun matchVod(t: Title): VodItem? = versionsOf(t).firstOrNull()
+
+    /**
+     * Every version of a Discover title in your playlists (each language, quality and playlist), English
+     * first, then unmarked, multi-language and other languages; titles you've hidden are left out.
+     * One indexed lookup per title, remembered until the catalog changes.
+     */
+    fun versionsOf(t: Title): List<VodItem> {
+        if (matchCacheFor != vodVersion) { versionsCache.clear(); matchCache.clear(); matchCacheFor = vodVersion }
         val k = t.type + "|" + Tmdb.normalize(t.name)
-        if (matchCache.containsKey(k)) return matchCache[k]
+        versionsCache[k]?.let { return it }
         val pids = vodPlaylists.map { it.id }
-        val found = runCatching { catalog.findByName(if (t.type == "tv") "series" else "movie", Tmdb.normalize(t.name), pids) }.getOrNull()
-        matchCache[k] = found
+        val found = runCatching { catalog.findAllByName(if (t.type == "tv") "series" else "movie", Tmdb.normalize(t.name), pids) }.getOrDefault(emptyList())
+            .sortedBy { com.avidviewer.tv.data.Language.rank(com.avidviewer.tv.data.Language.of(it.name, it.category)) } // stable: list order within a language
+        versionsCache[k] = found
         return found
     }
 

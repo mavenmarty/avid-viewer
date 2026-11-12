@@ -290,6 +290,16 @@ class Catalog(context: Context) : SQLiteOpenHelper(context.applicationContext, "
         }
     }
 
+    /** Every title with this name in these playlists (all versions: languages, qualities, categories), list order. */
+    fun findAllByName(group: String, normalized: String, playlists: List<String>, includeHidden: Boolean = false, limit: Int = 60): List<VodItem> {
+        if (playlists.isEmpty() || normalized.isBlank()) return emptyList()
+        val q = Query(group, playlists, includeHidden = includeHidden)
+        val (w, a) = q.where()
+        return readableDatabase.rawQuery("SELECT $COLS FROM title WHERE nn = ? AND $w ORDER BY ${q.order()} LIMIT $limit", arrayOf(normalized) + a).use { c ->
+            val out = ArrayList<VodItem>(); while (c.moveToNext()) out.add(read(c)); out
+        }
+    }
+
     /** Playlists that have a category of this kind (to hide it everywhere). */
     fun playlistsWithCategory(group: String, category: String): List<String> =
         readableDatabase.rawQuery("SELECT DISTINCT p FROM title WHERE g = ? AND c = ?", arrayOf(group, category)).use { c ->

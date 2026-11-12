@@ -771,7 +771,7 @@ class UsabilityTest {
     }
 
     /** A tiny Xtream Codes provider on this machine: a login, and a series with two seasons of episodes. */
-    private class FakeProvider : AutoCloseable {
+    private class FakeProvider(private val plot: String = "A show for testing.") : AutoCloseable {
         private val socket = java.net.ServerSocket(0, 50, java.net.InetAddress.getByName("127.0.0.1"))
         val port get() = socket.localPort
         private val thread = Thread {
@@ -785,7 +785,7 @@ class UsabilityTest {
                         val target = requestLine.split(" ").getOrElse(1) { "/" }
                         val body = when {
                             target.contains("xmltv") -> "<tv></tv>"
-                            target.contains("action=get_series_info") -> """{"info":{"name":"Test Show","plot":"A show for testing."},"episodes":{
+                            target.contains("action=get_series_info") -> """{"info":{"name":"Test Show","plot":"$plot"},"episodes":{
                                 "1":[{"id":"101","episode_num":1,"title":"Pilot","container_extension":"mp4","info":{"duration":"00:42:00"}},
                                      {"id":"102","episode_num":2,"title":"Second","container_extension":"mp4","info":{}}],
                                 "2":[{"id":"201","episode_num":1,"title":"Season Two Opener","container_extension":"mkv","info":{}}]}}"""
@@ -800,6 +800,25 @@ class UsabilityTest {
             }
         }.apply { isDaemon = true; start() }
         override fun close() { runCatching { socket.close() } }
+    }
+
+    @Test
+    fun aLongDescriptionStillLeavesRoomForSeasonsAndEpisodes() {
+        val longPlot = List(40) { "A very long description of the show that goes on and on, sentence $it." }.joinToString(" ")
+        FakeProvider(longPlot).use { server ->
+            rule.runOnIdle { vm.addPlaylist("Fake provider", "xtream", "http://127.0.0.1:${server.port}", "u", "", "", "", liveOn = false, vodOn = true) }
+            waitFor("the provider to be added (status=${vm.status})") { vm.playlists.any { it.name == "Fake provider" } }
+            val pid = vm.playlists.first { it.name == "Fake provider" }.id
+            go(Screen.SERIES)
+            rule.runOnIdle { vm.openVodDetail(com.avidviewer.tv.data.VodItem("$pid:s78", pid, "series", "Long Show", null, "", seriesId = "78", category = "Shows")) }
+            waitFor("episodes to load") { vm.detailEpisodes?.isNotEmpty() == true }
+            var tries = 0
+            while (!focused().contains("Season 1") && tries < 10) { press(listOf(Key.DirectionDown)); tries++ }
+            assertTrue("couldn't reach the season buttons below a long description (focus: ${focused()})", focused().contains("Season 1"))
+            tries = 0
+            while (!focused().contains("Pilot") && tries < 6) { press(listOf(Key.DirectionDown)); tries++ }
+            assertTrue("couldn't reach an episode below a long description (focus: ${focused()})", focused().contains("Pilot"))
+        }
     }
 
     @Test
@@ -851,6 +870,34 @@ class UsabilityTest {
         waitFor("full screen") { vm.screen == Screen.PLAYER }
         press(listOf(Key.Back))
         waitFor("back in the guide on channel 60 (focus: ${focused()})") { vm.screen == Screen.GUIDE && focused().contains("BIG Channel 60 with") }
+    }
+
+    /** Presses sent back to back, faster than the screen redraws (a quick thumb on the remote). */
+    private fun burst(k: Key, n: Int) { repeat(n) { key(k) }; settle() }
+
+    /** Nov 12: tapping Up/Down fast in the TV Guide froze and closed the app after a wrap-around. */
+    @Test
+    fun fastTapsInTheChannelListLandOnTheRightChannel() {
+        rule.runOnIdle { vm.chooseGroup(TestData.P1, "BIG") }
+        waitFor("BIG channel 1 highlighted") { focused().contains("BIG Channel 1 with") }
+        burst(Key.DirectionDown, 10)
+        waitFor("10 fast presses down reach channel 11 (focus: ${focused()})") { focused().contains("BIG Channel 11 with") }
+        burst(Key.DirectionDown, 25)
+        waitFor("25 more reach channel 36 (focus: ${focused()})") { focused().contains("BIG Channel 36 with") }
+        burst(Key.DirectionUp, 30)
+        waitFor("30 fast presses up reach channel 6 (focus: ${focused()})") { focused().contains("BIG Channel 6 with") }
+        // Up past the top goes to the preview, then wraps to the bottom; fast presses carry on from there.
+        burst(Key.DirectionUp, 5); press(listOf(Key.DirectionUp))
+        if (!focused().contains("BIG Channel 80 ")) press(listOf(Key.DirectionUp))
+        waitFor("wrapped to the last channel (focus: ${focused()})") { focused().contains("BIG Channel 80 ") }
+        burst(Key.DirectionUp, 4)
+        waitFor("4 up from the bottom reach channel 76 (focus: ${focused()})") { focused().contains("BIG Channel 76 with") }
+        burst(Key.DirectionDown, 4); burst(Key.DirectionDown, 1)
+        waitFor("Down past the bottom wraps to channel 1 (focus: ${focused()})") { focused().contains("BIG Channel 1 with") }
+        // Mixed fast taps never lose the highlight.
+        val rnd = Random(1112)
+        repeat(30) { burst(if (rnd.nextBoolean()) Key.DirectionDown else Key.DirectionUp, 1 + rnd.nextInt(8)) }
+        assertTrue("highlight lost (focus: ${focused()})", focused() != "(nothing focused)")
     }
 
     @Test
