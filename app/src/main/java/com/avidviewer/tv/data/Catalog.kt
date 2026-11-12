@@ -244,7 +244,7 @@ class Catalog(context: Context) : SQLiteOpenHelper(context.applicationContext, "
         val db = writableDatabase
         db.beginTransaction()
         try {
-            db.execSQL("UPDATE title SET h = 0 WHERE h = 1")
+            db.execSQL("UPDATE title SET h = 0, rep = 1, repc = 1 WHERE h = 1")
             for (key in hiddenCats) {
                 val parts = key.split('|', limit = 3)
                 if (parts.size == 3) db.execSQL("UPDATE title SET h = 1 WHERE g = ? AND p = ? AND c = ?", arrayOf(parts[0], parts[1], parts[2]))
@@ -269,13 +269,13 @@ class Catalog(context: Context) : SQLiteOpenHelper(context.applicationContext, "
         try {
             for (k in afterCats - beforeCats) catArgs(k)?.let { db.execSQL("UPDATE title SET h = 1 WHERE g = ? AND p = ? AND c = ?", it) }
             for (k in beforeCats - afterCats) catArgs(k)?.let { a ->
-                db.execSQL("UPDATE title SET h = 0 WHERE g = ? AND p = ? AND c = ?", a)
+                db.execSQL("UPDATE title SET h = 0, rep = 1, repc = 1 WHERE g = ? AND p = ? AND c = ?", a)
                 afterTitles.chunked(400).forEach { ch -> db.execSQL("UPDATE title SET h = 1 WHERE g = ? AND p = ? AND c = ? AND k IN (${ch.joinToString(",") { "?" }})", a + ch) }
             }
             (afterTitles - beforeTitles).chunked(400).forEach { ch -> db.execSQL("UPDATE title SET h = 1 WHERE k IN (${ch.joinToString(",") { "?" }})", ch.toTypedArray()) }
             val shown = (beforeTitles - afterTitles).toList()
             shown.chunked(400).forEach { ch ->
-                db.execSQL("UPDATE title SET h = 0 WHERE k IN (${ch.joinToString(",") { "?" }})", ch.toTypedArray())
+                db.execSQL("UPDATE title SET h = 0, rep = 1, repc = 1 WHERE k IN (${ch.joinToString(",") { "?" }})", ch.toTypedArray())
                 for (k in afterCats) catArgs(k)?.let { a -> db.execSQL("UPDATE title SET h = 1 WHERE g = ? AND p = ? AND c = ? AND k IN (${ch.joinToString(",") { "?" }})", a + ch) }
             }
             db.setTransactionSuccessful()
