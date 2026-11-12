@@ -301,6 +301,14 @@ class ChannelNavProbeTest {
         step("burst-up-10") { burst(Key.DirectionUp, 10) }
         step("burst-down-10") { burst(Key.DirectionDown, 10) }
         step("burst-mixed") { burstsMixed(1) }
+        step("burst-mixed-2") { burstsMixed(7) }
+        step("to-programs") { press(Key.DirectionRight) }
+        step("programs-burst-mixed") { burstsMixed(2) }
+        step("programs-wrap-bursts") { press(Key.DirectionLeft); burst(Key.DirectionUp, 30); burst(Key.DirectionDown, 30); press(Key.DirectionRight); burst(Key.DirectionUp, 30); burst(Key.DirectionDown, 30) }
+        step("small-group-burst") {
+            val small = vm.groups().minByOrNull { it.count }?.raw ?: "ALL CHANNELS"
+            rule.runOnIdle { vm.chooseGroup("fx", small) }; settle(500); burstsMixed(5); press(Key.DirectionRight); burstsMixed(6)
+        }
         Thread.setDefaultUncaughtExceptionHandler(prev)
         server.close()
     }
