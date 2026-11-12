@@ -32,6 +32,7 @@ import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -66,6 +67,13 @@ fun PlayerScreen(vm: AppViewModel) {
             .fillMaxSize()
             .background(Color.Black)
             .focusRequester(focus)
+            // Back while the panel is open closes it. Taken here, before the panel's rows see it:
+            // Compose can use Back to move the highlight out of a group and never report it as Back.
+            .onPreviewKeyEvent {
+                if (!vm.avPanel || (it.key != Key.Back && it.key != Key.Escape)) return@onPreviewKeyEvent false
+                if (it.type == KeyEventType.KeyUp) vm.avPanel = false
+                true
+            }
             .onKeyEvent {
                 if (it.type != KeyEventType.KeyDown) return@onKeyEvent false
                 // The panel's own rows take the keys; nothing here may change channel underneath it.

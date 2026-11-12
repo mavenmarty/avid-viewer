@@ -874,6 +874,38 @@ class UsabilityTest {
         waitFor("back in the guide on channel 60 (focus: ${focused()})") { vm.screen == Screen.GUIDE && focused().contains("BIG Channel 60 with") }
     }
 
+    /** Nov 12: Series / Movies list a title once; its page offers the other copies (languages, playlists). */
+    @Test
+    fun aTitleIsListedOnceAndItsPageOffersItsVersions() {
+        go(Screen.SERIES)
+        waitFor("series") { vm.vodOf("series").isNotEmpty() }
+        val p1 = TestData.P1
+        rule.runOnIdle {
+            val c = vm.catalog
+            val have = c.page(com.avidviewer.tv.data.Catalog.Query("movie", listOf(p1), includeHidden = true), 0, 100_000) +
+                c.page(com.avidviewer.tv.data.Catalog.Query("series", listOf(p1), includeHidden = true), 0, 100_000)
+            fun s(k: String, n: String, cat: String) = com.avidviewer.tv.data.VodItem("$p1:$k", p1, "series", n, null, "", seriesId = k, category = cat)
+            c.replace(p1, (have + s("dupfr", "FR | Mob Test", "FR | Séries") + s("dupen", "EN | Mob Test", "EN | Drama") + s("dupx", "Mob Test 4K", "Crime")).asSequence()) { false }
+            vm.setVodTitlesHidden(listOf("$p1:none"), true); vm.setVodTitlesHidden(listOf("$p1:none"), false) // the lists read again
+        }
+        fun mob() = vm.vodOf("series").filter { com.avidviewer.tv.data.Tmdb.normalize(it.name) == "mobtest" }
+        waitFor("one Mob Test in the list") { mob().size == 1 }
+        assertEquals("the English copy stands for the title", "$p1:dupen", mob().single().key)
+        rule.runOnIdle { vm.openVodDetail(mob().single()) }
+        waitFor("the versions button") { rule.onAllNodesWithTag("versions-button").fetchSemanticsNodes().isNotEmpty() }
+        rule.onNodeWithText("3 versions", substring = true).assertExists()
+        rule.onNodeWithText("This version: English", substring = true).assertExists()
+        rule.onNodeWithTag("versions-button").requestFocus(); settle()
+        press(listOf(Key.DirectionCenter))
+        waitFor("the versions list, on the copy shown (focus: ${focused()})") { vm.versionPicker != null && focused().contains("EN | Mob Test") }
+        press(listOf(Key.DirectionDown))
+        assertTrue("next copy (focus: ${focused()})", focused().contains("Mob Test 4K") || focused().contains("FR | Mob Test"))
+        var tries = 0
+        while (!focused().contains("FR | Mob Test") && tries < 4) { press(listOf(Key.DirectionDown)); tries++ }
+        press(listOf(Key.DirectionCenter))
+        waitFor("the page shows the French copy") { vm.vodDetail?.key == "$p1:dupfr" && vm.versionPicker == null }
+    }
+
     /** Nov 12: Menu in full screen opens Picture & sound (screen format, audio, captions, Add to List). */
     @Test
     fun menuInFullScreenOpensPictureAndSound() {
@@ -907,7 +939,7 @@ class UsabilityTest {
         assertTrue(vm.prefs.avForAll)
         // Back closes the panel, not full screen; the channel's own format stays.
         press(listOf(Key.Back))
-        waitFor("panel closed, still full screen") { !vm.avPanel && vm.screen == Screen.PLAYER }
+        waitFor("panel closed, still full screen (panel=${vm.avPanel} screen=${vm.screen} focus=${focused()})") { !vm.avPanel && vm.screen == Screen.PLAYER }
         assertEquals(com.avidviewer.tv.data.ScreenFormat.STANDARD, vm.screenFormat())
         // Up/Down change channel again once it's closed.
         press(listOf(Key.DirectionDown))
