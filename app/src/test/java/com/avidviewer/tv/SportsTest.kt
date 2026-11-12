@@ -78,6 +78,16 @@ class SportsTest {
     }
 
     @Test
+    fun espnIsAskedOneDayAtATime() {
+        val l = com.avidviewer.tv.data.League.of("NCAAM")!!
+        val u = EspnFeed.dayUrl(l, "20261112")
+        assertTrue(u, u.endsWith("basketball/mens-college-basketball/scoreboard?dates=20261112&limit=500&groups=50"))
+        val z = java.util.TimeZone.getTimeZone("America/Chicago")
+        // Wed Nov 11 2026, 9 PM in Chicago: Tue..Fri.
+        assertEquals(listOf("20261110", "20261111", "20261112", "20261113"), EspnFeed.days(1794459600000L, z))
+    }
+
+    @Test
     fun channelNamesAreReadAsNetworksAndCountries() {
         assertEquals(setOf("espn2"), Networks.identities("US| ESPN 2 HD"))
         assertEquals(setOf("fox"), Networks.identities("FOX 9 KMSP"))
@@ -153,7 +163,8 @@ class SportsTest {
         assertEquals(listOf("${TestData.P2}:tnt", "${TestData.P2}:ev"), live.channels.map { it.key })
         assertEquals(setOf(MatchKind.NATIONAL, MatchKind.GUIDE), live.channels.first().kinds)
         assertNotNull("another playlist's match can be shown and played", vm.sportsChannel("${TestData.P2}:tnt"))
-        assertTrue("today, tomorrow and the day after (and yesterday for finals)", espn.requests.any { it.contains("hockey/nhl/scoreboard?dates=") })
+        assertTrue("one request per day: yesterday, today and the next 2 days", espn.requests.count { it.contains("hockey/nhl/scoreboard?dates=") } == 4)
+        assertTrue("ESPN refuses date ranges: never ask for one", espn.requests.none { Regex("dates=\\d{8}-").containsMatchIn(it) })
         assertTrue(espn.requests.any { it.contains("mens-college-basketball/scoreboard") && it.contains("groups=50") })
         // League filter and the "no channel" setting.
         vm.sportLeague = "NFL"
@@ -165,8 +176,9 @@ class SportsTest {
         // Leagues off: not asked for.
         vm.updateSportLeagues(vm.sportLeagues().map { it.copy(on = it.id == "NHL") })
         espn.requests.clear()
-        idleUntil("refetched") { espn.requests.isNotEmpty() && !vm.sportsLoading }
-        assertTrue(espn.requests.all { it.contains("hockey/nhl") })
+        idleUntil("refreshed") { !vm.sportsLoading }
+        assertTrue("leagues switched off aren't asked for", espn.requests.all { it.contains("hockey/nhl") })
+        assertTrue("days ESPN answered a moment ago aren't asked again", espn.requests.isEmpty())
     }
 
     @Test
@@ -181,10 +193,14 @@ class SportsTest {
         idleUntil("games") { vm.sportGames.isNotEmpty() && !vm.sportsLoading }
         espn.close()
         EspnFeed.base = "http://127.0.0.1:9/espn/"
-        vm.updateSportLeagues(vm.sportLeagues()) // refetch
-        idleUntil("note") { vm.sportsNote != null && !vm.sportsLoading }
-        assertTrue(vm.sportsNote!!.startsWith("Couldn't reach ESPN"))
-        assertEquals(listOf("NHL:401"), vm.sportGames.map { it.game.id })
+        // The app starts again with ESPN out of reach: the days it saved are shown.
+        vm.viewModelScope.cancel()
+        val vm2 = AppViewModel(app).also { made.add(it) }
+        idleUntil("channels") { vm2.channels.isNotEmpty() }
+        vm2.openSportsScreen()
+        idleUntil("note") { vm2.sportsNote != null && !vm2.sportsLoading }
+        assertTrue(vm2.sportsNote!!.startsWith("Couldn't reach ESPN"))
+        assertEquals(listOf("NHL:401"), vm2.sportGames.map { it.game.id })
     }
 
     /** Discover froze and closed on a Fire TV: Compose compared paged title lists item by item. */
