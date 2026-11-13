@@ -572,25 +572,15 @@ class UsabilityTest {
     @Test
     fun crashDialogReportIssueSendsAndClearsAndCancelKeeps() {
         val app = ApplicationProvider.getApplicationContext<Application>()
-        val posts = java.util.Collections.synchronizedList(ArrayList<String>())
-        var answerOk = true
-        val server = com.sun.net.httpserver.HttpServer.create(java.net.InetSocketAddress("127.0.0.1", 0), 0)
-        server.createContext("/exec") { ex ->
-            posts.add(ex.requestBody.readBytes().toString(Charsets.UTF_8))
-            ex.responseHeaders.add("Location", "/result"); ex.sendResponseHeaders(302, -1); ex.close()
-        }
-        server.createContext("/result") { ex ->
-            val b = (if (answerOk) """{"ok":true,"code":200}""" else """{"ok":false,"code":429}""").toByteArray()
-            ex.sendResponseHeaders(200, b.size.toLong()); ex.responseBody.write(b); ex.close()
-        }
-        server.start()
+        val relay = FakeRelay()
+        val posts = relay.posts
         try {
             val crashText = "Avid Viewer 1.2.1 · 2026-11-13 11:00:00\nDevice: Amazon AFTKRT · Android 11\nThread: main\n\n" +
                 "java.io.FileNotFoundException: http://provider.example:8080/get.php?username=alice&password=s3cret\n" +
                 "  at com.avidviewer.tv.data.Net.open(Sources.kt:60)"
             fun crashAgain() {
                 java.io.File(app.filesDir, "last_crash.txt").writeText(crashText)
-                rule.runOnIdle { vm.crashRelay = "http://127.0.0.1:${server.address.port}/exec"; vm.reloadCrash(); vm.crashNoticeSeen = false; vm.crashReportStatus = null }
+                rule.runOnIdle { vm.crashRelay = relay.url; vm.reloadCrash(); vm.crashNoticeSeen = false; vm.crashReportStatus = null }
                 settle()
             }
 
@@ -604,7 +594,7 @@ class UsabilityTest {
             assertEquals(0, posts.size)
 
             // The relay refuses: the report is kept and the dialog says so.
-            answerOk = false
+            relay.ok = false
             crashAgain()
             rule.onNodeWithTag("crash-report").performClick()
             waitFor("the refused report") { !vm.crashReportBusy && posts.size == 1 }
@@ -612,7 +602,7 @@ class UsabilityTest {
             assertTrue(vm.crashReportStatus.orEmpty(), vm.crashReportStatus.orEmpty().startsWith("Couldn't send"))
 
             // Report issue: sent (without the provider's address or login), then cleared.
-            answerOk = true
+            relay.ok = true
             rule.onNodeWithTag("crash-report").performClick()
             waitFor("the report to be sent") { vm.lastCrash == null && posts.size == 2 }
             val sent = org.json.JSONObject(posts[1])
@@ -622,7 +612,7 @@ class UsabilityTest {
             assertTrue(!java.io.File(app.filesDir, "last_crash.txt").exists())
             assertTrue(rule.onAllNodesWithText("Thanks", substring = true).fetchSemanticsNodes().isNotEmpty())
             waitFor("the thank-you to close") { vm.crashNoticeSeen }
-        } finally { server.stop(0) }
+        } finally { relay.close() }
     }
 
     @Test
