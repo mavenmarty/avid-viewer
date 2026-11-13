@@ -13,6 +13,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import java.io.File
+import androidx.compose.ui.test.requestFocus
 
 /**
  * Pictures of the main screens on a TV-sized screen, saved with the test report (the screens folder), so a change to
@@ -129,12 +130,12 @@ class ScreenshotTest {
         waitFor { vm.vodOf("movie").isNotEmpty() }
         rule.runOnIdle { vm.chooseVodCategory("movie", "Featured") }
         settle(500)
-        runCatching { rule.onNode(androidx.compose.ui.test.hasContentDescription("Sample Feature 8", substring = true)).performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.RequestFocus) }
+        runCatching { rule.onNode(androidx.compose.ui.test.hasContentDescription("Sample Feature 8", substring = true)).requestFocus() }
             .onFailure { println("poster focus skipped: $it") }
         settle(800)
         shot("13-movies-poster-grid")
         runCatching { rule.onNode(androidx.compose.ui.test.hasContentDescription("Sample Feature 8", substring = true).not()
-            .and(androidx.compose.ui.test.hasText("Sample Feature 9", substring = true))).performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.RequestFocus) }
+            .and(androidx.compose.ui.test.hasText("Sample Feature 9", substring = true))).requestFocus() }
         settle(400)
         shot("14-movies-poster-no-art-highlighted")
         rule.runOnIdle { vm.navSelect(Screen.SETTINGS); vm.settingsSection = "playback" }
