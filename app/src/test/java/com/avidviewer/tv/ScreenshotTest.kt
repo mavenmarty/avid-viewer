@@ -56,6 +56,29 @@ class ScreenshotTest {
         }.onFailure { println("screenshot $name skipped: $it") }
     }
 
+    /** A remote button, delivered to the window the way UsabilityTest does it. */
+    private fun key(k: androidx.compose.ui.input.key.Key) {
+        val code = k.nativeKeyCode
+        rule.runOnUiThread {
+            val t = android.os.SystemClock.uptimeMillis()
+            rule.activity.dispatchKeyEvent(android.view.KeyEvent(t, t, android.view.KeyEvent.ACTION_DOWN, code, 0))
+            rule.activity.dispatchKeyEvent(android.view.KeyEvent(t, t + 40, android.view.KeyEvent.ACTION_UP, code, 0))
+        }
+        settle()
+    }
+
+    /** Opens Movies › Featured and highlights a poster with artwork (Right, Down, Right, as UsabilityTest does). */
+    private fun highlightPoster() {
+        rule.runOnIdle { vm.navSelect(Screen.SETTINGS) }
+        settle()
+        rule.runOnIdle { vm.navSelect(Screen.MOVIES) }
+        settle(400)
+        rule.runOnIdle { vm.chooseVodCategory("movie", "Featured") }
+        settle(400)
+        listOf(androidx.compose.ui.input.key.Key.DirectionRight, androidx.compose.ui.input.key.Key.DirectionDown, androidx.compose.ui.input.key.Key.DirectionRight).forEach { key(it) }
+        settle(800)
+    }
+
     @Test
     fun mainScreens() {
         val app = ApplicationProvider.getApplicationContext<Application>()
@@ -131,33 +154,23 @@ class ScreenshotTest {
         rule.runOnIdle { vm.setTheme("roast") }
         rule.runOnIdle { vm.navSelect(Screen.MOVIES) }
         waitFor { vm.vodOf("movie").isNotEmpty() }
-        rule.runOnIdle { vm.chooseVodCategory("movie", "Featured") }
-        settle(500)
-        runCatching { rule.onNode(androidx.compose.ui.test.hasContentDescription("Sample Feature 8", substring = true)).requestFocus() }
-            .onFailure { println("poster focus skipped: $it") }
-        settle(800)
+        highlightPoster()
         shot("13-movies-poster-grid")
-        runCatching { rule.onNode(androidx.compose.ui.test.hasContentDescription("Sample Feature 8", substring = true).not()
-            .and(androidx.compose.ui.test.hasText("Sample Feature 9", substring = true))).requestFocus() }
-        settle(400)
-        shot("14-movies-poster-no-art-highlighted")
-        fun focusPoster(n: Int) = runCatching { rule.onNode(androidx.compose.ui.test.hasContentDescription("Sample Feature $n", substring = true)).requestFocus() }
         rule.runOnIdle { vm.setVodLayout("featured") }
-        settle(500); focusPoster(5); settle(800)
+        highlightPoster()
         shot("15-movies-featured")
         rule.runOnIdle { vm.setVodLayout("showcase") }
-        settle(500); focusPoster(4); settle(800)
+        highlightPoster()
         shot("16-movies-showcase")
         rule.runOnIdle { vm.setVodLayout("grid") }
         // Every theme: Settings › Display (the theme picker, one highlighted) and the poster grid.
         com.avidviewer.tv.ui.Themes.all.forEachIndexed { k, t ->
             rule.runOnIdle { vm.setTheme(t.id); vm.navSelect(Screen.SETTINGS); vm.settingsSection = "display" }
             settle(500)
-            runCatching { rule.onNodeWithTag("theme-${t.id}").requestFocus() }
+            key(androidx.compose.ui.input.key.Key.DirectionRight)
             settle(500)
             shot("${17 + 2 * k}-theme-${t.id}-settings")
-            rule.runOnIdle { vm.navSelect(Screen.MOVIES) }
-            settle(500); focusPoster(8); settle(800)
+            highlightPoster()
             shot("${18 + 2 * k}-theme-${t.id}-movies")
         }
     }
