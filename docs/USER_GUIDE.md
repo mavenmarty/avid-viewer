@@ -2,7 +2,7 @@
 
 <!-- The version below and the Release notes section are updated automatically after each published build
      (.github/workflows/user-guide.yml). Feature descriptions are written by hand. -->
-This guide covers **Avid Viewer 1.0.170**, the current public release. Avid Viewer is an IPTV player for Android TV and Fire TV. You bring your own provider (an Xtream Codes login or an M3U link); the app doesn't include any channels.
+This guide covers **Avid Viewer 1.0.179**, the current public release. Avid Viewer is an IPTV player for Android TV and Fire TV. You bring your own provider (an Xtream Codes login or an M3U link); the app doesn't include any channels.
 
 **Contents:** [Getting started](#1-getting-started) · [Main menu](#2-main-menu) · [TV Guide](#3-tv-guide) · [Full-screen playback](#4-full-screen-playback) · [Search](#5-search) · [Discover](#6-discover) · [Sports](#7-sports) · [Movies and Series](#8-movies-and-series) · [Settings](#9-settings) · [Privacy](#10-privacy) · [Troubleshooting](#11-troubleshooting) · [Control4](#12-control4) · [Release notes](#release-notes)
 
@@ -441,7 +441,20 @@ Every public release since 1.0.35, newest first. Releases are published on GitHu
 
 <!-- new-releases: entries for new builds are added automatically below this line -->
 
-### 1.0.170 — November 12, 2026, 4:11 PM CT (current)
+### 1.0.179 — November 12, 2026, 7:16 PM CT (current)
+
+**Change log**
+
+- TV Guide: scroll as far as the guide goes (up to 7 days) with a day strip and Now; 2 hours back, dimmed; local half hours; hold Left for now; category in the time row; one-playlist Back skips the playlist list
+- Guide test fixes; downloads retry (DATA-08); one capped image loader, no image requests while a button is held (DATA-04); Discard changes? on Back (SET-02); shared loading/empty/error states with Try again (DATA-07); unchanged guides aren't downloaded again (DATA-05); highlighted movie category read ahead (DATA-06); series page opens on the next unwatched episode (#8); focus-return test (FOCUS-02)
+- One look for the row you're in, current values, switches and busy buttons; confirm destructive actions; inactive columns dimmed; decorative glyphs silent for TalkBack; Playlists keeps three full columns (STATE-01..05, SET-01, SET-03, A11Y-01); Rename Cancel returns to the channel; test fixes
+- Re-order mark stays readable; aired programmes say so to TalkBack; screenshots of the main screens saved with the test report
+- Screenshot test: fix comment
+- Screenshot test: draw the window directly; never fails the build
+- Menu: the press is taken by the item that has a menu (it beeped as unhandled); acts on release as before
+- CI: save the screenshot test's pictures to the screens branch (test builds on next only)
+
+### 1.0.170 — November 12, 2026, 4:11 PM CT
 
 **Release notes**
 
