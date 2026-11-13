@@ -311,7 +311,7 @@ class UsabilityTest {
         waitFor("channels") { vm.channelsIn("NEWS").isNotEmpty() && vm.channelsIn("KIDS").isNotEmpty() }
         val news = vm.channelsIn("NEWS").first().key
         val kidsCh = vm.channelsIn("KIDS").first().key
-        rule.runOnIdle { vm.toggleFavorite(news) }
+        rule.runOnIdle { if (news !in vm.prefs.favorites) vm.toggleFavorite(news) }
         waitFor("owner's favorite") { news in vm.prefs.favorites }
         var sam = ""
         var kids = ""
