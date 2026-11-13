@@ -73,6 +73,7 @@ object NavIcons {
     val Location = icon("location", "M12 21s-7-6.2-7-11.5a7 7 0 0 1 14 0C19 14.8 12 21 12 21z M12 7a2.5 2.5 0 1 0 0 5a2.5 2.5 0 1 0 0-5z")
     val Privacy = icon("privacy", "M12 3l8 3v6c0 4.5-3.4 8.3-8 9-4.6-.7-8-4.5-8-9V6z")
     val Storage = icon("storage", "M4 5h16v5H4z M4 14h16v5H4z M8 7.5h.01 M8 16.5h.01")
+    val Profiles = icon("profiles", "M9 4.5a3.5 3.5 0 1 0 0 7a3.5 3.5 0 1 0 0-7z M2.5 20c.8-3.5 3.4-5.5 6.5-5.5s5.7 2 6.5 5.5 M17 6.5a2.5 2.5 0 1 0 0 5a2.5 2.5 0 1 0 0-5z M16 14.6c2.6.2 4.6 2 5.3 4.9")
     val Settings = icon("settings", "M12 9a3 3 0 1 0 0 6a3 3 0 1 0 0-6z M12 2v3 M12 19v3 M4.2 4.2l2.1 2.1 M17.7 17.7l2.1 2.1 M2 12h3 M19 12h3 M4.2 19.8l2.1-2.1 M17.7 6.3l2.1-2.1")
 }
 
@@ -91,11 +92,13 @@ private val MENU = listOf(
 fun NavRail(vm: AppViewModel) {
     var railFocused by remember { mutableStateOf(false) }
     val expanded = vm.navMode == NavMode.FULL || railFocused
-    val requesters = remember { MENU.map { FocusRequester() } }
+    // A Kids profile has no Discover, Sports or Settings.
+    val menu = remember(vm.kidsMode) { MENU.filter { vm.screenAllowed(it.first) } }
+    val requesters = remember(menu) { menu.map { FocusRequester() } }
 
-    LaunchedEffect(vm.navMode) {
+    LaunchedEffect(vm.navMode, menu) {
         if (vm.navMode == NavMode.FULL) {
-            val i = MENU.indexOfFirst { it.first == vm.screen }.coerceAtLeast(0)
+            val i = menu.indexOfFirst { it.first == vm.screen }.coerceAtLeast(0)
             focusWhenReady(vm) { runCatching { requesters[i].requestFocus() }.isSuccess }
         }
     }
@@ -113,7 +116,21 @@ fun NavRail(vm: AppViewModel) {
                 Text("Avid Viewer", color = C.Text, fontSize = 15.sp, fontWeight = FontWeight.Bold, maxLines = 1)
             }
         }
-        MENU.forEachIndexed { i, (s, label, icon) ->
+        // Who's watching: opens the profile switcher (only with more than one profile).
+        if (vm.profiles.multiple) {
+            Focusable(
+                modifier = Modifier.fillMaxWidth().height(44.dp).padding(bottom = 4.dp),
+                color = Color.Transparent, focusedColor = C.Line,
+                onClick = { vm.profileSwitcher = true },
+            ) {
+                ProfileAvatar(vm.profile, 30.dp, Modifier.padding(start = 6.dp))
+                if (expanded) Column(Modifier.padding(start = 10.dp)) {
+                    Text(vm.profile.name, color = C.Text, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+                    Text("Switch profile", color = C.Soft, fontSize = 11.sp, maxLines = 1)
+                }
+            }
+        }
+        menu.forEachIndexed { i, (s, label, icon) ->
             val active = vm.screen == s
             Focusable(
                 modifier = Modifier.fillMaxWidth().height(36.dp).focusRequester(requesters[i]).activePath(active),

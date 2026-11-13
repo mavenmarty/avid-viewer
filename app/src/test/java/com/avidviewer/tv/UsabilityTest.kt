@@ -302,6 +302,67 @@ class UsabilityTest {
         assertTrue("the read-ahead list was used", !vm.vodPrefetchedFor("movie", drama))
     }
 
+    /**
+     * Profiles: each keeps its own favorites; a Kids profile sees only its categories, opens without a PIN and
+     * has no Settings; every other profile then needs a PIN (its own or a parent's).
+     */
+    @Test
+    fun profilesKeepTheirOwnFavoritesAndKidsSeesOnlyItsCategories() {
+        val news = "${TestData.P1}:c1-0"
+        val kidsCh = "${TestData.P1}:c4-0"
+        rule.runOnIdle { vm.toggleFavorite(news) }
+        waitFor("owner's favorite") { news in vm.prefs.favorites }
+        var sam = ""
+        var kids = ""
+        rule.runOnIdle { sam = vm.addProfile("Sam", kids = false, color = 1) }
+        // Adding a Kids profile when no parent has a PIN: the owner sets one first (twice).
+        rule.runOnIdle { vm.addKidsProfile("Kids", 2) { kids = it } }
+        waitFor("asked for a new PIN") { vm.pinAsk != null }
+        rule.runOnIdle { assertEquals(null, vm.answerPin("1234")) }
+        rule.runOnIdle { assertEquals(null, vm.answerPin("1234")) }
+        waitFor("Kids profile added") { kids.isNotEmpty() && vm.profiles.get(kids)?.kids == true }
+        assertTrue("the owner has a PIN now", vm.profiles.owner.hasPin)
+        rule.runOnIdle {
+            val k = vm.profiles.get(kids)!!
+            vm.updateProfile(k.copy(allowedGroups = setOf(vm.liveCategoryId(TestData.P1, "KIDS"))))
+        }
+        // Sam starts with a copy of the owner's favorites.
+        rule.runOnIdle { vm.chooseProfile(sam) }
+        waitFor("Sam asks for a PIN (a Kids profile exists)") { vm.pinAsk != null }
+        rule.runOnIdle { assertEquals("That PIN isn't right.", vm.answerPin("0000")) }
+        rule.runOnIdle { assertEquals(null, vm.answerPin("1234")) } // a parent's PIN opens it
+        waitFor("watching as Sam") { vm.profile.id == sam }
+        assertTrue(news in vm.prefs.favorites)
+        rule.runOnIdle { vm.toggleFavorite(news) } // Sam's own change
+        waitFor("Sam's favorite removed") { news !in vm.prefs.favorites }
+
+        // Kids: no PIN, only KIDS, no Settings / Discover / Sports.
+        rule.runOnIdle { vm.chooseProfile(kids) }
+        waitFor("watching as Kids") { vm.profile.id == kids && vm.pinAsk == null }
+        settle()
+        assertTrue(vm.kidsMode)
+        assertEquals(listOf("KIDS"), vm.groups().map { it.raw })
+        assertEquals(null, vm.channel(news))
+        assertTrue(vm.channel(kidsCh) != null)
+        assertTrue(vm.prefs.favorites.isEmpty())
+        assertTrue("no Settings for Kids", !vm.screenAllowed(Screen.SETTINGS) && !vm.screenAllowed(Screen.DISCOVER) && !vm.screenAllowed(Screen.SPORTS))
+        rule.runOnIdle { vm.navSelect(Screen.SETTINGS) }
+        assertTrue(vm.screen != Screen.SETTINGS)
+        rule.runOnIdle { vm.toggleFavorite(news) } // a channel it can't see can't be watched either
+        rule.runOnIdle { vm.selectChannel(news, PlayContext.GROUP) }
+        assertTrue("nothing outside KIDS plays", vm.currentKey != news)
+
+        // Back to the owner: PIN needed; the owner's favorites are as they were.
+        rule.runOnIdle { vm.chooseProfile(com.avidviewer.tv.data.Profile.OWNER) }
+        waitFor("owner asks for the PIN") { vm.pinAsk != null }
+        // Typed on the remote's number buttons in the PIN dialog.
+        waitFor("PIN dialog") { rule.onAllNodesWithTag("pin-dialog").fetchSemanticsNodes().isNotEmpty() }
+        press(listOf(Key.One, Key.Two, Key.Three, Key.Four))
+        waitFor("watching as the owner (pin=${vm.pinAsk?.title})") { vm.profile.isOwner }
+        assertTrue("owner's favorites kept", news in vm.prefs.favorites)
+        assertEquals(listOf("US| LOCALS", "NEWS", "SPORTS | NFL", "VOD | EN - Movies 4K", "KIDS", "FLO Sports").toSet(), vm.groups().map { it.raw }.toSet())
+    }
+
     @Test
     fun menuReorderMovesTheChannelAndBackOnlyEndsReordering() {
         rule.runOnIdle { vm.chooseGroup(TestData.P1, "KIDS") }

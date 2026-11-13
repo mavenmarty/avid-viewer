@@ -13,7 +13,7 @@ import javax.crypto.spec.SecretKeySpec
 /**
  * A backup file for reinstalling the app: playlists (with their logins), every setting, favorites,
  * lists, names, order, hidden items, sports categories, location, the TMDB key, watch history and
- * resume points. Channels, guides and movie catalogs aren't included; they download again.
+ * resume points, and every profile with its own favorites, lists, hidden items and history. Channels, guides and movie catalogs aren't included; they download again.
  *
  * The file is locked with a PIN the viewer chooses (AES-256-GCM, key from PBKDF2 with 120,000 rounds),
  * because it holds provider logins. Without the PIN it can't be read.
@@ -33,6 +33,9 @@ object Backup {
         val smbPassword: String = "",
         /** The channels and titles the choices above refer to, so a restore can find them in a changed list. */
         val refs: List<ChannelKeys.Ref> = emptyList(),
+        /** Profiles (profiles.json) and each non-owner profile's own files; null in backups from before profiles. */
+        val profiles: JSONObject? = null,
+        val profileFiles: JSONObject? = null,
     )
 
     class WrongPin : Exception("That PIN doesn't open this backup.")
@@ -57,6 +60,7 @@ object Backup {
             .put("history", JSONArray().apply { c.history.forEach { put(JSONObject().put("k", it.key).put("t", it.time).put("s", it.seconds)) } })
             .put("resume", JSONObject(c.resume))
             .put("refs", JSONArray().apply { c.refs.forEach { put(it.toJson()) } })
+            .apply { c.profiles?.let { put("profiles", it) }; c.profileFiles?.let { put("profileFiles", it) } }
         val salt = ByteArray(16).also { SecureRandom().nextBytes(it) }
         val kdf = bestKdf()
         val cipher = Cipher.getInstance("AES/GCM/NoPadding")
@@ -103,7 +107,8 @@ object Backup {
         val r = b.optJSONObject("resume")
         val resume = r?.keys()?.asSequence()?.associateWith { r.optLong(it) } ?: emptyMap()
         val refs = b.optJSONArray("refs")?.let { a -> List(a.length()) { ChannelKeys.Ref.fromJson(a.getJSONObject(it)) } } ?: emptyList()
-        return Contents(playlists, Prefs.fromJson(b.getJSONObject("prefs")), b.optString("tmdbKey"), history, resume, b.optLong("created"), b.optString("appVersion"), smbPassword = b.optString("smbPassword"), refs = refs)
+        return Contents(playlists, Prefs.fromJson(b.getJSONObject("prefs")), b.optString("tmdbKey"), history, resume, b.optLong("created"), b.optString("appVersion"), smbPassword = b.optString("smbPassword"), refs = refs,
+            profiles = b.optJSONObject("profiles"), profileFiles = b.optJSONObject("profileFiles"))
     }
 
     /** SHA-256 where the device has it (Android 8+), SHA-1 on older devices; the file records which. */

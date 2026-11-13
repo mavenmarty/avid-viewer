@@ -47,6 +47,9 @@ import com.avidviewer.tv.data.XtreamVod
 import com.avidviewer.tv.data.Weather
 import com.avidviewer.tv.data.WeatherService
 import com.avidviewer.tv.data.Net
+import com.avidviewer.tv.data.Profile
+import com.avidviewer.tv.data.ProfileSet
+import com.avidviewer.tv.data.Kids
 import com.avidviewer.tv.data.Xmltv
 import com.avidviewer.tv.data.Xtream
 import kotlinx.coroutines.Dispatchers
@@ -107,6 +110,212 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     var vodVersion by mutableStateOf(0); private set
 
     var playlists by mutableStateOf(store.loadPlaylists()); private set
+
+    // ---------------- profiles ----------------
+    /**
+     * At start: the last profile used, unless it needs a PIN, then a Kids profile (or it, behind Who's watching?).
+     * Who's watching? shows when there are several profiles and the app asks at start, or the last one is locked.
+     */
+    private val startup: Pair<ProfileSet, Boolean> = run {
+        val s = store.loadProfiles()
+        val last = s.activeProfile
+        val locked = s.multiple && s.needsPin(last)
+        val id = if (locked) s.list.firstOrNull { it.kids }?.id ?: last.id else last.id
+        store.profileId = id
+        s.copy(active = id) to (s.multiple && (s.startMode == "ask" || (locked && !s.hasKids)))
+    }
+    var profiles by mutableStateOf(startup.first); private set
+    val profile: Profile get() = profiles.activeProfile
+    /** The profile in use is a Kids profile: only its categories, no Settings, Discover or Sports. */
+    val kidsMode: Boolean get() = profile.kids
+    /** Who's watching? is on screen; nothing plays until a profile is chosen. */
+    var choosingProfile by mutableStateOf(startup.second); private set
+    /** The profile switcher (from the main menu) is open. */
+    var profileSwitcher by mutableStateOf(false)
+    /** A PIN is being asked for: why, and what to do with a right one. */
+    data class PinAsk(val title: String, val note: String, val avatar: Profile?, val check: (String) -> Boolean, val then: () -> Unit)
+    var pinAsk by mutableStateOf<PinAsk?>(null); private set
+    private var pinFails = 0
+    private var pinLockedUntil = 0L
+
+    /** The PIN dialog's answer: right → its action; wrong → false (5 wrong in a row wait a minute). */
+    fun answerPin(pin: String): String? {
+        val ask = pinAsk ?: return null
+        val nowMs = System.currentTimeMillis()
+        if (nowMs < pinLockedUntil) return "Too many tries. Wait ${((pinLockedUntil - nowMs) / 1000 + 1)} s."
+        if (ask.check(pin)) { pinFails = 0; pinAsk = null; ask.then(); return null }
+        pinFails++
+        if (pinFails >= 5) { pinFails = 0; pinLockedUntil = nowMs + 60_000L; return "Too many tries. Wait a minute." }
+        return "That PIN isn't right."
+    }
+    fun cancelPin() { pinAsk = null }
+
+    /** Asks for a parent's PIN, then runs [then]. Without a parent PIN set yet, runs it straight away. */
+    fun withParentPin(why: String, then: () -> Unit) {
+        if (profiles.list.none { it.isParent && it.hasPin }) { then(); return }
+        pinAsk = PinAsk("Parent PIN", why, null, { profiles.isParentPin(it) }, then)
+    }
+
+    /** Opens profile [id] (from Who's watching? or the switcher), asking for its PIN when it has to. */
+    fun chooseProfile(id: String) {
+        val p = profiles.get(id) ?: return
+        profileSwitcher = false
+        if (p.id == profile.id && !choosingProfile) return
+        if (profiles.needsPin(p)) {
+            pinAsk = PinAsk(
+                if (p.hasPin) "Enter ${p.name}'s PIN" else "Parent PIN to open ${p.name}",
+                if (profiles.hasKids) "A Kids profile is on this TV, so ${p.name} needs a PIN" else "",
+                p, { profiles.unlocks(p, it) }, { openProfile(p.id) },
+            )
+        } else openProfile(p.id)
+    }
+
+    /** Switches to profile [id]: its favorites, lists, hidden items, history and limits. */
+    private fun openProfile(id: String) {
+        val target = profiles.get(id) ?: return
+        recordWatch()
+        if (id != profile.id) {
+            player.stop(); player.clearMediaItems(); vodPlaying = null
+            store.profileId = id
+            profiles = profiles.copy(active = id).also { store.saveProfiles(it) }
+            prefs = store.loadPrefs()
+            history = store.loadHistory(); resume = store.loadResume(); watched = LinkedHashSet(store.loadWatched())
+            otherLive.clear(); playlistGroups = emptyMap(); favDataTick++
+            applyProfileVodLimits()
+        }
+        choosingProfile = false
+        // Start like at launch, on this profile's last channel.
+        screen = Screen.GUIDE; navMode = NavMode.GROUPS; vodDetail = null
+        currentKey = null; selectedGroup = null; startupPreviewDone = false
+        status = "Watching as ${target.name}"
+        if (channels.isNotEmpty()) applyChannels(channels)
+        ensureFavoriteData()
+    }
+
+    /**
+     * The catalog's hidden marks for the profile in use: its own hidden titles and categories, and for a
+     * Kids profile everything outside its chosen categories (and any adult category). Run on a switch and
+     * when a Kids profile's categories change; a background pass then picks each title's copy again.
+     */
+    private fun applyProfileVodLimits() {
+        val p = profile
+        val cats = prefs.vodHiddenCats
+        val titles = prefs.vodHiddenTitles
+        viewModelScope.launch {
+            withContext(Dispatchers.IO) {
+                runCatching { catalog.applyHidden(cats, titles, if (p.kids) kidsVodAllowed(p) else null) }
+                store.catalogProfile = p.id
+            }
+            vodVersion++
+            regroupLater()
+        }
+    }
+
+    private fun kidsVodAllowed(p: Profile): Set<String> = p.allowedVodCats.filterNot { Kids.isAdult(it.substringAfterLast('|')) }.toSet()
+
+    /** A Kids profile may see live category [raw] of playlist [pid]. */
+    private fun kidsAllowsGroup(pid: String, raw: String) =
+        (hiddenId(pid, raw) in profile.allowedGroups) && !Kids.isAdult(raw)
+
+    /** [c] can be shown and played by the profile in use. */
+    fun channelAllowed(c: Channel): Boolean = !kidsMode || kidsAllowsGroup(c.key.substringBefore(':'), c.group)
+
+    // ---- managing profiles (Settings › Profiles) ----
+    private fun newProfileId() = "p" + java.lang.Long.toString(System.currentTimeMillis(), 36)
+
+    /** Adds a profile; returns its id. A Kids profile starts with the categories whose names look made for children. */
+    fun addProfile(name: String, kids: Boolean, color: Int): String {
+        val id = newProfileId()
+        val p = Profile(id, name.trim().ifEmpty { if (kids) "Kids" else "Profile" }, color, kids = kids,
+            allowedGroups = if (kids) suggestedKidsGroups() else emptySet(), allowedVodCats = if (kids) suggestedKidsVodCats() else emptySet())
+        // A new grown-up profile starts with a copy of the owner's favorites and lists; Kids starts empty.
+        if (!kids) store.savePersonal(id, com.avidviewer.tv.data.personalOf(store.loadPrefs(Profile.OWNER)).apply { remove("lastChannel") })
+        else store.savePersonal(id, org.json.JSONObject())
+        saveProfiles(profiles.copy(list = profiles.list + p))
+        return id
+    }
+
+    fun updateProfile(p: Profile) {
+        val before = profiles.get(p.id)
+        saveProfiles(profiles.copy(list = profiles.list.map { if (it.id == p.id) p else it }))
+        if (p.id == profile.id && before != null && (before.allowedVodCats != p.allowedVodCats || before.kids != p.kids)) applyProfileVodLimits()
+        if (p.id == profile.id) favDataTick++
+    }
+
+    fun deleteProfile(id: String) {
+        if (id == Profile.OWNER || id == profile.id) return
+        store.deleteProfileData(id)
+        saveProfiles(profiles.copy(list = profiles.list.filterNot { it.id == id }))
+    }
+
+    fun setStartMode(mode: String) = saveProfiles(profiles.copy(startMode = mode))
+
+    /** The profile being edited in Settings › Profiles. */
+    var editingProfile by mutableStateOf<String?>(null)
+
+    /** Asks for a new 4-digit PIN twice, then gives it to [done]. */
+    fun askNewPin(p: Profile, done: (String) -> Unit) {
+        var first = ""
+        pinAsk = PinAsk("New PIN for ${p.name}", "4 digits. You'll enter it twice.", p, { first = it; true }) {
+            pinAsk = PinAsk("Enter the new PIN again", "", p, { it == first }) { done(first) }
+        }
+    }
+
+    fun setProfilePin(id: String, pin: String?) { profiles.get(id)?.let { updateProfile(it.withPin(pin)) } }
+
+    /**
+     * Adds a Kids profile. Kids opens without a PIN and every other profile needs one, so when no parent
+     * has a PIN yet the owner sets one first.
+     */
+    fun addKidsProfile(name: String, color: Int, done: (String) -> Unit = {}) {
+        val owner = profiles.owner
+        if (profiles.list.none { it.isParent && it.hasPin }) {
+            askNewPin(owner) { pin -> setProfilePin(owner.id, pin); done(addProfile(name, true, color)) }
+        } else done(addProfile(name, true, color))
+    }
+
+    private fun saveProfiles(s: ProfileSet) { profiles = s; store.saveProfiles(s) }
+
+    /** Live categories of every live playlist that look made for children (for a new Kids profile). */
+    private fun suggestedKidsGroups(): Set<String> = livePlaylists.flatMap { pl ->
+        runCatching { live.groupCounts(pl.id).map { it.first } }.getOrDefault(emptyList()).filter { Kids.looksForKids(it) }.map { hiddenId(pl.id, it) }
+    }.toSet()
+
+    private fun suggestedKidsVodCats(): Set<String> = listOf("movie", "series").flatMap { k ->
+        catalog.categories(k, vodPids(), includeHidden = true).filter { Kids.looksForKids(it.second) }.map { (pid, c, _) -> vodCatKey(k, pid, c) }
+    }.toSet()
+
+    /** Every live category of every live playlist, for choosing a Kids profile's: (playlist, raw name, channels). */
+    fun allLiveCategories(): List<Triple<Playlist, String, Int>> {
+        val key = livePlaylists.map { it.id } to System.identityHashCode(channels)
+        liveCatsCache?.let { (k, v) -> if (k == key) return v }
+        val v = livePlaylists.flatMap { pl -> runCatching { live.groupCounts(pl.id) }.getOrDefault(emptyList()).map { (g, n) -> Triple(pl, g, n) } }
+        liveCatsCache = key to v
+        return v
+    }
+    private var liveCatsCache: Pair<Pair<List<String>, Int>, List<Triple<Playlist, String, Int>>>? = null
+    private var vodCatsCache: Pair<Pair<List<String>, Int>, List<Triple<String, String, Int>>>? = null
+
+    /** Every movie and series category, for choosing a Kids profile's: (key, label, titles). */
+    fun allVodCategories(): List<Triple<String, String, Int>> {
+        val key = vodPids() to vodVersion
+        vodCatsCache?.let { (k, v) -> if (k == key) return v }
+        val v = listOf("movie" to "Movies", "series" to "Series").flatMap { (k, label) ->
+            runCatching { catalog.categories(k, vodPids(), includeHidden = true) }.getOrDefault(emptyList()).map { (pid, c, n) ->
+                val pl = playlists.firstOrNull { it.id == pid }?.name.orEmpty()
+                Triple(vodCatKey(k, pid, c), "$label · $c" + if (vodPids().size > 1) " · $pl" else "", n)
+            }
+        }
+        vodCatsCache = key to v
+        return v
+    }
+
+    /** Screens the profile in use can open: a Kids profile has no Discover, Sports or Settings. */
+    fun screenAllowed(s: Screen) = !kidsMode || (s != Screen.DISCOVER && s != Screen.SPORTS && s != Screen.SETTINGS && s != Screen.PLAYLISTS)
+
+    fun liveCategoryId(pid: String, raw: String) = hiddenId(pid, raw)
+    fun isAdultCategory(name: String) = Kids.isAdult(name)
+
     var prefs by mutableStateOf(store.loadPrefs()); private set
     var channels by mutableStateOf<List<Channel>>(emptyList()); private set
     var guide by mutableStateOf<Map<String, List<Program>>>(emptyMap()); private set
@@ -274,7 +483,17 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             val text = runCatching {
                 withContext(Dispatchers.Default) {
                     com.avidviewer.tv.data.Backup.write(
-                        com.avidviewer.tv.data.Backup.Contents(playlists, prefs, tmdbKey(), history, resume, System.currentTimeMillis(), installed.second, smbPassword(), backupRefs()), pin,
+                        com.avidviewer.tv.data.Backup.Contents(
+                            playlists,
+                            // The owner's settings and history, whichever profile is in use; the others go in profileFiles.
+                            if (profile.isOwner) prefs else store.loadPrefs(Profile.OWNER),
+                            tmdbKey(),
+                            if (profile.isOwner) history else store.loadHistory(Profile.OWNER),
+                            if (profile.isOwner) resume else store.loadResume(Profile.OWNER),
+                            System.currentTimeMillis(), installed.second, smbPassword(), backupRefs(),
+                            profiles = profiles.copy(active = Profile.OWNER).toJson(),
+                            profileFiles = store.exportProfileFiles(),
+                        ), pin,
                     )
                 }
             }.getOrElse { backupBusy = false; backupStatus = "Couldn't make the backup: ${it.message}"; return@launch }
@@ -390,6 +609,17 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             } catch (e: Exception) {
                 backupBusy = false; backupStatus = e.message; done(false); return@launch
             }
+            // A restore comes back as the owner; the backup's profiles replace these (older backups have none).
+            if (!profile.isOwner) {
+                player.stop(); store.profileId = Profile.OWNER
+                profiles = profiles.copy(active = Profile.OWNER).also { store.saveProfiles(it) }
+                prefs = store.loadPrefs(); watched = LinkedHashSet(store.loadWatched())
+            }
+            c.profiles?.let { j ->
+                val set = ProfileSet.fromJson(j).copy(active = Profile.OWNER)
+                withContext(Dispatchers.IO) { store.saveProfiles(set); c.profileFiles?.let { store.importProfileFiles(it) } }
+                profiles = set
+            }
             withContext(Dispatchers.IO) {
                 store.savePlaylists(c.playlists)
                 store.saveHistory(c.history)
@@ -410,6 +640,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             vodVersion++
             // Point favorites, lists etc. at the right channels even if the provider's list has changed since the backup.
             placeRestoredRefs(c.refs)
+            applyProfileVodLimits()
             pendingRestore = null
             backupBusy = false
             backupStatus = "Restored ${c.playlists.size} playlist(s) and your settings. Channels and guides are downloading again now."
@@ -462,6 +693,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     init {
         if (prefs.clearCacheOnExit) store.clearCache() // catches exits Android didn't report
+        // The catalog's hidden marks belong to one profile: put this profile's in place if another's are there,
+        // or (a Kids profile) its categories may have changed.
+        if (store.catalogProfile != profile.id || kidsMode) applyProfileVodLimits()
         // Titles saved before 1.0.160 get their language in the background, a few hundred at a time,
         // a little after start-up (channels and the guide come first); then Movies & Series regroup.
         viewModelScope.launch {
@@ -1437,7 +1671,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             val active = channels
             val activeGuide = guide
             val res = withContext(Dispatchers.Default) {
-                val all = (active + others.values.flatMap { it.first }).distinctBy { it.key }.filter { it.key !in hidden }
+                val all = (active + others.values.flatMap { it.first }).distinctBy { it.key }.filter { it.key !in hidden && channelAllowed(it) }
                 fun progs(c: Channel): List<Program> {
                     val id = epgIdOf(c) ?: return emptyList()
                     val pid = c.key.substringBefore(':')
@@ -1591,7 +1825,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** Hidden categories are stored per playlist as "playlistId\u0001name"; a bare name (older versions) hides it everywhere. */
     private fun hiddenId(pid: String, raw: String) = pid + "\u0001" + raw
 
-    fun isGroupHidden(pid: String, raw: String) = raw in prefs.hiddenGroups || hiddenId(pid, raw) in prefs.hiddenGroups
+    fun isGroupHidden(pid: String, raw: String) = raw in prefs.hiddenGroups || hiddenId(pid, raw) in prefs.hiddenGroups ||
+        (kidsMode && raw != FAV_GROUP && !raw.startsWith(LIST_PREFIX) && !kidsAllowsGroup(pid, raw))
 
     /** Shows or hides many categories of one playlist at once. */
     fun setGroupsHidden(pid: String, raws: Collection<String>, hidden: Boolean) {
@@ -1649,14 +1884,17 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     private fun computeChannelsIn(group: String): List<Channel> {
         if (isListGroup(group)) return listKeys(group).mapNotNull { channel(it) }
-        val list = channels.filter { it.group == group && it.key !in prefs.hiddenChannels }
+        val list = channels.filter { it.group == group && it.key !in prefs.hiddenChannels && channelAllowed(it) }
         val order = prefs.channelOrder[group] ?: return list
         val byKey = list.associateBy { it.key }
         return order.mapNotNull { byKey[it] } + list.filterNot { it.key in order }
     }
 
     /** Looks in the active playlist first, then in other playlists' saved channels (for combined Favorites). */
-    fun channel(key: String?): Channel? {
+    fun channel(key: String?): Channel? = anyChannel(key)?.takeIf { channelAllowed(it) }
+
+    /** [key]'s channel whether or not the profile in use may watch it. */
+    private fun anyChannel(key: String?): Channel? {
         if (key == null) return null
         channelIndexMemo.get(channels) { channels.associateBy { it.key } }[key]?.let { return it }
         val pid = key.substringBefore(':')
@@ -2380,7 +2618,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 if (!p.liveOn && !p.vodOn) continue
                 val isActive = p.id == activePlaylist()?.id
                 // The playlist being watched is in memory; the others are searched in the database.
-                val (chs, g) = if (isActive || !p.liveOn || !p.enabled) liveFor(p) else withContext(Dispatchers.IO) { liveHits(p, q, 50, 60, nowMs) }
+                val (chsAll, g) = if (isActive || !p.liveOn || !p.enabled) liveFor(p) else withContext(Dispatchers.IO) { liveHits(p, q, 50, 60, nowMs) }
+                val chs = chsAll.filter { channelAllowed(it) } // a Kids profile: only its categories
                 // Titles: searched in the catalog database, not loaded.
                 if (p.vodOn && p.enabled) importOldTitles(p)
                 val vodHitList = if (!p.vodOn || !p.enabled) emptyList() else withContext(Dispatchers.IO) {
@@ -2450,6 +2689,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     var lastKeyAt = 0L
 
     fun navSelect(target: Screen) {
+        if (!screenAllowed(target) || (target == Screen.MANAGE && kidsMode)) return
         jumpedFrom = null
         entryFocusFor = if (target == Screen.PLAYLISTS || target == Screen.MANAGE) Screen.SETTINGS else target
         val s = if (target == Screen.LIVE) Screen.GUIDE else target
@@ -2668,7 +2908,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     fun vodCatKey(kind: String, pid: String, cat: String) = vodKindKey(kind) + "|" + pid + "|" + cat
 
-    fun isVodCatHidden(kind: String, pid: String, cat: String) = vodCatKey(kind, pid, cat) in prefs.vodHiddenCats
+    fun isVodCatHidden(kind: String, pid: String, cat: String) = vodCatKey(kind, pid, cat).let { k ->
+        k in prefs.vodHiddenCats || (kidsMode && (k !in profile.allowedVodCats || Kids.isAdult(cat)))
+    }
 
     fun isVodHidden(v: VodItem) = v.key in prefs.vodHiddenTitles || isVodCatHidden(v.kind, v.playlistId, v.category.ifBlank { "Other" })
 
@@ -2815,6 +3057,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     private fun start(c: Channel) {
+        if (choosingProfile) { currentKey = c.key; return } // nothing plays behind Who's watching?
+        if (!channelAllowed(c)) return
         recordWatch()
         vodPlaying = null
         currentKey = c.key

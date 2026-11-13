@@ -64,7 +64,9 @@ fun AppRoot(vm: AppViewModel) {
                 if (!rescueFm.moveFocus(androidx.compose.ui.focus.FocusDirection.Down)) rescueFm.moveFocus(androidx.compose.ui.focus.FocusDirection.Next)
             }
         }
-        if (vm.screen == Screen.PLAYER) {
+        if (vm.choosingProfile) {
+            WhoIsWatching(vm)
+        } else if (vm.screen == Screen.PLAYER) {
             PlayerScreen(vm)
         } else {
             Row(Modifier.fillMaxSize()) {
@@ -91,6 +93,8 @@ fun AppRoot(vm: AppViewModel) {
                 }
             }
         }
+        ProfileSwitcherDialog(vm)
+        PinDialog(vm)
         ChannelOptionsDialog(vm)
         GroupOptionsDialog(vm)
         ListPickerDialog(vm)
@@ -140,7 +144,7 @@ fun AppRoot(vm: AppViewModel) {
         }
         // Back walks up the menu levels; at the full menu on the TV Guide it asks for a second press, then exits.
         val activity = androidx.compose.ui.platform.LocalContext.current as? android.app.Activity
-        BackHandler(enabled = vm.screen != Screen.PLAYER) { if (!vm.navBack()) activity?.finish() }
+        BackHandler(enabled = vm.screen != Screen.PLAYER && !vm.choosingProfile) { if (!vm.navBack()) activity?.finish() }
     }
 }
 

@@ -288,11 +288,11 @@ fun TvField(
 private const val ADD_PLAYLIST = "__add__"
 
 /** An action that needs a yes before it runs. */
-private class Confirm(val title: String, val message: String, val yes: String, val run: () -> Unit)
+internal class Confirm(val title: String, val message: String, val yes: String, val run: () -> Unit)
 
 /** "This can't be undone" confirmation; Cancel has the highlight. */
 @Composable
-private fun ConfirmDialog(c: Confirm, close: () -> Unit) {
+internal fun ConfirmDialog(c: Confirm, close: () -> Unit) {
     val cancelFocus = remember { FocusRequester() }
     AlertDialog(
         onDismissRequest = close,
@@ -602,6 +602,7 @@ private fun Modifier.staysInSection(sectionFr: FocusRequester? = null, firstFr: 
 
 private val SECTIONS = listOf(
     SettingsSection("playlists", "Playlists", NavIcons.Playlists),
+    SettingsSection("profiles", "Profiles", NavIcons.Profiles),
     SettingsSection("channels", "List Editor", NavIcons.Manage),
     SettingsSection("location", "Location & weather", NavIcons.Location),
     SettingsSection("display", "Display & time", NavIcons.Guide),
@@ -720,6 +721,7 @@ fun SettingsScreen(vm: AppViewModel) {
                             }
                         }
                         "privacy" -> privacySettings(vm) { settingsConfirm = it }
+                        "profiles" -> profilesSettings(vm) { settingsConfirm = it }
                         "storage" -> {
                             item {
                                 Label("The cache holds copies of channel logos, posters and recently streamed video, so screens load faster. Clearing it never removes your playlists, favorites, lists, TV guide, watch history or settings.", size = 13.sp, color = C.Soft, lines = Int.MAX_VALUE)
@@ -797,6 +799,7 @@ private fun sectionSummary(vm: AppViewModel, id: String): String? = when (id) {
     "sports" -> "${vm.sportLeagues().count { it.on }} leagues on"
     "discover" -> if (vm.prefs.tmdbKeyEnc.isBlank()) "Needs TMDB key" else "${vm.prefs.myServices.size} services"
     "privacy" -> if (vm.prefs.historyPaused) "History paused" else "History on"
+    "profiles" -> if (vm.profiles.multiple) "${vm.profiles.list.size} profiles · ${vm.profile.name}" else "Just you"
     "about" -> vm.update?.let { "Update ${it.versionName} available" } ?: "Version ${vm.installed.second}"
     else -> null
 }

@@ -240,11 +240,19 @@ class Catalog(context: Context) : SQLiteOpenHelper(context.applicationContext, "
     }
 
     /** Recomputes the hidden flag from the user's hidden categories ("movie|pid|cat") and titles. */
-    fun applyHidden(hiddenCats: Set<String>, hiddenTitles: Set<String>) {
+    fun applyHidden(hiddenCats: Set<String>, hiddenTitles: Set<String>, onlyCats: Set<String>? = null) {
         val db = writableDatabase
         db.beginTransaction()
         try {
             db.execSQL("UPDATE title SET h = 0, rep = 1, repc = 1 WHERE h = 1")
+            // A Kids profile: everything is hidden except its chosen categories ("movie|playlistId|category").
+            if (onlyCats != null) {
+                db.execSQL("UPDATE title SET h = 1")
+                for (key in onlyCats) {
+                    val parts = key.split('|', limit = 3)
+                    if (parts.size == 3) db.execSQL("UPDATE title SET h = 0 WHERE g = ? AND p = ? AND c = ?", arrayOf(parts[0], parts[1], parts[2]))
+                }
+            }
             for (key in hiddenCats) {
                 val parts = key.split('|', limit = 3)
                 if (parts.size == 3) db.execSQL("UPDATE title SET h = 1 WHERE g = ? AND p = ? AND c = ?", arrayOf(parts[0], parts[1], parts[2]))
