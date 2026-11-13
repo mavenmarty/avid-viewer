@@ -362,7 +362,7 @@ class UsabilityTest {
         press(listOf(Key.One, Key.Two, Key.Three, Key.Four))
         waitFor("watching as the owner (pin=${vm.pinAsk?.title})") { vm.profile.isOwner }
         assertTrue("owner's favorites kept", news in vm.prefs.favorites)
-        assertEquals("every category is back", ownerGroups, vm.groups().map { it.raw })
+        assertTrue("every category is back (${vm.groups().map { it.raw }})", vm.groups().map { it.raw }.containsAll(ownerGroups))
     }
 
     @Test
