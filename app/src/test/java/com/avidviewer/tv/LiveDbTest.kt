@@ -145,4 +145,29 @@ class LiveDbTest {
         assertTrue(read in LiveDb.PAGE + 10..total)
         assertEquals(50, live.guide("p", null, 0, Long.MAX_VALUE / 2).size)
     }
+
+    /**
+     * 1.2.0 paged by rowid alone; without table statistics (as on a TV) SQLite then gathered and sorted
+     * every remaining row of the playlist for each page of 500, so Sports took many minutes to match a
+     * week of guide. Pages now follow the index: no sorting, and every row exactly once, even when
+     * hundreds of rows share one end time across page boundaries.
+     */
+    @Test
+    fun pagedReadsWalkTheIndexAndSeeEveryRowOnce() {
+        for (plan in listOf(live.programPagePlan("p"), live.channelPagePlan("p"))) {
+            val text = plan.joinToString(" | ")
+            assertTrue(text, text.contains("USING INDEX"))
+            assertTrue(text, !text.contains("TEMP B-TREE"))
+        }
+
+        val h = 3_600_000L
+        val total = LiveDb.PAGE * 3 + 7
+        // Every programme ends at one of three times, so pages break in the middle of equal end times.
+        live.replacingGuide("p") { add -> for (i in 0 until total) add("ch$i.us", Program(0, h * (1 + i % 3), "Show $i", null, false)) }
+        val seen = ArrayList<String>()
+        live.forEachProgram("p", 0, Long.MAX_VALUE / 2) { e, _, _, _, _ -> seen.add(e) }
+        assertEquals(total, seen.size)
+        assertEquals(total, seen.toSet().size)
+        assertEquals(total, live.guide("p", null, 0, Long.MAX_VALUE / 2).size)
+    }
 }

@@ -1,0 +1,91 @@
+AUDIT|fixtures|generator|{"live": 10000, "vod": 30000, "largest_vod_category": 15500, "programmes": 93482, "m3u_bytes": 5958076, "guide_gz_bytes": 1127260, "live_json_bytes": 1971841}
+AUDIT|parse|m3u_40k_entries_ms|822
+AUDIT|parse|m3u_peak_heap_mb|102
+AUDIT|parse|m3u_live_vod|10000 live, 30000 vod
+AUDIT|parse|m3u_stream_to_catalog_ms|2807
+AUDIT|parse|m3u_stream_to_catalog_peak_heap_mb|93
+AUDIT|parse|m3u_stream_to_catalog_titles|30000
+AUDIT|parse|m3u_list_live_peak_mb|17
+AUDIT|parse|m3u_stream_live_peak_mb|7
+AUDIT|parse|m3u_list_entries|40000
+AUDIT|parse|xtream_live_10k_JSONArray_peak_heap_mb|23
+AUDIT|parse|xtream_live_10k_json_mb|1.8804941177368164
+AUDIT|parse|xtream_live_10k_app_peak_heap_mb|8
+AUDIT|parse|xtream_live_10k_app_channels|10000
+AUDIT|parse|store_vod_30k_save_load_peak_heap_mb|88
+AUDIT|parse|xmltv_7d_500ch_ms|985
+AUDIT|parse|xmltv_peak_heap_mb|95
+AUDIT|parse|xmltv_programmes_kept|22194
+AUDIT|S1_cold_start|first_channels_ms|3574
+AUDIT|S1_cold_start|first_interactive_ms|3789
+AUDIT|S1_cold_start|guide_ready_ms|3851
+AUDIT|S1_cold_start|channels_in_memory|10000
+AUDIT|S1_cold_start|programmes_in_memory|22194
+AUDIT|S1_cold_start|heap_delta_mb|24
+AUDIT|S1_cold_start|requests|{/live=2, /img=6, /catalog.m3u=1, /guide.xml.gz=1}
+AUDIT|S1_cold_start|focused|1 C0 CH 0001 Moon Story 1
+AUDIT|S1_cold_start|semantics_nodes|166
+AUDIT|recompose_costs|numbers()_ms|0.01
+AUDIT|recompose_costs|channelsIn(8000)_ms|0.00
+AUDIT|recompose_costs|channel(key)_linear_ms|0.002
+AUDIT|recompose_costs|groups()_ms|0.01
+AUDIT|S6_guide|rows_in_category|8000
+AUDIT|S6_guide|program_cells_rendered|25
+AUDIT|S6_guide|channel_rows_rendered|7
+AUDIT|S6_guide|semantics_nodes|166
+AUDIT|S6_guide|after_24_right_focus|Prog Hidden 56 2:00 AM – 3:00 AM
+AUDIT|S6_guide|furthest_ahead_reached|Tomorrow · UTC  ◀
+AUDIT|S6_guide|program_cells_rendered_after_right|25
+AUDIT|S6_guide|after_40_down_focus|Prog Last 538 1:30 AM – 2:30 AM
+AUDIT|S6_guide|program_cells_rendered_after_down|28
+AUDIT|S6_guide|guide_downloads_during_scroll|0
+AUDIT|S6_guide|programmes_held_before_after|22194 / 22194
+AUDIT|S4_depth_x50|restored_after_fullscreen|50/50
+AUDIT|S4_depth_x50|restored_category_after_back|50/50
+AUDIT|S4_depth_x50|restored_in_playlist_list_after_back|50/50
+AUDIT|S4_depth_x50|restored_channel_after_reentering|0/50
+AUDIT|S4_depth_x50|last_focus|2398 C2 CH 2398 שלום 2398
+AUDIT|S4_depth_x50|heap_mb_every_10|[109, 109, 110, 111, 113]
+AUDIT|S2_largest|vod_ready_ms|296
+AUDIT|S2_largest|vod_in_memory|30000
+AUDIT|S2_largest|first_items_ms|83
+AUDIT|S2_largest|items_in_category|15500
+AUDIT|S2_largest|poster_nodes_rendered|36
+AUDIT|S2_largest|semantics_nodes|122
+AUDIT|S2_largest|heap_delta_mb|-2
+AUDIT|S2_largest|image_requests_on_open|11
+AUDIT|recompose_costs|vodOf+vodCategories+vodItems_ms|0.01
+AUDIT|S3_hold_down_10s|wall_ms|3735
+AUDIT|S3_hold_down_10s|slowest_key_handling_ms|38
+AUDIT|S3_hold_down_10s|focus_after|4K · River Silent 100368 4K · River Silent 100368
+AUDIT|S3_hold_down_10s|image_requests|234
+AUDIT|S3_hold_down_10s|image_completed_aborted|13 / 221
+AUDIT|S3_hold_down_10s|poster_nodes_rendered|36
+AUDIT|S5_switch_x50|image_requests|533
+AUDIT|S5_switch_x50|image_completed_aborted|25 / 503
+AUDIT|S5_switch_x50|heap_mb_every_10|[109, 109, 109, 109, 109]
+AUDIT|S2b_search|search_ms|186
+AUDIT|S2b_search|hits|210
+AUDIT|S7_settings|playlists via Left|start='Playlists 1 added' right='＋ Add playlist' navCollapsed=true down30='playlists|Stress provider Live TV · Movi' exit='SETTINGS/playlists|Stress provider Live TV · Movi|nav=FULL'
+AUDIT|S7_settings|playlists via Back|start='Playlists 1 added' right='＋ Add playlist' navCollapsed=true down30='playlists|Stress provider Live TV · Movi' exit='SETTINGS/playlists|Stress provider Live TV · Movi|nav=FULL'
+AUDIT|S7_settings|channels via Left|start='List Editor Nothing hidden' right='Live TV' navCollapsed=true down30='channels|GROUP 21 27 channels Shown' exit='SETTINGS/about|Updates & about Version 1.0.0|nav=COLLAPSED'
+AUDIT|S7_settings|channels via Back|start='List Editor Nothing hidden' right='Live TV' navCollapsed=true down30='channels|GROUP 21 27 channels Shown' exit='SETTINGS/channels|GROUP 21 27 channels Shown|nav=FULL'
+AUDIT|S7_settings|location via Left|start='Location & weather Not set' right='Postal code Press OK to type' navCollapsed=true down30='location|°C' exit='SETTINGS/location|°F|nav=COLLAPSED'
+AUDIT|S7_settings|location via Back|start='Location & weather Not set' right='Postal code Press OK to type' navCollapsed=true down30='location|°C' exit='SETTINGS/location|°C|nav=FULL'
+AUDIT|S7_settings|display via Left|start='Display & time UTC' right='Auto' navCollapsed=true down30='display|Auto' exit='SETTINGS/display|Display & time UTC|nav=COLLAPSED'
+AUDIT|S7_settings|display via Back|start='Display & time UTC' right='Auto' navCollapsed=true down30='display|Auto' exit='SETTINGS/display|Auto|nav=FULL'
+AUDIT|S7_settings|guide via Left|start='TV guide Every 8 h' right='↻  Download the guide now' navCollapsed=true down30='guide|Open Playlists' exit='SETTINGS/playback|Playback|nav=COLLAPSED'
+AUDIT|S7_settings|guide via Back|start='TV guide Every 8 h' right='↻  Download the guide now' navCollapsed=true down30='guide|Open Playlists' exit='SETTINGS/guide|Open Playlists|nav=FULL'
+AUDIT|S7_settings|sports via Left|start='Sports tab 4 categories on' right='On' navCollapsed=true down30='sports|+ Add' exit='SETTINGS/sports|Filter categories Press OK to |nav=COLLAPSED'
+AUDIT|S7_settings|sports via Back|start='Sports tab 4 categories on' right='On' navCollapsed=true down30='sports|+ Add' exit='SETTINGS/sports|+ Add|nav=FULL'
+AUDIT|S7_settings|discover via Left|start='Discover Needs TMDB key' right='API key Press OK to type' navCollapsed=true down30='discover|API key Press OK to type' exit='SETTINGS/channels|List Editor Nothing hidden|nav=COLLAPSED'
+AUDIT|S7_settings|discover via Back|start='Discover Needs TMDB key' right='API key Press OK to type' navCollapsed=true down30='discover|API key Press OK to type' exit='SETTINGS/discover|API key Press OK to type|nav=FULL'
+AUDIT|S7_settings|playback via Left|start='Playback' right='MPEG-TS (.ts)' navCollapsed=true down30='playback|MPEG-TS (.ts)' exit='SETTINGS/channels|List Editor Nothing hidden|nav=COLLAPSED'
+AUDIT|S7_settings|playback via Back|start='Playback' right='MPEG-TS (.ts)' navCollapsed=true down30='playback|MPEG-TS (.ts)' exit='SETTINGS/playback|MPEG-TS (.ts)|nav=FULL'
+AUDIT|S7_settings|privacy via Left|start='Privacy & analytics History on' right='Clear watch history' navCollapsed=true down30='privacy|Clear watch history' exit='SETTINGS/sports|Sports tab 4 categories on|nav=COLLAPSED'
+AUDIT|S7_settings|privacy via Back|start='Privacy & analytics History on' right='Clear watch history' navCollapsed=true down30='privacy|Clear watch history' exit='SETTINGS/privacy|Clear watch history|nav=FULL'
+AUDIT|S7_settings|storage via Left|start='Storage' right='Clear cache now' navCollapsed=true down30='storage|Clear cache now' exit='SETTINGS/display|Display & time UTC|nav=COLLAPSED'
+AUDIT|S7_settings|storage via Back|start='Storage' right='Clear cache now' navCollapsed=true down30='storage|Clear cache now' exit='SETTINGS/storage|Clear cache now|nav=FULL'
+AUDIT|S7_settings|about via Left|start='Updates & about Version 1.0.0' right='User name (or DOMAIN\user) Press OK to t' navCollapsed=true down30='about|Check now' exit='SETTINGS/about|Updates & about Version 1.0.0|nav=COLLAPSED'
+AUDIT|S7_settings|about via Back|start='Updates & about Version 1.0.0' right='User name (or DOMAIN\user) Press OK to t' navCollapsed=true down30='about|Check now' exit='SETTINGS/about|Check now|nav=FULL'
+AUDIT|done|heap_end_mb|111

@@ -2533,10 +2533,33 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     /** The guide or channels changed: find channels again for the games already listed. */
     private suspend fun rematchSports() {
-        if (sportGames.isNotEmpty()) matchSports(sportGames.map { it.game })
+        if (sportGames.isEmpty()) return
+        // A match is already running (a guide download often lands while one does): ask for one more
+        // pass after it instead of starting another alongside it.
+        if (sportsMatchLock.isLocked) { sportsRematchWanted = true; return }
+        matchSports(sportGames.map { it.game })
     }
 
+    /** One channel match at a time; requests that come in meanwhile are folded into one more pass. */
+    private val sportsMatchLock = kotlinx.coroutines.sync.Mutex()
+    private var sportsRematchWanted = false
+
+    /**
+     * Games whose channels have been looked for at least once. Until then a game shows "Finding
+     * channels…" (and is listed even when games with no channel are hidden), so the schedule appears
+     * as soon as ESPN answers instead of after the whole guide has been read.
+     */
+    var sportsMatchedIds by mutableStateOf<Set<String>>(emptySet()); private set
+
     private suspend fun matchSports(games: List<Game>) {
+        sportsMatchLock.withLock { matchSportsNow(games) }
+        if (sportsRematchWanted && sportGames.isNotEmpty()) {
+            sportsRematchWanted = false
+            matchSports(sportGames.map { it.game })
+        }
+    }
+
+    private suspend fun matchSportsNow(games: List<Game>) {
         val zone = timeZone
         val t = System.currentTimeMillis()
         val endDay = java.util.Calendar.getInstance(zone).apply {
@@ -2549,6 +2572,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             when { g.live -> true; g.final -> t - g.likelyEnd() < keepFinal; else -> g.start <= endDay && g.likelyEnd() > t - 3600_000L }
         }
         if (kept.isEmpty()) { sportGames = emptyList(); return }
+        // List the games now, with the channels already found for them; matching fills in the rest.
+        val before = sportGames.associateBy { it.game.id }
+        sportGames = kept.sortedBy { it.start }.map { g -> SportGame(g, before[g.id]?.channels.orEmpty()) }
         val hiddenKeys = prefs.hiddenChannels
         val epgMap = prefs.epgMap
         val pls = livePlaylists.filter { it.enabled }
@@ -2557,9 +2583,13 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         val found = runCatching { matchChannels(kept, hiddenKeys, epgMap, pls) }
             .recoverCatching { e -> if (e is CancellationException) throw e; matchChannels(kept, hiddenKeys, epgMap, pls) }
         found.exceptionOrNull()?.let { e -> if (e is CancellationException) throw e }
-        val (matched, chans) = found.getOrNull() ?: return
+        val (matched, chans) = found.getOrNull() ?: run {
+            sportsMatchedIds = kept.mapTo(HashSet()) { it.id } // keep the channels already shown; stop "Finding channels…"
+            return
+        }
         sportsChannels = chans
         sportGames = kept.sortedBy { it.start }.map { SportGame(it, matched[it.id].orEmpty()) }
+        sportsMatchedIds = kept.mapTo(HashSet()) { it.id }
     }
 
     private suspend fun matchChannels(
@@ -2587,7 +2617,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     /** The games the Sports screen lists (league filter, and the "no channel found" setting). */
     fun sportsVisibleGames(): List<SportGame> = sportGames.filter { g ->
-        (sportLeague == null || g.game.league == sportLeague) && (prefs.sportsShowUnmatched || g.channels.isNotEmpty())
+        (sportLeague == null || g.game.league == sportLeague) && (prefs.sportsShowUnmatched || g.channels.isNotEmpty() || g.game.id !in sportsMatchedIds)
     }
 
     /** Sports' shortcut: the TV Guide's search, for a team. */
