@@ -431,6 +431,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** The game highlighted on the Sports screen. */
     var selectedGame by mutableStateOf<String?>(null)
     private var sportsPlayLeague: String? = null
+    /** The game whose channels Channel Up/Down steps through in full screen from Sports (issue #12). */
+    private var sportsPlayGame: String? = null
+    /** Set when Back leaves full screen for Sports: the screen puts the highlight back on the game (issue #11). */
+    var sportsReturnPending by mutableStateOf(false)
     /** Matched channels of other playlists, so they can be shown and played (only those). */
     private var sportsChannels: Map<String, Channel> = emptyMap()
     private var sportsFetchedAt = 0L
@@ -2167,7 +2171,11 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun openFullScreen(key: String?, ctx: PlayContext) {
         val c = channel(key) ?: return
         playContext = ctx
-        if (ctx == PlayContext.SPORTS) sportsPlayLeague = sportLeague
+        if (ctx == PlayContext.SPORTS) {
+            sportsPlayLeague = sportLeague
+            sportsPlayGame = (sportGames.firstOrNull { g -> g.game.id == selectedGame && g.channels.any { it.key == key } }
+                ?: sportGames.firstOrNull { g -> g.channels.any { it.key == key } })?.game?.id ?: selectedGame
+        }
         if (ctx == PlayContext.GROUP && !isListGroup(selectedGroup)) selectedGroup = c.group
         if (screen != Screen.PLAYER) lastScreen = screen
         if (currentKey != key || player.mediaItemCount == 0 || playerError != null) start(c)
@@ -2202,6 +2210,11 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             navMode = NavMode.GROUPS
             guideFocusTick++
         } else {
+            if (playContext == PlayContext.SPORTS && lastScreen == Screen.SPORTS) {
+                // Back from a game: Sports, with the game (and the channel playing) highlighted again.
+                sportsPlayGame?.let { selectedGame = it }
+                sportsReturnPending = true
+            }
             screen = lastScreen
         }
     }
@@ -3244,8 +3257,16 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     private fun leagueLabel(id: String?): String = com.avidviewer.tv.data.League.of(id)?.name ?: "Sports"
 
+    /** The game playing from Sports, with its channels (best first), if it's still listed. */
+    private fun playingGame(): SportGame? = sportGames.firstOrNull { it.game.id == sportsPlayGame }
+
     fun contextLabel(): String {
         if (playContext == PlayContext.SPORTS) {
+            playingGame()?.takeIf { it.channels.isNotEmpty() }?.let { g ->
+                val i = g.channels.indexOfFirst { it.key == currentKey }
+                val name = g.game.away.name + " at " + g.game.home.name
+                return name + if (i >= 0) " · channel ${i + 1} of ${g.channels.size}" else ""
+            }
             val live = liveGames(sportsPlayLeague)
             val i = live.indexOfFirst { g -> g.channels.any { it.key == currentKey } }
             return "Live ${leagueLabel(sportsPlayLeague)} games" + if (i >= 0) " · ${i + 1} of ${live.size}" else ""
@@ -3259,7 +3280,17 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** Remote Up / Channel Up = -1 (previous), Down / Channel Down = +1 (next). Wraps at both ends. */
     fun step(dir: Int) {
         if (playContext == PlayContext.SPORTS) {
-            // Channel Up/Down moves between live games (each on its best channel).
+            // Channel Up/Down goes through the channels found for the game being watched (issue #12).
+            playingGame()?.takeIf { it.channels.isNotEmpty() }?.let { g ->
+                val chans = g.channels
+                if (chans.size == 1) { flashOsd(contextLabel() + " · the only channel found for this game"); return }
+                var i = chans.indexOfFirst { it.key == currentKey }
+                i = if (i < 0) 0 else (i + dir + chans.size) % chans.size
+                sportsChannel(chans[i].key)?.let { start(it) }
+                flashOsd(contextLabel())
+                return
+            }
+            // No game to stay on (it dropped off the list): move between live games, each on its best channel.
             val live = liveGames(sportsPlayLeague)
             if (live.isEmpty()) { flashOsd("No live ${leagueLabel(sportsPlayLeague)} games with a channel"); return }
             var i = live.indexOfFirst { g -> g.channels.any { it.key == currentKey } }

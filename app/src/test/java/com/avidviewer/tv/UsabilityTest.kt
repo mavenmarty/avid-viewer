@@ -638,6 +638,57 @@ class UsabilityTest {
         } finally { espn.close() }
     }
 
+    /**
+     * Issues #11 and #12: in full screen from Sports, Channel Up/Down stays on the channels found for
+     * that game; Back returns to Sports with the playing channel highlighted, not the top-left button.
+     */
+    @Test
+    fun sportsFullScreenStaysOnTheGameAndBackKeepsYourPlace() {
+        val now = System.currentTimeMillis()
+        val wings = FakeEspn.Companion.T("DET", "Red Wings", "Detroit", "e30526", "7-8-3", "2")
+        val blues = FakeEspn.Companion.T("STL", "Blues", "St. Louis", "0070b9", "7-8-2", "1")
+        val espn = FakeEspn(mapOf("hockey/nhl" to FakeEspn.board(
+            FakeEspn.event("401", now - 30 * 60_000L, "in", wings, blues, listOf(Triple("TNT", "national", "TV")), "3:44 - 2nd", 2, "3:44"),
+        )))
+        val p2 = TestData.P2
+        try {
+            com.avidviewer.tv.data.EspnFeed.base = espn.base
+            rule.runOnIdle {
+                vm.live.replacingChannels(p2) { add ->
+                    add(com.avidviewer.tv.data.Channel("$p2:tnt", "US| TNT HD", "SPORTS", null, "http://127.0.0.1:9/tnt.ts", null))
+                    add(com.avidviewer.tv.data.Channel("$p2:ev", "NHL 03: Red Wings @ Blues", "SPORTS", null, "http://127.0.0.1:9/ev.ts", null))
+                }
+            }
+            go(Screen.SPORTS)
+            waitFor("the game with two channels") { vm.sportGames.any { it.game.id == "NHL:401" && it.channels.size >= 2 } }
+            settle()
+            val chans = vm.sportGames.first { it.game.id == "NHL:401" }.channels.map { it.key }
+            var tries = 0
+            while (!focused().contains("Red Wings") && tries < 6) { press(listOf(Key.DirectionDown)); tries++ }
+            fun nameOf(k: String) = vm.channelName(vm.sportsChannel(k)!!)
+            press(listOf(Key.DirectionCenter))
+            waitFor("on the first channel (focus: ${focused()})") { focused().contains(nameOf(chans[0])) }
+            press(listOf(Key.DirectionCenter))
+            waitFor("previewing") { vm.currentKey == chans[0] }
+            press(listOf(Key.DirectionCenter))
+            waitFor("full screen") { vm.screen == Screen.PLAYER }
+
+            // Channel Up/Down: through this game's channels only, wrapping around.
+            rule.runOnIdle { vm.step(1) }
+            waitFor("the game's next channel") { vm.currentKey == chans[1 % chans.size] }
+            assertTrue("label names the game: ${vm.contextLabel()}", vm.contextLabel().startsWith("Red Wings at Blues · channel 2 of ${chans.size}"))
+            repeat(chans.size - 1) { rule.runOnIdle { vm.step(1) } }
+            waitFor("wrapped back to the first channel") { vm.currentKey == chans[0] }
+            rule.runOnIdle { vm.step(1) }
+            waitFor("on the second channel again") { vm.currentKey == chans[1] }
+
+            // Back: Sports, with the channel that was playing highlighted.
+            press(listOf(Key.Back))
+            waitFor("back on Sports") { vm.screen == Screen.SPORTS }
+            waitFor("the playing channel is highlighted, not the top-left button (focus: ${focused()})") { focused().contains(nameOf(chans[1])) }
+        } finally { espn.close() }
+    }
+
     @Test
     fun settingsSportsTabSwitchesLeaguesWithOk() {
         go(Screen.SETTINGS)
