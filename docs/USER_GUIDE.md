@@ -4,7 +4,7 @@
      (.github/workflows/user-guide.yml). Feature descriptions are written by hand. -->
 This guide covers **Avid Viewer 1.1.0**, the current public release. Avid Viewer is an IPTV player for Android TV and Fire TV. You bring your own provider (an Xtream Codes login or an M3U link); the app doesn't include any channels.
 
-**Contents:** [Getting started](#1-getting-started) · [Main menu](#2-main-menu) · [TV Guide](#3-tv-guide) · [Full-screen playback](#4-full-screen-playback) · [Search](#5-search) · [Discover](#6-discover) · [Sports](#7-sports) · [Movies and Series](#8-movies-and-series) · [Settings](#9-settings) · [Privacy](#10-privacy) · [Troubleshooting](#11-troubleshooting) · [Control4](#12-control4) · [Release notes](#release-notes)
+**Contents:** [Getting started](#1-getting-started) · [Main menu](#2-main-menu) · [TV Guide](#3-tv-guide) · [Full-screen playback](#4-full-screen-playback) · [Search](#5-search) · [Discover](#6-discover) · [Sports](#7-sports) · [Movies and Series](#8-movies-and-series) · [Settings](#9-settings) ([Profiles](#profiles)) · [Privacy](#10-privacy) · [Troubleshooting](#11-troubleshooting) · [Control4](#12-control4) · [Release notes](#release-notes)
 
 ## 1. Getting started
 
@@ -45,7 +45,7 @@ Your password is stored encrypted on the device (Android Keystore) and is never 
 
 ## 2. Main menu
 
-The menu on the left lists **Search, Discover, TV Guide, Sports, Movies, Series** and **Settings**. Picking a screen highlights its first item. The menu is always on screen: once you've chosen a screen it shrinks to icons on the far left, and the labels come back when you move onto it.
+The menu on the left lists **Search, Discover, TV Guide, Sports, Movies, Series** and **Settings**. When the TV has more than one profile, the profile in use is shown at the top (its initial on its colour); **OK** on it opens **Switch profile** (see [Profiles](#profiles)). A Kids profile's menu has only Search, TV Guide, Movies and Series. Picking a screen highlights its first item. The menu is always on screen: once you've chosen a screen it shrinks to icons on the far left, and the labels come back when you move onto it.
 
 At the bottom of the menu you'll see:
 
@@ -53,7 +53,7 @@ At the bottom of the menu you'll see:
 - **Current weather** (if a postal code is set and Show weather is on).
 - An **Update x.y.z** button when a new version is available.
 
-The app opens on the TV Guide with the menu shown as icons, on:
+When the TV has more than one profile, the app first asks **Who's watching?** (or opens the last profile used, if you chose that in Settings › Profiles). Then it opens on the TV Guide with the menu shown as icons, on:
 
 1. the last channel you watched, in its own category;
 2. if that channel is in ★ Favorites or one of your lists, that list (the channel can belong to another playlist);
@@ -259,6 +259,40 @@ Settings has sections on the left and the open section's options on the right. *
 
 **Background downloads.** About 10 seconds after the app opens, it updates each switched-on playlist in turn, fetching only what's out of date: channels older than a day, the guide when it's older than your guide setting (8 hours by default), and movies & series older than a day. Content that's switched off is never loaded. The first download of a large movie catalog can make a Fire TV Stick feel slower for a minute or two.
 
+### Profiles
+
+Each person in the household can have their own profile. A profile has its own ★ Favorites and lists, hidden channels and categories, hidden movie and series categories and titles, My List, last channel, dismissed local suggestions, watch history (and whether it's paused), resume points and watched episodes. Playlists and logins, guide sources and matches, renamed and re-ordered items, Picture & sound and every other setting are shared.
+
+When you update from an earlier version, everything you had becomes the owner's profile, **Me**. Nothing changes until you add a second profile.
+
+**Settings › Profiles** (second in the list of sections)
+
+- **＋ Add profile**: a name and a colour.
+- **＋ Add Kids profile**: the same, for a child. If no grown-up has a PIN yet, the app asks you to set the owner's PIN first.
+- For each profile:
+  - **Edit**: name and colour; for a Kids profile, also the categories it can watch.
+  - **Set PIN / Change PIN**: a 4-digit PIN, entered twice. **Remove PIN** appears only while there's no Kids profile.
+  - **Parent** (grown-up profiles other than the owner): a parent can manage profiles, and their PIN opens any profile. The owner is always a parent.
+  - **Delete…**: asks first, then deletes that profile's favorites, lists, hidden items and history. It can't be undone. The owner's profile and the profile in use can't be deleted.
+- **When the app starts**: **Ask who's watching** (the default) or **Last profile used**. With Last profile used, if that profile needs a PIN the app opens on the Kids profile instead.
+- In a profile that isn't a parent, changing profiles asks for a parent's PIN.
+
+**Kids profile**
+
+- **Categories**: a switch for each live TV category and each movie and series category. A new Kids profile starts with the categories whose names look made for children. Adult categories are greyed out and are never shown.
+- The TV Guide, Movies, Series and Search show only those categories. Channels outside them can't be opened from favorites, lists, search or the last channel.
+- Discover, Sports and Settings aren't in a Kids profile's menu.
+- A Kids profile never needs a PIN. While a Kids profile exists, every other profile needs one, so a child can't switch out.
+
+**Who's watching? and switching**
+
+- **Who's watching?**: **Left/Right** pick a profile, **OK** opens it. Profiles that need a PIN show "PIN"; Kids profiles show "Kids". Nothing plays until a profile is chosen.
+- **Switch profile**: **OK** on the profile at the top of the main menu. Choose another profile, or **Manage profiles…** to open Settings › Profiles.
+- **PIN**: type the 4 digits with the remote's number keys or the on-screen pad (**Delete** removes the last digit, **Cancel** goes back). A profile's own PIN or any parent's PIN opens it. After 5 wrong PINs in a row the app says "Too many tries. Wait a minute."
+- **Forgot a PIN?** Open a parent's profile and use **Change PIN** on that profile; the old PIN isn't needed.
+
+Profiles are included in backups (see [Backup & restore](#backup--restore)).
+
 ### TV guide
 
 - **Download the guide every**: 4, 8, 12 or 24 hours (8 is the default). The app also follows this while it stays open. Each download keeps up to 7 days of listings. A guide source that hasn't changed since the last download isn't downloaded again.
@@ -311,7 +345,7 @@ Rename, re-order and Add to List are done with Menu on the item itself in the TV
 
 ### Privacy & analytics
 
-Everything here stays on the device; nothing is uploaded or backed up to the cloud.
+Everything here stays on the device; nothing is uploaded or backed up to the cloud. Watch history, the pause switch and the 7-day summary belong to the profile in use.
 
 - **Pause watch history**: stop recording what you watch.
 - **Your viewing, last 7 days**: hours watched and your top channels.
@@ -336,7 +370,7 @@ Everything here stays on the device; nothing is uploaded or backed up to the clo
 
 #### Backup & restore
 
-A backup saves your playlists (with their logins), ★ Favorites and your lists, renamed and re-ordered channels and categories, hidden items, Sports leagues and options, location, the TMDB key, network-share settings, all other settings, watch history and resume points. Channels, guides and movie catalogs aren't included; they download again after a restore.
+A backup saves your playlists (with their logins), ★ Favorites and your lists, renamed and re-ordered channels and categories, hidden items, Sports leagues and options, location, the TMDB key, network-share settings, all other settings, watch history and resume points, and every profile with its own favorites, lists, hidden items and history (PINs are stored only as one-way hashes). After a restore the app opens on the owner's profile. Channels, guides and movie catalogs aren't included; they download again after a restore.
 
 Because it holds your provider logins, every backup is locked with a **PIN** you choose (4 or more digits). The PIN can't be recovered if you forget it.
 
@@ -371,6 +405,7 @@ The share password is stored encrypted on the TV and is included in your PIN-loc
 - All your data stays on the device. Android cloud backup and device-to-device transfer are turned off.
 - Provider passwords and the TMDB key are encrypted with the Android Keystore.
 - Backup files are encrypted and locked with your PIN, because they contain provider logins.
+- Profile PINs are stored only as salted one-way hashes, never as the digits.
 - Outside services get only what they need: your postal code (Open-Meteo, for weather), title lookups (TMDB/JustWatch, if you add a key), scoreboards (ESPN) and update checks (GitHub).
 
 ## 11. Troubleshooting
@@ -444,20 +479,29 @@ The **Avid Viewer** Control4 driver (`um_avid_viewer.c4z`) adds Avid Viewer to t
 
 ## Release notes
 
-Every public release since 1.0.35, newest first. Releases are published on GitHub (`mavenmarty/avid-viewer`) as `AvidViewer.apk`. The app offers each new version itself, or you can check in Settings › Updates & about › **Check now**.
+Every public release since 1.0.35, newest first. From 1.1.0, versions are numbered major.minor.patch: new features raise the middle number, fixes the last one (the GitHub tag adds a build number, for example `v1.1.0.186`). Releases are published on GitHub (`mavenmarty/avid-viewer`) as `AvidViewer.apk`. The app offers each new version itself, or you can check in Settings › Updates & about › **Check now**.
 
 <!-- new-releases: entries for new builds are added automatically below this line -->
 
 ### 1.1.0 — November 13, 2026, 8:33 AM CT (current)
 
+**Release notes**
+
+- **Profiles:** each person gets their own ★ Favorites and lists, hidden channels and categories, My List, last channel, watch history, resume points and next episode. Playlists, the guide and settings are shared. See [Profiles](#profiles).
+- **Who's watching?** at start when the TV has more than one profile (or the last profile used, if you prefer). **Switch profile** from the top of the main menu.
+- **Kids profile:** only the categories a parent picks, never adult categories, and no Discover, Sports or Settings.
+- **A PIN per profile:** any grown-up profile can have its own 4-digit PIN, and every one needs a PIN while a Kids profile exists. A parent's PIN opens any profile.
+- **Profiles are in backups.**
+- **New version numbers:** major.minor.patch. This release is 1.1.0; earlier versions update to it as usual.
+
 **Change log**
 
-- Semantic versions from the commits (feat → minor, fix → patch, breaking → major); tags v<x.y.z>.<build> so older installs keep finding updates; the app and guide show x.y.z
-- Profiles with their own favorites, lists, hidden items, My List and history; a Kids profile limited to chosen categories; a PIN per profile (a parent's opens any), needed by every other profile while a Kids profile exists; Who's watching? at start; switcher in the main menu; Settings › Profiles; profiles in backups
-- Profiles test uses real channel keys; Settings has a Profiles section; screenshots of the profile screens
-- Profiles test doesn't depend on the sample favorites
-- Compare the owner's categories before and after Kids
-- Owner's categories all come back after Kids
+- Profiles with their own favorites, lists, hidden items, My List, last channel, history, resume points and watched episodes; Who's watching? at start or the last profile used; switcher in the main menu; Settings › Profiles
+- Kids profile limited to chosen live, movie and series categories (adult categories never), without Discover, Sports or Settings
+- A PIN per profile (a parent's opens any), needed by every other profile while a Kids profile exists; 5 wrong tries wait a minute
+- Profiles in backups; a restore opens on the owner's profile
+- Version numbers from the changes in each release (feature → minor, fix → patch); tags `v<x.y.z>.<build>` so older installs keep finding updates
+- Tests for profiles and Kids limits; screenshots of the profile screens
 
 ### 1.0.179 — November 12, 2026, 7:16 PM CT
 
