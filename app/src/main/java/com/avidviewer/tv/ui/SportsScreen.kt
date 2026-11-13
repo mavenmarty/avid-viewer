@@ -33,7 +33,6 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import coil.compose.AsyncImage
 import com.avidviewer.tv.data.Game
 import com.avidviewer.tv.data.League
 import com.avidviewer.tv.data.Team
@@ -53,6 +52,15 @@ fun SportsScreen(vm: AppViewModel) {
     LaunchedEffect(goToChannels.value) {
         if (goToChannels.value > 0) focusWhenReady(vm) { runCatching { channelsFr.requestFocus() }.isSuccess }
     }
+    // Back from full screen (issue #11): the highlight returns to the channel that was playing in
+    // "Where to watch", or else to the game's card, instead of the first button at the top left.
+    val playingFr = remember { FocusRequester() }
+    val gameFr = remember { FocusRequester() }
+    LaunchedEffect(vm.sportsReturnPending) {
+        if (!vm.sportsReturnPending) return@LaunchedEffect
+        focusWhenReady(vm) { runCatching { playingFr.requestFocus() }.isSuccess || runCatching { gameFr.requestFocus() }.isSuccess }
+        vm.sportsReturnPending = false
+    }
 
     Column(Modifier.fillMaxSize().padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Row(Modifier.fillMaxWidth().height(150.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -67,9 +75,9 @@ fun SportsScreen(vm: AppViewModel) {
         Row(Modifier.fillMaxWidth().weight(1f), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Column(Modifier.width(470.dp).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 LeagueFilters(vm)
-                GameList(vm, games, selected?.game?.id) { goToChannels.value++ }
+                GameList(vm, games, selected?.game?.id, gameFr) { goToChannels.value++ }
             }
-            WhereToWatch(vm, selected, channelsFr, Modifier.weight(1f).fillMaxHeight())
+            WhereToWatch(vm, selected, channelsFr, playingFr, Modifier.weight(1f).fillMaxHeight())
         }
     }
 }
@@ -91,7 +99,7 @@ private fun LeagueFilters(vm: AppViewModel) {
 private sealed class Row0 { data class Header(val text: String) : Row0(); data class Card(val g: AppViewModel.SportGame) : Row0() }
 
 @Composable
-private fun GameList(vm: AppViewModel, games: List<AppViewModel.SportGame>, selectedId: String?, onOpen: () -> Unit) {
+private fun GameList(vm: AppViewModel, games: List<AppViewModel.SportGame>, selectedId: String?, selectedFr: FocusRequester, onOpen: () -> Unit) {
     if (games.isEmpty()) {
         Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(C.Surface).padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Label(if (vm.sportsLoading) "Getting today's games…" else "No games", size = 15.sp, color = C.Text, weight = FontWeight.Bold)
@@ -116,23 +124,32 @@ private fun GameList(vm: AppViewModel, games: List<AppViewModel.SportGame>, sele
         if (final.isNotEmpty()) { out.add(Row0.Header("FINAL")); final.forEach { out.add(Row0.Card(it)) } }
         out
     }
-    LazyColumn(verticalArrangement = Arrangement.spacedBy(5.dp), contentPadding = PaddingValues(bottom = 20.dp)) {
+    val listState = androidx.compose.foundation.lazy.rememberLazyListState()
+    // Coming back from a game further down the list: scroll it into view so its card can take the highlight.
+    LaunchedEffect(vm.sportsReturnPending) {
+        if (!vm.sportsReturnPending) return@LaunchedEffect
+        val i = rows.indexOfFirst { it is Row0.Card && it.g.game.id == selectedId }
+        if (i >= 0) runCatching { listState.scrollToItem(i + if (vm.sportsNote != null) 1 else 0) }
+    }
+    LazyColumn(state = listState, verticalArrangement = Arrangement.spacedBy(5.dp), contentPadding = PaddingValues(bottom = 20.dp)) {
         vm.sportsNote?.let { note -> item(key = "note") { Label(note, size = 11.sp, color = C.Soft, lines = 2) } }
         items(rows, key = { r -> when (r) { is Row0.Header -> "h:" + r.text; is Row0.Card -> r.g.game.id } }) { r ->
             when (r) {
                 is Row0.Header -> Label(r.text, size = 11.sp, color = C.Muted, weight = FontWeight.Bold, modifier = Modifier.padding(start = 2.dp, top = 4.dp))
-                is Row0.Card -> GameCard(vm, r.g, r.g.game.id == selectedId, onOpen)
+                is Row0.Card -> GameCard(vm, r.g, r.g.game.id == selectedId, if (r.g.game.id == selectedId) selectedFr else null, onOpen)
             }
         }
     }
 }
 
 @Composable
-private fun GameCard(vm: AppViewModel, sg: AppViewModel.SportGame, isSelected: Boolean, onOpen: () -> Unit) {
+private fun GameCard(vm: AppViewModel, sg: AppViewModel.SportGame, isSelected: Boolean, fr: FocusRequester?, onOpen: () -> Unit) {
     val g = sg.game
     val none = sg.channels.isEmpty()
+    val finding = none && g.id !in vm.sportsMatchedIds
     Focusable(
         modifier = Modifier.fillMaxWidth().height(52.dp).testTag("game-" + g.id)
+            .then(if (fr != null) Modifier.focusRequester(fr) else Modifier)
             .then(if (isSelected) Modifier.border(1.dp, C.Line, RoundedCornerShape(8.dp)) else Modifier),
         shape = RoundedCornerShape(8.dp),
         onFocus = { vm.selectedGame = g.id },
@@ -150,7 +167,7 @@ private fun GameCard(vm: AppViewModel, sg: AppViewModel.SportGame, isSelected: B
             }
             Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Label(statusText(vm, g), size = 13.sp, weight = FontWeight.Bold, color = if (g.live) Color(0xFFFF8A8D) else C.Text)
-                Label(when (val n = sg.channels.size) { 0 -> "No channel yet"; 1 -> "1 channel"; else -> "$n channels" }, size = 11.sp, color = if (none) C.Muted else C.Soft)
+                Label(when (val n = sg.channels.size) { 0 -> if (finding) "Finding channels…" else "No channel yet"; 1 -> "1 channel"; else -> "$n channels" }, size = 11.sp, color = if (none) C.Muted else C.Soft)
             }
         }
     }
@@ -205,13 +222,14 @@ private fun GameHeader(vm: AppViewModel, g: Game?, modifier: Modifier) {
 }
 
 @Composable
-private fun WhereToWatch(vm: AppViewModel, sg: AppViewModel.SportGame?, firstFr: FocusRequester, modifier: Modifier) {
+private fun WhereToWatch(vm: AppViewModel, sg: AppViewModel.SportGame?, firstFr: FocusRequester, playingFr: FocusRequester, modifier: Modifier) {
     Column(modifier.clip(RoundedCornerShape(10.dp)).background(C.Surface).padding(horizontal = 12.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         val list = sg?.channels.orEmpty()
+        val finding = sg != null && list.isEmpty() && sg.game.id !in vm.sportsMatchedIds
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Label("Where to watch", size = 14.sp, color = C.Text, weight = FontWeight.Bold, modifier = Modifier.weight(1f))
             if (sg != null) Label(
-                when { list.isEmpty() -> "No channel found yet"; list.size == 1 -> if (sg.game.state == "pre") "1 channel so far" else "1 channel"; else -> "${list.size} channels · best first" },
+                when { finding -> "Finding channels…"; list.isEmpty() -> "No channel found yet"; list.size == 1 -> if (sg.game.state == "pre") "1 channel so far" else "1 channel"; else -> "${list.size} channels · best first" },
                 size = 11.sp, color = C.Muted,
             )
         }
@@ -221,14 +239,15 @@ private fun WhereToWatch(vm: AppViewModel, sg: AppViewModel.SportGame?, firstFr:
                 val c = vm.sportsChannel(m.key)
                 Focusable(
                     modifier = Modifier.fillMaxWidth().height(48.dp).testTag("watch-" + m.key)
-                        .then(if (m == list.first()) Modifier.focusRequester(firstFr) else Modifier),
+                        .then(if (m == list.first()) Modifier.focusRequester(firstFr) else Modifier)
+                        .then(if (m.key == vm.currentKey) Modifier.focusRequester(playingFr) else Modifier),
                     color = C.Surface2,
                     shape = RoundedCornerShape(8.dp),
                     onClick = { vm.selectChannel(m.key, PlayContext.SPORTS) },
                 ) {
                     Row(Modifier.fillMaxSize().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         Box(Modifier.size(34.dp).clip(RoundedCornerShape(6.dp)).background(C.Rail), contentAlignment = Alignment.Center) {
-                            if (c?.logo != null) AsyncImage(model = c.logo, contentDescription = null, modifier = Modifier.size(30.dp))
+                            if (c?.logo != null) TvImage(model = c.logo, contentDescription = null, modifier = Modifier.size(30.dp))
                             else Label(m.name.take(3).uppercase(), size = 10.sp, color = C.Soft, weight = FontWeight.Bold)
                         }
                         Column(Modifier.weight(1f)) {
@@ -239,13 +258,16 @@ private fun WhereToWatch(vm: AppViewModel, sg: AppViewModel.SportGame?, firstFr:
                     }
                 }
             }
-            if (sg.game.state == "pre" && list.size < 3) item(key = "later") {
+            if (finding) item(key = "finding") {
+                Label("Looking through your playlists and TV guide for this game's channels…", size = 12.sp, color = C.Soft, lines = 2, modifier = Modifier.testTag("sports-finding"))
+            }
+            if (!finding && sg.game.state == "pre" && list.size < 3) item(key = "later") {
                 Column(Modifier.fillMaxWidth().border(1.dp, C.Line, RoundedCornerShape(8.dp)).padding(horizontal = 12.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Label(if (list.isEmpty()) "No channel found yet" else "More channels can appear closer to game time", size = 12.sp, color = C.Soft, weight = FontWeight.Bold, lines = 2)
-                    Label("Your TV guide covers about the next 36 hours, so guide listings and event channels for this game show up nearer the start. The list updates on its own.", size = 11.sp, lines = 4)
+                    Label("Guide listings and event channels for a game often appear closer to its start, depending on how far ahead your TV guide goes. The list updates on its own.", size = 11.sp, lines = 4)
                 }
             }
-            if (list.isEmpty() && sg.game.state != "pre") item(key = "none") {
+            if (!finding && list.isEmpty() && sg.game.state != "pre") item(key = "none") {
                 Label("No channel in your playlists matched this game. ESPN lists: ${networks(sg.game).ifBlank { "no TV" }}.", size = 12.sp, lines = 3)
             }
             item(key = "search") {
@@ -283,7 +305,7 @@ private fun TeamDot(t: Team) {
 private fun TeamBadge(t: Team) {
     Box(Modifier.size(40.dp).clip(CircleShape).background(t.color?.let { Color(it) } ?: C.Line), contentAlignment = Alignment.Center) {
         Label(t.abbr, size = 11.sp, color = Color.White, weight = FontWeight.Bold)
-        if (t.logo != null) AsyncImage(model = t.logo, contentDescription = t.fullName, modifier = Modifier.size(32.dp))
+        if (t.logo != null) TvImage(model = t.logo, contentDescription = t.fullName, modifier = Modifier.size(32.dp))
     }
 }
 

@@ -18,26 +18,67 @@ import java.util.zip.GZIPInputStream
 const val USER_AGENT = "AvidViewer/1.0 (Android TV)"
 
 object Net {
+    /**
+     * A stalled download gives up after 45 s without a byte (it used to wait 2 minutes, DATA-08). A request that
+     * fails before anything is read (no connection, a timeout waiting for the answer, a busy server) is tried
+     * again after 1 s and then 3 s; once data is flowing it isn't, so nothing is read twice.
+     */
     val client: OkHttpClient = OkHttpClient.Builder()
-        .connectTimeout(20, TimeUnit.SECONDS)
-        .readTimeout(120, TimeUnit.SECONDS)
+        .connectTimeout(15, TimeUnit.SECONDS)
+        .readTimeout(45, TimeUnit.SECONDS)
         .followRedirects(true)
         .followSslRedirects(true)
         .build()
 
-    fun <T> open(url: String, block: (InputStream) -> T): T {
+    /** Pauses before the 2nd and 3rd tries (tests make them short). */
+    @Volatile var backoffMs = longArrayOf(1_000L, 3_000L)
+
+    /**
+     * Downloads [url] and hands its body to [block]. [onResponse] sees the answer's headers first (to keep an
+     * ETag / Last-Modified for next time).
+     */
+    fun <T> open(url: String, onResponse: ((okhttp3.Response) -> Unit)? = null, block: (InputStream) -> T): T {
         val req = Request.Builder().url(url).header("User-Agent", USER_AGENT).build()
-        client.newCall(req).execute().use { resp ->
-            if (!resp.isSuccessful) throw IOException("Server answered ${resp.code}")
-            val body = resp.body ?: throw IOException("Empty response")
-            val raw = BufferedInputStream(body.byteStream(), 64 * 1024)
-            // Some guides are served gzipped without a header saying so.
-            raw.mark(2)
-            val b1 = raw.read(); val b2 = raw.read()
-            raw.reset()
-            val stream: InputStream = if (b1 == 0x1f && b2 == 0x8b) GZIPInputStream(raw, 64 * 1024) else raw
-            return block(stream)
+        var attempt = 0
+        while (true) {
+            val last = attempt >= backoffMs.size
+            val resp = try {
+                client.newCall(req).execute()
+            } catch (e: IOException) {
+                if (last || Thread.currentThread().isInterrupted) throw e
+                Thread.sleep(backoffMs[attempt++]); continue
+            }
+            if (!last && (resp.code >= 500 || resp.code == 429 || resp.code == 408)) {
+                resp.close(); Thread.sleep(backoffMs[attempt++]); continue
+            }
+            resp.use {
+                if (!resp.isSuccessful) throw IOException("Server answered ${resp.code}")
+                onResponse?.invoke(resp)
+                val body = resp.body ?: throw IOException("Empty response")
+                val raw = BufferedInputStream(body.byteStream(), 64 * 1024)
+                // Some guides are served gzipped without a header saying so.
+                raw.mark(2)
+                val b1 = raw.read(); val b2 = raw.read()
+                raw.reset()
+                val stream: InputStream = if (b1 == 0x1f && b2 == 0x8b) GZIPInputStream(raw, 64 * 1024) else raw
+                return block(stream)
+            }
         }
+    }
+
+    /** What a server said about a file last time, to ask "has it changed?" (DATA-05). */
+    data class Validators(val etag: String?, val lastModified: String?) {
+        val any get() = !etag.isNullOrBlank() || !lastModified.isNullOrBlank()
+        companion object { fun of(r: okhttp3.Response) = Validators(r.header("ETag"), r.header("Last-Modified")) }
+    }
+
+    /** True when the server answers 304 Not Modified to a conditional request for [url] (nothing is downloaded). */
+    fun unchanged(url: String, v: Validators): Boolean {
+        if (!v.any) return false
+        val b = Request.Builder().url(url).header("User-Agent", USER_AGENT)
+        v.etag?.takeIf { it.isNotBlank() }?.let { b.header("If-None-Match", it) }
+        v.lastModified?.takeIf { it.isNotBlank() }?.let { b.header("If-Modified-Since", it) }
+        return client.newCall(b.build()).execute().use { it.code == 304 }
     }
 
     fun text(url: String): String = open(url) { it.readBytes().toString(Charsets.UTF_8) }
@@ -234,8 +275,8 @@ object Xmltv {
     /** The same, handing each programme to [emit] (channel id as in [wanted]) as it's read; returns how many. */
     fun read(
         url: String, wanted: Set<String>, from: Long, to: Long,
-        offsetMs: Long, directory: MutableList<Pair<String, String>>?, emit: (String, Program) -> Unit,
-    ): Int = Net.open(url) { input ->
+        offsetMs: Long, directory: MutableList<Pair<String, String>>?, onResponse: ((okhttp3.Response) -> Unit)? = null, emit: (String, Program) -> Unit,
+    ): Int = Net.open(url, onResponse) { input ->
         val wantedLower = wanted.associateBy { it.lowercase() }
         var n = 0
         val xp = Xml.newPullParser()

@@ -73,6 +73,7 @@ object NavIcons {
     val Location = icon("location", "M12 21s-7-6.2-7-11.5a7 7 0 0 1 14 0C19 14.8 12 21 12 21z M12 7a2.5 2.5 0 1 0 0 5a2.5 2.5 0 1 0 0-5z")
     val Privacy = icon("privacy", "M12 3l8 3v6c0 4.5-3.4 8.3-8 9-4.6-.7-8-4.5-8-9V6z")
     val Storage = icon("storage", "M4 5h16v5H4z M4 14h16v5H4z M8 7.5h.01 M8 16.5h.01")
+    val Profiles = icon("profiles", "M9 4.5a3.5 3.5 0 1 0 0 7a3.5 3.5 0 1 0 0-7z M2.5 20c.8-3.5 3.4-5.5 6.5-5.5s5.7 2 6.5 5.5 M17 6.5a2.5 2.5 0 1 0 0 5a2.5 2.5 0 1 0 0-5z M16 14.6c2.6.2 4.6 2 5.3 4.9")
     val Settings = icon("settings", "M12 9a3 3 0 1 0 0 6a3 3 0 1 0 0-6z M12 2v3 M12 19v3 M4.2 4.2l2.1 2.1 M17.7 17.7l2.1 2.1 M2 12h3 M19 12h3 M4.2 19.8l2.1-2.1 M17.7 6.3l2.1-2.1")
 }
 
@@ -91,11 +92,13 @@ private val MENU = listOf(
 fun NavRail(vm: AppViewModel) {
     var railFocused by remember { mutableStateOf(false) }
     val expanded = vm.navMode == NavMode.FULL || railFocused
-    val requesters = remember { MENU.map { FocusRequester() } }
+    // A Kids profile has no Discover, Sports or Settings.
+    val menu = remember(vm.kidsMode) { MENU.filter { vm.screenAllowed(it.first) } }
+    val requesters = remember(menu) { menu.map { FocusRequester() } }
 
-    LaunchedEffect(vm.navMode) {
+    LaunchedEffect(vm.navMode, menu) {
         if (vm.navMode == NavMode.FULL) {
-            val i = MENU.indexOfFirst { it.first == vm.screen }.coerceAtLeast(0)
+            val i = menu.indexOfFirst { it.first == vm.screen }.coerceAtLeast(0)
             focusWhenReady(vm) { runCatching { requesters[i].requestFocus() }.isSuccess }
         }
     }
@@ -113,18 +116,32 @@ fun NavRail(vm: AppViewModel) {
                 Text("Avid Viewer", color = C.Text, fontSize = 15.sp, fontWeight = FontWeight.Bold, maxLines = 1)
             }
         }
-        MENU.forEachIndexed { i, (s, label, icon) ->
+        // Who's watching: opens the profile switcher (only with more than one profile).
+        if (vm.profiles.multiple) {
+            Focusable(
+                modifier = Modifier.fillMaxWidth().height(44.dp).padding(bottom = 4.dp),
+                color = Color.Transparent, focusedColor = C.Line,
+                onClick = { vm.profileSwitcher = true },
+            ) {
+                ProfileAvatar(vm.profile, 30.dp, Modifier.padding(start = 6.dp))
+                if (expanded) Column(Modifier.padding(start = 10.dp)) {
+                    Text(vm.profile.name, color = C.Text, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+                    Text("Switch profile", color = C.Soft, fontSize = 11.sp, maxLines = 1)
+                }
+            }
+        }
+        menu.forEachIndexed { i, (s, label, icon) ->
             val active = vm.screen == s
             Focusable(
-                modifier = Modifier.fillMaxWidth().height(36.dp).focusRequester(requesters[i]),
-                color = if (active) C.Accent else Color.Transparent,
-                focusedColor = if (active) C.AccentFocus else C.Surface2,
+                modifier = Modifier.fillMaxWidth().height(36.dp).focusRequester(requesters[i]).activePath(active),
+                color = if (active) C.Surface2 else Color.Transparent,
+                focusedColor = C.Line,
                 onClick = { vm.navSelect(s) },
             ) {
-                Icon(icon, contentDescription = label, tint = if (active) C.OnAccent else C.Soft, modifier = Modifier.padding(start = 10.dp).size(20.dp))
+                Icon(icon, contentDescription = if (expanded) null else label, tint = if (active) C.Accent else C.Soft, modifier = Modifier.padding(start = 10.dp).size(20.dp))
                 if (expanded) {
                     Text(
-                        label, color = if (active) C.OnAccent else C.Soft, fontSize = 14.sp, maxLines = 1,
+                        label, color = if (active) C.Text else C.Soft, fontSize = 14.sp, maxLines = 1,
                         fontWeight = if (active) FontWeight.Bold else FontWeight.Medium, modifier = Modifier.padding(start = 12.dp),
                     )
                 }
@@ -223,11 +240,11 @@ fun PlaylistTree(vm: AppViewModel) {
             val open = vm.expandedPlaylist == p.id
             item(key = "pl-" + p.id) {
                 Focusable(
-                    modifier = Modifier.fillMaxWidth().height(44.dp).then(if (p.id == active) Modifier.focusRequester(first) else Modifier),
-                    color = if (open) C.Surface2 else C.Surface,
+                    modifier = Modifier.fillMaxWidth().height(44.dp).then(if (p.id == active) Modifier.focusRequester(first) else Modifier).activePath(p.id == active),
+                    color = if (open || p.id == active) C.Surface2 else C.Surface,
                     onClick = { vm.togglePlaylist(p.id) },
                 ) {
-                    Text(if (open) "▾" else "▸", color = C.Accent, fontSize = 14.sp, modifier = Modifier.padding(start = 10.dp, end = 8.dp))
+                    Glyph(if (open) "▾" else "▸", C.Accent, 14.sp, Modifier.padding(start = 10.dp, end = 8.dp))
                     Column(Modifier.weight(1f)) {
                         Label(p.name, size = 14.sp, color = C.Text, weight = FontWeight.SemiBold)
                         if (p.id == active) Label("Active", size = 12.sp, color = C.Accent)
@@ -286,7 +303,7 @@ fun GroupNav(vm: AppViewModel) {
     }
     LazyColumn(
         state = navState,
-        modifier = Modifier.width(210.dp).fillMaxHeight().background(C.Rail).onFocusChanged { vm.inGroupNav = it.hasFocus },
+        modifier = Modifier.width(210.dp).fillMaxHeight().background(C.Rail).onFocusChanged { vm.inGroupNav = it.hasFocus }.dimWhenInactive(),
         contentPadding = PaddingValues(10.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
@@ -299,11 +316,12 @@ fun GroupNav(vm: AppViewModel) {
         item(key = "fav") {
             val on = vm.selectedGroup == FAV_GROUP
             Focusable(
-                modifier = Modifier.fillMaxWidth().height(38.dp).navFocusTarget(vm, FAV_GROUP),
+                modifier = Modifier.fillMaxWidth().height(38.dp).navFocusTarget(vm, FAV_GROUP).activePath(on),
                 color = if (on) C.Surface2 else Color.Transparent,
                 onClick = { vm.ensureFavoriteData(); vm.chooseGroup(vm.activePlaylist()?.id ?: "", FAV_GROUP) },
             ) {
-                Label((if (on) "▶ " else "") + "★ Favorites", size = 14.sp, color = if (on) C.Text else C.Accent, weight = FontWeight.Bold, modifier = Modifier.padding(start = 10.dp).weight(1f))
+                Glyph("★", C.Accent, 14.sp, Modifier.padding(start = 10.dp, end = 6.dp))
+                Label("Favorites", size = 14.sp, color = if (on) C.Text else C.Accent, weight = FontWeight.Bold, modifier = Modifier.weight(1f))
                 Label("${vm.prefs.favorites.size}", size = 12.sp, modifier = Modifier.padding(end = 10.dp))
             }
         }
@@ -311,12 +329,13 @@ fun GroupNav(vm: AppViewModel) {
             val g = LIST_PREFIX + l.id
             val on = vm.selectedGroup == g
             Focusable(
-                modifier = Modifier.fillMaxWidth().height(38.dp).navFocusTarget(vm, g),
+                modifier = Modifier.fillMaxWidth().height(38.dp).navFocusTarget(vm, g).activePath(on),
                 color = if (on) C.Surface2 else Color.Transparent,
                 onMenu = { vm.listMenu = g },
                 onClick = { vm.ensureFavoriteData(); vm.chooseGroup(vm.activePlaylist()?.id ?: "", g) },
             ) {
-                Label((if (on) "▶ " else "") + "☰ " + l.name, size = 14.sp, color = if (on) C.Text else C.Accent, weight = FontWeight.SemiBold, modifier = Modifier.padding(start = 10.dp).weight(1f))
+                Glyph("☰", C.Accent, 14.sp, Modifier.padding(start = 10.dp, end = 6.dp))
+                Label(l.name, size = 14.sp, color = if (on) C.Text else C.Accent, weight = if (on) FontWeight.Bold else FontWeight.SemiBold, modifier = Modifier.weight(1f))
                 Label("${l.keys.size}", size = 12.sp, modifier = Modifier.padding(end = 10.dp))
             }
         }
@@ -332,7 +351,7 @@ fun GroupNav(vm: AppViewModel) {
             var text by remember(vm.guideQuery.isBlank()) { mutableStateOf(vm.guideQuery) }
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 TvField("🔍  Search", text, modifier = Modifier.fillMaxWidth().testTag("nav-search"), imeAction = androidx.compose.ui.text.input.ImeAction.Search,
-                    onSubmit = { vm.guideQuery = text.trim() }) { text = it }
+                    onSubmit = { vm.guideQuery = text.trim() }) { text = it; vm.typeGuideQuery(it) } // results as you type
                 if (vm.guideQuery.isNotBlank()) TvButton("✕  Clear search", modifier = Modifier.fillMaxWidth()) { text = ""; vm.guideQuery = "" }
             }
         }
@@ -346,7 +365,7 @@ fun GroupNav(vm: AppViewModel) {
                 if (isMoving) focusWhenReady(vm, frames = 30, isFocused = { hasFocus }) { runCatching { fr.requestFocus() }.isSuccess }
             }
             Focusable(
-                modifier = Modifier.fillMaxWidth().height(38.dp).focusRequester(fr).onFocusChanged { hasFocus = it.isFocused }.navFocusTarget(vm, g.raw)
+                modifier = Modifier.fillMaxWidth().height(38.dp).focusRequester(fr).onFocusChanged { hasFocus = it.isFocused }.navFocusTarget(vm, g.raw).activePath(on && !isMoving)
                     .then(if (!isMoving) Modifier.wrapEnds(wrap, isFirst = false, isLast = g == groups.last()) else Modifier)
                     .then(if (isMoving) Modifier.border(2.dp, C.AccentFocus, androidx.compose.foundation.shape.RoundedCornerShape(8.dp)) else Modifier)
                     .onPreviewKeyEvent { e ->
@@ -359,7 +378,8 @@ fun GroupNav(vm: AppViewModel) {
                 onMenu = { if (!isMoving) vm.groupMenu = g.raw },
                 onClick = { if (isMoving) vm.movingGroup = null else vm.chooseGroup(vm.activePlaylist()?.id ?: "", g.raw) },
             ) {
-                Label((if (isMoving) "⇅ " else if (on) "▶ " else "") + g.name, size = 14.sp, color = if (on || isMoving) C.Text else C.Soft, weight = if (on || isMoving) FontWeight.Bold else FontWeight.Normal, modifier = Modifier.padding(start = 10.dp).weight(1f))
+                if (isMoving) Label("⇅", size = 14.sp, color = C.Accent, weight = FontWeight.Bold, modifier = Modifier.padding(start = 10.dp))
+                Label(g.name, size = 14.sp, color = if (on || isMoving) C.Text else C.Soft, weight = if (on || isMoving) FontWeight.Bold else FontWeight.Normal, modifier = Modifier.padding(start = 10.dp).weight(1f))
                 Label(if (isMoving) "${groups.indexOf(g) + 1}/${groups.size}" else "${g.count}", size = 12.sp, color = if (isMoving) C.Accent else C.Muted, modifier = Modifier.padding(end = 10.dp))
             }
         }

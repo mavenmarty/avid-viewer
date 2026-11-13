@@ -43,6 +43,9 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.toggleableState
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
@@ -285,11 +288,11 @@ fun TvField(
 private const val ADD_PLAYLIST = "__add__"
 
 /** An action that needs a yes before it runs. */
-private class Confirm(val title: String, val message: String, val yes: String, val run: () -> Unit)
+internal class Confirm(val title: String, val message: String, val yes: String, val run: () -> Unit)
 
 /** "This can't be undone" confirmation; Cancel has the highlight. */
 @Composable
-private fun ConfirmDialog(c: Confirm, close: () -> Unit) {
+internal fun ConfirmDialog(c: Confirm, close: () -> Unit) {
     val cancelFocus = remember { FocusRequester() }
     AlertDialog(
         onDismissRequest = close,
@@ -314,6 +317,7 @@ fun PlaylistsScreen(vm: AppViewModel) {
     var sources by remember { mutableStateOf(false) }
     var confirm by remember { mutableStateOf<Confirm?>(null) }
     LaunchedEffect(sel) { sources = false }
+    var formFocused by remember { mutableStateOf(false) }
     val selP = vm.playlists.firstOrNull { it.id == sel }
     val adding = selP == null
     val active = vm.activePlaylist()?.id
@@ -327,10 +331,12 @@ fun PlaylistsScreen(vm: AppViewModel) {
     }
 
     Row(Modifier.fillMaxSize().padding(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 12.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-        // 1. The list
-        LazyColumn(Modifier.width(220.dp).fillMaxHeight().staysInSection(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        // 1. The list. SET-03, one rule for every settings page: at most three full columns. Settings' own section
+        // list already shrinks to icons; with the highlight in the form (the 3rd column) this list narrows too.
+        val listW by androidx.compose.animation.core.animateDpAsState(if (formFocused) 140.dp else 220.dp, label = "playlistList")
+        LazyColumn(Modifier.width(listW).fillMaxHeight().staysInSection().dimWhenInactive(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             item { Text("Playlists", color = C.Text, fontSize = 22.sp, fontWeight = FontWeight.Bold) }
-            item { Label("Up/Down to choose · Right for options", size = 12.sp, modifier = Modifier.padding(bottom = 4.dp)) }
+            if (!formFocused) item { Label("Up/Down to choose · Right for options", size = 12.sp, modifier = Modifier.padding(bottom = 4.dp)) }
             item(key = "add") {
                 Focusable(
                     modifier = Modifier.fillMaxWidth().height(48.dp),
@@ -345,7 +351,7 @@ fun PlaylistsScreen(vm: AppViewModel) {
             items(vm.playlists, key = { "pl-" + it.id }) { p ->
                 val on = p.id == sel
                 Focusable(
-                    modifier = Modifier.fillMaxWidth().height(58.dp),
+                    modifier = Modifier.fillMaxWidth().height(58.dp).activePath(on),
                     color = if (on) C.Surface2 else C.Surface,
                     onFocus = { if (sel != p.id) { sel = p.id; editing = false } },
                     onClick = { sel = p.id },
@@ -354,7 +360,7 @@ fun PlaylistsScreen(vm: AppViewModel) {
                         Label(p.name, size = 15.sp, color = if (p.enabled) C.Text else C.Muted, weight = FontWeight.SemiBold)
                         Label(playlistState(p, false), size = 12.sp, color = if (p.enabled) C.Accent else C.Muted)
                     }
-                    if (on) Text("›", color = C.Accent, fontSize = 20.sp, modifier = Modifier.padding(end = 10.dp))
+                    if (on) Glyph("›", C.Accent, 20.sp, Modifier.padding(end = 10.dp))
                 }
             }
             if (vm.playlists.isEmpty()) item { Label("No playlists yet. Avid Viewer doesn't include any channels; add your provider.", size = 12.sp, lines = Int.MAX_VALUE) }
@@ -362,7 +368,7 @@ fun PlaylistsScreen(vm: AppViewModel) {
 
         // 2. Actions and switches for the chosen playlist
         if (selP != null) {
-            LazyColumn(Modifier.width(250.dp).fillMaxHeight().staysInSection(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            LazyColumn(Modifier.width(250.dp).fillMaxHeight().staysInSection().dimWhenInactive(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 item {
                     Column(Modifier.padding(bottom = 4.dp)) {
                         Label(selP.name, size = 17.sp, color = C.Text, weight = FontWeight.Bold, lines = 2)
@@ -372,7 +378,7 @@ fun PlaylistsScreen(vm: AppViewModel) {
                 item { TvButton("✎  Edit", modifier = Modifier.fillMaxWidth(), selected = editing) { editing = true; sources = false } }
                 item { TvButton("▤  Guide sources", modifier = Modifier.fillMaxWidth().testTag("pl-guide-sources"), selected = sources) { sources = true; editing = false } }
                 item {
-                    TvButton(if (vm.busy) "Working…" else "↻  Refresh", modifier = Modifier.fillMaxWidth()) {
+                    TvButton(if (vm.busy) "Working…" else "↻  Refresh", modifier = Modifier.fillMaxWidth(), busy = vm.busy) {
                         if (!vm.busy) confirm = Confirm(
                             "Refresh ${selP.name}?",
                             "Your saved channels, guide, movies and series for this playlist are replaced with what your provider has now. This can't be undone.",
@@ -402,7 +408,7 @@ fun PlaylistsScreen(vm: AppViewModel) {
         }
 
         // 3. Add or edit form (far right)
-        Column(Modifier.weight(1f).fillMaxHeight().clip(RoundedCornerShape(12.dp)).background(C.Surface)) {
+        Column(Modifier.weight(1f).fillMaxHeight().clip(RoundedCornerShape(12.dp)).background(C.Surface).onFocusChanged { formFocused = it.hasFocus }) {
             when {
                 adding -> PlaylistForm(vm, null, onCancel = null) { f ->
                     vm.addPlaylist(f.name, f.type, f.server, f.user, f.pass, f.m3u, f.epg, f.liveOn, f.vodOn)
@@ -441,21 +447,8 @@ private fun playlistState(p: com.avidviewer.tv.data.Playlist, active: Boolean): 
 }
 
 @Composable
-private fun MiniToggle(title: String, desc: String, on: Boolean, enabled: Boolean = true, onToggle: () -> Unit) {
-    Focusable(Modifier.fillMaxWidth().heightIn(min = 58.dp), onClick = { if (enabled) onToggle() }) {
-        Column(Modifier.weight(1f).padding(start = 12.dp, end = 8.dp, top = 8.dp, bottom = 8.dp)) {
-            Label(title, size = 14.sp, color = if (enabled) C.Text else C.Muted, weight = FontWeight.SemiBold, lines = 2)
-            Label(if (enabled) desc else "Turn the playlist on first", size = 12.sp, lines = Int.MAX_VALUE)
-        }
-        Label(if (on) "On" else "Off", size = 12.sp, color = if (on && enabled) C.Accent else C.Muted, weight = FontWeight.Bold, modifier = Modifier.padding(end = 6.dp))
-        Row(
-            Modifier.padding(end = 12.dp).width(40.dp).height(22.dp).clip(RoundedCornerShape(11.dp)).background(if (on && enabled) C.Accent else C.Line).padding(3.dp),
-            horizontalArrangement = if (on) Arrangement.End else Arrangement.Start,
-        ) {
-            Spacer(Modifier.width(16.dp).height(16.dp).clip(RoundedCornerShape(8.dp)).background(androidx.compose.ui.graphics.Color.White))
-        }
-    }
-}
+private fun MiniToggle(title: String, desc: String, on: Boolean, enabled: Boolean = true, onToggle: () -> Unit) =
+    SettingSwitch(title, if (enabled) desc else "Turn the playlist on first", on, enabled = enabled, compact = true, onToggle = onToggle)
 
 @Composable
 private fun PlaylistDetails(p: com.avidviewer.tv.data.Playlist, active: Boolean) {
@@ -489,6 +482,27 @@ private class PlaylistFields(
     val m3u: String, val epg: String, val liveOn: Boolean, val vodOn: Boolean,
 )
 
+/**
+ * Back on a form with changes that aren't saved asks first (SET-02): "Keep editing" has the highlight, so a
+ * stray Back loses nothing; Discard drops the changes and does what Back would have done ([onDiscard]).
+ */
+@Composable
+fun DiscardGuard(dirty: Boolean, onDiscard: () -> Unit) {
+    var asking by remember { mutableStateOf(false) }
+    BackHandler(enabled = dirty && !asking) { asking = true }
+    if (!asking) return
+    val keep = remember { FocusRequester() }
+    AlertDialog(
+        onDismissRequest = { asking = false },
+        containerColor = C.Surface,
+        title = { Text("Discard changes?", color = C.Text, fontWeight = FontWeight.Bold) },
+        text = { Label("What you typed here hasn't been saved.", size = 14.sp, color = C.Soft, lines = Int.MAX_VALUE) },
+        confirmButton = { TvButton("Keep editing", primary = true, modifier = Modifier.focusRequester(keep)) { asking = false } },
+        dismissButton = { TvButton("Discard") { asking = false; onDiscard() } },
+    )
+    LaunchedEffect(Unit) { focusWhenReady { runCatching { keep.requestFocus() }.isSuccess } }
+}
+
 /** The add form, or the edit form when [existing] is given. */
 @Composable
 private fun PlaylistForm(vm: AppViewModel, existing: com.avidviewer.tv.data.Playlist?, onCancel: (() -> Unit)?, onSubmit: (PlaylistFields) -> Unit) {
@@ -502,6 +516,13 @@ private fun PlaylistForm(vm: AppViewModel, existing: com.avidviewer.tv.data.Play
     var epg by remember(k) { mutableStateOf(existing?.epgUrl ?: "") }
     var liveOn by remember(k) { mutableStateOf(true) }
     var vodOn by remember(k) { mutableStateOf(true) }
+    val dirty = type != (existing?.type ?: "xtream") || name != (existing?.name ?: "") || server != (existing?.server ?: "") ||
+        user != (existing?.username ?: "") || pass.isNotEmpty() || m3u != (existing?.m3uUrl ?: "") || epg != (existing?.epgUrl ?: "")
+    DiscardGuard(dirty) {
+        type = existing?.type ?: "xtream"; name = existing?.name ?: ""; server = existing?.server ?: ""; user = existing?.username ?: ""
+        pass = ""; m3u = existing?.m3uUrl ?: ""; epg = existing?.epgUrl ?: ""
+        if (onCancel != null) onCancel() else vm.navBack()
+    }
     LazyColumn(
         Modifier.fillMaxSize(),
         contentPadding = PaddingValues(16.dp),
@@ -536,7 +557,7 @@ private fun PlaylistForm(vm: AppViewModel, existing: com.avidviewer.tv.data.Play
         }
         item {
             Row(Modifier.padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                TvButton(if (vm.busy) "Working…" else if (existing == null) "Add playlist" else "Save changes", primary = true) {
+                TvButton(if (vm.busy) "Working…" else if (existing == null) "Add playlist" else "Save changes", primary = true, busy = vm.busy) {
                     if (!vm.busy) {
                         onSubmit(PlaylistFields(name, type, server, user, pass, m3u, epg, liveOn, vodOn))
                         if (existing == null) pass = ""
@@ -581,6 +602,7 @@ private fun Modifier.staysInSection(sectionFr: FocusRequester? = null, firstFr: 
 
 private val SECTIONS = listOf(
     SettingsSection("playlists", "Playlists", NavIcons.Playlists),
+    SettingsSection("profiles", "Profiles", NavIcons.Profiles),
     SettingsSection("channels", "List Editor", NavIcons.Manage),
     SettingsSection("location", "Location & weather", NavIcons.Location),
     SettingsSection("display", "Display & time", NavIcons.Guide),
@@ -641,7 +663,7 @@ fun SettingsScreen(vm: AppViewModel) {
     androidx.compose.runtime.DisposableEffect(Unit) { onDispose { vm.settingsInContent = false } }
     Row(Modifier.fillMaxSize()) {
         Column(
-            Modifier.width(listWidth).fillMaxHeight().background(C.Bg)
+            Modifier.width(listWidth).fillMaxHeight().background(C.Bg).dimWhenInactive()
                 // More sections than fit on a TV screen: the list scrolls to keep the highlighted one in view.
                 .verticalScroll(androidx.compose.foundation.rememberScrollState())
                 .padding(if (compact) 6.dp else 10.dp)
@@ -653,13 +675,13 @@ fun SettingsScreen(vm: AppViewModel) {
             SECTIONS.forEach { sec ->
                 val on = sec.id == section
                 Focusable(
-                    modifier = Modifier.fillMaxWidth().height(42.dp).focusRequester(sectionFrs.getValue(sec.id))
+                    modifier = Modifier.fillMaxWidth().height(42.dp).focusRequester(sectionFrs.getValue(sec.id)).activePath(on)
                         .then(if (sec == SECTIONS.first()) Modifier.entryFocus(vm, Screen.SETTINGS) else Modifier),
                     color = if (on) C.Surface2 else androidx.compose.ui.graphics.Color.Transparent,
                     // Highlighting a section only shows its summary; OK opens it and moves into it (NAV-08).
                     onClick = { vm.settingsSection = sec.id; openTick++ },
                 ) {
-                    androidx.compose.material3.Icon(sec.icon, contentDescription = sec.title, tint = if (on) C.Accent else C.Muted, modifier = Modifier.padding(start = if (compact) 12.dp else 10.dp).width(20.dp).height(20.dp))
+                    androidx.compose.material3.Icon(sec.icon, contentDescription = if (compact) sec.title else null, tint = if (on) C.Accent else C.Muted, modifier = Modifier.padding(start = if (compact) 12.dp else 10.dp).width(20.dp).height(20.dp))
                     if (!compact) Column(Modifier.padding(start = 12.dp).weight(1f)) {
                         Label(sec.title, size = 14.sp, color = if (on) C.Text else C.Soft, weight = if (on) FontWeight.Bold else FontWeight.Normal)
                         sectionSummary(vm, sec.id)?.let { Label(it, size = 12.sp) }
@@ -689,7 +711,7 @@ fun SettingsScreen(vm: AppViewModel) {
                         "display" -> displaySettings(vm)
                         "guide" -> guideSettings(vm) { t, m, y, r -> settingsConfirm = Confirm(t, m, y, r) }
                         "sports" -> sportsSettings(vm)
-                        "discover" -> discoverSettings(vm)
+                        "discover" -> discoverSettings(vm) { settingsConfirm = it }
                         "playback" -> item {
                             SettingBlock("Stream format (Xtream)", "If channels won't play, try the other format. Applies after Refresh in Playlists.") {
                                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -698,7 +720,8 @@ fun SettingsScreen(vm: AppViewModel) {
                                 }
                             }
                         }
-                        "privacy" -> privacySettings(vm)
+                        "privacy" -> privacySettings(vm) { settingsConfirm = it }
+                        "profiles" -> profilesSettings(vm) { settingsConfirm = it }
                         "storage" -> {
                             item {
                                 Label("The cache holds copies of channel logos, posters and recently streamed video, so screens load faster. Clearing it never removes your playlists, favorites, lists, TV guide, watch history or settings.", size = 13.sp, color = C.Soft, lines = Int.MAX_VALUE)
@@ -719,9 +742,11 @@ fun SettingsScreen(vm: AppViewModel) {
                                 fun mb(b: Long) = if (b < 1024 * 1024) "${b / 1024} KB" else "${b / (1024 * 1024)} MB"
                                 SettingBlock("Cache size: ${mb(size)}", "Clear it now to free up that space. Your playlists and settings stay as they are.") {
                                     TvButton("Clear cache now") {
-                                        val before = size
-                                        vm.store.clearCache(); size = vm.store.cacheSizeBytes()
-                                        note = "Cleared ${mb((before - size).coerceAtLeast(0))}. Logos and posters will download again as you browse."
+                                        settingsConfirm = Confirm("Clear the cache?", "Logos and posters (${mb(size)}) will download again as you browse. Playlists and settings stay.", "Clear cache") {
+                                            val before = size
+                                            vm.store.clearCache(); size = vm.store.cacheSizeBytes()
+                                            note = "Cleared ${mb((before - size).coerceAtLeast(0))}. Logos and posters will download again as you browse."
+                                        }
                                     }
                                     note?.let { Label(it, size = 12.sp, color = C.Accent, lines = Int.MAX_VALUE) }
                                 }
@@ -732,7 +757,7 @@ fun SettingsScreen(vm: AppViewModel) {
                                 item {
                                     SettingBlock("Last crash", "The app closed unexpectedly. These details stay on this device; share a photo of them to help fix the problem.") {
                                         Label(crash.lines().take(14).joinToString("\n"), size = 11.sp, color = C.Soft, lines = Int.MAX_VALUE)
-                                        TvButton("Clear crash report") { vm.clearCrash() }
+                                        TvButton("Clear crash report") { settingsConfirm = Confirm("Clear the crash report?", "Its details can't be shared after this.", "Clear") { vm.clearCrash() } }
                                     }
                                 }
                             }
@@ -742,11 +767,11 @@ fun SettingsScreen(vm: AppViewModel) {
                             item {
                                 SettingBlock("App updates", "Installed: version ${vm.installed.second}" + (vm.update?.let { " · version ${it.versionName} available" } ?: "")) {
                                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                        if (vm.update != null) TvButton(if (vm.updateBusy) "Working…" else "Download and install", primary = true) { if (!vm.updateBusy) vm.installUpdate() }
+                                        if (vm.update != null) TvButton(if (vm.updateBusy) "Working…" else "Download and install", primary = true, busy = vm.updateBusy) { if (!vm.updateBusy) vm.installUpdate() }
                                         if (vm.updateFile != null && !vm.updateBusy) TvButton("Open installer", modifier = Modifier.testTag("update-open-installer")) { vm.openInstaller() }
                                         TvButton("Check now") { vm.checkForUpdate() }
-                                        TvButton(if (p.autoUpdateCheck) "Auto-check: on" else "Auto-check: off", selected = p.autoUpdateCheck) { vm.updatePrefs { it.copy(autoUpdateCheck = !it.autoUpdateCheck) } }
                                     }
+                                    SettingSwitch("Check for updates automatically", "Looks for a new version when the app starts.", p.autoUpdateCheck, compact = true) { vm.updatePrefs { it.copy(autoUpdateCheck = !it.autoUpdateCheck) } }
                                     vm.updateStatus?.let { Label(it, size = 12.sp, color = C.Soft, lines = 3) }
                                 }
                             }
@@ -774,6 +799,7 @@ private fun sectionSummary(vm: AppViewModel, id: String): String? = when (id) {
     "sports" -> "${vm.sportLeagues().count { it.on }} leagues on"
     "discover" -> if (vm.prefs.tmdbKeyEnc.isBlank()) "Needs TMDB key" else "${vm.prefs.myServices.size} services"
     "privacy" -> if (vm.prefs.historyPaused) "History paused" else "History on"
+    "profiles" -> if (vm.profiles.multiple) "${vm.profiles.list.size} profiles · ${vm.profile.name}" else "Just you"
     "about" -> vm.update?.let { "Update ${it.versionName} available" } ?: "Version ${vm.installed.second}"
     else -> null
 }
@@ -788,7 +814,9 @@ private fun androidx.compose.foundation.lazy.LazyListScope.locationSettings(vm: 
             else "${p.postalCode} · ${p.placeName}",
         ) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                TvField("Postal code", code, modifier = Modifier.width(220.dp)) { code = it.take(8) }
+                // Done on the keyboard saves too; Back with an unsaved code asks first (SET-02).
+                TvField("Postal code", code, modifier = Modifier.width(220.dp), onSubmit = { if (code != p.postalCode) vm.setPostalCode(code) }) { code = it.take(8) }
+                DiscardGuard(code != p.postalCode) { code = p.postalCode; vm.navBack() }
                 TvButton("Save", primary = true) { vm.setPostalCode(code) }
             }
             vm.postalStatus?.let { Label(it, size = 12.sp, color = C.Soft) }
@@ -825,7 +853,7 @@ private fun androidx.compose.foundation.lazy.LazyListScope.displaySettings(vm: A
 }
 
 /** Watch history and a viewing summary, all computed and kept on this device. */
-private fun androidx.compose.foundation.lazy.LazyListScope.privacySettings(vm: AppViewModel) {
+private fun androidx.compose.foundation.lazy.LazyListScope.privacySettings(vm: AppViewModel, ask: (Confirm) -> Unit) {
     val p = vm.prefs
     item { Label("Everything here stays on this device in the app's private storage. Nothing is uploaded or backed up to the cloud.", size = 13.sp, color = C.Soft, lines = Int.MAX_VALUE) }
     item { ToggleRow("Pause watch history", "Stop recording what you watch. Existing history is kept until you clear it.", p.historyPaused) { vm.updatePrefs { it.copy(historyPaused = !it.historyPaused) } } }
@@ -843,7 +871,7 @@ private fun androidx.compose.foundation.lazy.LazyListScope.privacySettings(vm: A
     }
     item {
         SettingBlock("Watch history", if (vm.history.isEmpty()) "No watch history" else "${vm.history.size} viewing sessions from the last 90 days") {
-            TvButton("Clear watch history") { vm.clearHistory() }
+            TvButton("Clear watch history") { ask(Confirm("Clear watch history?", "All ${vm.history.size} viewing sessions will be deleted. This can't be undone.", "Clear history") { vm.clearHistory() }) }
         }
     }
 }
@@ -924,19 +952,36 @@ private fun appVersion(vm: AppViewModel): String = try {
 }
 
 @Composable
-private fun ToggleRow(title: String, desc: String, on: Boolean, onToggle: () -> Unit) {
-    Focusable(Modifier.fillMaxWidth().heightIn(min = 60.dp), onClick = onToggle) {
-        Column(Modifier.weight(1f).padding(horizontal = 14.dp, vertical = 9.dp)) {
-            Label(title, size = 15.sp, color = C.Text, weight = FontWeight.SemiBold, lines = 2)
-            Label(desc, size = 12.sp, lines = Int.MAX_VALUE)
+private fun ToggleRow(title: String, desc: String, on: Boolean, onToggle: () -> Unit) = SettingSwitch(title, desc, on, onToggle = onToggle)
+
+/**
+ * The one on/off control in Settings (STATE-03): the title and what it does, then "On"/"Off" and a switch.
+ * OK flips it. [compact] is the smaller size used inside a playlist's options. TalkBack hears a switch, on or off.
+ */
+@Composable
+fun SettingSwitch(title: String, desc: String, on: Boolean, enabled: Boolean = true, compact: Boolean = false, onToggle: () -> Unit) {
+    Focusable(
+        Modifier.fillMaxWidth().heightIn(min = if (compact) 58.dp else 60.dp)
+            .semantics(mergeDescendants = true) { role = androidx.compose.ui.semantics.Role.Switch; toggleableState = androidx.compose.ui.state.ToggleableState(on) },
+        onClick = { if (enabled) onToggle() },
+    ) {
+        Column(Modifier.weight(1f).padding(start = if (compact) 12.dp else 14.dp, end = 8.dp, top = 8.dp, bottom = 8.dp)) {
+            Label(title, size = if (compact) 14.sp else 15.sp, color = if (enabled) C.Text else C.Muted, weight = FontWeight.SemiBold, lines = 2)
+            if (desc.isNotBlank()) Label(desc, size = 12.sp, lines = Int.MAX_VALUE)
         }
-        Label(if (on) "On" else "Off", size = 13.sp, color = if (on) C.Accent else C.Muted, weight = FontWeight.Bold, modifier = Modifier.padding(end = 8.dp))
-        Row(
-            Modifier.padding(end = 14.dp).width(46.dp).height(26.dp).clip(RoundedCornerShape(13.dp)).background(if (on) C.Accent else C.Line).padding(3.dp),
-            horizontalArrangement = if (on) Arrangement.End else Arrangement.Start,
-        ) {
-            Spacer(Modifier.width(20.dp).height(20.dp).clip(RoundedCornerShape(10.dp)).background(androidx.compose.ui.graphics.Color.White))
-        }
+        Label(if (on) "On" else "Off", size = 13.sp, color = if (on && enabled) C.Accent else C.Muted, weight = FontWeight.Bold, modifier = Modifier.padding(end = 8.dp))
+        SwitchTrack(on && enabled, Modifier.padding(end = if (compact) 12.dp else 14.dp))
+    }
+}
+
+/** The switch drawing on its own (for rows that are more than a switch, like a league). */
+@Composable
+fun SwitchTrack(on: Boolean, modifier: Modifier = Modifier) {
+    Row(
+        modifier.width(46.dp).height(26.dp).clip(RoundedCornerShape(13.dp)).background(if (on) C.Accent else C.Line).padding(3.dp),
+        horizontalArrangement = if (on) Arrangement.End else Arrangement.Start,
+    ) {
+        Spacer(Modifier.width(20.dp).height(20.dp).clip(RoundedCornerShape(10.dp)).background(androidx.compose.ui.graphics.Color.White))
     }
 }
 
@@ -999,8 +1044,8 @@ private fun androidx.compose.foundation.lazy.LazyListScope.sportsSettings(vm: Ap
                             Label(l.name, size = 14.sp, color = C.Text, weight = FontWeight.SemiBold)
                             Label(if (isMoving) "▲ ▼ move · ◀ top · ▶ bottom · OK done" else l.season, size = 11.sp, color = if (isMoving) C.AccentFocus else C.Muted)
                         }
-                        Label(if (s.on) "On" else "Off", size = 12.sp, weight = FontWeight.Bold, color = if (s.on) C.OnAccent else C.Soft,
-                            modifier = Modifier.clip(RoundedCornerShape(12.dp)).background(if (s.on) C.Accent else C.Surface).padding(horizontal = 12.dp, vertical = 3.dp))
+                        Label(if (s.on) "On" else "Off", size = 13.sp, weight = FontWeight.Bold, color = if (s.on) C.Accent else C.Muted)
+                        SwitchTrack(s.on)
                     }
                 }
             }
@@ -1038,7 +1083,7 @@ private fun androidx.compose.foundation.lazy.LazyListScope.sportsSettings(vm: Ap
 }
 
 
-private fun androidx.compose.foundation.lazy.LazyListScope.discoverSettings(vm: AppViewModel) {
+private fun androidx.compose.foundation.lazy.LazyListScope.discoverSettings(vm: AppViewModel, ask: (Confirm) -> Unit) {
     val p = vm.prefs
     item {
         var key by remember { mutableStateOf("") }
@@ -1047,9 +1092,10 @@ private fun androidx.compose.foundation.lazy.LazyListScope.discoverSettings(vm: 
             if (p.tmdbKeyEnc.isBlank()) "Free from themoviedb.org (Settings › API). Stored encrypted on this device only." else "Saved (encrypted on this device). Enter a new key to replace it.",
         ) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                TvField("API key", key, modifier = Modifier.width(360.dp), password = p.tmdbKeyEnc.isNotBlank() && key.isEmpty()) { key = it.trim() }
+                TvField("API key", key, modifier = Modifier.width(360.dp), password = p.tmdbKeyEnc.isNotBlank() && key.isEmpty(), onSubmit = { if (key.isNotBlank()) { vm.setTmdbKey(key); key = "" } }) { key = it.trim() }
+                DiscardGuard(key.isNotBlank()) { key = ""; vm.navBack() }
                 TvButton("Save", primary = true) { vm.setTmdbKey(key); key = "" }
-                if (p.tmdbKeyEnc.isNotBlank()) TvButton("Remove") { vm.setTmdbKey("") }
+                if (p.tmdbKeyEnc.isNotBlank()) TvButton("Remove") { ask(Confirm("Remove the TMDB key?", "Discover stops working until you enter a key again.", "Remove key") { vm.setTmdbKey("") }) }
             }
             vm.tmdbStatus?.let { Label(it, size = 12.sp, color = C.Soft, lines = 2) }
         }
@@ -1261,7 +1307,7 @@ private fun BackupBlock(vm: AppViewModel) {
             "It stays there if Avid Viewer is deleted, so after reinstalling you can restore everything here. Channels, guides and movies download again on their own.",
     ) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            TvButton(if (vm.backupBusy) "Working…" else "Back up now", primary = true, modifier = Modifier.testTag("backup-now")) { if (!vm.backupBusy) making = true }
+            TvButton(if (vm.backupBusy) "Working…" else "Back up now", primary = true, busy = vm.backupBusy, modifier = Modifier.testTag("backup-now")) { if (!vm.backupBusy) making = true }
             TvButton("Restore from a backup", modifier = Modifier.testTag("backup-restore")) { if (!vm.backupBusy) vm.startRestore() }
         }
         vm.backupStatus?.let { Label(it, size = 12.sp, color = C.Soft, lines = Int.MAX_VALUE) }
@@ -1366,7 +1412,7 @@ private fun RestorePinDialog(vm: AppViewModel) {
             }
         },
         confirmButton = {
-            TvButton(if (vm.backupBusy) "Restoring…" else "Restore", primary = true) {
+            TvButton(if (vm.backupBusy) "Restoring…" else "Restore", primary = true, busy = vm.backupBusy) {
                 if (!vm.backupBusy) vm.restore(pin) { ok -> if (!ok) wrong = vm.backupStatus ?: "That PIN doesn't open this backup." }
             }
         },

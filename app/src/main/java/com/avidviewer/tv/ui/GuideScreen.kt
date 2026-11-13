@@ -1,6 +1,8 @@
 package com.avidviewer.tv.ui
 
 import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.background
@@ -53,9 +55,28 @@ import kotlinx.coroutines.launch
 private const val DP_PER_MIN = 3.3f
 private const val CH_COL = 200 // channel column width (dp)
 private const val WINDOW_MIN = 150
-/** How far ahead the guide can scroll. */
+/** How far ahead the guide can scroll at least; it goes further when the guide data does (up to [GUIDE_DAYS] days). */
 private const val AHEAD_MIN = 12 * 60
 private const val HALF_MS = 30 * 60 * 1000L
+/** How far back the guide can scroll, in half hours: 2 hours of programmes that have aired, dimmed (GUIDE-04). */
+private const val BACK_SLOTS = -4
+/** Key repeats of a held Left before the guide jumps back to now. */
+private const val HOLD_TO_NOW = 4
+
+/**
+ * The start of the half hour [ms] falls in, on the clock of [zone]: the guide's columns sit on local :00 and :30
+ * even in zones that are 15 or 45 minutes off the hour (GUIDE-03).
+ */
+fun localHalfHour(ms: Long, zone: java.util.TimeZone): Long {
+    val off = zone.getOffset(ms).toLong()
+    return Math.floorDiv(ms + off, HALF_MS) * HALF_MS - off
+}
+
+/** The start of the local day [ms] falls in, on the clock of [zone]. */
+fun localDayStart(ms: Long, zone: java.util.TimeZone): Long =
+    java.util.Calendar.getInstance(zone).apply {
+        timeInMillis = ms; set(java.util.Calendar.HOUR_OF_DAY, 0); set(java.util.Calendar.MINUTE, 0); set(java.util.Calendar.SECOND, 0); set(java.util.Calendar.MILLISECOND, 0)
+    }.timeInMillis
 
 @Composable
 fun GuideScreen(vm: AppViewModel) {
@@ -67,13 +88,17 @@ fun GuideScreen(vm: AppViewModel) {
     val list = vm.channelsIn(vm.selectedGroup).distinctBy { it.key }
     val numbers = vm.numbers()
     val half = HALF_MS
-    // The visible 2.5-hour window starts at the current half hour plus [slots] × 30 minutes (up to 12 hours ahead).
-    val base = (vm.now / half) * half
-    val maxSlots = (AHEAD_MIN - WINDOW_MIN) / 30 + 1
+    // The visible 2.5-hour window starts at the current (local) half hour plus [slots] × 30 minutes: back 2 hours,
+    // ahead as far as the guide data goes (at least 12 hours, at most GUIDE_DAYS days).
+    val zone = vm.timeZone
+    val base = localHalfHour(vm.now, zone)
+    val aheadMs = maxOf(AHEAD_MIN * 60_000L, vm.guideLastEnd - base)
+    val maxSlots = ((aheadMs - WINDOW_MIN * 60_000L) / half).toInt().coerceAtLeast(0) + 1
     // The window and the highlighted time are kept in the navigation store, so leaving the guide
     // (full screen, another screen) comes back to the same time (NAV-05).
-    var slots by remember { mutableStateOf(((vm.nav.guideWindowStart - base) / half).toInt().coerceAtLeast(0)) }
-    slots = slots.coerceIn(0, maxSlots)
+    // A remembered window from long ago (or none yet) opens at now.
+    var slots by remember { mutableStateOf(Math.floorDiv(vm.nav.guideWindowStart - base, half).let { if (it < BACK_SLOTS || it > Int.MAX_VALUE) 0 else it.toInt() }) }
+    slots = slots.coerceIn(BACK_SLOTS, maxSlots)
     val winStart = base + slots * half
     val winEnd = winStart + WINDOW_MIN * 60 * 1000L
     var focusProg by remember { mutableStateOf<Pair<String, Program?>?>(null) }
@@ -85,9 +110,11 @@ fun GuideScreen(vm: AppViewModel) {
 
     // The time the highlight is on. Up/Down lands on the program airing at this time in the next row,
     // whatever the run times are; it only changes when you move left or right.
-    var anchor by remember { mutableStateOf(vm.nav.guideAnchor.takeIf { it >= base } ?: vm.now) }
+    var anchor by remember { mutableStateOf(vm.nav.guideAnchor.takeIf { it >= base + BACK_SLOTS * half } ?: vm.now) }
     LaunchedEffect(slots, anchor) { vm.nav.guideWindowStart = winStart; vm.nav.guideAnchor = anchor }
     val path = vm.guidePath(vm.selectedGroup)
+    // Days ahead: the programmes for the times on screen are read for this category when they aren't in memory.
+    LaunchedEffect(winStart, path, list.size) { vm.guideViewing(list, winStart, winEnd) }
     // Focus handles per channel, made only for rows that are actually shown (an 8,000-channel category
     // used to allocate 16,000 of them up front).
     val progFocusMap = remember(vm.selectedGroup) { HashMap<String, FocusRequester>() }
@@ -239,13 +266,30 @@ fun GuideScreen(vm: AppViewModel) {
 
     /** Right on the last program in view (or Left on the first) scrolls the window by whole half hours. */
     fun shiftTo(time: Long, row: Int, forward: Boolean) {
-        val need = if (forward) ((time + half - (base + WINDOW_MIN * 60 * 1000L)) + half - 1) / half else (time - base) / half
-        val n = need.toInt().coerceIn(0, maxSlots)
+        val need = if (forward) Math.floorDiv((time + half - (base + WINDOW_MIN * 60 * 1000L)) + half - 1, half) else Math.floorDiv(time - base, half)
+        val n = need.toInt().coerceIn(BACK_SLOTS, maxSlots)
         if (n == slots) return
         slots = n
         anchor = time
         pendingProg = row
     }
+
+    /** Puts the window on [time] (Now, a day in the day strip, or holding Left); [row] takes the highlight if given. */
+    fun jumpTo(time: Long, row: Int?) {
+        val n = Math.floorDiv(localHalfHour(time, zone) - base, half).toInt().coerceIn(BACK_SLOTS, maxSlots)
+        slots = n
+        anchor = time.coerceAtLeast(base + n * half)
+        if (row != null) pendingProg = row
+    }
+    // The day strip (Now, Tomorrow, Sat…): shown when the guide reaches past today.
+    val today = localDayStart(vm.now, zone)
+    val days = remember(today, vm.guideLastEnd) {
+        val out = ArrayList<Long>()
+        var d = localDayStart(today + 26 * 3600 * 1000L, zone)
+        while (d < vm.guideLastEnd && out.size < GUIDE_DAYS) { out.add(d); d = localDayStart(d + 26 * 3600 * 1000L, zone) }
+        out
+    }
+    val dayFr = remember { FocusRequester() }
 
     // Channel Up / Channel Down (and Page Up / Page Down) move a full page; Up/Down still move one row.
     fun page(dir: Int) {
@@ -298,9 +342,13 @@ fun GuideScreen(vm: AppViewModel) {
         if (vm.guideQuery.isNotBlank()) {
             GuideSearchResults(vm, Modifier.weight(1f))
         } else {
-        // Timeline header
+        if (days.isNotEmpty()) DayStrip(vm, days, winStart, dayFr, previewFr,
+            onNow = { jumpTo(vm.now, null) },
+            onDay = { d -> jumpTo(d + (vm.now - today).coerceIn(0, 24 * 3600 * 1000L - 1), null) })
+        // Timeline header: where you are (category · day · zone), then the half-hour marks.
         Row(Modifier.fillMaxWidth().height(18.dp)) {
-            Label(vm.dayLabel(winStart) + " · ${vm.zoneLabel()}" + if (slots > 0) "  ◀" else "", size = 12.sp, modifier = Modifier.width((CH_COL + 3).dp))
+            Label(listOfNotNull(vm.selectedGroup?.let { vm.groupName(it) }, vm.dayLabel(winStart)).joinToString(" · ") + " · ${vm.zoneLabel()}" + if (slots != 0) "  ◀" else "",
+                size = 12.sp, modifier = Modifier.width((CH_COL + 3).dp))
             Box(Modifier.weight(1f)) {
                 for (i in 0 until WINDOW_MIN / 30) {
                     Label(vm.fmtTime(winStart + i * half), size = 12.sp, modifier = Modifier.offset(x = (i * 30 * DP_PER_MIN).dp))
@@ -316,7 +364,7 @@ fun GuideScreen(vm: AppViewModel) {
                         val isMoving = c.key == vm.movingChannel
                         Focusable(
                             modifier = Modifier.width(CH_COL.dp).fillMaxHeight().focusRequester(rowFr(idx)!!)
-                                .then(if (idx == 0) Modifier.focusProperties { up = previewFr } else Modifier)
+                                .then(if (idx == 0) Modifier.focusProperties { up = if (days.isNotEmpty()) dayFr else previewFr } else Modifier)
                                 .then(if (isMoving) Modifier.border(2.dp, C.AccentFocus, RoundedCornerShape(8.dp)) else Modifier)
                                 .onFocusChanged {
                                     if (isMoving) movingFocused = it.isFocused
@@ -349,7 +397,7 @@ fun GuideScreen(vm: AppViewModel) {
                                 modifier = Modifier.padding(start = 7.dp, end = 6.dp),
                             )
                         }
-                        val progs = vm.programs(c).filter { it.end > winStart && it.start < winEnd }
+                        val progs = vm.programsAt(c, winStart, winEnd).filter { it.end > winStart && it.start < winEnd }
                         if (progs.isEmpty()) {
                             Focusable(
                                 modifier = Modifier.width((WINDOW_MIN * DP_PER_MIN).dp).fillMaxHeight().focusRequester(progFr(idx)!!)
@@ -378,9 +426,12 @@ fun GuideScreen(vm: AppViewModel) {
                             laid.forEachIndexed { pi, (p, a, b) ->
                                 if (a > cursor) Box(Modifier.width((((a - cursor) / 60000f * DP_PER_MIN).dp - 3.dp).coerceAtLeast(0.dp)))
                                 val isNow = vm.now >= p.start && vm.now < p.end
+                                // Already aired: dimmed; OK still tunes the channel live (there's no catch-up).
+                                val aired = p.end <= vm.now
                                 Focusable(
                                     modifier = Modifier.width(((((b - a) / 60000f) * DP_PER_MIN).dp - 3.dp).coerceAtLeast(4.dp)).fillMaxHeight()
                                         .then(if (p === target) Modifier.focusRequester(progFr(idx)!!) else Modifier)
+                                        .then(if (aired) Modifier.semantics { stateDescription = "Already aired" } else Modifier)
                                         .onPreviewKeyEvent { e ->
                                             if (e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
                                             when (e.key) {
@@ -388,12 +439,17 @@ fun GuideScreen(vm: AppViewModel) {
                                                 Key.DirectionDown -> moveRow(idx, 1, holdSteps(e), e.nativeKeyEvent.repeatCount == 0)
                                                 // Last program in view: scroll the guide forward to the next program.
                                                 Key.DirectionRight -> if (pi == laid.lastIndex && slots < maxSlots) { shiftTo(maxOf(p.end, winEnd - 60_000L), idx, true); true } else false
-                                                // First program in view: scroll back (at the start, Left goes to the channel name).
-                                                Key.DirectionLeft -> if (pi == 0 && slots > 0) { shiftTo(minOf(p.start, winStart) - 60_000L, idx, false); true } else false
+                                                // Holding Left on a later window jumps straight back to now (NAV-15).
+                                                // First program in view: scroll back, up to 2 hours (at the end, Left goes to the channel name).
+                                                Key.DirectionLeft -> when {
+                                                    slots > 0 && e.nativeKeyEvent.repeatCount >= HOLD_TO_NOW -> { jumpTo(vm.now, idx); true }
+                                                    pi == 0 && slots > BACK_SLOTS -> { shiftTo(minOf(p.start, winStart) - 60_000L, idx, false); true }
+                                                    else -> false
+                                                }
                                                 else -> false
                                             }
                                         },
-                                    color = if (isNow) C.Surface2 else C.Surface,
+                                    color = if (isNow) C.Surface2 else if (aired) C.Surface.copy(alpha = 0.45f) else C.Surface,
                                     focusedColor = C.Line,
                                     onFocus = {
                                         focusProg = c.key to p
@@ -405,8 +461,8 @@ fun GuideScreen(vm: AppViewModel) {
                                     onClick = { vm.selectChannel(c.key, PlayContext.GROUP) },
                                 ) {
                                     Column(Modifier.padding(horizontal = 8.dp)) {
-                                        Label((if (p.isNew) "NEW · " else "") + p.title, size = 12.sp, color = C.Text, weight = FontWeight.SemiBold)
-                                        Label("${vm.fmtTime(p.start)} – ${vm.fmtTime(p.end)}", size = 12.sp)
+                                        Label((if (p.isNew && !aired) "NEW · " else "") + p.title, size = 12.sp, color = if (aired) C.Muted else C.Text, weight = FontWeight.SemiBold)
+                                        Label("${vm.fmtTime(p.start)} – ${vm.fmtTime(p.end)}", size = 12.sp, color = if (aired) C.Muted.copy(alpha = 0.7f) else C.Muted)
                                     }
                                 }
                                 cursor = b
@@ -425,14 +481,35 @@ fun GuideScreen(vm: AppViewModel) {
     }
 }
 
+/**
+ * Now, then one chip per day the guide reaches (Tomorrow, Sat, Sun…). The chip of the day on screen is marked;
+ * OK moves the guide there, at the same time of day as now (GUIDE-01).
+ */
+@Composable
+private fun DayStrip(vm: AppViewModel, days: List<Long>, winStart: Long, first: FocusRequester, previewFr: FocusRequester, onNow: () -> Unit, onDay: (Long) -> Unit) {
+    val onDayShown = days.lastOrNull { winStart >= it }
+    Row(Modifier.fillMaxWidth().height(30.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+        DayChip("Now", onDayShown == null && winStart <= vm.now, Modifier.focusRequester(first).focusProperties { up = previewFr }, onNow)
+        days.forEach { d -> DayChip(vm.dayLabel(d + 12 * 3600 * 1000L), d == onDayShown, Modifier.focusProperties { up = previewFr }) { onDay(d) } }
+    }
+}
+
+@Composable
+private fun DayChip(text: String, on: Boolean, modifier: Modifier, onClick: () -> Unit) {
+    Focusable(modifier = modifier.height(26.dp), shape = RoundedCornerShape(13.dp), color = if (on) C.Accent else C.Surface2, focusedColor = if (on) C.AccentFocus else C.Line, onClick = onClick) {
+        Text(text, color = if (on) C.OnAccent else C.Text, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, modifier = Modifier.padding(horizontal = 12.dp))
+    }
+}
+
 /** Menu on a channel: favorite, rename, move, hide. Stays open so Move can be pressed repeatedly. */
 @Composable
 fun ChannelOptionsDialog(vm: AppViewModel) {
     val key = vm.channelMenu ?: return
     val c = vm.channel(key) ?: run { vm.channelMenu = null; return }
     var renaming by remember(key) { mutableStateOf(false) }
+    // Cancel closes the menu too, like Save: the highlight goes back to the channel (FOCUS-02).
     if (renaming) {
-        RenameDialog("Rename channel", vm.channelName(c), onDismiss = { renaming = false }) { vm.renameChannel(key, it); renaming = false; vm.channelMenu = null }
+        RenameDialog("Rename channel", vm.channelName(c), onDismiss = { renaming = false; vm.channelMenu = null }) { vm.renameChannel(key, it); renaming = false; vm.channelMenu = null }
         return
     }
     val list = vm.channelsIn(vm.selectedGroup)
@@ -482,8 +559,8 @@ private fun DetailsPanel(vm: AppViewModel, c: com.avidviewer.tv.data.Channel?, c
             val untilStart = ((p.start - now) / 60000L).coerceAtLeast(0)
             Label("${vm.fmtTime(p.start)} – ${vm.fmtTime(p.end)}" + when {
                 airing -> " · $left min left"
-                p.start > now -> " · starts in " + (if (untilStart >= 60) "${untilStart / 60} h ${untilStart % 60} min" else "$untilStart min")
-                else -> ""
+                p.start > now -> " · " + (if (vm.dayLabel(p.start) != "Today") vm.dayLabel(p.start) else "starts in " + (if (untilStart >= 60) "${untilStart / 60} h ${untilStart % 60} min" else "$untilStart min"))
+                else -> " · already aired · OK plays the channel live"
             }, size = 12.sp, color = if (airing) C.Accent else C.Soft)
             if (airing) {
                 val frac = ((now - p.start).toFloat() / (p.end - p.start).coerceAtLeast(1)).coerceIn(0f, 1f)

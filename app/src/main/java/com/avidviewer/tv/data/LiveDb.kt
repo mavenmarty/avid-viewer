@@ -35,6 +35,9 @@ class LiveDb(private val catalog: Catalog) {
         private fun channel(c: Cursor) = Channel(c.getString(0), c.getString(1), c.getString(2), c.getString(3), c.getString(4), c.getString(5))
         private fun program(c: Cursor, from: Int) = Program(c.getLong(from), c.getLong(from + 1), c.getString(from + 2), c.getString(from + 3), c.getInt(from + 4) == 1)
 
+        /** Rows per page for the one-at-a-time readers ([forEachChannel], [forEachProgram], [guide]): well inside one CursorWindow. */
+        const val PAGE = 500
+
         /** SQL LIKE pattern for "contains [s]", with LIKE's wildcards escaped. */
         fun contains(s: String) = "%" + s.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
     }
@@ -51,6 +54,12 @@ class LiveDb(private val catalog: Catalog) {
 
     fun channelsSavedAt(pid: String) = savedAt(pid, "ch")
     fun guideSavedAt(pid: String) = savedAt(pid, "guide")
+
+    /** The saved guide was found still current (its sources hadn't changed): counts as freshly downloaded. */
+    fun guideChecked(pid: String) = markSaved(db, pid, "guide")
+
+    /** When the last saved programme of a playlist ends (0 = none). */
+    fun guideEnd(pid: String): Long = db.rawQuery("SELECT MAX(x) FROM prog WHERE p = ?", arrayOf(pid)).use { c -> if (c.moveToFirst() && !c.isNull(0)) c.getLong(0) else 0L }
 
     private fun markSaved(d: SQLiteDatabase, pid: String, kind: String, at: Long = System.currentTimeMillis()) {
         d.insertWithOnConflict("live_saved", null, ContentValues().apply { put("p", pid); put("kind", kind); put("saved", at) }, SQLiteDatabase.CONFLICT_REPLACE)
@@ -114,10 +123,14 @@ class LiveDb(private val catalog: Catalog) {
     }
 
     /** Channels whose name contains [needle] (case-insensitive for plain letters), in list order. */
-    fun searchChannels(pid: String, needle: String, limit: Int): List<Channel> =
-        db.rawQuery("SELECT $CH_COLS FROM channel WHERE p = ? AND n LIKE ? ESCAPE '\\' ORDER BY o LIMIT $limit", arrayOf(pid, contains(needle))).use { c ->
+    fun searchChannels(pid: String, needle: String, limit: Int): List<Channel> {
+        // Every word typed, in any order.
+        val words = SearchText.words(needle).ifEmpty { listOf(needle.trim()) }
+        val where = words.joinToString(" AND ") { "n LIKE ? ESCAPE '\\'" }
+        return db.rawQuery("SELECT $CH_COLS FROM channel WHERE p = ? AND $where ORDER BY o LIMIT $limit", arrayOf(pid) + words.map { contains(it) }).use { c ->
             val l = ArrayList<Channel>(); while (c.moveToNext()) l.add(channel(c)); l
         }
+    }
 
     /** Channels that carry one of these guide ids (as saved by the provider). */
     fun channelsWithEpg(pid: String, ids: Collection<String>): List<Channel> {
@@ -226,7 +239,13 @@ class LiveDb(private val catalog: Catalog) {
         val out = HashMap<String, MutableList<Program>>()
         fun collect(c: Cursor) { while (c.moveToNext()) out.getOrPut(c.getString(0)) { ArrayList() }.add(program(c, 1)) }
         val sql = "SELECT e, s, x, t, st, nw FROM prog WHERE p = ? AND x > ? AND s < ?"
-        if (ids == null) db.rawQuery("$sql ORDER BY e, s", arrayOf(pid, from.toString(), to.toString())).use(::collect)
+        if (ids == null) {
+            // A whole playlist's guide can be tens of thousands of rows: read it in pages (see [pages]), then sort.
+            pages("e, s, x, t, st, nw", "prog", "p = ? AND x > ? AND s < ?", arrayOf(pid, from.toString(), to.toString()), "x") { c ->
+                out.getOrPut(c.getString(2)) { ArrayList() }.add(program(c, 3))
+            }
+            out.values.forEach { l -> l.sortBy { it.start } }
+        }
         else ids.distinct().chunked(400).forEach { part ->
             if (part.isNotEmpty()) db.rawQuery("$sql AND e IN (${part.joinToString(",") { "?" }}) ORDER BY e, s", arrayOf(pid, from.toString(), to.toString()) + part).use(::collect)
         }
@@ -235,10 +254,12 @@ class LiveDb(private val catalog: Catalog) {
 
     /** Programmes not yet over whose title or subtitle contains [needle], soonest first: (guide id, programme). */
     fun searchPrograms(pid: String, needle: String, after: Long, limit: Int): List<Pair<String, Program>> {
-        val like = contains(needle)
+        // Every word typed, in any order, in the title and subtitle together.
+        val words = SearchText.words(needle).ifEmpty { listOf(needle.trim()) }
+        val where = words.joinToString(" AND ") { "(t || ' ' || IFNULL(st, '')) LIKE ? ESCAPE '\\'" }
         return db.rawQuery(
-            "SELECT e, s, x, t, st, nw FROM prog WHERE p = ? AND x > ? AND (t LIKE ? ESCAPE '\\' OR st LIKE ? ESCAPE '\\') ORDER BY s LIMIT $limit",
-            arrayOf(pid, after.toString(), like, like),
+            "SELECT e, s, x, t, st, nw FROM prog WHERE p = ? AND x > ? AND $where ORDER BY s LIMIT $limit",
+            arrayOf(pid, after.toString()) + words.map { contains(it) },
         ).use { c -> val l = ArrayList<Pair<String, Program>>(); while (c.moveToNext()) l.add(c.getString(0) to program(c, 1)); l }
     }
 
@@ -247,17 +268,61 @@ class LiveDb(private val catalog: Catalog) {
 
     // ---------------------------------------------------------------- passes (Sports matching)
 
+    /**
+     * Reads `SELECT rowid, [key], [cols] FROM [table] WHERE [where]` a page of [PAGE] rows at a time, in
+     * the order of an index that starts with the playlist and then [key] (an integer column), handing
+     * each row to [row] with the selected [cols] starting at index 2.
+     *
+     * One long cursor over thousands of rows has to refill its window part-way through; if a guide or
+     * channel download replaces the same rows in between, the refill finds fewer rows than it counted
+     * and Android throws "Couldn't read row N from CursorWindow" (issue #9). A page always fits in one
+     * window, so it is read in a single pass, and each page sees the table as it is when it starts.
+     *
+     * Each page carries on from the last row seen by ([key], rowid), which is the order of the index
+     * (an index ends with the rowid), so SQLite walks the index and stops after [PAGE] rows. Paging by
+     * rowid alone (1.2.0) made SQLite gather and sort every remaining row of the playlist for every page
+     * when the database has no statistics, so a week of guide took many minutes on a Fire TV.
+     */
+    private inline fun pages(cols: String, table: String, where: String, args: Array<String>, key: String, row: (Cursor) -> Unit) {
+        var lastKey: Long? = null
+        var lastRow = 0L
+        while (true) {
+            var n = 0
+            val k = lastKey
+            val (more, moreArgs) = if (k == null) "" to emptyArray<String>()
+                else " AND $key >= ? AND ($key > ? OR rowid > ?)" to arrayOf(k.toString(), k.toString(), lastRow.toString())
+            db.rawQuery(
+                "SELECT rowid, $key, $cols FROM $table WHERE $where$more ORDER BY $key, rowid LIMIT $PAGE",
+                args + moreArgs,
+            ).use { c -> while (c.moveToNext()) { lastRow = c.getLong(0); lastKey = c.getLong(1); row(c); n++ } }
+            if (n < PAGE) break
+        }
+    }
+
+    /** The query plan [pages] gets for the guide (tests check it walks the index without sorting). */
+    fun programPagePlan(pid: String): List<String> = plan(
+        "SELECT rowid, x, e, s, x, t, st FROM prog WHERE p = ? AND x > ? AND s < ? AND x >= ? AND (x > ? OR rowid > ?) ORDER BY x, rowid LIMIT $PAGE",
+        arrayOf(pid, "0", "1", "0", "0", "0"),
+    )
+
+    /** The query plan [pages] gets for channels. */
+    fun channelPagePlan(pid: String): List<String> = plan(
+        "SELECT rowid, o, k, n, g, e FROM channel WHERE p = ? AND o >= ? AND (o > ? OR rowid > ?) ORDER BY o, rowid LIMIT $PAGE",
+        arrayOf(pid, "0", "0", "0"),
+    )
+
+    private fun plan(sql: String, args: Array<String>): List<String> =
+        db.rawQuery("EXPLAIN QUERY PLAN $sql", args).use { c -> buildList { while (c.moveToNext()) add(c.getString(c.columnCount - 1)) } }
+
     /** Every channel of a playlist, one at a time: key, name, category, guide id. */
     fun forEachChannel(pid: String, fn: (String, String, String, String?) -> Unit) {
-        db.rawQuery("SELECT k, n, g, e FROM channel WHERE p = ?", arrayOf(pid)).use { c ->
-            while (c.moveToNext()) fn(c.getString(0), c.getString(1), c.getString(2), c.getString(3))
-        }
+        pages("k, n, g, e", "channel", "p = ?", arrayOf(pid), "o") { c -> fn(c.getString(2), c.getString(3), c.getString(4), c.getString(5)) }
     }
 
     /** Every programme of a playlist overlapping [from]..[to], one at a time: guide id, start, end, title, subtitle. */
     fun forEachProgram(pid: String, from: Long, to: Long, fn: (String, Long, Long, String, String?) -> Unit) {
-        db.rawQuery("SELECT e, s, x, t, st FROM prog WHERE p = ? AND x > ? AND s < ?", arrayOf(pid, from.toString(), to.toString())).use { c ->
-            while (c.moveToNext()) fn(c.getString(0), c.getLong(1), c.getLong(2), c.getString(3), c.getString(4))
+        pages("e, s, x, t, st", "prog", "p = ? AND x > ? AND s < ?", arrayOf(pid, from.toString(), to.toString()), "x") { c ->
+            fn(c.getString(2), c.getLong(3), c.getLong(4), c.getString(5), c.getString(6))
         }
     }
 

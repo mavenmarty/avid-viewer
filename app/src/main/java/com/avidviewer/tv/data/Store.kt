@@ -107,8 +107,44 @@ class Store(private val context: Context) {
         writeAtomic(File(dir, "playlists.json"), a.toString())
     }
 
+    // ---- profiles ----
+    fun loadProfiles(): ProfileSet = runCatching {
+        val f = File(dir, "profiles.json")
+        if (f.exists()) ProfileSet.fromJson(JSONObject(f.readText())) else ProfileSet()
+    }.getOrDefault(ProfileSet())
+
+    fun saveProfiles(s: ProfileSet) = writeAtomic(File(dir, "profiles.json"), s.toJson().toString())
+
+    /**
+     * Whose personal data the prefs, history, resume points and watched episodes below are. The owner's
+     * stay where they always were; another profile's are under profiles/<id>/ ([Profile]).
+     */
+    @Volatile var profileId: String = loadProfiles().active
+
+    private fun profileDir(id: String) = File(dir, "profiles/$id").apply { mkdirs() }
+    private fun personalFile(name: String, id: String = profileId) = if (id == Profile.OWNER) File(dir, name) else File(profileDir(id), name)
+
+    /** A profile's personal prefs (favorites, lists, hidden items…), or null if it has none yet. */
+    fun loadPersonal(id: String): JSONObject? = runCatching {
+        if (id == Profile.OWNER) personalOf(loadPrefsFile())
+        else File(profileDir(id), "personal.json").takeIf { it.exists() }?.let { JSONObject(it.readText()) }
+    }.getOrNull()
+
+    fun savePersonal(id: String, personal: JSONObject) {
+        if (id == Profile.OWNER) savePrefsFile(loadPrefsFile().withPersonal(personal))
+        else writeAtomic(File(profileDir(id), "personal.json"), personal.toString())
+    }
+
+    /** Which profile's hidden marks the movie & series catalog holds now. */
+    var catalogProfile: String
+        get() = runCatching { File(dir, "catalog_profile.txt").readText().trim() }.getOrDefault(Profile.OWNER).ifEmpty { Profile.OWNER }
+        set(v) { runCatching { File(dir, "catalog_profile.txt").writeText(v) } }
+
+    /** Removes a profile's own files (not the owner's). */
+    fun deleteProfileData(id: String) { if (id != Profile.OWNER) File(dir, "profiles/$id").deleteRecursively() }
+
     // ---- prefs ----
-    fun loadPrefs(): Prefs {
+    private fun loadPrefsFile(): Prefs {
         val f = File(dir, "prefs.json")
         return try {
             if (f.exists()) Prefs.fromJson(JSONObject(f.readText())) else Prefs()
@@ -117,7 +153,23 @@ class Store(private val context: Context) {
         }
     }
 
-    fun savePrefs(p: Prefs) = writeAtomic(File(dir, "prefs.json"), p.toJson().toString())
+    private fun savePrefsFile(p: Prefs) = writeAtomic(File(dir, "prefs.json"), p.toJson().toString())
+
+    /** The shared settings with profile [id]'s own (the current profile by default) in place of the owner's. */
+    fun loadPrefs(id: String = profileId): Prefs {
+        val base = loadPrefsFile()
+        if (id == Profile.OWNER) return base
+        return base.withPersonal(loadPersonal(id) ?: JSONObject())
+    }
+
+    /** Saves the shared settings for everyone, and the personal ones for the current profile only. */
+    fun savePrefs(p: Prefs) {
+        val id = profileId
+        if (id == Profile.OWNER) { savePrefsFile(p); return }
+        val owner = runCatching { personalOf(loadPrefsFile()) }.getOrDefault(JSONObject())
+        savePrefsFile(p.withPersonal(owner))
+        writeAtomic(File(profileDir(id), "personal.json"), personalOf(p).toString())
+    }
 
     /** When a playlist's saved "channels", "guide" or "vod" file was written; 0 if it's missing or empty. */
     fun savedAt(kind: String, playlistId: String): Long {
@@ -226,8 +278,8 @@ class Store(private val context: Context) {
     }
 
     // ---- watch history ----
-    fun loadHistory(): List<HistoryEntry> {
-        val f = File(dir, "history.json")
+    fun loadHistory(id: String = profileId): List<HistoryEntry> {
+        val f = personalFile("history.json", id)
         if (!f.exists()) return emptyList()
         return try {
             val a = JSONArray(f.readText())
@@ -240,18 +292,18 @@ class Store(private val context: Context) {
         }
     }
 
-    fun saveHistory(list: List<HistoryEntry>) {
+    fun saveHistory(list: List<HistoryEntry>, id: String = profileId) {
         val cutoff = System.currentTimeMillis() - 90L * 24 * 3600 * 1000
         val a = JSONArray()
         list.filter { it.time >= cutoff }.takeLast(5000).forEach {
             a.put(JSONObject().put("k", it.key).put("t", it.time).put("s", it.seconds))
         }
-        writeAtomic(File(dir, "history.json"), a.toString())
+        writeAtomic(personalFile("history.json", id), a.toString())
     }
 
     // ---- resume points for movies & episodes ----
-    fun loadResume(): Map<String, Long> {
-        val f = File(dir, "resume.json")
+    fun loadResume(id: String = profileId): Map<String, Long> {
+        val f = personalFile("resume.json", id)
         if (!f.exists()) return emptyMap()
         return try {
             val o = JSONObject(f.readText()); o.keys().asSequence().associateWith { o.getLong(it) }
@@ -260,7 +312,39 @@ class Store(private val context: Context) {
         }
     }
 
-    fun saveResume(m: Map<String, Long>) = writeAtomic(File(dir, "resume.json"), JSONObject(m).toString())
+    fun saveResume(m: Map<String, Long>, id: String = profileId) = writeAtomic(personalFile("resume.json", id), JSONObject(m).toString())
+
+    // ---- episodes watched to the end (the series page opens on the next one) ----
+    fun loadWatched(): Set<String> = runCatching {
+        val f = personalFile("watched.json")
+        if (!f.exists()) emptySet() else org.json.JSONArray(f.readText()).let { a -> (0 until a.length()).map { a.getString(it) }.toHashSet() }
+    }.getOrDefault(emptySet())
+
+    fun saveWatched(keys: Collection<String>) = writeAtomic(personalFile("watched.json"), org.json.JSONArray(keys.toList().takeLast(5000)).toString())
+
+    /**
+     * Every profile other than the owner, with its own files, for a backup: id → {"personal", "history",
+     * "resume", "watched"} (raw JSON text of each file that exists).
+     */
+    fun exportProfileFiles(): JSONObject {
+        val out = JSONObject()
+        File(dir, "profiles").listFiles()?.filter { it.isDirectory }?.forEach { d ->
+            val o = JSONObject()
+            for (n in listOf("personal", "history", "resume", "watched")) File(d, "$n.json").takeIf { it.exists() }?.let { o.put(n, it.readText()) }
+            out.put(d.name, o)
+        }
+        return out
+    }
+
+    /** Replaces every non-owner profile's files with a backup's ([exportProfileFiles]). */
+    fun importProfileFiles(o: JSONObject) {
+        File(dir, "profiles").deleteRecursively()
+        o.keys().forEach { id ->
+            if (id == Profile.OWNER || !Regex("[A-Za-z0-9_-]{1,40}").matches(id)) return@forEach
+            val files = o.optJSONObject(id) ?: return@forEach
+            for (n in listOf("personal", "history", "resume", "watched")) files.optString(n).takeIf { it.isNotEmpty() }?.let { writeAtomic(File(profileDir(id), "$n.json"), it) }
+        }
+    }
 
     fun clearCache() {
         context.cacheDir.listFiles()?.forEach { it.deleteRecursively() }

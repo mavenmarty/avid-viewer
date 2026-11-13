@@ -9,6 +9,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.padding
@@ -37,7 +39,13 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import coil.compose.AsyncImage
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.composed
 
 /** Palette taken from the Avid Viewer icon: deep navy, electric blue and silver. */
 object C {
@@ -72,12 +80,17 @@ fun Focusable(
     content: @Composable RowScope.(focused: Boolean) -> Unit,
 ) {
     var focused by remember { mutableStateOf(false) }
+    val menuDown = remember { booleanArrayOf(false) }
     Row(
         modifier
             .onPreviewKeyEvent {
-                if (onMenu != null && it.key == Key.Menu && it.type == KeyEventType.KeyUp) {
-                    onMenu(); true
-                } else false
+                // Menu acts on release (so the same press doesn't reach what it opens). Its press is taken here
+                // too: left to the system it beeped as an unhandled key, and on 1.0.170 a tester saw only the beep
+                // (BUG-015 retest). A release without a press seen here (e.g. after a dialog closed) is ignored.
+                if (onMenu == null || it.key != Key.Menu) false
+                else if (it.type == KeyEventType.KeyDown) { if (it.nativeKeyEvent.repeatCount == 0) menuDown[0] = true; true }
+                else if (it.type == KeyEventType.KeyUp) { if (menuDown[0]) { menuDown[0] = false; onMenu() }; true }
+                else false
             }
             .onFocusChanged {
                 focused = it.isFocused
@@ -97,26 +110,52 @@ fun TvButton(
     modifier: Modifier = Modifier,
     primary: Boolean = false,
     selected: Boolean = false,
+    busy: Boolean = false,
     onClick: () -> Unit,
 ) {
-    val on = primary || selected
+    // STATE-02: the main action is filled; the current value of a choice is outlined with a check mark, so the
+    // two never look alike. STATE-04: a busy button shows a spinner, is dimmed and ignores OK; it keeps the
+    // highlight (taking it away would leave the remote with nothing highlighted) and TalkBack says "Busy".
+    val outline = selected && !primary
     Focusable(
-        modifier = modifier,
+        modifier = modifier
+            .then(if (outline) Modifier.border(2.dp, C.Accent, RoundedCornerShape(20.dp)) else Modifier)
+            .semantics { if (selected) this.selected = true; if (busy) stateDescription = "Busy" }
+            .alpha(if (busy) 0.6f else 1f),
         shape = RoundedCornerShape(20.dp),
-        color = if (on) C.Accent else C.Surface2,
-        focusedColor = if (on) C.AccentFocus else C.Line,
-        onClick = onClick,
+        color = if (primary) C.Accent else C.Surface2,
+        focusedColor = if (primary) C.AccentFocus else C.Line,
+        onClick = { if (!busy) onClick() },
     ) {
-        Text(
-            text,
-            color = if (on) C.OnAccent else C.Text,
-            fontSize = 13.sp,
-            fontWeight = FontWeight.SemiBold,
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp),
-            maxLines = 1,
-        )
+        Row(Modifier.padding(horizontal = 14.dp, vertical = 7.dp), verticalAlignment = Alignment.CenterVertically) {
+            if (busy) androidx.compose.material3.CircularProgressIndicator(color = if (primary) C.OnAccent else C.Accent, strokeWidth = 2.dp, modifier = Modifier.padding(end = 8.dp).size(13.dp))
+            else if (outline && !text.startsWith("✓")) Glyph("✓", C.Accent, 13.sp, Modifier.padding(end = 6.dp))
+            Text(text, color = if (primary) C.OnAccent else C.Text, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+        }
     }
 }
+
+/** A decorative symbol (✓ ★ ☰ ▸): drawn, but not read out by TalkBack (A11Y-01). */
+@Composable
+fun Glyph(g: String, color: Color, size: TextUnit = 14.sp, modifier: Modifier = Modifier) =
+    Text(g, color = color, fontSize = size, fontWeight = FontWeight.Bold, maxLines = 1, modifier = modifier.clearAndSetSemantics { })
+
+/** How much a list without the highlight is dimmed, so the column you're in stands out (STATE-05). */
+const val INACTIVE_ALPHA = 0.72f
+
+/** Dims a side list (categories, settings sections) while the highlight is elsewhere on the screen (STATE-05). */
+fun Modifier.dimWhenInactive(): Modifier = composed {
+    var has by remember { mutableStateOf(true) }
+    onFocusChanged { has = it.hasFocus }.alpha(if (has) 1f else INACTIVE_ALPHA)
+}
+
+/**
+ * STATE-01: the row you are in (the screen in the menu, the category, the settings section) looks the same in
+ * every list: a raised row with an accent bar down its left edge and a bold label. TalkBack hears "selected".
+ */
+fun Modifier.activePath(on: Boolean): Modifier = semantics { selected = on }.then(
+    if (on) Modifier.drawWithContent { drawContent(); drawRect(C.Accent, size = androidx.compose.ui.geometry.Size(3.dp.toPx(), size.height)) } else Modifier,
+)
 
 @Composable
 fun Label(text: String, size: TextUnit = 13.sp, color: Color = C.Muted, weight: FontWeight = FontWeight.Normal, modifier: Modifier = Modifier, lines: Int = 1) =
@@ -138,7 +177,7 @@ fun ChannelBadge(name: String, logo: String?, size: Dp = 32.dp) {
     ) {
         Text(initials(name), color = Color.White, fontSize = (size.value * 0.36f).coerceAtLeast(11f).sp, fontWeight = FontWeight.Bold)
         if (logo != null) {
-            AsyncImage(
+            TvImage(
                 model = logo,
                 contentDescription = null,
                 modifier = Modifier
@@ -323,4 +362,38 @@ fun Modifier.wrapEnds(wrap: ListWrap, isFirst: Boolean, isLast: Boolean): Modifi
                 else -> false
             }
         }
+}
+
+
+/** What a screen is waiting for or missing (DATA-07): the same look everywhere. */
+enum class StateKind { LOADING, EMPTY, ERROR }
+
+/**
+ * Loading, empty and error messages, one style on every screen: a title, a line or two, then buttons the
+ * remote can reach. An error always offers Try again ([retry]); [action] is the screen's own way out
+ * (Add a playlist, Open Settings…). The first button takes the highlight.
+ */
+@Composable
+fun StateMessage(
+    kind: StateKind,
+    title: String,
+    body: String? = null,
+    retry: (() -> Unit)? = null,
+    action: Pair<String, () -> Unit>? = null,
+    modifier: Modifier = Modifier,
+) {
+    val first = remember { FocusRequester() }
+    Column(modifier.padding(vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            if (kind == StateKind.LOADING) androidx.compose.material3.CircularProgressIndicator(color = C.Accent, strokeWidth = 2.dp, modifier = Modifier.size(18.dp))
+            if (kind == StateKind.ERROR) Text("!", color = C.OnAccent, fontSize = 13.sp, fontWeight = FontWeight.Bold,
+                modifier = Modifier.clip(RoundedCornerShape(10.dp)).background(C.Accent).padding(horizontal = 8.dp, vertical = 1.dp))
+            Text(title, color = C.Text, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+        }
+        body?.takeIf { it.isNotBlank() }?.let { Label(it, size = 14.sp, color = C.Soft, lines = 4) }
+        val buttons = listOfNotNull(retry?.takeIf { kind == StateKind.ERROR }?.let { "Try again" to it }, action)
+        if (buttons.isNotEmpty()) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            buttons.forEachIndexed { i, (label, go) -> TvButton(label, primary = i == 0, modifier = if (i == 0) Modifier.focusRequester(first) else Modifier) { go() } }
+        }
+    }
 }

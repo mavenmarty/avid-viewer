@@ -23,6 +23,7 @@ object TestData {
         context.filesDir.mkdirs()
         val store = Store(context)
         val dead = "http://127.0.0.1:9/none" // nothing listens here: any accidental download fails fast
+        com.avidviewer.tv.data.Net.backoffMs = longArrayOf(5L, 5L) // retries of failed downloads: no real waits in tests
         com.avidviewer.tv.data.EspnFeed.base = "$dead/espn/" // Sports: no real ESPN in tests (SportsTest serves its own)
         store.savePlaylists(
             listOf(
@@ -47,9 +48,11 @@ object TestData {
         val half = 30 * 60 * 1000L
         val start = (now / half) * half - half
         store.saveGuide(P1, channels.associate { c ->
-            c.epgId!! to (0 until 30).map { k ->
+            // KIDS has three days of guide, so the guide can scroll days ahead (day strip); the rest 15 hours.
+            c.epgId!! to (0 until if (c.group == "KIDS") 150 else 30).map { k ->
                 val len = if (k % 3 == 0) 2 * half else half
-                val s = start + k * half
+                // KIDS also starts 2 hours back, so the guide has programmes that have aired.
+                val s = start + k * half - (if (c.group == "KIDS") 3 * half else 0L)
                 Program(s, s + len, "Program ${c.name.take(10)} $k", if (k % 2 == 0) "Episode $k" else null, k % 5 == 0)
             }
         })

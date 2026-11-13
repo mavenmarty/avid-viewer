@@ -12,6 +12,8 @@ import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.assertIsDisplayed
+import com.avidviewer.tv.ui.PlayContext
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.isRoot
 import androidx.compose.ui.test.onLast
@@ -19,6 +21,7 @@ import androidx.compose.ui.test.printToString
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.pressKey
@@ -80,6 +83,13 @@ class UsabilityTest {
             n.config.getOrNull(androidx.compose.ui.semantics.SemanticsProperties.Text)?.joinToString(" ") { it.text } ?: "(no text)"
         }.ifBlank { "(nothing focused)" }
     }.getOrDefault("(unknown)")
+
+    /** Whether what has the highlight is the row you are in (the "active path": selected for TalkBack too). */
+    private fun focusedSelected(): Boolean = runCatching {
+        rule.onAllNodes(androidx.compose.ui.test.isFocused()).fetchSemanticsNodes().any { n ->
+            n.config.getOrNull(androidx.compose.ui.semantics.SemanticsProperties.Selected) == true
+        }
+    }.getOrDefault(false)
 
     /**
      * Presses a remote button the way the Fire TV does: a key down and key up delivered to the app's
@@ -170,6 +180,189 @@ class UsabilityTest {
         waitFor("Back from a channel highlights the current category (focus: ${focused()})") { vm.inGroupNav && focused().contains("NEWS") }
         press(listOf(Key.Back))
         assertNotEquals("Back should leave the category list", NavMode.GROUPS, vm.navMode)
+    }
+
+    private fun focusKidsProgramme() {
+        rule.onAllNodes(androidx.compose.ui.test.hasText("Program KIDS Chann", substring = true) and androidx.compose.ui.test.hasClickAction()).onFirst().requestFocus()
+        settle()
+    }
+
+    @Test
+    fun guideColumnsSitOnLocalHalfHours() {
+        // Kathmandu is UTC+5:45: the columns must be at local :00 and :30, not UTC's (:15 / :45 there).
+        val ktm = java.util.TimeZone.getTimeZone("Asia/Kathmandu")
+        val t = java.util.GregorianCalendar(ktm).apply { set(2026, 10, 12, 20, 14, 0) }.timeInMillis
+        val base = com.avidviewer.tv.ui.localHalfHour(t, ktm)
+        val local = java.util.GregorianCalendar(ktm).apply { timeInMillis = base }
+        assertEquals(20, local.get(java.util.Calendar.HOUR_OF_DAY)); assertEquals(0, local.get(java.util.Calendar.MINUTE))
+        // Across a daylight-saving change (US Central falls back on 1 Nov 2026: 1:00–2:00 happens twice).
+        val chi = java.util.TimeZone.getTimeZone("America/Chicago")
+        val d = java.util.GregorianCalendar(java.util.TimeZone.getTimeZone("UTC")).apply { clear(); set(2026, 10, 1, 7, 40, 0) }.timeInMillis // 1:40 CST, the second 1:40 that night
+        val b2 = java.util.GregorianCalendar(chi).apply { timeInMillis = com.avidviewer.tv.ui.localHalfHour(d, chi) }
+        assertEquals(1, b2.get(java.util.Calendar.HOUR_OF_DAY)); assertEquals(30, b2.get(java.util.Calendar.MINUTE))
+        assertEquals(10 * 60_000L, d - com.avidviewer.tv.ui.localHalfHour(d, chi))
+    }
+
+    @Test
+    fun guideScrollsDaysAheadWithTheDayStripAndTwoHoursBackDimmed() {
+        rule.runOnIdle { vm.chooseGroup(TestData.P1, "KIDS") }
+        settle()
+        waitFor("the guide to know it runs past tomorrow") { vm.guideLastEnd > System.currentTimeMillis() + 48 * 3600_000L }
+        // Where you are: the category is named over the times (NAV-14).
+        waitFor("the category named in the time row") { rule.onAllNodesWithText("KIDS · Today", substring = true).fetchSemanticsNodes().isNotEmpty() }
+        waitFor("the day strip") { rule.onAllNodesWithText("Tomorrow").fetchSemanticsNodes().isNotEmpty() }
+        val base = com.avidviewer.tv.ui.localHalfHour(vm.now, vm.timeZone)
+        rule.onAllNodesWithText("Tomorrow").onFirst().performClick()
+        settle()
+        waitFor("the window on tomorrow (start ${vm.nav.guideWindowStart})") { vm.nav.guideWindowStart >= base + 20 * 3600_000L }
+        waitFor("tomorrow's programmes read for the category") {
+            rule.onAllNodesWithText("Program KIDS Chann", substring = true).fetchSemanticsNodes().isNotEmpty() &&
+                rule.onAllNodesWithText("No guide information").fetchSemanticsNodes().isEmpty()
+        }
+        waitFor("the time row says Tomorrow") { rule.onAllNodesWithText("KIDS · Tomorrow", substring = true).fetchSemanticsNodes().isNotEmpty() }
+        // Two days ahead is past what is held in memory: those programmes are read for the category on screen.
+        val d2 = vm.dayLabel(vm.now + 48 * 3600_000L)
+        rule.onAllNodesWithText(d2).onFirst().performClick()
+        settle()
+        waitFor("the window two days ahead") { vm.nav.guideWindowStart >= base + 44 * 3600_000L }
+        waitFor("programmes two days ahead") {
+            rule.onAllNodesWithText("Program KIDS Chann", substring = true).fetchSemanticsNodes().isNotEmpty() &&
+                rule.onAllNodesWithText("No guide information").fetchSemanticsNodes().isEmpty()
+        }
+        // Holding Left on a later window jumps back to now (NAV-15).
+        focusKidsProgramme()
+        hold(Key.DirectionLeft, 6)
+        waitFor("held Left back at now (start ${vm.nav.guideWindowStart}, base $base)") { vm.nav.guideWindowStart == base }
+        // Left from the first programme goes back up to 2 hours, no further; aired programmes say so.
+        focusKidsProgramme()
+        var lefts = 0
+        while (vm.nav.guideWindowStart != base - 2 * 3600_000L && lefts < 10) { press(listOf(Key.DirectionLeft)); lefts++ }
+        assertEquals("window 2 h back (focus: ${focused()})", base - 2 * 3600_000L, vm.nav.guideWindowStart)
+        waitFor("an aired programme highlighted and marked (focus: ${focused()})") {
+            rule.onAllNodes(androidx.compose.ui.test.isFocused()).fetchSemanticsNodes().any { it.config.getOrNull(androidx.compose.ui.semantics.SemanticsProperties.StateDescription) == "Already aired" }
+        }
+        press(listOf(Key.DirectionLeft)) // to the channel name: the window stays
+        assertEquals("never more than 2 h back", base - 2 * 3600_000L, vm.nav.guideWindowStart)
+        // Now, in the day strip, comes back.
+        rule.onAllNodesWithText("Now").onFirst().performClick()
+        settle()
+        assertEquals(base, vm.nav.guideWindowStart)
+    }
+
+    @Test
+    fun withOnePlaylistBackFromTheCategoriesGoesStraightToTheMainMenu() {
+        rule.runOnIdle { vm.setPlaylistEnabled(TestData.P2, false) }
+        waitFor("one live playlist") { vm.livePlaylists.size == 1 }
+        rule.runOnIdle { vm.chooseGroup(TestData.P1, "NEWS") }
+        settle()
+        rule.onAllNodes(androidx.compose.ui.test.hasText("NEWS Channel 1 with", substring = true) and androidx.compose.ui.test.hasClickAction()).onFirst().requestFocus()
+        settle()
+        press(listOf(Key.Back))
+        waitFor("Back from a channel highlights the category") { vm.inGroupNav && focused().contains("NEWS") }
+        press(listOf(Key.Back))
+        assertEquals("Back from the categories opens the main menu (no playlist-list step)", NavMode.FULL, vm.navMode)
+    }
+
+    /** FOCUS-02: closing a dialog (Done, Cancel, Save or Back) puts the highlight back on what opened it. */
+    @Test
+    fun theHighlightComesBackToTheChannelAfterItsMenuAndRename() {
+        rule.runOnIdle { vm.chooseGroup(TestData.P1, "KIDS") }
+        settle()
+        fun onCh3() = focused().contains("KIDS Channel 3 with")
+        rule.onAllNodes(androidx.compose.ui.test.hasText("KIDS Channel 3 with", substring = true) and androidx.compose.ui.test.hasClickAction()).onFirst().requestFocus()
+        settle()
+        assertTrue(focused(), onCh3())
+        for (close in listOf("Done", "Back")) {
+            press(listOf(Key.Menu))
+            waitFor("channel options") { vm.channelMenu != null }
+            if (close == "Done") rule.onAllNodesWithText("Done").onFirst().performClick() else press(listOf(Key.Back))
+            waitFor("the highlight back on channel 3 after $close (focus: ${focused()})") { vm.channelMenu == null && onCh3() }
+        }
+        for (close in listOf("Cancel", "Save")) {
+            press(listOf(Key.Menu))
+            waitFor("channel options") { vm.channelMenu != null }
+            rule.onAllNodesWithText("Rename", substring = true).onFirst().performClick()
+            waitFor("the rename box") { rule.onAllNodesWithText(close).fetchSemanticsNodes().isNotEmpty() }
+            rule.onAllNodesWithText(close).onFirst().performClick()
+            waitFor("the highlight back on channel 3 after Rename › $close (focus: ${focused()})") { vm.channelMenu == null && onCh3() }
+        }
+    }
+
+    /** DATA-06: a highlighted movie category has its first page read ahead; OK then shows it straight away. */
+    @Test
+    fun aHighlightedMovieCategoryIsReadAhead() {
+        go(Screen.MOVIES)
+        waitFor("movies") { vm.vodOf("movie").isNotEmpty() }
+        val drama = vm.vodCategories("movie").first { it.first == "Drama" }.first
+        rule.onAllNodes(androidx.compose.ui.test.hasText(vm.vodCatName("movie", drama), substring = true) and androidx.compose.ui.test.hasClickAction()).onFirst().requestFocus()
+        settle()
+        waitFor("Drama read ahead") { vm.vodPrefetchedFor("movie", drama) }
+        press(listOf(Key.DirectionCenter))
+        waitFor("Drama shown") { vm.vodCategory["movie"] == drama && vm.vodItems("movie").size == 20 }
+        assertTrue("the read-ahead list was used", !vm.vodPrefetchedFor("movie", drama))
+    }
+
+    /**
+     * Profiles: each keeps its own favorites; a Kids profile sees only its categories, opens without a PIN and
+     * has no Settings; every other profile then needs a PIN (its own or a parent's).
+     */
+    @Test
+    fun profilesKeepTheirOwnFavoritesAndKidsSeesOnlyItsCategories() {
+        waitFor("channels") { vm.channelsIn("NEWS").isNotEmpty() && vm.channelsIn("KIDS").isNotEmpty() }
+        val ownerGroups = vm.groups().map { it.raw }
+        val news = vm.channelsIn("NEWS").first().key
+        val kidsCh = vm.channelsIn("KIDS").first().key
+        rule.runOnIdle { if (news !in vm.prefs.favorites) vm.toggleFavorite(news) }
+        waitFor("owner's favorite") { news in vm.prefs.favorites }
+        var sam = ""
+        var kids = ""
+        rule.runOnIdle { sam = vm.addProfile("Sam", kids = false, color = 1) }
+        // Adding a Kids profile when no parent has a PIN: the owner sets one first (twice).
+        rule.runOnIdle { vm.addKidsProfile("Kids", 2) { kids = it } }
+        waitFor("asked for a new PIN") { vm.pinAsk != null }
+        rule.runOnIdle { assertEquals(null, vm.answerPin("1234")) }
+        rule.runOnIdle { assertEquals(null, vm.answerPin("1234")) }
+        waitFor("Kids profile added") { kids.isNotEmpty() && vm.profiles.get(kids)?.kids == true }
+        assertTrue("the owner has a PIN now", vm.profiles.owner.hasPin)
+        rule.runOnIdle {
+            val k = vm.profiles.get(kids)!!
+            vm.updateProfile(k.copy(allowedGroups = setOf(vm.liveCategoryId(TestData.P1, "KIDS"))))
+        }
+        // Sam starts with a copy of the owner's favorites.
+        rule.runOnIdle { vm.chooseProfile(sam) }
+        waitFor("Sam asks for a PIN (a Kids profile exists)") { vm.pinAsk != null }
+        rule.runOnIdle { assertEquals("That PIN isn't right.", vm.answerPin("0000")) }
+        rule.runOnIdle { assertEquals(null, vm.answerPin("1234")) } // a parent's PIN opens it
+        waitFor("watching as Sam") { vm.profile.id == sam }
+        assertTrue(news in vm.prefs.favorites)
+        rule.runOnIdle { vm.toggleFavorite(news) } // Sam's own change
+        waitFor("Sam's favorite removed") { news !in vm.prefs.favorites }
+
+        // Kids: no PIN, only KIDS, no Settings / Discover / Sports.
+        rule.runOnIdle { vm.chooseProfile(kids) }
+        waitFor("watching as Kids") { vm.profile.id == kids && vm.pinAsk == null }
+        settle()
+        assertTrue(vm.kidsMode)
+        assertEquals(listOf("KIDS"), vm.groups().map { it.raw })
+        assertEquals(null, vm.channel(news))
+        assertTrue(vm.channel(kidsCh) != null)
+        assertTrue(vm.prefs.favorites.isEmpty())
+        assertTrue("no Settings for Kids", !vm.screenAllowed(Screen.SETTINGS) && !vm.screenAllowed(Screen.DISCOVER) && !vm.screenAllowed(Screen.SPORTS))
+        rule.runOnIdle { vm.navSelect(Screen.SETTINGS) }
+        assertTrue(vm.screen != Screen.SETTINGS)
+        rule.runOnIdle { vm.toggleFavorite(news) } // a channel it can't see can't be watched either
+        rule.runOnIdle { vm.selectChannel(news, PlayContext.GROUP) }
+        assertTrue("nothing outside KIDS plays", vm.currentKey != news)
+
+        // Back to the owner: PIN needed; the owner's favorites are as they were.
+        rule.runOnIdle { vm.chooseProfile(com.avidviewer.tv.data.Profile.OWNER) }
+        waitFor("owner asks for the PIN") { vm.pinAsk != null }
+        // Typed on the remote's number buttons in the PIN dialog.
+        waitFor("PIN dialog") { rule.onAllNodesWithTag("pin-dialog").fetchSemanticsNodes().isNotEmpty() }
+        press(listOf(Key.One, Key.Two, Key.Three, Key.Four))
+        waitFor("watching as the owner (pin=${vm.pinAsk?.title})") { vm.profile.isOwner }
+        assertTrue("owner's favorites kept", news in vm.prefs.favorites)
+        assertTrue("every category is back (${vm.groups().map { it.raw }})", vm.groups().map { it.raw }.containsAll(ownerGroups))
     }
 
     @Test
@@ -445,6 +638,57 @@ class UsabilityTest {
         } finally { espn.close() }
     }
 
+    /**
+     * Issues #11 and #12: in full screen from Sports, Channel Up/Down stays on the channels found for
+     * that game; Back returns to Sports with the playing channel highlighted, not the top-left button.
+     */
+    @Test
+    fun sportsFullScreenStaysOnTheGameAndBackKeepsYourPlace() {
+        val now = System.currentTimeMillis()
+        val wings = FakeEspn.Companion.T("DET", "Red Wings", "Detroit", "e30526", "7-8-3", "2")
+        val blues = FakeEspn.Companion.T("STL", "Blues", "St. Louis", "0070b9", "7-8-2", "1")
+        val espn = FakeEspn(mapOf("hockey/nhl" to FakeEspn.board(
+            FakeEspn.event("401", now - 30 * 60_000L, "in", wings, blues, listOf(Triple("TNT", "national", "TV")), "3:44 - 2nd", 2, "3:44"),
+        )))
+        val p2 = TestData.P2
+        try {
+            com.avidviewer.tv.data.EspnFeed.base = espn.base
+            rule.runOnIdle {
+                vm.live.replacingChannels(p2) { add ->
+                    add(com.avidviewer.tv.data.Channel("$p2:tnt", "US| TNT HD", "SPORTS", null, "http://127.0.0.1:9/tnt.ts", null))
+                    add(com.avidviewer.tv.data.Channel("$p2:ev", "NHL 03: Red Wings @ Blues", "SPORTS", null, "http://127.0.0.1:9/ev.ts", null))
+                }
+            }
+            go(Screen.SPORTS)
+            waitFor("the game with two channels") { vm.sportGames.any { it.game.id == "NHL:401" && it.channels.size >= 2 } }
+            settle()
+            val chans = vm.sportGames.first { it.game.id == "NHL:401" }.channels.map { it.key }
+            var tries = 0
+            while (!focused().contains("Red Wings") && tries < 6) { press(listOf(Key.DirectionDown)); tries++ }
+            fun nameOf(k: String) = vm.channelName(vm.sportsChannel(k)!!)
+            press(listOf(Key.DirectionCenter))
+            waitFor("on the first channel (focus: ${focused()})") { focused().contains(nameOf(chans[0])) }
+            press(listOf(Key.DirectionCenter))
+            waitFor("previewing") { vm.currentKey == chans[0] }
+            press(listOf(Key.DirectionCenter))
+            waitFor("full screen") { vm.screen == Screen.PLAYER }
+
+            // Channel Up/Down: through this game's channels only, wrapping around.
+            rule.runOnIdle { vm.step(1) }
+            waitFor("the game's next channel") { vm.currentKey == chans[1 % chans.size] }
+            assertTrue("label names the game: ${vm.contextLabel()}", vm.contextLabel().startsWith("Red Wings at Blues · channel 2 of ${chans.size}"))
+            repeat(chans.size - 1) { rule.runOnIdle { vm.step(1) } }
+            waitFor("wrapped back to the first channel") { vm.currentKey == chans[0] }
+            rule.runOnIdle { vm.step(1) }
+            waitFor("on the second channel again") { vm.currentKey == chans[1] }
+
+            // Back: Sports, with the channel that was playing highlighted.
+            press(listOf(Key.Back))
+            waitFor("back on Sports") { vm.screen == Screen.SPORTS }
+            waitFor("the playing channel is highlighted, not the top-left button (focus: ${focused()})") { focused().contains(nameOf(chans[1])) }
+        } finally { espn.close() }
+    }
+
     @Test
     fun settingsSportsTabSwitchesLeaguesWithOk() {
         go(Screen.SETTINGS)
@@ -547,6 +791,22 @@ class UsabilityTest {
         rule.onNodeWithTag("guide-src-add").performClick()
         settle()
         assertTrue(rule.onAllNodesWithText("New guide source").fetchSemanticsNodes().isNotEmpty())
+        // Back with something typed asks before throwing it away (SET-02); Keep editing is highlighted.
+        rule.onNodeWithTag("guide-src-url").performClick()
+        settle()
+        rule.onAllNodes(androidx.compose.ui.test.hasSetTextAction()).onFirst().performTextInput("http://example.invalid/guide.xml")
+        settle()
+        press(listOf(Key.Back)) // closes the keyboard
+        if (rule.onAllNodesWithText("Discard changes?").fetchSemanticsNodes().isEmpty()) press(listOf(Key.Back))
+        waitFor("Discard changes? (focus: ${focused()})") { rule.onAllNodesWithText("Discard changes?").fetchSemanticsNodes().isNotEmpty() }
+        waitFor("Keep editing highlighted (focus: ${focused()})") { focused().contains("Keep editing") }
+        press(listOf(Key.DirectionCenter))
+        waitFor("still editing") { rule.onAllNodesWithText("Discard changes?").fetchSemanticsNodes().isEmpty() && rule.onAllNodesWithText("New guide source").fetchSemanticsNodes().isNotEmpty() }
+        press(listOf(Key.Back))
+        waitFor("asked again") { rule.onAllNodesWithText("Discard").fetchSemanticsNodes().isNotEmpty() }
+        rule.onAllNodesWithText("Discard").onFirst().performClick()
+        waitFor("the form closed without saving") { rule.onAllNodesWithText("New guide source").fetchSemanticsNodes().isEmpty() }
+        assertTrue(vm.playlists.first { it.id == TestData.P1 }.epgSources.none { it.url.contains("example.invalid") })
         // Deleting asks first.
         rule.onAllNodesWithTag("guide-src-delete").onFirst().performClick()
         settle()
@@ -668,7 +928,7 @@ class UsabilityTest {
         waitFor("the playlist list (nav=${vm.navMode})") { vm.navMode == NavMode.COLLAPSED && vm.inPlaylistTree }
         go(Screen.SETTINGS)
         waitFor("Settings opens on its first section (focus: ${focused()})") { focused().contains("Playlists") }
-        press(listOf(Key.DirectionDown, Key.DirectionDown, Key.DirectionDown, Key.DirectionDown))
+        press(listOf(Key.DirectionDown, Key.DirectionDown, Key.DirectionDown, Key.DirectionDown, Key.DirectionDown)) // past Profiles, List Editor, Location, Display
         waitFor("on TV guide (focus: ${focused()})") { focused().contains("TV guide") }
         assertEquals("highlighting a section doesn't open it", "playlists", vm.settingsSection)
         press(listOf(Key.DirectionCenter))
@@ -733,7 +993,7 @@ class UsabilityTest {
         goDeepInBig()
         press(listOf(Key.Back))
         waitFor("Back highlights the current category in the category list (focus: ${focused()}, nav=${vm.navMode})") {
-            vm.navMode == NavMode.GROUPS && vm.inGroupNav && focused().trim().startsWith("▶ BIG")
+            vm.navMode == NavMode.GROUPS && vm.inGroupNav && (focused().trim().startsWith("BIG") && focusedSelected())
         }
         press(listOf(Key.Back))
         waitFor("Back again highlights the same category in the playlist list, not the top (focus: ${focused()}, nav=${vm.navMode})") {
@@ -747,7 +1007,7 @@ class UsabilityTest {
     fun leftWorksLikeBackBetweenTheLayers() {
         goDeepInBig()
         press(listOf(Key.DirectionLeft))
-        waitFor("Left from a channel name highlights the current category (focus: ${focused()})") { vm.inGroupNav && focused().trim().startsWith("▶ BIG") }
+        waitFor("Left from a channel name highlights the current category (focus: ${focused()})") { vm.inGroupNav && (focused().trim().startsWith("BIG") && focusedSelected()) }
         press(listOf(Key.DirectionLeft))
         waitFor("Left again goes to the playlist list on that category (focus: ${focused()}, nav=${vm.navMode})") {
             vm.navMode == NavMode.COLLAPSED && focused().trim().startsWith("BIG")
@@ -812,12 +1072,76 @@ class UsabilityTest {
             go(Screen.SERIES)
             rule.runOnIdle { vm.openVodDetail(com.avidviewer.tv.data.VodItem("$pid:s78", pid, "series", "Long Show", null, "", seriesId = "78", category = "Shows")) }
             waitFor("episodes to load") { vm.detailEpisodes?.isNotEmpty() == true }
+            // Nothing watched yet: the page opens on Season 1, Episode 1 (#8). Up goes back to the buttons.
+            waitFor("the page opens on episode 1 (focus: ${focused()})") { focused().contains("Pilot") }
             var tries = 0
+            while (!focused().contains("My List") && tries < 12) { press(listOf(Key.DirectionUp)); tries++ }
+            assertTrue("couldn't go Up to the buttons (focus: ${focused()})", focused().contains("My List"))
+            tries = 0
             while (!focused().contains("Season 1") && tries < 10) { press(listOf(Key.DirectionDown)); tries++ }
             assertTrue("couldn't reach the season buttons below a long description (focus: ${focused()})", focused().contains("Season 1"))
             tries = 0
             while (!focused().contains("Pilot") && tries < 6) { press(listOf(Key.DirectionDown)); tries++ }
             assertTrue("couldn't reach an episode below a long description (focus: ${focused()})", focused().contains("Pilot"))
+        }
+    }
+
+    /** Issues #5 and #6: Back and Left from Series posters go to the current category, then the main menu. */
+    @Test
+    fun backAndLeftFromPostersGoToTheCurrentCategoryThenTheMainMenu() {
+        rule.runOnIdle { vm.navSelect(Screen.SERIES) }
+        waitFor("series") { vm.vodOf("series").isNotEmpty() }
+        rule.runOnIdle { vm.chooseVodCategory("series", "Crime") }
+        rule.runOnIdle { vm.vodCatFocus++ }
+        waitFor("on the Crime category (focus: ${focused()})") { focused().contains("Crime") && !focused().contains("Show") }
+        press(listOf(Key.DirectionRight))
+        waitFor("on a Crime poster (focus: ${focused()})") { focused().contains("Crime Show") }
+        press(listOf(Key.DirectionDown)); press(listOf(Key.DirectionRight)); press(listOf(Key.DirectionRight))
+        // #6: Left back out of the posters lands on Crime, not on whichever category is level with them.
+        var tries = 0
+        while (focused().contains("Show") && tries < 8) { press(listOf(Key.DirectionLeft)); tries++ }
+        assertTrue("Left from the posters didn't land on Crime (focus: ${focused()})", (focused().contains("Crime") && !focused().contains("Show") && focusedSelected()))
+        // #5: title page → Back → its poster → Back → the category → Back → the main menu, on Series.
+        press(listOf(Key.DirectionRight))
+        waitFor("a poster again") { focused().contains("Crime Show") }
+        press(listOf(Key.DirectionCenter))
+        waitFor("the title page") { vm.vodDetail != null }
+        press(listOf(Key.Back))
+        waitFor("Back returns to the poster (focus: ${focused()})") { vm.vodDetail == null && focused().contains("Crime Show") }
+        press(listOf(Key.Back))
+        waitFor("Back goes to the Crime category (focus: ${focused()})") { (focused().contains("Crime") && !focused().contains("Show") && focusedSelected()) && vm.navMode != NavMode.FULL }
+        press(listOf(Key.Back))
+        waitFor("Back opens the main menu on Series (focus: ${focused()} mode=${vm.navMode})") { vm.navMode == NavMode.FULL && focused().contains("Series") }
+        assertEquals(Screen.SERIES, vm.screen)
+    }
+
+    /** Nov 12: from My List, a series with several copies (versions line) left no room for its episodes. */
+    @Test
+    fun aSeriesFromMyListWithSeveralCopiesStillReachesItsEpisodes() {
+        val longPlot = List(25) { "A long description of the show that goes on and on, sentence $it." }.joinToString(" ")
+        FakeProvider(longPlot).use { server ->
+            rule.runOnIdle { vm.addPlaylist("Fake provider", "xtream", "http://127.0.0.1:${server.port}", "u", "", "", "", liveOn = false, vodOn = true) }
+            waitFor("the provider to be added (status=${vm.status})") { vm.playlists.any { it.name == "Fake provider" } }
+            val pid = vm.playlists.first { it.name == "Fake provider" }.id
+            fun s(k: String, n: String, cat: String) = com.avidviewer.tv.data.VodItem("$pid:$k", pid, "series", n, null, "", seriesId = "80", category = cat)
+            val en = s("s80en", "EN | Copy Show", "EN | Drama")
+            rule.runOnIdle {
+                vm.catalog.replace(pid, sequenceOf(en, s("s80fr", "FR | Copy Show", "FR | Séries"), s("s80x", "Copy Show 4K", "Crime"))) { false }
+                vm.toggleMyList(en)
+            }
+            go(Screen.SERIES)
+            rule.runOnIdle { vm.openVodDetail(vm.prefs.myList.first { it.key == en.key }) }
+            waitFor("episodes and versions") { vm.detailEpisodes?.isNotEmpty() == true && vm.versionsOfItem(en).size == 3 }
+            rule.onNodeWithText("This version: English", substring = true).assertExists()
+            waitFor("the page opens on episode 1 (focus: ${focused()})") { focused().contains("Pilot") }
+            var tries = 0
+            while (!focused().contains("My List") && tries < 12) { press(listOf(Key.DirectionUp)); tries++ }
+            assertTrue("couldn't go Up to the buttons (focus: ${focused()})", focused().contains("My List"))
+            tries = 0
+            while (!focused().contains("Pilot") && tries < 12) { press(listOf(Key.DirectionDown)); tries++ }
+            assertTrue("couldn't reach episode 1 from My List (focus: ${focused()})", focused().contains("Pilot"))
+            press(listOf(Key.DirectionCenter))
+            waitFor("episode 1 plays") { vm.screen == Screen.PLAYER && vm.vodPlaying?.name?.contains("S1 E1") == true }
         }
     }
 
@@ -855,6 +1179,30 @@ class UsabilityTest {
         }
     }
 
+    /** #8: the series page opens on the next episode to watch, in its season. */
+    @Test
+    fun aSeriesPageOpensOnTheNextUnwatchedEpisode() {
+        FakeProvider().use { server ->
+            rule.runOnIdle { vm.addPlaylist("Fake provider", "xtream", "http://127.0.0.1:${server.port}", "u", "", "", "", liveOn = false, vodOn = true) }
+            waitFor("the provider to be added (status=${vm.status})") { vm.playlists.any { it.name == "Fake provider" } }
+            val pid = vm.playlists.first { it.name == "Fake provider" }.id
+            val show = com.avidviewer.tv.data.VodItem("$pid:s77", pid, "series", "Test Show", null, "", seriesId = "77", category = "Shows")
+            go(Screen.SERIES)
+            fun open(what: String, want: String) {
+                rule.runOnIdle { vm.closeVodDetail(false); vm.openVodDetail(show) }
+                waitFor("episodes ($what)") { vm.detailEpisodes?.isNotEmpty() == true }
+                waitFor("$what: the page opens on “$want” (focus: ${focused()}, season ${vm.detailSeason})") { focused().contains(want) }
+            }
+            open("nothing watched", "Pilot")
+            val eps = vm.detailEpisodes!!
+            rule.runOnIdle { vm.markWatched(vm.episodeKey(show, eps[0])) }
+            open("episode 1 watched", "Second")
+            rule.runOnIdle { vm.markWatched(vm.episodeKey(show, eps[1])) }
+            open("season 1 watched", "Season Two Opener")
+            assertEquals("2", vm.detailSeason)
+        }
+    }
+
     @Test
     fun backFromFullScreenReturnsToTheChannelFarDownTheList() {
         rule.runOnIdle { vm.chooseGroup(TestData.P1, "BIG") }
@@ -872,31 +1220,197 @@ class UsabilityTest {
         waitFor("back in the guide on channel 60 (focus: ${focused()})") { vm.screen == Screen.GUIDE && focused().contains("BIG Channel 60 with") }
     }
 
+    /** Nov 12: searching "Farg" found nothing; part of a word, in any order, now finds it — as you type. */
+    @Test
+    fun searchFindsPartOfAWordAsYouType() {
+        go(Screen.SEARCH)
+        rule.runOnIdle { vm.typeSearch("farg") } // typed, Search not pressed
+        waitFor("results for farg (searched=${vm.searchedFor})") { vm.searchedFor == "farg" && vm.searchResults?.any { it.stations.isNotEmpty() } == true }
+        assertTrue(vm.searchResults!!.flatMap { it.stations }.all { it.title.contains("Fargo") })
+        rule.runOnIdle { vm.typeSearch("fargo wday 3") }
+        waitFor("words in any order") { vm.searchedFor == "fargo wday 3" && vm.searchResults?.flatMap { it.stations }?.any { it.title.contains("WDAY ABC 3 Fargo") } == true }
+        rule.runOnIdle { vm.typeSearch("movie drama 1") }
+        waitFor("movies too") { vm.searchedFor == "movie drama 1" && vm.searchResults?.flatMap { it.movies }?.any { it.title == "Drama Movie 1" } == true }
+        rule.runOnIdle { vm.typeSearch("zzzz") }
+        waitFor("nothing found names what was searched") { vm.searchedFor == "zzzz" }
+        rule.onNodeWithText("Nothing found for “zzzz”", substring = true).assertExists()
+        // The TV Guide's own search, too.
+        rule.runOnIdle { vm.runGuideSearch("abc farg") }
+        waitFor("guide search finds the channels") { vm.guideSearchHits.channels.any { vm.channelName(it).contains("Fargo") } }
+    }
+
+    /** Nov 12: on a Discover title page, the remote couldn't reach the versions below the description. */
+    @Test
+    fun discoverTitlePageReachesEveryVersionWithTheRemote() {
+        val p1 = TestData.P1
+        go(Screen.MOVIES)
+        waitFor("movies") { vm.vodOf("movie").isNotEmpty() }
+        rule.runOnIdle {
+            val c = vm.catalog
+            val have = c.page(com.avidviewer.tv.data.Catalog.Query("movie", listOf(p1), includeHidden = true), 0, 100_000) +
+                c.page(com.avidviewer.tv.data.Catalog.Query("series", listOf(p1), includeHidden = true), 0, 100_000)
+            fun m(k: String, n: String, cat: String) = com.avidviewer.tv.data.VodItem("$p1:$k", p1, "movie", n, null, "http://127.0.0.1:9/$k.mp4", category = cat)
+            c.replace(p1, (have + m("dfr", "FR | Mob Test", "FR | Films") + m("den", "EN | Mob Test", "EN | Action") + m("dx", "Mob Test 4K", "Crime")).asSequence()) { false }
+            vm.setVodTitlesHidden(listOf("$p1:none"), true); vm.setVodTitlesHidden(listOf("$p1:none"), false)
+        }
+        go(Screen.DISCOVER)
+        val long = List(30) { "A long description of the film that keeps going, sentence $it." }.joinToString(" ")
+        rule.runOnIdle { vm.discoverDetail = com.avidviewer.tv.data.Title(1, "movie", "Mob Test", "2025", long, null, null, 7.5, emptyList(), "") }
+        waitFor("the title page, on Play (focus: ${focused()})") { focused().contains("Play") && vm.versionsOf(vm.discoverDetail!!).size == 3 }
+        val seen = ArrayList<String>()
+        var tries = 0
+        while (!focused().contains("Where to watch") && tries < 12) { press(listOf(Key.DirectionDown)); seen.add(focused().take(40)); tries++ }
+        assertTrue("Down didn't reach every version and Where to watch: $seen", seen.any { it.contains("EN | Mob Test") } && seen.any { it.contains("FR | Mob Test") } && focused().contains("Where to watch"))
+        tries = 0
+        while (!focused().contains("FR | Mob Test") && tries < 6) { press(listOf(Key.DirectionUp)); tries++ }
+        press(listOf(Key.DirectionCenter))
+        waitFor("the French copy plays") { vm.screen == Screen.PLAYER && vm.vodPlaying?.key == "$p1:dfr" }
+    }
+
+    /** Issue #10: Menu on a Discover title adds it to My List (and takes it off), like Movies and Series. */
+    @Test
+    fun menuOnADiscoverTitleTogglesMyList() {
+        val p1 = TestData.P1
+        go(Screen.MOVIES)
+        waitFor("movies") { vm.vodOf("movie").isNotEmpty() }
+        rule.runOnIdle {
+            val c = vm.catalog
+            val have = c.page(com.avidviewer.tv.data.Catalog.Query("movie", listOf(p1), includeHidden = true), 0, 100_000) +
+                c.page(com.avidviewer.tv.data.Catalog.Query("series", listOf(p1), includeHidden = true), 0, 100_000)
+            c.replace(p1, (have + com.avidviewer.tv.data.VodItem("$p1:menu1", p1, "movie", "Menu Test Film", null, "http://127.0.0.1:9/m.mp4", category = "Action")).asSequence()) { false }
+            vm.setVodTitlesHidden(listOf("$p1:none"), true); vm.setVodTitlesHidden(listOf("$p1:none"), false)
+        }
+        go(Screen.DISCOVER)
+        val onProvider = com.avidviewer.tv.data.Title(11, "movie", "Menu Test Film", "2025", "", null, null, 7.0, emptyList(), "")
+        val elsewhere = com.avidviewer.tv.data.Title(12, "movie", "Not In Any Playlist Film", "2025", "", null, null, 7.0, emptyList(), "")
+        waitFor("the title is on the provider") { vm.matchVod(onProvider) != null }
+        rule.runOnIdle { vm.discoverMenu(onProvider) }
+        waitFor("added to My List") { vm.inMyList("$p1:menu1") }
+        assertTrue(vm.discoverHint.orEmpty().startsWith("Added"))
+        rule.runOnIdle { vm.discoverMenu(onProvider) }
+        waitFor("taken off My List") { !vm.inMyList("$p1:menu1") }
+        assertTrue(vm.discoverHint.orEmpty().startsWith("Removed"))
+        val before = vm.prefs.myList.size
+        rule.runOnIdle { vm.discoverMenu(elsewhere) }
+        assertEquals(before, vm.prefs.myList.size)
+        assertTrue(vm.discoverHint.orEmpty().contains("isn't on your provider"))
+    }
+
+    /** Nov 12: Series / Movies list a title once; its page offers the other copies (languages, playlists). */
+    @Test
+    fun aTitleIsListedOnceAndItsPageOffersItsVersions() {
+        go(Screen.SERIES)
+        waitFor("series") { vm.vodOf("series").isNotEmpty() }
+        val p1 = TestData.P1
+        rule.runOnIdle {
+            val c = vm.catalog
+            val have = c.page(com.avidviewer.tv.data.Catalog.Query("movie", listOf(p1), includeHidden = true), 0, 100_000) +
+                c.page(com.avidviewer.tv.data.Catalog.Query("series", listOf(p1), includeHidden = true), 0, 100_000)
+            fun s(k: String, n: String, cat: String) = com.avidviewer.tv.data.VodItem("$p1:$k", p1, "series", n, null, "", seriesId = k, category = cat)
+            c.replace(p1, (have + s("dupfr", "FR | Mob Test", "FR | Séries") + s("dupen", "EN | Mob Test", "EN | Drama") + s("dupx", "Mob Test 4K", "Crime")).asSequence()) { false }
+            vm.setVodTitlesHidden(listOf("$p1:none"), true); vm.setVodTitlesHidden(listOf("$p1:none"), false) // the lists read again
+        }
+        fun mob() = vm.vodOf("series").filter { com.avidviewer.tv.data.Tmdb.normalize(it.name) == "mobtest" }
+        waitFor("one Mob Test in the list") { mob().size == 1 }
+        assertEquals("the English copy stands for the title", "$p1:dupen", mob().single().key)
+        rule.runOnIdle { vm.openVodDetail(mob().single()) }
+        waitFor("the versions button") { rule.onAllNodesWithTag("versions-button").fetchSemanticsNodes().isNotEmpty() }
+        rule.onNodeWithText("3 versions", substring = true).assertExists()
+        rule.onNodeWithText("This version: English", substring = true).assertExists()
+        rule.onNodeWithTag("versions-button").requestFocus(); settle()
+        press(listOf(Key.DirectionCenter))
+        waitFor("the versions list, on the copy shown (focus: ${focused()})") { vm.versionPicker != null && focused().contains("EN | Mob Test") }
+        press(listOf(Key.DirectionDown))
+        assertTrue("next copy (focus: ${focused()})", focused().contains("Mob Test 4K") || focused().contains("FR | Mob Test"))
+        var tries = 0
+        while (!focused().contains("FR | Mob Test") && tries < 4) { press(listOf(Key.DirectionDown)); tries++ }
+        press(listOf(Key.DirectionCenter))
+        waitFor("the page shows the French copy") { vm.vodDetail?.key == "$p1:dupfr" && vm.versionPicker == null }
+    }
+
+    /** Nov 12: Menu in full screen opens Picture & sound (screen format, audio, captions, Add to List). */
+    @Test
+    fun menuInFullScreenOpensPictureAndSound() {
+        val key = "${TestData.P1}:c1-3"
+        rule.runOnIdle { vm.openFullScreen(key, PlayContext.GROUP) }
+        waitFor("full screen") { vm.screen == Screen.PLAYER && vm.currentKey == key }
+        press(listOf(Key.Menu))
+        waitFor("the panel opens on Screen format (focus: ${focused()})") { vm.avPanel && focused().contains("Screen format") }
+        rule.onNodeWithText("Picture & sound").assertIsDisplayed()
+        // Right changes the format, saved for this channel only.
+        press(listOf(Key.DirectionRight))
+        assertEquals("fill", vm.prefs.avChannels[key]?.format)
+        assertEquals(null, vm.prefs.avDefault.format)
+        assertEquals(com.avidviewer.tv.data.ScreenFormat.FILL, vm.screenFormat())
+        press(listOf(Key.DirectionLeft)); press(listOf(Key.DirectionLeft))
+        assertEquals("4:3", vm.prefs.avChannels[key]?.format)
+        // Up/Down move through the rows and never change the channel underneath.
+        press(listOf(Key.DirectionDown)); press(listOf(Key.DirectionDown))
+        assertTrue("Down reaches Closed captions (focus: ${focused()})", focused().contains("Closed captions"))
+        assertEquals(key, vm.currentKey)
+        press(listOf(Key.DirectionRight)) // captions on (before any track is found)
+        assertEquals(true, vm.prefs.avChannels[key]?.captions)
+        press(listOf(Key.DirectionDown))
+        assertTrue("caption size row (focus: ${focused()})", focused().contains("Text size"))
+        press(listOf(Key.DirectionRight))
+        assertEquals("large", vm.prefs.captionStyle.size)
+        // "Save changes for" → all channels: the next change goes to the default.
+        var tries = 0
+        while (!focused().contains("Save changes for") && tries < 8) { press(listOf(Key.DirectionDown)); tries++ }
+        press(listOf(Key.DirectionRight))
+        assertTrue(vm.prefs.avForAll)
+        // Back closes the panel, not full screen; the channel's own format stays.
+        press(listOf(Key.Back))
+        waitFor("panel closed, still full screen (panel=${vm.avPanel} screen=${vm.screen} focus=${focused()})") { !vm.avPanel && vm.screen == Screen.PLAYER }
+        assertEquals(com.avidviewer.tv.data.ScreenFormat.STANDARD, vm.screenFormat())
+        // Up/Down change channel again once it's closed.
+        press(listOf(Key.DirectionDown))
+        waitFor("Down changes channel after the panel closes") { vm.currentKey != key }
+        // Another channel uses the default; Reset brings a channel back to it.
+        assertEquals(com.avidviewer.tv.data.ScreenFormat.AUTO, vm.screenFormat())
+        rule.runOnIdle { vm.setAvForAll(false); vm.openFullScreen(key, PlayContext.GROUP) }
+        press(listOf(Key.Menu))
+        waitFor("panel again") { vm.avPanel && focused().contains("Screen format") }
+        tries = 0
+        while (!focused().contains("Use the settings for all channels") && tries < 12) { press(listOf(Key.DirectionDown)); tries++ }
+        press(listOf(Key.DirectionCenter))
+        assertEquals(null, vm.prefs.avChannels[key])
+        // Add to List is still in the panel.
+        tries = 0
+        while (!focused().contains("Add to List") && tries < 12) { press(listOf(Key.DirectionDown)); tries++ }
+        press(listOf(Key.DirectionCenter))
+        waitFor("the list picker opens") { vm.listPickerKey == key && !vm.avPanel }
+    }
+
     /** Presses sent back to back, faster than the screen redraws (a quick thumb on the remote). */
     private fun burst(k: Key, n: Int) { repeat(n) { key(k) }; settle() }
 
     /** Nov 12: tapping Up/Down fast in the TV Guide froze and closed the app after a wrap-around. */
     @Test
-    fun fastTapsInTheChannelListLandOnTheRightChannel() {
+    fun fastTapsInTheChannelListKeepUpAndNeverFreeze() {
+        fun row(): Int = Regex("BIG Channel (\\d+) with").find(focused())?.groupValues?.get(1)?.toInt() ?: -1
+        fun near(what: String, want: Int) = waitFor("$what: about channel $want (focus: ${focused()})") { row() in (want - 2)..want }
         rule.runOnIdle { vm.chooseGroup(TestData.P1, "BIG") }
-        waitFor("BIG channel 1 highlighted") { focused().contains("BIG Channel 1 with") }
-        burst(Key.DirectionDown, 10)
-        waitFor("10 fast presses down reach channel 11 (focus: ${focused()})") { focused().contains("BIG Channel 11 with") }
-        burst(Key.DirectionDown, 25)
-        waitFor("25 more reach channel 36 (focus: ${focused()})") { focused().contains("BIG Channel 36 with") }
-        burst(Key.DirectionUp, 30)
-        waitFor("30 fast presses up reach channel 6 (focus: ${focused()})") { focused().contains("BIG Channel 6 with") }
-        // Up past the top goes to the preview, then wraps to the bottom; fast presses carry on from there.
-        burst(Key.DirectionUp, 5); press(listOf(Key.DirectionUp))
-        if (!focused().contains("BIG Channel 80 ")) press(listOf(Key.DirectionUp))
-        waitFor("wrapped to the last channel (focus: ${focused()})") { focused().contains("BIG Channel 80 ") }
-        burst(Key.DirectionUp, 4)
-        waitFor("4 up from the bottom reach channel 76 (focus: ${focused()})") { focused().contains("BIG Channel 76 with") }
-        burst(Key.DirectionDown, 4); burst(Key.DirectionDown, 1)
-        waitFor("Down past the bottom wraps to channel 1 (focus: ${focused()})") { focused().contains("BIG Channel 1 with") }
-        // Mixed fast taps never lose the highlight.
+        waitFor("BIG channel 1 highlighted") { row() == 1 }
+        // Fast presses count from where the highlight is heading (a press arriving mid-scroll may drop).
+        burst(Key.DirectionDown, 10); near("10 fast presses down", 11)
+        var at = row()
+        burst(Key.DirectionDown, 25); near("25 more", at + 25)
+        at = row()
+        burst(Key.DirectionUp, 20); near("20 fast presses up", at - 20)
+        // Up to the top, past the preview, wraps to the bottom; fast presses carry on from there.
+        var tries = 0
+        while (row() != 80 && tries < 60) { press(listOf(Key.DirectionUp)); tries++ }
+        assertEquals("Up past the top didn't wrap to the last channel (focus: ${focused()})", 80, row())
+        burst(Key.DirectionUp, 4); near("4 up from the bottom", 76)
+        tries = 0
+        while (row() != 80 && tries < 10) { press(listOf(Key.DirectionDown)); tries++ }
+        press(listOf(Key.DirectionDown))
+        waitFor("Down past the bottom wraps to channel 1 (focus: ${focused()})") { row() == 1 }
+        // Mixed fast taps, across both wraps, never lose the highlight.
         val rnd = Random(1112)
         repeat(30) { burst(if (rnd.nextBoolean()) Key.DirectionDown else Key.DirectionUp, 1 + rnd.nextInt(8)) }
+        settle()
         assertTrue("highlight lost (focus: ${focused()})", focused() != "(nothing focused)")
     }
 
@@ -905,8 +1419,9 @@ class UsabilityTest {
         rule.runOnIdle { vm.chooseGroup(TestData.P1, "KIDS") }
         waitFor("KIDS channel 1 highlighted") { focused().contains("KIDS Channel 1 with") }
         // Down on the last channel goes to the first; Up from the top (past the header) to the last.
-        press(listOf(Key.DirectionUp))
-        if (!focused().contains("KIDS Channel 12 ")) press(listOf(Key.DirectionUp))
+        // (Up from the first channel goes to the day strip, then the preview, then wraps.)
+        var ups = 0
+        while (!focused().contains("KIDS Channel 12 ") && ups < 3) { press(listOf(Key.DirectionUp)); ups++ }
         waitFor("Up wraps to the last channel (focus: ${focused()})") { focused().contains("KIDS Channel 12 ") }
         press(listOf(Key.DirectionDown))
         waitFor("Down wraps to the first channel (focus: ${focused()})") { focused().contains("KIDS Channel 1 with") }

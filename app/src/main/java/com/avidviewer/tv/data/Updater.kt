@@ -29,9 +29,17 @@ object Updater {
         return PackageInfoCompat.getLongVersionCode(info) to (info.versionName ?: "")
     }
 
+    /** "v1.1.0.190" → "1.1.0"; "v1.0.179" → "1.0.179". */
+    fun displayVersion(tag: String): String {
+        val parts = tag.removePrefix("v").split('.')
+        return if (parts.size >= 4) parts.take(3).joinToString(".") else parts.joinToString(".")
+    }
+
     fun latest(): Release? {
         val o = JSONObject(Net.text("https://api.github.com/repos/$REPO/releases/latest"))
-        val tag = o.optString("tag_name") // e.g. v1.0.12, where 12 is the version code
+        // e.g. v1.0.179 (up to 1.0.179) or v1.1.0.190 (semantic version + build): the last part is the
+        // version code. Shown as 1.0.179 / 1.1.0.
+        val tag = o.optString("tag_name")
         val code = tag.substringAfterLast('.').toLongOrNull() ?: return null
         val assets = o.optJSONArray("assets") ?: return null
         var url: String? = null
@@ -40,7 +48,7 @@ object Updater {
             val a = assets.getJSONObject(i)
             if (a.optString("name").endsWith(".apk", true)) { url = a.optString("browser_download_url"); size = a.optLong("size", -1L); break }
         }
-        return Release(code, tag.removePrefix("v"), url ?: return null, o.optString("body"), size)
+        return Release(code, displayVersion(tag), url ?: return null, o.optString("body"), size)
     }
 
     /** No data for this long means the connection has stalled: pick up where it stopped. */

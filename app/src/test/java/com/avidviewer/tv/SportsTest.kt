@@ -158,7 +158,7 @@ class SportsTest {
         }
         vm.live.replacingGuide(TestData.P2) { add -> add("tnt.us", Program(now - 35 * 60_000L, now + 2 * 3600_000L, "NHL Hockey", "Red Wings at Blues", false)) }
         vm.openSportsScreen()
-        idleUntil("games from ESPN (${vm.sportsNote})") { vm.sportGames.size == 3 }
+        idleUntil("games from ESPN (${vm.sportsNote})") { vm.sportGames.size == 3 && vm.sportsMatchedIds.size == 3 }
         val live = vm.sportGames.first { it.game.id == "NHL:401" }
         assertEquals(listOf("${TestData.P2}:tnt", "${TestData.P2}:ev"), live.channels.map { it.key })
         assertEquals(setOf(MatchKind.NATIONAL, MatchKind.GUIDE), live.channels.first().kinds)

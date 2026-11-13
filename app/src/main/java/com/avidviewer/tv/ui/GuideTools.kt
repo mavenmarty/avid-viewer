@@ -61,7 +61,7 @@ fun LazyListScope.guideSettings(vm: AppViewModel, confirm: (title: String, messa
                     " · $sources source" + (if (sources == 1) "" else "s") + (if (vm.guideBusy == pl.id) " · downloading…" else ""),
                     size = 12.sp, color = C.Text, lines = Int.MAX_VALUE)
             }
-            TvButton(if (vm.guideBusy != null) "Downloading…" else "↻  Download the guide now", modifier = Modifier.testTag("guide-refresh-now")) { if (vm.guideBusy == null) vm.refreshGuideNow() }
+            TvButton(if (vm.guideBusy != null) "Downloading…" else "↻  Download the guide now", busy = vm.guideBusy != null, modifier = Modifier.testTag("guide-refresh-now")) { if (vm.guideBusy == null) vm.refreshGuideNow() }
         }
     }
     item {
@@ -138,7 +138,7 @@ fun GuideSourcesPane(vm: AppViewModel, pl: Playlist, confirm: (title: String, me
             if (editing == "new") SourceForm(null, onCancel = { editing = null }) { name, url, off -> vm.addEpgSource(pl.id, name, url, off); editing = null }
             else Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 TvButton("＋  Add guide source", primary = true, modifier = Modifier.testTag("guide-src-add")) { editing = "new" }
-                TvButton(if (vm.guideBusy == pl.id) "Downloading…" else "↻  Download now") { if (vm.guideBusy == null) vm.refreshGuideNow(pl.id) }
+                TvButton(if (vm.guideBusy == pl.id) "Downloading…" else "↻  Download now", busy = vm.guideBusy == pl.id) { if (vm.guideBusy == null) vm.refreshGuideNow(pl.id) }
             }
         }
         item {
@@ -155,6 +155,7 @@ private fun SourceForm(src: EpgSource?, onCancel: () -> Unit, onSave: (name: Str
     var url by remember(src?.id) { mutableStateOf(src?.url ?: "") }
     var offset by remember(src?.id) { mutableStateOf(src?.offsetHours ?: 0) }
     var problem by remember(src?.id) { mutableStateOf<String?>(null) }
+    DiscardGuard(name != (src?.name ?: "") || url != (src?.url ?: "") || offset != (src?.offsetHours ?: 0)) { onCancel() }
     Column(
         Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(C.Bg).padding(10.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),

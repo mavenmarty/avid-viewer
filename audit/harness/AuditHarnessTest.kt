@@ -130,6 +130,19 @@ class AuditHarnessTest {
         return res to ((peak.get() - base).coerceAtLeast(0L) / (1024 * 1024))
     }
 
+    /** Largest amount of memory still in use right after a collection, while [block] runs (what it holds, not its garbage). */
+    private fun <T> peakLiveMb(block: () -> T): Pair<T, Long> {
+        repeat(3) { System.gc(); Thread.sleep(40) }
+        val r = Runtime.getRuntime()
+        val base = r.totalMemory() - r.freeMemory()
+        val peak = java.util.concurrent.atomic.AtomicLong(base)
+        val running = java.util.concurrent.atomic.AtomicBoolean(true)
+        val sampler = thread(isDaemon = true) { while (running.get()) { System.gc(); peak.accumulateAndGet(r.totalMemory() - r.freeMemory()) { a, b -> maxOf(a, b) }; Thread.sleep(30) } }
+        val res = try { block() } finally { running.set(false); sampler.join() }
+        System.gc(); val after = r.totalMemory() - r.freeMemory()
+        return res to ((peak.get() - base).coerceAtLeast(0L) / (1024 * 1024))
+    }
+
     // ------------------------------------------------------------------ remote helpers (as in UsabilityTest)
 
     private lateinit var vm: AppViewModel
@@ -204,6 +217,21 @@ class AuditHarnessTest {
             report("parse", "m3u_40k_entries_ms", (System.nanoTime() - t0) / 1_000_000)
             report("parse", "m3u_peak_heap_mb", peak)
             report("parse", "m3u_live_vod", "${chs.size} live, ${vodOut.size} vod")
+            // Catalog step 2: the same file streamed straight into the database (what the app now does).
+            val cat = com.avidviewer.tv.data.Catalog(app)
+            val t2 = System.nanoTime()
+            val (ing, speak) = peakMb { cat.replacing("fx-stream", { false }) { add -> com.avidviewer.tv.data.M3u.read(pl, add) } }
+            report("parse", "m3u_stream_to_catalog_ms", (System.nanoTime() - t2) / 1_000_000)
+            report("parse", "m3u_stream_to_catalog_peak_heap_mb", speak)
+            report("parse", "m3u_stream_to_catalog_titles", ing.added)
+            cat.delete("fx-stream")
+            // Live memory (after collections) — the list way vs the streamed way, same file.
+            val (lv, lpeak) = peakLiveMb { val out = ArrayList<com.avidviewer.tv.data.VodItem>(); com.avidviewer.tv.data.M3u.channels(pl, out).size + out.size }
+            report("parse", "m3u_list_live_peak_mb", lpeak)
+            val (_, slpeak) = peakLiveMb { cat.replacing("fx-stream", { false }) { add -> com.avidviewer.tv.data.M3u.read(pl, add) }.added }
+            report("parse", "m3u_stream_live_peak_mb", slpeak)
+            report("parse", "m3u_list_entries", lv)
+            cat.delete("fx-stream"); cat.close()
             val (_, jpeak) = peakMb { org.json.JSONArray(File(fx, "live_streams.json").readText()).length() }
             report("parse", "xtream_live_10k_JSONArray_peak_heap_mb", jpeak)
             report("parse", "xtream_live_10k_json_mb", File(fx, "live_streams.json").length() / (1024 * 1024.0))
@@ -220,6 +248,38 @@ class AuditHarnessTest {
             report("parse", "xmltv_7d_500ch_ms", (System.nanoTime() - t1) / 1_000_000)
             report("parse", "xmltv_peak_heap_mb", gpk)
             report("parse", "xmltv_programmes_kept", g.values.sumOf { it.size })
+            // Step 3: the guide and the live list streamed straight into the database (what the app now does).
+            val cat3 = com.avidviewer.tv.data.Catalog(app)
+            val live = com.avidviewer.tv.data.LiveDb(cat3)
+            val from = System.currentTimeMillis() - 3 * 3600_000L; val to = System.currentTimeMillis() + 36 * 3600_000L
+            val (_, glist) = peakLiveMb { com.avidviewer.tv.data.Xmltv.read("http://$host/guide.xml.gz", wanted, from, to).size }
+            report("parse", "xmltv_list_live_peak_mb", glist)
+            val t3 = System.nanoTime()
+            val (gi, gstream) = peakLiveMb { live.replacingGuide("fx") { add -> com.avidviewer.tv.data.Xmltv.read("http://$host/guide.xml.gz", wanted, from, to, 0L, null) { id, pr -> add(id, pr) } } }
+            report("parse", "xmltv_stream_to_db_ms", (System.nanoTime() - t3) / 1_000_000)
+            report("parse", "xmltv_stream_live_peak_mb", gstream)
+            report("parse", "xmltv_stream_programmes", gi.added)
+            // Split the streamed guide's cost: reading alone (nothing kept), and writing alone (no download).
+            val (_, readOnly) = peakLiveMb { var n = 0; com.avidviewer.tv.data.Xmltv.read("http://$host/guide.xml.gz", wanted, from, to, 0L, null) { _, _ -> n++ }; n }
+            report("parse", "xmltv_read_only_live_peak_mb", readOnly)
+            val (_, writeOnly) = peakLiveMb { live.replacingGuide("fx-w") { add -> for (i in 0 until 22_000) add("ch${i % 500}", com.avidviewer.tv.data.Program(from + i * 60_000L, from + i * 60_000L + 1_800_000L, "Programme $i", null, false)) } }
+            report("parse", "guide_write_only_live_peak_mb", writeOnly)
+            live.delete("fx-w")
+            val t4 = System.nanoTime()
+            val (win, wpk) = peakLiveMb { live.guide("fx", null, from, to) }
+            report("parse", "guide_window_read_ms", (System.nanoTime() - t4) / 1_000_000)
+            report("parse", "guide_window_live_mb", wpk)
+            report("parse", "guide_window_channels", win.size)
+            val (_, clist) = peakLiveMb { com.avidviewer.tv.data.M3u.read(pl, null).size }
+            report("parse", "m3u_live_list_live_peak_mb", clist)
+            val (ci, cstream) = peakLiveMb { live.replacingChannels("fx") { add -> com.avidviewer.tv.data.M3u.read(pl, add, null) } }
+            report("parse", "m3u_live_stream_to_db_live_peak_mb", cstream)
+            report("parse", "m3u_live_stream_to_db_channels", ci.added)
+            val t5 = System.nanoTime()
+            val hits = live.searchChannels("fx", "news", 60).size + live.searchPrograms("fx", "news", System.currentTimeMillis(), 80).size
+            report("parse", "db_live_search_ms", (System.nanoTime() - t5) / 1_000_000)
+            report("parse", "db_live_search_hits", hits)
+            live.delete("fx"); cat3.close()
         }.onFailure { report("parse", "error", it.toString()) }
 
         // ---- S1 cold start ----

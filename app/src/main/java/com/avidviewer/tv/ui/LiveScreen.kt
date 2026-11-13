@@ -143,10 +143,14 @@ private fun PreviewPane(vm: AppViewModel, modifier: Modifier) {
 
 @Composable
 fun EmptyState(vm: AppViewModel, title: String, body: String) {
-    Column(Modifier.fillMaxSize().padding(40.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text(title, color = C.Text, fontSize = 24.sp, fontWeight = FontWeight.Bold)
-        Label(body, size = 15.sp, color = C.Soft, lines = 3)
-        if (vm.busy) Label(vm.status ?: "Loading…", size = 14.sp, lines = Int.MAX_VALUE)
-        TvButton("Add a playlist", primary = true) { vm.navSelect(Screen.PLAYLISTS) }
+    val failed = !vm.busy && vm.status?.startsWith("Couldn't") == true && vm.playlists.isNotEmpty()
+    Column(Modifier.fillMaxSize().padding(40.dp)) {
+        StateMessage(
+            kind = when { vm.busy -> StateKind.LOADING; failed -> StateKind.ERROR; else -> StateKind.EMPTY },
+            title = if (vm.busy) "Loading channels…" else if (failed) "Couldn't load channels" else title,
+            body = if (vm.busy) vm.status else if (failed) vm.status else body,
+            retry = { vm.loadActive(refresh = true) },
+            action = "Add a playlist" to { vm.navSelect(Screen.PLAYLISTS) },
+        )
     }
 }

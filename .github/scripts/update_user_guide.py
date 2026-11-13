@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Add release entries for new published versions to docs/USER_GUIDE.md.
 
-For every release tag (v1.0.N) newer than the newest version already in the guide, this adds a
+For every release tag (v1.0.N, or v<major>.<minor>.<patch>.<build> from 1.1.0 on) newer than the newest version already in the guide, this adds a
 "### 1.0.N — <date>" entry with the change log (the commit subjects since the previous release),
 marks it "(current)", and updates the version named at the top of the guide.
 
@@ -57,7 +57,9 @@ def changes(prev_tag: str, tag: str) -> list[str]:
         files = git("show", "--name-only", "--format=", sha).split()
         if files and all(f.startswith(DOC_ONLY) for f in files):
             continue  # documentation-only commit
-        items.append(subject.strip())
+        # "feat: Profiles" → "Profiles" (the type only decides the version number)
+        subject = re.sub(r"^[a-z]+(\([^)]*\))?!?:\s*", "", subject.strip())
+        items.append(subject[:1].upper() + subject[1:])
     return items
 
 
@@ -68,7 +70,13 @@ def main() -> int:
         return 1
 
     documented = re.findall(r"^### (\d+\.\d+\.\d+) — ", text, flags=re.M)
-    tags = sorted((t[1:] for t in git("tag", "--list", "v*").split() if re.fullmatch(r"v\d+\.\d+\.\d+", t)), key=vkey)
+    # Version shown → its tag. From 1.1.0 tags carry the build number as a 4th part (v1.1.0.190).
+    tag_of = {}
+    for t in git("tag", "--list", "v*").split():
+        m = re.fullmatch(r"v(\d+\.\d+\.\d+)(\.\d+)?", t)
+        if m:
+            tag_of[m.group(1)] = t
+    tags = sorted(tag_of, key=vkey)
     if not documented or not tags:
         print("No documented versions or no tags; nothing done.")
         return 0
@@ -81,9 +89,9 @@ def main() -> int:
     prev = newest
     entries = []
     for v in new:
-        items = changes(f"v{prev}", f"v{v}") or ["Maintenance build with no app changes"]
+        items = changes(tag_of.get(prev, f"v{prev}"), tag_of[v]) or ["Maintenance build with no app changes"]
         body = "\n".join(f"- {s}" for s in items)
-        entries.append(f"### {v} — {fmt_date(release_date(f'v{v}'))}\n\n**Change log**\n\n{body}\n")
+        entries.append(f"### {v} — {fmt_date(release_date(tag_of[v]))}\n\n**Change log**\n\n{body}\n")
         prev = v
     latest = new[-1]
 

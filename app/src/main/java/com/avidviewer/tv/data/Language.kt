@@ -25,10 +25,10 @@ object Language {
 
     private fun code(s: String) = CODE.find(s)?.groupValues?.get(1)?.lowercase()?.let { LABELS[it] }
 
-    private fun word(s: String): String? {
-        val l = s.lowercase()
-        return WORDS.entries.firstOrNull { (w, _) -> Regex("(^|[^a-zà-ÿ])" + Regex.escape(w) + "($|[^a-zà-ÿ])").containsMatchIn(l) }?.value
-    }
+    /** All the words in one pattern, made once (it was made again for every word of every title). */
+    private val WORD = Regex("(?:^|[^a-zà-ÿ])(" + WORDS.keys.sortedByDescending { it.length }.joinToString("|") { Regex.escape(it) } + ")(?=$|[^a-zà-ÿ])")
+
+    private fun word(s: String): String? = WORD.find(s.lowercase())?.groupValues?.get(1)?.let { WORDS[it] }
 
     /** English first, then unmarked (often English), then multi-language, then everything else. */
     fun rank(lang: String?): Int = when (lang) { "English" -> 0; null -> 1; "Multi-language" -> 2; else -> 3 }

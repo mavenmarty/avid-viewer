@@ -54,6 +54,7 @@ class MainActivity : ComponentActivity() {
         vm.backupHost = backupHost
         com.avidviewer.tv.data.CrashLog.install(this, runCatching { packageManager.getPackageInfo(packageName, 0).versionName }.getOrNull() ?: "")
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        coil.Coil.setImageLoader(com.avidviewer.tv.ui.Images.imageLoader(applicationContext))
         setContent {
             MaterialTheme(colorScheme = darkColorScheme(primary = C.Accent, background = C.Bg, surface = C.Surface)) {
                 AppRoot(vm)

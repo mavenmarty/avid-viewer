@@ -17,15 +17,17 @@ data class Ingest<T>(val result: T, val added: Int, val committed: Boolean)
  * episodes, "series" for series), c category ("Other" when blank), n name, nn normalized name (for
  * search and matching), l logo, u url, s series id, a added, r rating, y year, o position in the
  * provider's list, h hidden (1 when the title or its category is hidden by the user), tk the
- * stream address token (ChannelKeys.token), to follow saved choices when keys change.
+ * stream address token (ChannelKeys.token), to follow saved choices when keys change, lr the
+ * language rank (Language.rank: 0 English … 3 other), so a title listed once shows its English copy.
  */
-class Catalog(context: Context) : SQLiteOpenHelper(context.applicationContext, "catalog.db", null, 3) {
+class Catalog(context: Context) : SQLiteOpenHelper(context.applicationContext, "catalog.db", null, 5) {
 
     override fun onCreate(db: SQLiteDatabase) {
         db.execSQL(
             """CREATE TABLE title (k TEXT PRIMARY KEY, p TEXT NOT NULL, t TEXT NOT NULL, g TEXT NOT NULL, c TEXT NOT NULL,
                n TEXT NOT NULL, nn TEXT NOT NULL, l TEXT, u TEXT NOT NULL, s TEXT, a INTEGER NOT NULL DEFAULT 0,
-               r TEXT NOT NULL DEFAULT '', y TEXT NOT NULL DEFAULT '', o INTEGER NOT NULL, h INTEGER NOT NULL DEFAULT 0, tk TEXT)""",
+               r TEXT NOT NULL DEFAULT '', y TEXT NOT NULL DEFAULT '', o INTEGER NOT NULL, h INTEGER NOT NULL DEFAULT 0, tk TEXT,
+               lr INTEGER NOT NULL DEFAULT -1, rep INTEGER NOT NULL DEFAULT 1, repc INTEGER NOT NULL DEFAULT 1)""",
         )
         db.execSQL("CREATE INDEX title_list ON title (g, h, c, p, o)")
         db.execSQL("CREATE INDEX title_all ON title (g, h, p, o)")
@@ -45,13 +47,80 @@ class Catalog(context: Context) : SQLiteOpenHelper(context.applicationContext, "
         }
         // 3: live channels and guide programmes (LiveDb).
         if (oldVersion < 3) LiveDb.create(db)
+        // 4: language rank, so Movies and Series list each title once with its English copy.
+        // Only the column here (-1 = not worked out yet): [fillLanguages] fills it in the background.
+        // 1.0.160 worked out every title inside the upgrade, which held the database (live channels
+        // too) for minutes on a big catalog; Fire TV closed the app and the upgrade started over.
+        if (oldVersion < 4) db.execSQL("ALTER TABLE title ADD COLUMN lr INTEGER NOT NULL DEFAULT -1")
+        // 5: the copy that stands for each title, worked out by [regroup] in the background (1 until then).
+        // 1.0.160–162 grouped titles inside every page read, on the screen's thread: a big catalog
+        // took seconds per page and froze Movies and Series.
+        if (oldVersion < 5) {
+            db.execSQL("ALTER TABLE title ADD COLUMN rep INTEGER NOT NULL DEFAULT 1")
+            db.execSQL("ALTER TABLE title ADD COLUMN repc INTEGER NOT NULL DEFAULT 1")
+        }
     }
+
+    /**
+     * Marks the copy that stands for each title (rep: across everything; repc: within its category):
+     * English first, then unmarked, multi-language, other languages; then the playlists' order and the
+     * list order. Hidden titles and playlists not in [pids] are left out. Lists with [Query.grouped]
+     * then just read the marked rows. Takes a second or two on a big catalog: call off the main thread,
+     * after a download, a change of hidden titles, or when the languages have been filled in.
+     */
+    fun regroup(pids: List<String>) {
+        val db = writableDatabase
+        val pl = if (pids.isEmpty()) "0" else "CASE p ${pids.mapIndexed { i, p -> "WHEN '${p.replace("'", "''")}' THEN $i" }.joinToString(" ")} ELSE ${pids.size} END"
+        val pick = "MIN((CASE WHEN lr < 0 THEN 1 ELSE lr END) * $RANK + ($pl) * $PER_PLAYLIST + o)"
+        val inPids = if (pids.isEmpty()) "0" else "p IN (${pids.joinToString(",") { "'" + it.replace("'", "''") + "'" }})"
+        for (g in listOf("movie", "series")) {
+            db.beginTransaction()
+            try {
+                db.execSQL("UPDATE title SET rep = CASE WHEN rowid IN (SELECT r FROM (SELECT rowid AS r, $pick FROM title WHERE g = ? AND h = 0 AND $inPids GROUP BY $GROUP_KEY)) THEN 1 ELSE 0 END WHERE g = ?", arrayOf(g, g))
+                db.execSQL("UPDATE title SET repc = CASE WHEN rowid IN (SELECT r FROM (SELECT rowid AS r, $pick FROM title WHERE g = ? AND h = 0 AND $inPids GROUP BY c, $GROUP_KEY)) THEN 1 ELSE 0 END WHERE g = ?", arrayOf(g, g))
+                db.setTransactionSuccessful()
+            } finally { db.endTransaction() }
+        }
+    }
+
+    /**
+     * Works out the language of titles saved before version 4, a few hundred at a time in short
+     * transactions, so other reads (channels, the guide) never wait long. Returns how many were done.
+     * Call off the main thread.
+     */
+    fun fillLanguages(batch: Int = 400, pause: () -> Unit = { Thread.sleep(15) }): Int {
+        var done = 0
+        val db = writableDatabase
+        while (true) {
+            val rows = db.rawQuery("SELECT rowid, n, c FROM title WHERE lr < 0 LIMIT $batch", null).use { c ->
+                val l = ArrayList<Triple<Long, String, String?>>(batch); while (c.moveToNext()) l.add(Triple(c.getLong(0), c.getString(1), c.getString(2))); l
+            }
+            if (rows.isEmpty()) return done
+            db.beginTransaction()
+            try {
+                val st = db.compileStatement("UPDATE title SET lr = ? WHERE rowid = ?")
+                for ((id, n, cat) in rows) { st.clearBindings(); st.bindLong(1, langRank(n, cat).toLong()); st.bindLong(2, id); st.executeUpdateDelete() }
+                db.setTransactionSuccessful()
+            } finally { db.endTransaction() }
+            done += rows.size
+            pause()
+        }
+    }
+
+    /** True while some titles still wait for [fillLanguages]. */
+    fun needsLanguages(): Boolean = readableDatabase.rawQuery("SELECT 1 FROM title WHERE lr < 0 LIMIT 1", null).use { it.moveToFirst() }
 
     override fun onConfigure(db: SQLiteDatabase) { db.enableWriteAheadLogging() }
 
     companion object {
         fun group(kind: String) = if (kind == "series") "series" else "movie"
         fun cat(v: VodItem) = v.category.ifBlank { "Other" }
+        fun langRank(name: String, category: String?) = Language.rank(Language.of(name, category))
+        /** Language rank × this + position orders a title's copies: English first, then list order. */
+        private const val RANK = 100_000_000_000_000L
+        private const val PER_PLAYLIST = 10_000_000_000L
+        /** What folds copies together: the normalized name (a title with no usable name stays on its own). */
+        private const val GROUP_KEY = "(CASE WHEN nn = '' THEN k ELSE nn END)"
         private const val COLS = "k, p, t, c, n, l, u, s, a, r, y"
         fun read(c: Cursor) = VodItem(
             key = c.getString(0), playlistId = c.getString(1), kind = c.getString(2), category = c.getString(3),
@@ -90,7 +159,7 @@ class Catalog(context: Context) : SQLiteOpenHelper(context.applicationContext, "
         db.beginTransaction()
         try {
             db.delete("title", "p = ?", arrayOf(pid))
-            val st = db.compileStatement("INSERT OR IGNORE INTO title (k, p, t, g, c, n, nn, l, u, s, a, r, y, o, h, tk) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
+            val st = db.compileStatement("INSERT OR IGNORE INTO title (k, p, t, g, c, n, nn, l, u, s, a, r, y, o, h, tk, lr) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
             var o = 0L
             var added = 0
             val result = fill { v ->
@@ -102,6 +171,7 @@ class Catalog(context: Context) : SQLiteOpenHelper(context.applicationContext, "
                 if (v.seriesId != null) st.bindString(10, v.seriesId) else st.bindNull(10)
                 st.bindLong(11, v.added); st.bindString(12, v.rating); st.bindString(13, v.year); st.bindLong(14, o++); st.bindLong(15, if (hidden(v)) 1 else 0)
                 st.bindString(16, ChannelKeys.token(v.url))
+                st.bindLong(17, langRank(v.name, cat(v)).toLong())
                 if (st.executeInsert() != -1L) added++
             }
             if (!keep(result, added)) return Ingest(result, added, committed = false)
@@ -170,11 +240,19 @@ class Catalog(context: Context) : SQLiteOpenHelper(context.applicationContext, "
     }
 
     /** Recomputes the hidden flag from the user's hidden categories ("movie|pid|cat") and titles. */
-    fun applyHidden(hiddenCats: Set<String>, hiddenTitles: Set<String>) {
+    fun applyHidden(hiddenCats: Set<String>, hiddenTitles: Set<String>, onlyCats: Set<String>? = null) {
         val db = writableDatabase
         db.beginTransaction()
         try {
-            db.execSQL("UPDATE title SET h = 0 WHERE h = 1")
+            db.execSQL("UPDATE title SET h = 0, rep = 1, repc = 1 WHERE h = 1")
+            // A Kids profile: everything is hidden except its chosen categories ("movie|playlistId|category").
+            if (onlyCats != null) {
+                db.execSQL("UPDATE title SET h = 1")
+                for (key in onlyCats) {
+                    val parts = key.split('|', limit = 3)
+                    if (parts.size == 3) db.execSQL("UPDATE title SET h = 0 WHERE g = ? AND p = ? AND c = ?", arrayOf(parts[0], parts[1], parts[2]))
+                }
+            }
             for (key in hiddenCats) {
                 val parts = key.split('|', limit = 3)
                 if (parts.size == 3) db.execSQL("UPDATE title SET h = 1 WHERE g = ? AND p = ? AND c = ?", arrayOf(parts[0], parts[1], parts[2]))
@@ -199,13 +277,13 @@ class Catalog(context: Context) : SQLiteOpenHelper(context.applicationContext, "
         try {
             for (k in afterCats - beforeCats) catArgs(k)?.let { db.execSQL("UPDATE title SET h = 1 WHERE g = ? AND p = ? AND c = ?", it) }
             for (k in beforeCats - afterCats) catArgs(k)?.let { a ->
-                db.execSQL("UPDATE title SET h = 0 WHERE g = ? AND p = ? AND c = ?", a)
+                db.execSQL("UPDATE title SET h = 0, rep = 1, repc = 1 WHERE g = ? AND p = ? AND c = ?", a)
                 afterTitles.chunked(400).forEach { ch -> db.execSQL("UPDATE title SET h = 1 WHERE g = ? AND p = ? AND c = ? AND k IN (${ch.joinToString(",") { "?" }})", a + ch) }
             }
             (afterTitles - beforeTitles).chunked(400).forEach { ch -> db.execSQL("UPDATE title SET h = 1 WHERE k IN (${ch.joinToString(",") { "?" }})", ch.toTypedArray()) }
             val shown = (beforeTitles - afterTitles).toList()
             shown.chunked(400).forEach { ch ->
-                db.execSQL("UPDATE title SET h = 0 WHERE k IN (${ch.joinToString(",") { "?" }})", ch.toTypedArray())
+                db.execSQL("UPDATE title SET h = 0, rep = 1, repc = 1 WHERE k IN (${ch.joinToString(",") { "?" }})", ch.toTypedArray())
                 for (k in afterCats) catArgs(k)?.let { a -> db.execSQL("UPDATE title SET h = 1 WHERE g = ? AND p = ? AND c = ? AND k IN (${ch.joinToString(",") { "?" }})", a + ch) }
             }
             db.setTransactionSuccessful()
@@ -225,19 +303,29 @@ class Catalog(context: Context) : SQLiteOpenHelper(context.applicationContext, "
         val limit: Int? = null,
         /** Only this exact kind (e.g. "episode" within the movie group). */
         val kind: String? = null,
+        /** Each title once (copies with the same name in other languages, qualities or playlists folded in). */
+        val grouped: Boolean = false,
     ) {
         fun where(): Pair<String, Array<String>> {
             val sb = StringBuilder("g = ?")
             val args = ArrayList<String>(); args.add(group)
             if (!includeHidden) sb.append(" AND h = 0")
+            // Each title once: the copy [regroup] marked (within the category when one is chosen).
+            if (grouped) sb.append(if (category != null) " AND repc = 1" else " AND rep = 1")
             if (category != null) { sb.append(" AND c = ?"); args.add(category) }
             if (kind != null) { sb.append(" AND t = ?"); args.add(kind) }
             sb.append(" AND p IN (${playlists.joinToString(",") { "?" }})"); args.addAll(playlists)
-            nameContains?.takeIf { it.isNotBlank() }?.let { sb.append(" AND n LIKE ? ESCAPE '\\'"); args.add("%" + it.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%") }
+            // Every word typed, in any order ("news fargo" finds "Fargo News").
+            nameContains?.takeIf { it.isNotBlank() }?.let { q ->
+                for (w in SearchText.words(q).ifEmpty { listOf(q.trim()) }) {
+                    sb.append(" AND n LIKE ? ESCAPE '\\'"); args.add("%" + w.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%")
+                }
+            }
             return sb.toString() to args.toTypedArray()
         }
         // Playlists in the user's order, then the provider's order within each.
-        fun order(): String = if (newestFirst) "a DESC, o" else "CASE p ${playlists.mapIndexed { i, p -> "WHEN '${p.replace("'", "''")}' THEN $i" }.joinToString(" ")} END, o"
+        fun order(): String = if (newestFirst) "a DESC, o" else "${plIndex()}, o"
+        private fun plIndex() = "CASE p ${playlists.mapIndexed { i, p -> "WHEN '${p.replace("'", "''")}' THEN $i" }.joinToString(" ")} END"
     }
 
     fun count(q: Query): Int {
@@ -252,7 +340,8 @@ class Catalog(context: Context) : SQLiteOpenHelper(context.applicationContext, "
         val (w, a) = q.where()
         val lim = q.limit?.let { minOf(size, it - offset) } ?: size
         if (lim <= 0) return emptyList()
-        return readableDatabase.rawQuery("SELECT $COLS FROM title WHERE $w ORDER BY ${q.order()} LIMIT $lim OFFSET $offset", a).use { c ->
+        val sql = "SELECT $COLS FROM title WHERE $w ORDER BY ${q.order()} LIMIT $lim OFFSET $offset"
+        return readableDatabase.rawQuery(sql, a).use { c ->
             val out = ArrayList<VodItem>(c.count); while (c.moveToNext()) out.add(read(c)); out
         }
     }

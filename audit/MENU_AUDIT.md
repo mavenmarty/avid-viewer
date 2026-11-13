@@ -457,3 +457,93 @@ CI JVM under Robolectric (not a Fire TV). Fixtures: 10,000 live channels (one ca
 | 1.4 (NAV-06) | Update dialog opens by itself only when found before the first key press | No focus change mid-scenario | Unit test `StabilizeTest.updateDialogOnlyOpensBeforeTheFirstButtonPress` |
 
 Found while doing this: the new caches were first declared after the view model's `init`, so a fast startup could hit them before they existed. The UI tests caught it as a NullPointerException, and it's fixed by declaring them first. Everything else measured the same as before (S1–S6), with memory still flat. Still open from Stabilize: **1.5, the on-device catalog database (DATA-01)**.
+
+### Nov 11 — 1.5 step 1: movies and series in an on-device database (on `next`, not yet published)
+
+- **New:** `data/Catalog.kt` adds the SQLite titles table and `PagedTitles`, a list that reads 100-title pages as the grid shows them and keeps at most 12 pages.
+- **Now database queries:** Movies/Series lists and categories, Recently added, Continue watching, the List Editor, global search, "hide everywhere" and Discover's "On your provider".
+- **Hidden flags:** updated as soon as you press the button.
+- **Upgrading:** titles saved by older versions move into the database on first use.
+- **Downloads:** replace a playlist's titles in one transaction, and choices that point at titles still follow them to new IDs.
+- **Measured (harness run 43033050306):**
+  - Memory with 30,000 titles is about 8 MB lower and stays flat: end of run 112 MB (was 120), category switching 109 MB (was 117).
+  - The largest category still draws 36 posters, and opens in 80 ms.
+  - Search returns the same 210 hits, in 186 ms (was 80 ms). It now queries the database instead of memory; it runs off the main thread.
+- **Still to do for 1.5:**
+  - **Step 2:** stream the provider lists straight into the database, so downloading no longer builds the whole list in memory first. The 70 MB M3U peak is still there.
+  - **Step 3:** live channels and the guide in the database (programmes by time window).
+
+### Nov 11 — 1.5 step 2: downloads stream straight into the database (on `next`, not yet published)
+
+- **M3U:** `M3u.read(p, onVod)` hands each movie/series entry over as the file is read; nothing collects them. Live channels are still a list (step 3).
+- **Xtream:** movies and series stream into one save (`XtreamVod.movies/series(p, emit)`).
+- **One transaction, kept on failure:** `Catalog.replacing` writes inside one transaction (WAL, so screens keep reading the old titles until it commits). A dropped download rolls back. For Xtream, if movies or series fail and titles were already saved, the old ones stay and the message says so (before, the failed part was emptied).
+- **Following choices to new IDs without the list in memory:** a stream-address token column (database v2; existing databases upgrade in place) and `Catalog.remap`. It uses the same rules as before (same address, then name + category, then a unique name) via indexed lookups and one light pass over names.
+- **Measured (harness run 43037727854, `audit/results/harness-run-43037727854-catalog-step2.txt`), same 6 MB file with 10k live + 30k VOD:**
+  - Memory actually held while reading (measured after collections): **7 MB** streamed vs **17 MB** collected as a list. The 7 MB left is the 10k live channels.
+  - The sampled peak without collections (93 vs 102 MB) is mostly short-lived garbage, so it isn't a fair measure of either. The earlier "70 MB M3U peak" was this kind of number.
+  - The streamed save takes 2.1–2.8 s for 30k titles (parse alone: 0.6–0.8 s), off the main thread. The old way also wrote the titles afterwards.
+  - End-of-run heap 111 MB (112 at step 1); search, posters and memory over 50 switches unchanged.
+- **Tests:** `CatalogStreamTest` covers rollback, keep-old on a partial failure, first-duplicate-wins, remap by address/name+category/unique name (and refusing an ambiguous name), the v1→v2 upgrade, and streaming an M3U file. All CI tests pass on `next`.
+- **Still to do for 1.5:** step 3, live channels and the guide in the database.
+
+### Nov 11 — 1.5 step 3: live channels and the guide in the database (on `next`, not yet published)
+
+- **New:** `data/LiveDb.kt` adds channel, programme and saved-time tables in the same database (version 3; existing databases upgrade in place).
+  - Old `channels_<id>.json` / `guide_<id>.json` files are moved in on first use, then deleted.
+- **Downloads stream straight in:**
+  - Live lists: M3U, and Xtream `get_live_streams`. An M3U file fills channels and titles in one read.
+  - Guide: each XMLTV source, in source order; the first source with a channel's programmes still wins.
+  - **Failures keep the saved data:** a failed download, or an empty live list (expired account, error page), keeps what was saved. The guide also stays if every source fails.
+- **Only the playlist being watched is read back whole** (the guide grid needs it).
+  - Other playlists are looked up instead of loaded: favorites and lists (only those channels), category counts, global search, and the TV Guide's search box.
+  - The search box now holds only the matches and their guide (it used to hold every playlist's channels and guides while open). This closes the rest of DATA-02.
+- **Saved choices follow changed channel keys** via indexed lookups (address, guide id + name, name + category, unique name), for referenced channels only.
+- **Found and fixed:** adding two guide sources quickly started two downloads, and the older one (with fewer sources) could finish last and overwrite the newer. Guide downloads for a playlist now run one at a time, each with the sources current when it starts. Part of 5.3 (DATA-05); conditional GET is still to do.
+- **Measured (harness runs 43044191314 and 43045873316, `audit/results/harness-run-43045873316-catalog-step3.txt`):**
+  - **Live list, 10k channels:** memory held while saving **0 MB** streamed, vs 5 MB as a list.
+  - **Guide, 500 ch × 7 days (22,209 programmes kept):** writing to the database costs **0 MB**. Reading the window back takes **1 MB** for 500 channels, in 0.6 s.
+  - **The XML read itself measures 1–33 MB held between runs.** It's the same parser either way, so this is noise in the measurement (collections triggered from the test aren't guaranteed to finish); it isn't something the database adds. The old JSON guide file (whole-file string + JSON tree on save and load) is gone.
+  - **First start on a fresh install:** channels showed at 3.0 s and 5.0 s in the two runs (2.5–3.6 s at steps 1–2). CI timing varies a lot. When VOD is on, an M3U playlist's channels appear only after the same file's titles are written (1.8 s for 30k), and that was already so in step 2.
+  - Unchanged: memory over 50 deep returns and 50 category switches (110–112 MB), title search 182 ms, posters.
+- **Tests:** `LiveDbTest` covers failed or empty downloads keeping saved data, first duplicate wins, category counts, search with literal wildcards, remap rules, guide windows and programme search, deletion, and moving old files in. `StabilizeTest` checks that the search box holds only the matches. All 61 CI tests pass.
+- **1.5 acceptance:**
+  - No full parse on the main path at start: met; saved data is read from the database.
+  - Peak during a 40k refresh < 30 MB: met for what the app holds (6 MB with titles, 0 MB channels). The raw sampled peak, which includes garbage, is still higher.
+  - Movies opens a 15,500 category with ≤ 2 pages: met at step 1.
+- **Next in the work plan:**
+  - Phase 2, navigation core.
+  - 4.1, the guide reading programmes by time window as it scrolls, with 7 days kept on disk. The database makes this a small change now.
+  - Possible follow-up: show an M3U's channels before its titles finish saving on a first download.
+
+### Nov 11 — Phase 2: navigation core (on `next`, not yet published)
+
+| Task | Change | Result |
+|---|---|---|
+| 2.1 Navigation store (NAV-01, -04, -05, GUIDE-02) | `ui/NavStore.kt`. Per place (`guide/<playlist>/<category>`, `vod/<kind>/<category>\|<search>`) it keeps the focused item **by key** and the first visible item by key + offset. When a key is gone, the nearest item by old position is used. The guide's time window, highlighted time and "on a programme or a name" are kept for the whole guide. | Harness S4 "restored channel after re-entering": **50/50** (was 0/50). Tests: a category seen before comes back on the same channel, also after hiding two channels above it; Back from full screen returns to the same programme and time window; Back from a title's page lands on its poster. |
+| 2.2 Focus manager (NAV-02, NAV-03, FOCUS-01) | `focusWhenReady` (`ui/Focus.kt`): retries each frame, stops on a key press, and replaces every fixed `delay(..) + requestFocus` (menu, playlist list, dialogs, Discover, Live, re-order). The playlist/category-list flags clear when those lists leave the screen, and Left-as-Back only applies on the guide. In Settings, Left at a section's left edge goes to that section's own row. | S7: ◀ never opens the menu from Settings any more (was 2/22 runs). ◀ from a section's left edge lands on its own row in every section; the 4 where ◀ moves along a row of buttons first (°C→°F, time zones, stream format) behave as expected. FOCUS-02 (dialogs returning focus) wasn't changed; the dialog tests that exist (rename, add to list) still pass. |
+| 2.3 Back rules (NAV-07, -10, -11, -12) | Back inside a Settings section goes to its row, then the menu. Right into a section lands on its first control (a hidden stop hands the highlight to the first control in reading order). Back at the top shows "Press Back again to exit" and exits on a second press within 2.5 s. Back from a channel or title opened from Search returns to that result. | S7 Back: right row in **11/11** sections (was 0/11: it opened the menu). Tests cover each rule. |
+| 2.4 Scroll by key (NAV-13) | Both left-hand lists find a category by the item keys the list itself uses; the three counted header offsets are gone. | Existing Back/Left layer tests pass. |
+
+**Found and fixed along the way:**
+- Programmes that overlap in a guide were laid out one after another, pushing the row past the screen edge, where Right couldn't reach them. Each now starts where the one before ends.
+- The title page's "put the highlight back" loop compared wall-clock time with uptime, so a key press never stopped it.
+- An early version of the Settings entry stop could be asked for focus after the list had dropped it, which crashed the hold-buttons test; it's now only used while on screen.
+
+**Decisions taken without asking (open questions G-4 and G-5):**
+- Back at the top asks for a second press; it doesn't exit at once, and there's no confirmation dialog.
+- Back after a jump from Search returns to the results.
+
+Both are easy to change.
+
+**Still open from phase 2:**
+- FOCUS-02, checking that every dialog returns focus to its opener (needs a harness check per dialog).
+- Restoring position after the app is killed (the store is in memory only).
+- NAV-08 (Settings sections still preview on highlight) and NAV-09 (wrap-around policy) are waiting on G-2 and G-8.
+
+**Measured:** harness run 43062052674 (`audit/results/harness-run-43062052674-navigation.txt`). Memory over 50 deep returns is flat (110–112 MB) and the end-of-run heap is 111 MB. All 67 CI tests pass.
+
+### Nov 11 — decisions G-2 and G-8 (on `next`, not yet published)
+
+- **Settings sections open on OK** (NAV-08). Highlighting a section only shows its summary; OK opens it and moves into its first control. Left and Back still return to the open section's row.
+- **Wrap-around** (NAV-09, G-2): only the guide's category list, the Movies/Series category lists and the guide's channel list wrap, and only on a fresh press, never while holding. That was already the case; `onlyCategoryAndChannelListsWrapAround` now guards it. The main menu, the Settings section list and the poster grid stop at the end.

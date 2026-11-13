@@ -86,6 +86,72 @@ class CatalogStreamTest {
         assertEquals("s101", ChannelKeys.token("http://x/movie/u/p/101.mp4"))
     }
 
+    /**
+     * Nov 12 (1.0.160): with a big catalog, the upgrade to version 4 worked out every title's language
+     * inside the upgrade, holding the database for minutes; channels never loaded and Fire TV closed
+     * the app. The upgrade now only adds the column; the languages are filled in later, in small steps.
+     */
+    @Test
+    fun aBigVersionThreeCatalogUpgradesAtOnceAndGetsItsLanguagesLater() {
+        catalog.close(); app.deleteDatabase("catalog.db")
+        val f = app.getDatabasePath("catalog.db").also { it.parentFile?.mkdirs() }
+        val n = 60_000
+        SQLiteDatabase.openOrCreateDatabase(f, null).use { db ->
+            db.execSQL("""CREATE TABLE title (k TEXT PRIMARY KEY, p TEXT NOT NULL, t TEXT NOT NULL, g TEXT NOT NULL, c TEXT NOT NULL,
+               n TEXT NOT NULL, nn TEXT NOT NULL, l TEXT, u TEXT NOT NULL, s TEXT, a INTEGER NOT NULL DEFAULT 0,
+               r TEXT NOT NULL DEFAULT '', y TEXT NOT NULL DEFAULT '', o INTEGER NOT NULL, h INTEGER NOT NULL DEFAULT 0, tk TEXT)""")
+            db.execSQL("CREATE TABLE source (p TEXT PRIMARY KEY, saved INTEGER NOT NULL)")
+            com.avidviewer.tv.data.LiveDb.create(db)
+            db.beginTransaction()
+            val st = db.compileStatement("INSERT INTO title (k, p, t, g, c, n, nn, u, o) VALUES (?, 'p', 'series', 'series', ?, ?, ?, 'http://x/s', ?)")
+            for (i in 0 until n) {
+                val (cat, name) = when (i % 3) { 0 -> "EN | Drama" to "EN | Show $i"; 1 -> "FR | Séries" to "FR | Show $i"; else -> "Crime" to "Show number $i with a long provider name" }
+                st.clearBindings(); st.bindString(1, "p:$i"); st.bindString(2, cat); st.bindString(3, name); st.bindString(4, "show$i"); st.bindLong(5, i.toLong()); st.executeInsert()
+            }
+            db.setTransactionSuccessful(); db.endTransaction()
+            db.execSQL("INSERT INTO source VALUES ('p', 1)")
+            db.version = 3
+        }
+        val t0 = System.currentTimeMillis()
+        catalog = Catalog(app)
+        val live = com.avidviewer.tv.data.LiveDb(catalog)
+        assertEquals(0, live.channelCount("p")) // live tables answer right away
+        assertEquals(n, catalog.count(Catalog.Query("series", listOf("p"))))
+        val upgradeMs = System.currentTimeMillis() - t0
+        assertTrue("the upgrade took $upgradeMs ms", upgradeMs < 3_000)
+        // Before the languages are in, grouped lists still work (unknown counts as unmarked).
+        assertTrue(catalog.needsLanguages())
+        assertEquals(10, catalog.page(Catalog.Query("series", listOf("p"), grouped = true), 0, 10).size)
+        // Filled in small steps.
+        val t1 = System.currentTimeMillis()
+        assertEquals(n, catalog.fillLanguages(pause = {}))
+        val fillMs = System.currentTimeMillis() - t1
+        assertTrue("filling languages took $fillMs ms", fillMs < 30_000)
+        assertFalse(catalog.needsLanguages())
+        catalog.readableDatabase.rawQuery("SELECT lr, COUNT(*) FROM title GROUP BY lr ORDER BY lr", null).use { c ->
+            val m = HashMap<Int, Int>(); while (c.moveToNext()) m[c.getInt(0)] = c.getInt(1)
+            assertEquals(mapOf(0 to n / 3, 1 to n / 3, 3 to n / 3), m)
+        }
+        assertEquals(0, catalog.fillLanguages(pause = {}))
+        // Each title once: worked out in one background pass, so reading a list page stays quick
+        // (1.0.160–162 grouped inside every page read: seconds per page on a Fire TV).
+        val t2 = System.currentTimeMillis()
+        catalog.regroup(listOf("p"))
+        val regroupMs = System.currentTimeMillis() - t2
+        assertTrue("regrouping took $regroupMs ms", regroupMs < 20_000)
+        val gq = Catalog.Query("series", listOf("p"), grouped = true)
+        val t3 = System.currentTimeMillis()
+        assertEquals(n, catalog.count(gq)) // every name is different here
+        repeat(20) { catalog.page(gq, it * 2_000, 100) }
+        val pageMs = System.currentTimeMillis() - t3
+        assertTrue("20 pages took $pageMs ms", pageMs < 2_000)
+        // The plan reads the list's index, with no grouping or temporary sort per page.
+        val plan = catalog.readableDatabase.rawQuery("EXPLAIN QUERY PLAN SELECT k FROM title WHERE g = 'series' AND h = 0 AND rep = 1 AND p IN ('p') ORDER BY CASE p WHEN 'p' THEN 0 END, o LIMIT 100 OFFSET 0", null).use { c ->
+            val l = ArrayList<String>(); while (c.moveToNext()) l.add(c.getString(c.columnCount - 1)); l.joinToString(" | ")
+        }
+        assertFalse("plan: $plan", plan.contains("GROUP BY"))
+    }
+
     @Test
     fun aVersionOneCatalogIsUpgradedInPlace() {
         catalog.close(); app.deleteDatabase("catalog.db")
