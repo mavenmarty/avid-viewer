@@ -64,7 +64,6 @@ android {
                 // Print the full reason for any failure in the build log.
                 it.testLogging {
                     events("failed", "skipped")
-                    showStandardStreams = true
                     exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
                     showStackTraces = true
                     showCauses = true

@@ -61,7 +61,7 @@ jobs:
       - name: Usability tests (remote navigation + crash hunting)
         env:
           SMB_TEST_ADDRESS: "\\\\127.0.0.1:1445\\backups\\AvidViewer"
-        run: gradle --no-daemon testDebugUnitTest --tests "*ChannelNavProbeTest*"
+        run: gradle --no-daemon testDebugUnitTest
 
       - name: Save test report
         if: always()
