@@ -2,7 +2,7 @@
 
 <!-- The version below and the Release notes section are updated automatically after each published build
      (.github/workflows/user-guide.yml). Feature descriptions are written by hand. -->
-This guide covers **Avid Viewer 1.0.179**, the current public release. Avid Viewer is an IPTV player for Android TV and Fire TV. You bring your own provider (an Xtream Codes login or an M3U link); the app doesn't include any channels.
+This guide covers **Avid Viewer 1.1.0**, the current public release. Avid Viewer is an IPTV player for Android TV and Fire TV. You bring your own provider (an Xtream Codes login or an M3U link); the app doesn't include any channels.
 
 **Contents:** [Getting started](#1-getting-started) · [Main menu](#2-main-menu) · [TV Guide](#3-tv-guide) · [Full-screen playback](#4-full-screen-playback) · [Search](#5-search) · [Discover](#6-discover) · [Sports](#7-sports) · [Movies and Series](#8-movies-and-series) · [Settings](#9-settings) · [Privacy](#10-privacy) · [Troubleshooting](#11-troubleshooting) · [Control4](#12-control4) · [Release notes](#release-notes)
 
@@ -448,7 +448,18 @@ Every public release since 1.0.35, newest first. Releases are published on GitHu
 
 <!-- new-releases: entries for new builds are added automatically below this line -->
 
-### 1.0.179 — November 12, 2026, 7:16 PM CT (current)
+### 1.1.0 — November 13, 2026, 8:33 AM CT (current)
+
+**Change log**
+
+- Semantic versions from the commits (feat → minor, fix → patch, breaking → major); tags v<x.y.z>.<build> so older installs keep finding updates; the app and guide show x.y.z
+- Profiles with their own favorites, lists, hidden items, My List and history; a Kids profile limited to chosen categories; a PIN per profile (a parent's opens any), needed by every other profile while a Kids profile exists; Who's watching? at start; switcher in the main menu; Settings › Profiles; profiles in backups
+- Profiles test uses real channel keys; Settings has a Profiles section; screenshots of the profile screens
+- Profiles test doesn't depend on the sample favorites
+- Compare the owner's categories before and after Kids
+- Owner's categories all come back after Kids
+
+### 1.0.179 — November 12, 2026, 7:16 PM CT
 
 **Release notes**
 
