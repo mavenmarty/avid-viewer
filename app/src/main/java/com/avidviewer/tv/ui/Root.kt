@@ -30,6 +30,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -102,15 +103,31 @@ fun AppRoot(vm: AppViewModel) {
         ReorderHelp(vm)
         ListOptionsDialog(vm)
         VodCategoryOptionsDialog(vm)
-        // The app closed unexpectedly last time: say so once (details stay in Settings › About).
-        if (vm.lastCrash != null && !vm.crashNoticeSeen && vm.screen != Screen.PLAYER) {
+        // The app closed unexpectedly last time: say so once, and offer to send the report to bugs@
+        // (Report issue sends it and clears it; Cancel keeps it in Settings › Updates & about).
+        if ((vm.lastCrash != null || vm.crashReportSent) && !vm.crashNoticeSeen && vm.screen != Screen.PLAYER) {
+            if (vm.crashReportSent) LaunchedEffect(Unit) { kotlinx.coroutines.delay(2500); vm.closeCrashNotice() }
             androidx.compose.material3.AlertDialog(
-                onDismissRequest = { vm.crashNoticeSeen = true },
+                onDismissRequest = { if (!vm.crashReportBusy) vm.closeCrashNotice() },
                 containerColor = C.Surface,
+                modifier = Modifier.testTag("crash-dialog"),
                 title = { Text("Avid Viewer closed unexpectedly", color = C.Text, fontWeight = FontWeight.Bold) },
-                text = { Label("Sorry about that. The details were saved on this device in Settings › Updates & about, so the problem can be found and fixed. Nothing was sent anywhere.", size = 14.sp, color = C.Soft, lines = Int.MAX_VALUE) },
-                confirmButton = { TvButton("OK", primary = true) { vm.crashNoticeSeen = true } },
-                dismissButton = { TvButton("See details") { vm.crashNoticeSeen = true; vm.navSelect(Screen.SETTINGS); vm.settingsSection = "about" } },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        if (!vm.crashReportSent) Label(
+                            "Sorry about that. The details were saved on this device. Report issue sends them to bugs@avidviewer.app so the problem can be found and fixed: the app version, the TV model and the error, with no playlists, addresses or logins.",
+                            size = 14.sp, color = C.Soft, lines = Int.MAX_VALUE,
+                        )
+                        vm.crashReportStatus?.let { Label(it, size = 13.sp, color = if (vm.crashReportSent) C.Text else C.Accent, lines = 3, modifier = Modifier.testTag("crash-report-status")) }
+                    }
+                },
+                confirmButton = {
+                    if (vm.crashReportSent) TvButton("OK", primary = true) { vm.closeCrashNotice() }
+                    else TvButton(if (vm.crashReportBusy) "Sending…" else "Report issue", primary = true, busy = vm.crashReportBusy, modifier = Modifier.testTag("crash-report")) { vm.reportCrash() }
+                },
+                dismissButton = {
+                    if (!vm.crashReportSent) TvButton("Cancel", modifier = Modifier.testTag("crash-cancel")) { if (!vm.crashReportBusy) vm.closeCrashNotice() }
+                },
             )
         }
         // New version found: ask before updating (never interrupts full-screen viewing).

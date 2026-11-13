@@ -7,4 +7,10 @@ object Links {
 
     /** The Control4 universal mini driver (um_avid_viewer.c4z) on Google Drive, viewable by anyone with the link. */
     const val CONTROL4_DRIVER = "https://drive.google.com/file/d/10XxPywvX456lPTmou6xsqERmbTfhOJul/view"
+
+    /**
+     * The crash relay (tools/crash-relay/Code.gs, a Google Apps Script web app) that emails "Report issue"
+     * crash reports to bugs@avidviewer.app. Empty until it is deployed: Report issue then says it couldn't send.
+     */
+    const val CRASH_RELAY = ""
 }

@@ -667,6 +667,48 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     fun clearCrash() { com.avidviewer.tv.data.CrashLog.clear(getApplication()); lastCrash = null }
 
+    /** For tests: reads the saved crash report again (as the next launch would). */
+    internal fun reloadCrash() { lastCrash = com.avidviewer.tv.data.CrashLog.read(getApplication()) }
+
+    /** "Report issue" is sending the crash report. */
+    var crashReportBusy by mutableStateOf(false); private set
+    /** What the last "Report issue" did ("sent" or why it couldn't), shown in the dialog and in Settings. */
+    var crashReportStatus by mutableStateOf<String?>(null)
+    /** The report went out: the crash dialog shows a thank-you, then closes. */
+    var crashReportSent by mutableStateOf(false); private set
+
+    /** For tests: where reports go (the deployed relay by default). */
+    internal var crashRelay: String = com.avidviewer.tv.data.Links.CRASH_RELAY
+
+    /**
+     * "Report issue": sends the saved crash report to bugs@avidviewer.app through the crash relay and,
+     * once it's sent, clears it. If it can't be sent, the report stays (Settings › Updates & about) and
+     * the reason is shown; Cancel leaves it as it is.
+     */
+    fun reportCrash() {
+        val crash = lastCrash ?: return
+        if (crashReportBusy) return
+        crashReportBusy = true
+        crashReportStatus = "Sending…"
+        viewModelScope.launch {
+            val ok = withContext(Dispatchers.IO) { com.avidviewer.tv.data.CrashReport.send(installed.second, crash, crashRelay) }
+            crashReportBusy = false
+            if (ok) {
+                clearCrash()
+                crashReportSent = true
+                crashReportStatus = "Thanks. The report was sent to bugs@avidviewer.app."
+            } else {
+                crashReportStatus = "Couldn't send the report. Check the connection and try again; it's kept in Settings › Updates & about."
+            }
+        }
+    }
+
+    /** Closes the crash dialog (Cancel, Back, or after the thank-you). The report stays unless it was sent. */
+    fun closeCrashNotice() {
+        crashNoticeSeen = true
+        if (crashReportSent) { crashReportSent = false; crashReportStatus = null }
+    }
+
     /** Other playlists' channels found by the TV Guide's search box (only the matches). */
     var searchPool by mutableStateOf<List<Channel>>(emptyList()); private set
     /** Bumped when other playlists' favorites finish loading, so the guide redraws. */

@@ -11,7 +11,8 @@ import java.util.Locale
 
 /**
  * Saves the details of a crash on the device so the next launch can say what happened.
- * Nothing is sent anywhere; the report stays in the app's private storage until it's cleared.
+ * It stays in the app's private storage until it's cleared, or sent with "Report issue" ([CrashReport]),
+ * which also clears it.
  */
 object CrashLog {
     private fun file(context: Context) = File(context.filesDir, "last_crash.txt")
