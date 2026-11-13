@@ -697,6 +697,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 clearCrash()
                 crashReportSent = true
                 crashReportStatus = "Thanks. The report was sent to bugs@avidviewer.app."
+                kotlinx.coroutines.delay(2500)
+                if (crashReportSent) closeCrashNotice()
             } else {
                 crashReportStatus = "Couldn't send the report. Check the connection and try again; it's kept in Settings › Updates & about."
             }
