@@ -41,6 +41,7 @@ Your password is stored encrypted on the device (Android Keystore) and is never 
 - **Channel Up / Channel Down** (or Page Up / Page Down) move a page at a time in the TV Guide and change channels in full screen.
 - **Channel and category lists wrap around.** A single press past the last item goes to the first, and the reverse. Holding a button stops at the end, so a fast scroll doesn't fly past. Other lists (the main menu, the playlist list, Settings and poster grids) stop at the end.
 - If a press ever finds nothing highlighted, the app puts the highlight back.
+- **Where you are:** in every list, the row you're in (the screen in the main menu, the category, the settings section, the playlist) is raised with a blue bar down its left edge. Lists you're not in are slightly dimmed. For a choice, the current value has a blue outline and a ✓; the main action is a filled button. On/off settings are switches. A button that's working shows a spinner and waits.
 
 ## 2. Main menu
 
@@ -67,15 +68,18 @@ The TV Guide is the home screen for live TV. Next to the main menu it has:
 - **Category list**: the playlist's categories, with **‹ Menu**, ★ Favorites, your lists, **＋ New list** and **🔍 Search** at the top.
 - **The guide**: the preview window and details panel at the top, the channel grid below.
 
-**Back and Left step back one layer at a time:** from a channel to your current category in the category list, then to the playlist list (on that same category), then to the main menu. Holding Left doesn't skip layers, and inside the grid Left still moves through programs and time.
+**Back and Left step back one layer at a time:** from a channel to your current category in the category list, then to the playlist list (on that same category), then to the main menu. With only one playlist with live TV, the playlist list is skipped: from the categories, Back goes straight to the main menu. Holding Left doesn't skip layers, and inside the grid Left still moves through programs and time.
 
 ### The guide grid
 
 - The top shows a **preview window** and a **details panel** for the highlighted channel or program: channel number and name (plus the playlist name when you have more than one), the program title with a **New** tag for new episodes, the times with **N min left** and a progress bar (or **starts in …** for a later program), up to two lines about the show, and what's **Next**.
-- Below it is a **timeline grid**: two-line channel names on the left, programs across a 2.5-hour window, with a line marking "now".
-- **Left/Right** move between programs. Going past the last program in view scrolls the guide forward by half hours, up to **12 hours ahead**. Left on the first program scrolls back, and at the start it moves to the channel name.
+- Below it is a **timeline grid**: two-line channel names on the left, programs across a 2.5-hour window, with a line marking "now". Above the times, the row names the category, the day and the time zone ("KIDS · Today · CST"). The columns sit on your clock's :00 and :30.
+- **Left/Right** move between programs. Going past the last program in view scrolls the guide forward by half hours, **as far as the guide has listings, up to 7 days**. Left on the first program scrolls back, **up to 2 hours before now**; one more Left moves to the channel name.
+- **Programs that have aired** (in those 2 hours) are dimmed and marked **already aired**. There's no catch-up: OK on one plays the channel live.
+- **Day strip:** when the guide reaches past today, a row of buttons sits above the times: **Now**, **Tomorrow**, then the next days (**Sat**, **Sun**…). **OK** on a day moves the guide to that day at the same time as now; **Now** comes back. The day on screen is filled in.
+- **Hold Left** on a later time to jump straight back to now.
 - **Up/Down** move one channel and land on the program airing at the same time, so the highlighted time stays put as you move between rows. Quick taps are counted, so a fast run of presses lands about where you'd expect, even in a category with thousands of channels.
-- **Up on the first channel** moves to the preview window; **Up again** jumps to the last channel. **Down on the last channel** goes back to the first.
+- **Up on the first channel** moves to the day strip (when it's shown), then the preview window; **Up again** jumps to the last channel. **Down on the last channel** goes back to the first.
 - **CH+/CH−** (Page Up/Down) move a full page and wrap around at the ends.
 - **OK** on a channel or program starts it in the preview. **OK again**, or OK on the preview window, opens it full screen.
 - **Each category remembers where you were.** A category you haven't opened yet starts at its first channel. Coming back to one you've visited highlights the channel you left, even if channels above it were hidden or the list refreshed; if that channel is gone, the nearest one is highlighted, not the top.
@@ -96,7 +100,7 @@ Highlight **🔍 Search** in the category list (just below ＋ New list) and pre
 - **⊘ Hide channel**: hide it everywhere. You can bring it back in Settings › List Editor.
 - **Match guide…**: pick the guide listings for this channel (see *Matching a channel to the guide* below).
 
-Saving a **Rename** (channels, categories, lists, movie and series categories) closes the dialog.
+Saving a **Rename** (channels, categories, lists, movie and series categories) closes the dialog; so does **Cancel**. Either way the highlight goes back to the item you renamed. The **Menu** button acts when you let it go.
 
 ### Matching a channel to the guide
 
@@ -208,17 +212,17 @@ Sports lists real games from **ESPN's schedules** for today and the next 2 days,
 - **North America only:**
   - US channels come first; Canadian channels are the backup.
   - Channels marked for other countries are left out, for example "UK |" in the name, or a category for another country.
-- **Games further ahead:** your guide covers about 36 hours, so guide listings and event channels for later games appear closer to the start. **Search the guide for "[team]"** jumps to the TV Guide's search.
+- **Games further ahead:** guide listings and event channels for later games depend on how far ahead your guide goes (up to 7 days), so some appear closer to the start. **Search the guide for "[team]"** jumps to the TV Guide's search.
 - **Updates:** each day is asked for separately. Today and yesterday are refreshed about every minute while Sports is open (scores while games are live), the next 2 days every 30 minutes. In the background Sports refreshes every 30 minutes. If ESPN can't be reached, Sports says so and shows the last list saved on the TV.
 
 ## 8. Movies and Series
 
 - **Left side**: Playlists, then categories: **All**, **Recently added**, **Continue watching**, **My List**, and your provider's categories.
-- **Right side**: posters for the chosen category.
+- **Right side**: posters for the chosen category. A category you pause on is read ahead, so OK shows it at once.
 - **Each title is listed once.** When your playlists have the same title several times (other languages, qualities such as 4K or HD, or other playlists), it appears once, shown by its English copy (else one with no language marked). This applies to All, Recently added, every category and the search.
 - **🔍 Search movies / 🔍 Search series** is in the category list, below My List. Results replace the poster grid; **✕ Clear search** ends the search.
 - **OK on a poster** opens its page: plot, cast, director, **▶ Play**, or **▶ Resume from [time]** and **Start over**, plus **+ My List**.
-- **⇄ N versions** (on a title with several copies) lists each copy with its language, name, category and playlist; ✓ marks the one shown, and the line **This version: …** under the buttons says which one you're on. **OK** on another copy shows that one, with its own episodes, resume point and My List button. The language comes from codes on the name or category ("EN |", "FR -", "VF", "MULTI"…); copies without one show "Language not marked". Series pages list episodes by **Season**, with resume points. The page scrolls as one: from the buttons, **Down** goes to the season buttons, then through every episode, however long the description; **Up** from the first episode goes back to the seasons. After you watch an episode and press **Back**, that episode is highlighted.
+- **⇄ N versions** (on a title with several copies) lists each copy with its language, name, category and playlist; ✓ marks the one shown, and the line **This version: …** under the buttons says which one you're on. **OK** on another copy shows that one, with its own episodes, resume point and My List button. The language comes from codes on the name or category ("EN |", "FR -", "VF", "MULTI"…); copies without one show "Language not marked". Series pages list episodes by **Season**, with resume points; episodes you've played to the end say **✓ Watched**. **A series page opens on the next episode to watch**, with its season chosen: Season 1, Episode 1 for a series you haven't started, otherwise the episode after the last one you finished (or the one you stopped part-way through). The page scrolls as one: **Up** from the episode goes to the season buttons, then the title's buttons; from the buttons, **Down** goes to the season buttons, then through every episode, however long the description. After you watch an episode and press **Back**, that episode is highlighted.
 - **Each category (and each search) keeps its own place.**
 - **Back** goes one step at a time: from a title's page to its poster, from a poster to the category you're in (highlighted), then to the main menu, on **Movies** or **Series**.
 - **Left** from the first column of posters goes to the category you're browsing.
@@ -232,7 +236,8 @@ Settings has sections on the left and the open section's options on the right. *
 
 ### Playlists
 
-- The list of your playlists (Up/Down to choose, Right for options) and **Add playlist**.
+- The list of your playlists (Up/Down to choose, Right for options) and **Add playlist**. While you're in the form on the right, the list narrows, so the page never has more than three full columns.
+- **Back** in the add or edit form with changes that aren't saved asks **Discard changes?**. **Keep editing** has the highlight; **Discard** drops the changes. The guide source form, postal code and TMDB key ask the same way.
 - For each playlist:
   - **✎ Edit**: change its details. If you change the server, login or links, its channels and guide are downloaded again, and you're asked to confirm first.
   - **↻ Refresh**: replace the saved channels, guide, movies and series with what your provider has now.
@@ -250,11 +255,13 @@ Settings has sections on the left and the open section's options on the right. *
 - **Order matters:** sources are read top to bottom, and for each channel the first source with listings is used.
 - **Download now** gets this playlist's guide again.
 
+**Downloads that stall** give up after 45 seconds. A download that fails before it starts (no connection, a busy server) is tried again twice, after 1 and 3 seconds. Loading, empty and error messages look the same on every screen, and errors have **Try again**.
+
 **Background downloads.** About 10 seconds after the app opens, it updates each switched-on playlist in turn, fetching only what's out of date: channels older than a day, the guide when it's older than your guide setting (8 hours by default), and movies & series older than a day. Content that's switched off is never loaded. The first download of a large movie catalog can make a Fire TV Stick feel slower for a minute or two.
 
 ### TV guide
 
-- **Download the guide every**: 4, 8, 12 or 24 hours (8 is the default). The app also follows this while it stays open.
+- **Download the guide every**: 4, 8, 12 or 24 hours (8 is the default). The app also follows this while it stays open. Each download keeps up to 7 days of listings. A guide source that hasn't changed since the last download isn't downloaded again.
 - **Last downloaded**: when each playlist's guide last downloaded and how many sources it has. **Download the guide now** gets every guide again.
 - **Channels matched by hand**: how many there are, with **Clear all matches** (asks first).
 
@@ -274,7 +281,7 @@ Rename, re-order and Add to List are done with Menu on the item itself in the TV
 
 ### Location & weather
 
-- **Postal code**: a US ZIP or Canadian postal code. It's used for weather, local channel suggestions and the Auto time zone. Only the code is sent, to Open-Meteo.
+- **Postal code**: a US ZIP or Canadian postal code (Done on the keyboard saves it). It's used for weather, local channel suggestions and the Auto time zone. Only the code is sent, to Open-Meteo.
 - **Show weather**: current conditions under the clock, refreshed every 30 minutes.
 - **Suggest local channels**: on or off. **Show them again** restores suggestions you dismissed.
 - **Temperature units**.
@@ -295,7 +302,7 @@ Rename, re-order and Add to List are done with Menu on the item itself in the TV
 
 ### Discover
 
-- **TMDB API key**: Save or Remove it.
+- **TMDB API key**: Save it (or press Done on the keyboard), or Remove it (asks first).
 - **My streaming services**: pick the services you subscribe to.
 
 ### Playback
@@ -308,20 +315,20 @@ Everything here stays on the device; nothing is uploaded or backed up to the clo
 
 - **Pause watch history**: stop recording what you watch.
 - **Your viewing, last 7 days**: hours watched and your top channels.
-- **Clear watch history** (the app keeps up to 90 days).
+- **Clear watch history** (the app keeps up to 90 days). It asks first.
 
 ### Storage
 
 - **Clear cache on exit**: empty the cache (logos, posters, recently streamed video) every time you leave the app.
-- **Cache size** and **Clear cache now**. Clearing never removes your playlists, favorites, lists, guide, history or settings.
+- **Cache size** and **Clear cache now** (asks first). Clearing never removes your playlists, favorites, lists, guide, history or settings.
 
 ### Updates & about
 
-- **App updates**: the installed version, **Check now**, **Download and install**, and **Auto-check** on/off.
+- **App updates**: the installed version, **Check now**, **Download and install**, and the **Check for updates automatically** switch.
   - The **Update available** dialog (**Update now** / **Later**) opens by itself only when the app starts, before you press anything. If a new version is found later, the main menu shows **Update x.y.z** instead, so nothing pops up while you're browsing or watching.
   - The download shows its progress. If the connection stalls, the app waits 15 seconds and continues from where it stopped (up to 8 tries). The finished file is checked before installing, and a damaged download is refused.
   - If Android's installer doesn't appear within about 25 seconds, an **Open installer** button opens Android's own install screen for the same file.
-- **Last crash**: if the app closed unexpectedly, the details are kept here on the device (nothing is sent anywhere), with **Clear crash report**.
+- **Last crash**: if the app closed unexpectedly, the details are kept here on the device (nothing is sent anywhere), with **Clear crash report** (asks first).
 - **Report a bug**: email **bugs@avidviewer.app** with what happened and the steps that lead to it. The section lists the details to include, read from the TV (app version, device model, Android and Fire OS versions, and the last crash's error). Scan the **QR code** with a phone camera to start that email with the details filled in; **Open email app** appears only on TVs that have one. No playlists, logins or provider addresses are included.
 - **User guide and Control4 driver**: two QR codes to scan with a phone. **User guide (PDF)** opens the latest version of this guide; **Control4 mini driver** downloads `um_avid_viewer.c4z` (see [Control4](#12-control4)).
 - **Moving through this section:** opening it (OK on Updates & about) highlights **Report a bug** first; **Down** moves to the QR codes, then to Backup & restore and App updates. Blocks without buttons (Report a bug on TVs without an email app, and the QR codes) take the highlight themselves, with a ring around the whole block, so the page scrolls each one fully into view.
@@ -443,16 +450,31 @@ Every public release since 1.0.35, newest first. Releases are published on GitHu
 
 ### 1.0.179 — November 12, 2026, 7:16 PM CT (current)
 
+**Release notes**
+
+- **The TV Guide scrolls days ahead**, as far as the listings go (up to 7 days), with a day strip (**Now**, **Tomorrow**, **Sat**…) to jump between days. Downloads keep 7 days of listings instead of 36 hours.
+- **2 hours back:** programs that have aired are dimmed and marked "already aired"; OK on one plays the channel live.
+- **Hold Left** on a later time to jump back to now. The time columns sit on your local :00 and :30, and the time row names the category.
+- **Back with one playlist:** from the categories, Back goes straight to the main menu (GitHub #7).
+- **Series pages open on the next episode to watch**; finished episodes say ✓ Watched (#8).
+- **Faster Movies & Series:** the category you pause on is read ahead, and posters no longer download for every row that flies past while you hold a button.
+- **Steadier downloads:** stalled downloads give up after 45 seconds; failed starts are tried again; an unchanged guide isn't downloaded again.
+- **No lost typing:** Back on a form with unsaved changes asks "Discard changes?". Clear cache, Clear crash report, Clear watch history and Remove (TMDB key) ask first.
+- **One look everywhere:** a blue bar marks the row you're in, the current value has an outline and a ✓, on/off settings are switches, busy buttons show a spinner, and lists you're not in are dimmed. Loading and error messages are the same on every screen, with **Try again**.
+- **TalkBack** no longer reads decorative symbols, and announces the current row or value as selected.
+- **Menu button:** the highlighted item now takes the press (on 1.0.170 it could only beep). Holding OK still opens the same menu.
+
 **Change log**
 
-- TV Guide: scroll as far as the guide goes (up to 7 days) with a day strip and Now; 2 hours back, dimmed; local half hours; hold Left for now; category in the time row; one-playlist Back skips the playlist list
-- Guide test fixes; downloads retry (DATA-08); one capped image loader, no image requests while a button is held (DATA-04); Discard changes? on Back (SET-02); shared loading/empty/error states with Try again (DATA-07); unchanged guides aren't downloaded again (DATA-05); highlighted movie category read ahead (DATA-06); series page opens on the next unwatched episode (#8); focus-return test (FOCUS-02)
-- One look for the row you're in, current values, switches and busy buttons; confirm destructive actions; inactive columns dimmed; decorative glyphs silent for TalkBack; Playlists keeps three full columns (STATE-01..05, SET-01, SET-03, A11Y-01); Rename Cancel returns to the channel; test fixes
-- Re-order mark stays readable; aired programmes say so to TalkBack; screenshots of the main screens saved with the test report
-- Screenshot test: fix comment
-- Screenshot test: draw the window directly; never fails the build
-- Menu: the press is taken by the item that has a menu (it beeped as unhandled); acts on release as before
-- CI: save the screenshot test's pictures to the screens branch (test builds on next only)
+- TV Guide: up to 7 days ahead with a day strip and Now; 2 hours back, dimmed; local half hours; hold Left for now; category in the time row
+- Back from the guide's categories skips the playlist list with one live playlist (#7)
+- Series page opens on the next unwatched episode (#8)
+- Downloads: shorter timeout with retries; unchanged guide sources aren't downloaded again
+- Images: one shared, capped downloader; none start while a button is held; highlighted movie category read ahead
+- Discard changes? on forms; confirmations for destructive settings; shared loading, empty and error messages with Try again
+- One style for the current row and value, switches and busy buttons; dimmed inactive lists; TalkBack fixes
+- Menu key handled by the highlighted item; Rename › Cancel returns to the channel
+- Tests for each of these; screenshots of the main screens on every test build
 
 ### 1.0.170 — November 12, 2026, 4:11 PM CT
 
