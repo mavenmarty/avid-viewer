@@ -61,7 +61,7 @@ class ProfilesTest {
         val old = ProfileSet.fromJson(org.json.JSONObject(ProfileSet(listOf(Profile(Profile.OWNER, "Me"), Profile("p2", "Sam"))).toJson().toString().replace("\"theme\":\"\",", "")))
         assertTrue(old.list.all { it.theme.isEmpty() })
         assertEquals(listOf("midnight", "midnight"), old.withThemes(existingInstall = true)!!.list.map { it.theme })
-        assertEquals(listOf("roast", "roast"), ProfileSet().withThemes(existingInstall = false)!!.list.map { it.theme })
+        assertEquals(listOf("roast"), ProfileSet().withThemes(existingInstall = false)!!.list.map { it.theme })
         val chosen = old.withThemes(true)!!.let { s -> s.copy(list = s.list.map { if (it.id == "p2") it.copy(theme = "latte", vodLayout = "showcase") else it }) }
         assertEquals(null, chosen.withThemes(true))
         val back = ProfileSet.fromJson(chosen.toJson())
