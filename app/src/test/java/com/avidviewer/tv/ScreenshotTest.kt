@@ -15,6 +15,7 @@ import org.robolectric.annotation.GraphicsMode
 import java.io.File
 import androidx.compose.ui.test.requestFocus
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.input.key.nativeKeyCode
 
 /**
  * Pictures of the main screens on a TV-sized screen, saved with the test report (the screens folder), so a change to
