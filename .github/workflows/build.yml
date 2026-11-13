@@ -84,6 +84,14 @@ jobs:
           if git fetch -q origin screens; then git worktree add -q "$wt" FETCH_HEAD; else git worktree add -q --detach "$wt"; (cd "$wt" && git checkout -q --orphan screens-new && git rm -rqf .); fi
           cd "$wt" && cp "$tmp"/*.png . && git add *.png && (git commit -qm "Screens from build ${{ github.run_number }} (${GITHUB_SHA::7})" || true) && git push -q origin HEAD:refs/heads/screens
 
+      # Semantic version from the commits since the last release (see .github/scripts/next_version.sh).
+      - name: Work out the version
+        id: ver
+        if: github.ref != 'refs/heads/ci-check'
+        run: |
+          git fetch -q --tags --unshallow origin 2>/dev/null || git fetch -q --tags origin
+          .github/scripts/next_version.sh ${{ github.run_number }}
+
       - name: Build release APK
         if: github.ref != 'refs/heads/ci-check'
         env:
@@ -92,7 +100,7 @@ jobs:
           SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_PASSWORD }}
           SIGNING_KEY_ALIAS: avidviewer
           VERSION_CODE: ${{ github.run_number }}
-          VERSION_NAME: 1.0.${{ github.run_number }}
+          VERSION_NAME: ${{ steps.ver.outputs.version }}
         run: gradle --no-daemon assembleRelease
 
       - name: Rename APK
@@ -102,15 +110,15 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: github.ref != 'refs/heads/ci-check'
         with:
-          name: AvidViewer-1.0.${{ github.run_number }}
+          name: AvidViewer-${{ steps.ver.outputs.version }}
           path: AvidViewer.apk
 
       - name: Publish release
         if: steps.key.outputs.signed == 'true' && github.ref == 'refs/heads/main'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.0.${{ github.run_number }}
-          name: Avid Viewer 1.0.${{ github.run_number }}
+          tag_name: ${{ steps.ver.outputs.tag }}
+          name: Avid Viewer ${{ steps.ver.outputs.version }}
           body: Install AvidViewer.apk on your TV box. New versions install over the old one and keep your settings.
           files: AvidViewer.apk
           make_latest: true
