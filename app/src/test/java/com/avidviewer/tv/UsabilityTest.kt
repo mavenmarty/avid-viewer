@@ -309,6 +309,7 @@ class UsabilityTest {
     @Test
     fun profilesKeepTheirOwnFavoritesAndKidsSeesOnlyItsCategories() {
         waitFor("channels") { vm.channelsIn("NEWS").isNotEmpty() && vm.channelsIn("KIDS").isNotEmpty() }
+        val ownerGroups = vm.groups().map { it.raw }
         val news = vm.channelsIn("NEWS").first().key
         val kidsCh = vm.channelsIn("KIDS").first().key
         rule.runOnIdle { if (news !in vm.prefs.favorites) vm.toggleFavorite(news) }
@@ -361,7 +362,7 @@ class UsabilityTest {
         press(listOf(Key.One, Key.Two, Key.Three, Key.Four))
         waitFor("watching as the owner (pin=${vm.pinAsk?.title})") { vm.profile.isOwner }
         assertTrue("owner's favorites kept", news in vm.prefs.favorites)
-        assertEquals(listOf("US| LOCALS", "NEWS", "SPORTS | NFL", "VOD | EN - Movies 4K", "KIDS", "FLO Sports").toSet(), vm.groups().map { it.raw }.toSet())
+        assertEquals("every category is back", ownerGroups, vm.groups().map { it.raw })
     }
 
     @Test
