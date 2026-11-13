@@ -1216,6 +1216,35 @@ class UsabilityTest {
         waitFor("the French copy plays") { vm.screen == Screen.PLAYER && vm.vodPlaying?.key == "$p1:dfr" }
     }
 
+    /** Issue #10: Menu on a Discover title adds it to My List (and takes it off), like Movies and Series. */
+    @Test
+    fun menuOnADiscoverTitleTogglesMyList() {
+        val p1 = TestData.P1
+        go(Screen.MOVIES)
+        waitFor("movies") { vm.vodOf("movie").isNotEmpty() }
+        rule.runOnIdle {
+            val c = vm.catalog
+            val have = c.page(com.avidviewer.tv.data.Catalog.Query("movie", listOf(p1), includeHidden = true), 0, 100_000) +
+                c.page(com.avidviewer.tv.data.Catalog.Query("series", listOf(p1), includeHidden = true), 0, 100_000)
+            c.replace(p1, (have + com.avidviewer.tv.data.VodItem("$p1:menu1", p1, "movie", "Menu Test Film", null, "http://127.0.0.1:9/m.mp4", category = "Action")).asSequence()) { false }
+            vm.setVodTitlesHidden(listOf("$p1:none"), true); vm.setVodTitlesHidden(listOf("$p1:none"), false)
+        }
+        go(Screen.DISCOVER)
+        val onProvider = com.avidviewer.tv.data.Title(11, "movie", "Menu Test Film", "2025", "", null, null, 7.0, emptyList(), "")
+        val elsewhere = com.avidviewer.tv.data.Title(12, "movie", "Not In Any Playlist Film", "2025", "", null, null, 7.0, emptyList(), "")
+        waitFor("the title is on the provider") { vm.matchVod(onProvider) != null }
+        rule.runOnIdle { vm.discoverMenu(onProvider) }
+        waitFor("added to My List") { vm.inMyList("$p1:menu1") }
+        assertTrue(vm.discoverHint.orEmpty().startsWith("Added"))
+        rule.runOnIdle { vm.discoverMenu(onProvider) }
+        waitFor("taken off My List") { !vm.inMyList("$p1:menu1") }
+        assertTrue(vm.discoverHint.orEmpty().startsWith("Removed"))
+        val before = vm.prefs.myList.size
+        rule.runOnIdle { vm.discoverMenu(elsewhere) }
+        assertEquals(before, vm.prefs.myList.size)
+        assertTrue(vm.discoverHint.orEmpty().contains("isn't on your provider"))
+    }
+
     /** Nov 12: Series / Movies list a title once; its page offers the other copies (languages, playlists). */
     @Test
     fun aTitleIsListedOnceAndItsPageOffersItsVersions() {

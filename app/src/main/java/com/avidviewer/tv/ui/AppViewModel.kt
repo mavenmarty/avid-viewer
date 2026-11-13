@@ -368,6 +368,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     // Discover (TMDB)
     var discoverTab by mutableStateOf("new")
     var onlyMyServices by mutableStateOf(false)
+    /** Discover shows only titles your own playlists have (the "▶ ON YOUR PROVIDER" ones), issue #13. */
+    var onlyOnProvider by mutableStateOf(false)
     var discoverLists by mutableStateOf<Map<String, List<Title>>>(emptyMap()); private set
     var discoverLoading by mutableStateOf(false); private set
     var discoverError by mutableStateOf<String?>(null); private set
@@ -2316,6 +2318,25 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun openTitle(t: Title) {
         discoverDetail = t
         if (!whereCache.containsKey(t.key)) fetchWhere(listOf(t))
+    }
+
+    /** A short note at the bottom of Discover (e.g. after Menu on a title); cleared after a few seconds. */
+    var discoverHint by mutableStateOf<String?>(null)
+
+    /**
+     * Menu on a Discover title (issue #10): adds it to My List, or takes it off, as Menu does on the
+     * Movies and Series screens. Only titles on your provider can go in My List; for the others the
+     * note says why and how to find them.
+     */
+    fun discoverMenu(t: Title) {
+        val match = matchVod(t)
+        discoverHint = if (match == null) {
+            "“${t.name}” isn't on your provider, so it can't go in My List. Press OK for where to watch."
+        } else {
+            val adding = !inMyList(match.key)
+            toggleMyList(match)
+            if (adding) "Added “${t.name}” to My List." else "Removed “${t.name}” from My List."
+        }
     }
 
     /** The same title in the user's own provider catalog, if there is one. */

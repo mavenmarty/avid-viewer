@@ -52,6 +52,9 @@ fun DiscoverScreen(vm: AppViewModel) {
             Text("Discover", color = C.Text, fontSize = 22.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(end = 10.dp))
             TABS.forEachIndexed { i, (id, label) -> TvButton(label, selected = vm.discoverTab == id, modifier = if (i == 0) Modifier.entryFocus(vm, Screen.DISCOVER) else Modifier) { vm.chooseDiscoverTab(id) } }
             Spacer(Modifier.weight(1f))
+            TvButton(if (vm.onlyOnProvider) "✓ On your provider" else "On your provider", selected = vm.onlyOnProvider, modifier = Modifier.testTag("only-on-provider")) {
+                vm.onlyOnProvider = !vm.onlyOnProvider
+            }
             if (vm.prefs.myServices.isNotEmpty()) {
                 TvButton(if (vm.onlyMyServices) "✓ My services" else "My services", selected = vm.onlyMyServices) { vm.onlyMyServices = !vm.onlyMyServices }
             }
@@ -65,14 +68,19 @@ fun DiscoverScreen(vm: AppViewModel) {
         val all = vm.discoverLists[vm.discoverTab]
         val mine = vm.prefs.myServices.map { it.id }.toSet()
         val list = all?.let { l ->
-            if (!vm.onlyMyServices || mine.isEmpty()) l
-            else l.filter { t -> vm.whereCache[t.key]?.let { w -> (w.stream + w.free).any { it.id in mine } } ?: false || vm.matchVod(t) != null }
+            val onProvider = if (vm.onlyOnProvider) l.filter { t -> vm.matchVod(t) != null } else l
+            if (!vm.onlyMyServices || mine.isEmpty()) onProvider
+            else onProvider.filter { t -> vm.whereCache[t.key]?.let { w -> (w.stream + w.free).any { it.id in mine } } ?: false || vm.matchVod(t) != null }
         }
         vm.discoverNote?.takeIf { vm.discoverTab == "foryou" }?.let { Label(it, size = 13.sp, color = C.Soft, lines = 2, modifier = Modifier.padding(bottom = 8.dp)) }
         when {
             vm.discoverError != null && all == null -> StateMessage(StateKind.ERROR, "Couldn't load Discover", vm.discoverError, retry = { vm.loadDiscover(vm.discoverTab, force = true) })
             list == null -> StateMessage(StateKind.LOADING, "Loading…")
-            list.isEmpty() -> StateMessage(StateKind.EMPTY, "Nothing to show", if (vm.onlyMyServices) "Nothing here on your services yet. Turn off “My services” to see everything." else "Nothing to show right now.")
+            list.isEmpty() -> StateMessage(StateKind.EMPTY, "Nothing to show", when {
+                vm.onlyOnProvider -> "None of these titles are on your provider. Turn off “On your provider” to see everything."
+                vm.onlyMyServices -> "Nothing here on your services yet. Turn off “My services” to see everything."
+                else -> "Nothing to show right now."
+            })
             else -> LazyVerticalGrid(
                 columns = GridCells.Fixed(6),
                 modifier = Modifier.weight(1f),
@@ -83,7 +91,10 @@ fun DiscoverScreen(vm: AppViewModel) {
                 items(list.distinctBy { it.key }, key = { it.key }) { t -> TitleCard(vm, t) }
             }
         }
-        Label("Data from TMDB · Streaming availability by JustWatch", size = 12.sp, modifier = Modifier.padding(vertical = 6.dp))
+        val hint = vm.discoverHint
+        LaunchedEffect(hint) { if (hint != null) { delay(4000); if (vm.discoverHint == hint) vm.discoverHint = null } }
+        if (hint != null) Label(hint, size = 13.sp, color = C.Text, lines = 2, modifier = Modifier.padding(top = 6.dp).testTag("discover-hint"))
+        Label("Data from TMDB · Streaming availability by JustWatch · Menu: add to My List", size = 12.sp, modifier = Modifier.padding(vertical = 6.dp))
     }
 }
 
@@ -96,6 +107,7 @@ private fun TitleCard(vm: AppViewModel, t: Title) {
         shape = RoundedCornerShape(8.dp),
         color = Color.Transparent,
         focusedColor = C.Surface2,
+        onMenu = { vm.discoverMenu(t) },
         onClick = { vm.openTitle(t) },
     ) { focused ->
         Column(Modifier.fillMaxWidth().padding(3.dp)) {
@@ -107,6 +119,10 @@ private fun TitleCard(vm: AppViewModel, t: Title) {
                         "▶ ON YOUR PROVIDER", color = C.OnAccent, fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 1,
                         modifier = Modifier.align(Alignment.TopStart).padding(5.dp).clip(RoundedCornerShape(4.dp)).background(C.Accent).padding(horizontal = 5.dp, vertical = 1.dp),
                     )
+                    if (vm.inMyList(match.key)) {
+                        Text("✓", color = C.OnAccent, fontSize = 12.sp, fontWeight = FontWeight.Bold,
+                            modifier = Modifier.align(Alignment.TopEnd).padding(5.dp).clip(RoundedCornerShape(4.dp)).background(C.Accent).padding(horizontal = 5.dp).testTag("in-my-list"))
+                    }
                 }
             }
             Label(t.name, size = 12.sp, color = if (focused) C.Text else C.Soft, weight = if (focused) FontWeight.Bold else FontWeight.Normal, lines = 2, modifier = Modifier.padding(top = 4.dp))
