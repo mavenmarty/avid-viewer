@@ -52,6 +52,7 @@ import com.avidviewer.tv.data.ProfileSet
 import com.avidviewer.tv.data.Kids
 import com.avidviewer.tv.data.Xmltv
 import com.avidviewer.tv.data.Xtream
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.sync.withLock
@@ -2517,7 +2518,23 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         val hiddenKeys = prefs.hiddenChannels
         val epgMap = prefs.epgMap
         val pls = livePlaylists.filter { it.enabled }
-        val (matched, chans) = withContext(Dispatchers.IO) {
+        // Reading the guide can still fail if it is replaced under us (issue #9): try once more, and if
+        // that fails too, keep the games and channels already shown. Matching is never worth a crash.
+        val found = runCatching { matchChannels(kept, hiddenKeys, epgMap, pls) }
+            .recoverCatching { e -> if (e is CancellationException) throw e; matchChannels(kept, hiddenKeys, epgMap, pls) }
+        found.exceptionOrNull()?.let { e -> if (e is CancellationException) throw e }
+        val (matched, chans) = found.getOrNull() ?: return
+        sportsChannels = chans
+        sportGames = kept.sortedBy { it.start }.map { SportGame(it, matched[it.id].orEmpty()) }
+    }
+
+    private suspend fun matchChannels(
+        kept: List<Game>,
+        hiddenKeys: Set<String>,
+        epgMap: Map<String, String>,
+        pls: List<Playlist>,
+    ): Pair<Map<String, List<com.avidviewer.tv.data.ChannelMatch>>, Map<String, Channel>> =
+        withContext(Dispatchers.IO) {
             liveReady()
             val m = com.avidviewer.tv.data.SportsMatcher(kept) { it in hiddenKeys }
             val from = kept.minOf { it.start } - 2 * 3600_000L
@@ -2533,9 +2550,6 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             val keys = r.values.flatten().map { it.key }.distinct()
             r to live.channelsByKeys(keys).associateBy { it.key }
         }
-        sportsChannels = chans
-        sportGames = kept.sortedBy { it.start }.map { SportGame(it, matched[it.id].orEmpty()) }
-    }
 
     /** The games the Sports screen lists (league filter, and the "no channel found" setting). */
     fun sportsVisibleGames(): List<SportGame> = sportGames.filter { g ->

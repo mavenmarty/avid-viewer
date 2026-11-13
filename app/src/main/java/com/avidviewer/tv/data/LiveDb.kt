@@ -35,6 +35,9 @@ class LiveDb(private val catalog: Catalog) {
         private fun channel(c: Cursor) = Channel(c.getString(0), c.getString(1), c.getString(2), c.getString(3), c.getString(4), c.getString(5))
         private fun program(c: Cursor, from: Int) = Program(c.getLong(from), c.getLong(from + 1), c.getString(from + 2), c.getString(from + 3), c.getInt(from + 4) == 1)
 
+        /** Rows per page for the one-at-a-time readers ([forEachChannel], [forEachProgram], [guide]): well inside one CursorWindow. */
+        const val PAGE = 500
+
         /** SQL LIKE pattern for "contains [s]", with LIKE's wildcards escaped. */
         fun contains(s: String) = "%" + s.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
     }
@@ -236,7 +239,13 @@ class LiveDb(private val catalog: Catalog) {
         val out = HashMap<String, MutableList<Program>>()
         fun collect(c: Cursor) { while (c.moveToNext()) out.getOrPut(c.getString(0)) { ArrayList() }.add(program(c, 1)) }
         val sql = "SELECT e, s, x, t, st, nw FROM prog WHERE p = ? AND x > ? AND s < ?"
-        if (ids == null) db.rawQuery("$sql ORDER BY e, s", arrayOf(pid, from.toString(), to.toString())).use(::collect)
+        if (ids == null) {
+            // A whole playlist's guide can be tens of thousands of rows: read it in pages (see [pages]), then sort.
+            pages("e, s, x, t, st, nw", "prog", "p = ? AND x > ? AND s < ?", arrayOf(pid, from.toString(), to.toString())) { c ->
+                out.getOrPut(c.getString(1)) { ArrayList() }.add(program(c, 2))
+            }
+            out.values.forEach { l -> l.sortBy { it.start } }
+        }
         else ids.distinct().chunked(400).forEach { part ->
             if (part.isNotEmpty()) db.rawQuery("$sql AND e IN (${part.joinToString(",") { "?" }}) ORDER BY e, s", arrayOf(pid, from.toString(), to.toString()) + part).use(::collect)
         }
@@ -259,17 +268,36 @@ class LiveDb(private val catalog: Catalog) {
 
     // ---------------------------------------------------------------- passes (Sports matching)
 
+    /**
+     * Reads `SELECT rowid, [cols] FROM [table] WHERE [where]` a page of [PAGE] rows at a time (by rowid),
+     * handing each row to [row] with the selected columns starting at index 1.
+     *
+     * One long cursor over thousands of rows has to refill its window part-way through; if a guide or
+     * channel download replaces the same rows in between, the refill finds fewer rows than it counted
+     * and Android throws "Couldn't read row N from CursorWindow" (issue #9). A page always fits in one
+     * window, so it is read in a single pass, and each page sees the table as it is when it starts.
+     */
+    private inline fun pages(cols: String, table: String, where: String, args: Array<String>, row: (Cursor) -> Unit) {
+        var after = 0L
+        while (true) {
+            var n = 0
+            db.rawQuery(
+                "SELECT rowid, $cols FROM $table WHERE $where AND rowid > ? ORDER BY rowid LIMIT $PAGE",
+                args + after.toString(),
+            ).use { c -> while (c.moveToNext()) { after = c.getLong(0); row(c); n++ } }
+            if (n < PAGE) break
+        }
+    }
+
     /** Every channel of a playlist, one at a time: key, name, category, guide id. */
     fun forEachChannel(pid: String, fn: (String, String, String, String?) -> Unit) {
-        db.rawQuery("SELECT k, n, g, e FROM channel WHERE p = ?", arrayOf(pid)).use { c ->
-            while (c.moveToNext()) fn(c.getString(0), c.getString(1), c.getString(2), c.getString(3))
-        }
+        pages("k, n, g, e", "channel", "p = ?", arrayOf(pid)) { c -> fn(c.getString(1), c.getString(2), c.getString(3), c.getString(4)) }
     }
 
     /** Every programme of a playlist overlapping [from]..[to], one at a time: guide id, start, end, title, subtitle. */
     fun forEachProgram(pid: String, from: Long, to: Long, fn: (String, Long, Long, String, String?) -> Unit) {
-        db.rawQuery("SELECT e, s, x, t, st FROM prog WHERE p = ? AND x > ? AND s < ?", arrayOf(pid, from.toString(), to.toString())).use { c ->
-            while (c.moveToNext()) fn(c.getString(0), c.getLong(1), c.getLong(2), c.getString(3), c.getString(4))
+        pages("e, s, x, t, st", "prog", "p = ? AND x > ? AND s < ?", arrayOf(pid, from.toString(), to.toString())) { c ->
+            fn(c.getString(1), c.getLong(2), c.getLong(3), c.getString(4), c.getString(5))
         }
     }
 

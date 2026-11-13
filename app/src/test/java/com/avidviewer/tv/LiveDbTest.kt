@@ -109,4 +109,40 @@ class LiveDbTest {
         assertTrue(live.guideSavedAt("old") > 0)
         assertEquals(setOf("one.us"), live.epgIds("old"))
     }
+
+    /**
+     * Issue #9: Sports matching read the whole guide through one cursor while a guide refresh replaced
+     * the same rows, and Android threw "Couldn't read row N from CursorWindow". The readers now go a
+     * page at a time, so every row is still read, and a refresh part-way through can't break the read.
+     */
+    @Test
+    fun bigGuidesAreReadInPagesAndSurviveARefreshPartWay() {
+        val h = 3_600_000L
+        val total = LiveDb.PAGE * 3 + 7
+        live.replacingGuide("p") { add -> for (i in 0 until total) add("ch$i.us", Program(i * 1000L, i * 1000L + h, "Show $i", null, false)) }
+        live.replacingChannels("p") { add -> for (i in 0 until total) add(ch("p:$i", "Channel $i", "http://x/live/u/p/$i.ts", epg = "ch$i.us")) }
+
+        val seen = HashSet<String>()
+        live.forEachProgram("p", 0, Long.MAX_VALUE / 2) { e, _, _, _, _ -> seen.add(e) }
+        assertEquals(total, seen.size)
+        var channels = 0
+        live.forEachChannel("p") { _, _, _, _ -> channels++ }
+        assertEquals(total, channels)
+        assertEquals(total, live.guide("p", null, 0, Long.MAX_VALUE / 2).size)
+        assertEquals(listOf(0L, 1000L), live.guide("p", null, 0, 2000).let { g -> listOf(g["ch0.us"]!!.single().start, g["ch1.us"]!!.single().start) })
+
+        // A refresh that shrinks the guide while the reader is part-way through: no crash, and the read ends.
+        var read = 0
+        var refreshed = false
+        live.forEachProgram("p", 0, Long.MAX_VALUE / 2) { _, _, _, _, _ ->
+            read++
+            if (read == LiveDb.PAGE + 10 && !refreshed) {
+                refreshed = true
+                live.replacingGuide("p") { add -> for (i in 0 until 50) add("new$i.us", Program(0, h, "New $i", null, false)) }
+            }
+        }
+        assertTrue(refreshed)
+        assertTrue(read in LiveDb.PAGE + 10..total)
+        assertEquals(50, live.guide("p", null, 0, Long.MAX_VALUE / 2).size)
+    }
 }
