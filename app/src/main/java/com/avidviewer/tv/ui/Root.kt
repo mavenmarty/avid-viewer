@@ -103,10 +103,9 @@ fun AppRoot(vm: AppViewModel) {
         ReorderHelp(vm)
         ListOptionsDialog(vm)
         VodCategoryOptionsDialog(vm)
-        // The app closed unexpectedly last time: say so once, and offer to send the report to bugs@
+        // The app closed unexpectedly last time: say so once, and offer to send the report to bugs@avidviewer.app
         // (Report issue sends it and clears it; Cancel keeps it in Settings › Updates & about).
         if ((vm.lastCrash != null || vm.crashReportSent) && !vm.crashNoticeSeen && vm.screen != Screen.PLAYER) {
-            if (vm.crashReportSent) LaunchedEffect(Unit) { kotlinx.coroutines.delay(2500); vm.closeCrashNotice() }
             androidx.compose.material3.AlertDialog(
                 onDismissRequest = { if (!vm.crashReportBusy) vm.closeCrashNotice() },
                 containerColor = C.Surface,
