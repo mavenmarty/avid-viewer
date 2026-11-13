@@ -222,13 +222,27 @@ Sports lists real games from **ESPN's schedules** for today and the next 2 days,
 
 - **Left side**: Playlists, then categories: **All**, **Recently added**, **Continue watching**, **My List**, and your provider's categories.
 - **Right side**: posters for the chosen category. A category you pause on is read ahead, so OK shows it at once.
+- **Posters fill their tiles.** The title and year appear on a dark fade only on the highlighted poster, and on titles that have no artwork (most posters already show their title). The highlighted poster grows a little and gets a ring. **✓** in a corner means the title is in My List.
+- **Layouts**: the buttons above the posters switch between three ways of browsing. Each profile remembers its choice; **Up** from the top row of posters reaches them.
+  - **▦ Grid**: rows of posters.
+
+    ![Movies in the Grid layout](images/movies-grid.jpg)
+
+  - **▭ Featured**: the highlighted title's artwork, name, year and rating above the posters.
+
+    ![Movies in the Featured layout](images/movies-featured.jpg)
+
+  - **▣ Showcase**: the highlighted title's artwork fills the screen, with one row of posters along the bottom (**Left/Right** to move along it).
+
+    ![Movies in the Showcase layout](images/movies-showcase.jpg)
+
 - **Each title is listed once.** When your playlists have the same title several times (other languages, qualities such as 4K or HD, or other playlists), it appears once, shown by its English copy (else one with no language marked). This applies to All, Recently added, every category and the search.
 - **🔍 Search movies / 🔍 Search series** is in the category list, below My List. Results replace the poster grid; **✕ Clear search** ends the search.
 - **OK on a poster** opens its page: plot, cast, director, **▶ Play**, or **▶ Resume from [time]** and **Start over**, plus **+ My List**.
 - **⇄ N versions** (on a title with several copies) lists each copy with its language, name, category and playlist; ✓ marks the one shown, and the line **This version: …** under the buttons says which one you're on. **OK** on another copy shows that one, with its own episodes, resume point and My List button. The language comes from codes on the name or category ("EN |", "FR -", "VF", "MULTI"…); copies without one show "Language not marked". Series pages list episodes by **Season**, with resume points; episodes you've played to the end say **✓ Watched**. **A series page opens on the next episode to watch**, with its season chosen: Season 1, Episode 1 for a series you haven't started, otherwise the episode after the last one you finished (or the one you stopped part-way through). The page scrolls as one: **Up** from the episode goes to the season buttons, then the title's buttons; from the buttons, **Down** goes to the season buttons, then through every episode, however long the description. After you watch an episode and press **Back**, that episode is highlighted.
 - **Each category (and each search) keeps its own place.**
 - **Back** goes one step at a time: from a title's page to its poster, from a poster to the category you're in (highlighted), then to the main menu, on **Movies** or **Series**.
-- **Left** from the first column of posters goes to the category you're browsing.
+- **Left** from the first column of posters (in Showcase, from the first poster) goes to the category you're browsing.
 - **Category list wraps around**: Up on **All** jumps to the last category, and Down on the last returns to All. The poster grid stops at the end.
 - **Menu on a category**: **Rename**, **Re-order** or **Hide** it. Hidden categories come back in Settings › List Editor.
 - If you have more than one playlist, movies and series from all of them are merged.
@@ -268,12 +282,14 @@ Each person in the household can have their own profile. A profile has its own �
 
 When you update from an earlier version, everything you had becomes the owner's profile, **Me**. Nothing changes until you add a second profile.
 
+Each profile also has its own **theme** (colours) and its own Movies and Series **layout**. See [Display & time](#display--time).
+
 **Settings › Profiles** (second in the list of sections)
 
 - **＋ Add profile**: a name and a colour.
 - **＋ Add Kids profile**: the same, for a child. If no grown-up has a PIN yet, the app asks you to set the owner's PIN first.
 - For each profile:
-  - **Edit**: name and colour; for a Kids profile, also the categories it can watch.
+  - **Edit**: name, colour and **Theme**; for a Kids profile, also the categories it can watch.
   - **Set PIN / Change PIN**: a 4-digit PIN, entered twice. **Remove PIN** appears only while there's no Kids profile.
   - **Parent** (grown-up profiles other than the owner): a parent can manage profiles, and their PIN opens any profile. The owner is always a parent.
   - **Delete…**: asks first, then deletes that profile's favorites, lists, hidden items and history. It can't be undone. The owner's profile and the profile in use can't be deleted.
@@ -324,6 +340,15 @@ Rename, re-order and Add to List are done with Menu on the item itself in the TV
 - **Temperature units**.
 
 ### Display & time
+
+- **Theme**: the colours of the profile you're using. Each profile has its own; change another profile's in Settings › Profiles › Edit. **OK** on a preview picks it, and ✓ marks the one in use.
+  - **Dark roast**: dark brown, a soft warm-grey highlight with dark text, muted gold. New installs and new profiles start on it.
+  - **Midnight blue**: navy with a bright blue ring, the look up to 1.3.0. Profiles that existed before 1.4.0 keep it until you change it.
+  - **Espresso & cream**, **Espresso & ivory** and **Mocha & latte**: other warm themes, from darkest to lightest base.
+
+  ![Settings › Display & time › Theme](images/settings-theme.jpg)
+
+  ![Movies in Midnight blue](images/theme-midnight-blue.jpg)
 
 - **Show clock**: time and date in the menu and in the full-screen info bar.
 - **Time zone**: Auto (from your postal code), Device, Eastern, Central, Mountain, Arizona, Pacific, Alaska, Hawaii or Atlantic. Guide and program times use this zone.
@@ -498,14 +523,18 @@ Every public release since 1.0.35, newest first. From 1.1.0, versions are number
 
 ### 1.4.0 — November 13, 2026, 2:38 PM CT (current)
 
+**Release notes**
+
+- **A new look: themes.** Each profile picks its own colours in Settings › Profiles (Edit), or for the profile you're using in Settings › Display & time › **Theme**. There are five: **Dark roast** (dark brown with a soft warm-grey highlight), **Midnight blue** (the look up to 1.3.0), **Espresso & cream**, **Espresso & ivory** and **Mocha & latte**. If you're updating, your profiles keep Midnight blue until you change them; new installs and new profiles start on Dark roast. In the warm themes the highlight is a light tile with dark text, which is easier on the eyes than the blue ring.
+- **Posters first in Movies and Series.** Posters fill their tiles, with no frame or text block under them. The title and year show on a dark fade only on the highlighted poster (and on titles with no artwork); the highlighted poster grows a little and gets a ring.
+- **Three layouts for Movies and Series**: **Grid**, **Featured** (the highlighted title's artwork and details above the posters) and **Showcase** (its artwork fills the screen, with one row of posters along the bottom). Switch with the buttons above the posters; each profile remembers its choice. See [Movies and Series](#8-movies-and-series).
+
 **Change log**
 
-- Dark roast and warm grey palette; poster-first Movies and Series grid
-- Focus posters with requestFocus in the poster-grid screenshots
-- A colour theme for each profile, and Grid / Featured / Showcase layouts for Movies and Series
-- A new install has one profile
-- Screenshots highlight a poster and a theme with the remote keys
-- Import nativeKeyCode
+- Themes: five colour themes, one per profile (Settings › Profiles › Edit, and Settings › Display & time for the profile in use); profiles from before 1.4.0 keep Midnight blue, new installs and new profiles get Dark roast; themes and layouts are saved with profiles (and in backups)
+- Movies and Series: posters fill their tiles; title and year on a fade on the highlighted poster and on posters with no artwork; the highlighted poster grows and gets a ring
+- Movies and Series: Grid, Featured and Showcase layouts, remembered per profile
+- Tests for themes on existing and new installs; screenshots of the layouts and every theme
 
 ### 1.3.0 — November 13, 2026, 1:18 PM CT
 

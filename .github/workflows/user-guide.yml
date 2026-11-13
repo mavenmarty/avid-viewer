@@ -15,6 +15,7 @@ on:
     branches: [main]
     paths:
       - "docs/USER_GUIDE.md"
+      - "docs/images/**"
       - ".github/scripts/build_guide_pdf.py"
       - ".github/scripts/guide-pdf.css"
   workflow_dispatch:

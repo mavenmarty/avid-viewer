@@ -34,7 +34,8 @@ def main() -> int:
         open(md, "w", encoding="utf-8").write(text)
         subprocess.run(["pandoc", md, "-f", "markdown+gfm_auto_identifiers", "-t", "html5", "-s",
                         "--metadata", f"pagetitle=Avid Viewer User Guide {version}".strip(),
-                        "--css", CSS, "--embed-resources", "-o", html], check=True)
+                        "--css", CSS, "--resource-path", os.path.abspath(os.path.dirname(GUIDE)),
+                        "--embed-resources", "-o", html], check=True)
         subprocess.run([chrome, "--headless", "--no-sandbox", "--disable-gpu", "--no-pdf-header-footer",
                         f"--print-to-pdf={out}", html], check=True,
                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
