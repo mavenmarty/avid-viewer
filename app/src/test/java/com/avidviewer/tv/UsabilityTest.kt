@@ -308,8 +308,9 @@ class UsabilityTest {
      */
     @Test
     fun profilesKeepTheirOwnFavoritesAndKidsSeesOnlyItsCategories() {
-        val news = "${TestData.P1}:c1-0"
-        val kidsCh = "${TestData.P1}:c4-0"
+        waitFor("channels") { vm.channelsIn("NEWS").isNotEmpty() && vm.channelsIn("KIDS").isNotEmpty() }
+        val news = vm.channelsIn("NEWS").first().key
+        val kidsCh = vm.channelsIn("KIDS").first().key
         rule.runOnIdle { vm.toggleFavorite(news) }
         waitFor("owner's favorite") { news in vm.prefs.favorites }
         var sam = ""
@@ -875,7 +876,7 @@ class UsabilityTest {
         waitFor("the playlist list (nav=${vm.navMode})") { vm.navMode == NavMode.COLLAPSED && vm.inPlaylistTree }
         go(Screen.SETTINGS)
         waitFor("Settings opens on its first section (focus: ${focused()})") { focused().contains("Playlists") }
-        press(listOf(Key.DirectionDown, Key.DirectionDown, Key.DirectionDown, Key.DirectionDown))
+        press(listOf(Key.DirectionDown, Key.DirectionDown, Key.DirectionDown, Key.DirectionDown, Key.DirectionDown)) // past Profiles, List Editor, Location, Display
         waitFor("on TV guide (focus: ${focused()})") { focused().contains("TV guide") }
         assertEquals("highlighting a section doesn't open it", "playlists", vm.settingsSection)
         press(listOf(Key.DirectionCenter))

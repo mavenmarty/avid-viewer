@@ -79,5 +79,19 @@ class ScreenshotTest {
         shot("06-settings-about")
         rule.runOnIdle { vm.navSelect(Screen.DISCOVER) }
         shot("07-discover-needs-key")
+        // Profiles: a grown-up and a Kids profile (the owner sets a PIN first).
+        rule.runOnIdle { vm.addProfile("Sam", kids = false, color = 1); vm.addKidsProfile("Kids", 2) }
+        rule.runOnIdle { vm.answerPin("1234") }
+        rule.runOnIdle { vm.answerPin("1234") }
+        rule.runOnIdle { vm.navSelect(Screen.SETTINGS); vm.settingsSection = "profiles" }
+        shot("08-settings-profiles")
+        rule.runOnIdle { vm.editingProfile = vm.profiles.list.first { it.kids }.id }
+        shot("09-kids-profile-categories")
+        rule.runOnIdle { vm.editingProfile = null; vm.askWhoIsWatching() }
+        shot("10-whos-watching")
+        rule.runOnIdle { vm.chooseProfile(vm.profiles.owner.id) }
+        shot("11-pin")
+        rule.runOnIdle { vm.cancelPin(); vm.chooseProfile(vm.profiles.list.first { it.kids }.id) }
+        shot("12-kids-guide")
     }
 }

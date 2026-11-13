@@ -150,6 +150,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
     fun cancelPin() { pinAsk = null }
 
+    /** Shows Who's watching? again (as at start); nothing plays until a profile is chosen. */
+    fun askWhoIsWatching() { if (profiles.multiple) { recordWatch(); player.stop(); choosingProfile = true } }
+
     /** Asks for a parent's PIN, then runs [then]. Without a parent PIN set yet, runs it straight away. */
     fun withParentPin(why: String, then: () -> Unit) {
         if (profiles.list.none { it.isParent && it.hasPin }) { then(); return }
