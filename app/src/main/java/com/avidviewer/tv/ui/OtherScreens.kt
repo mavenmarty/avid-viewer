@@ -755,9 +755,13 @@ fun SettingsScreen(vm: AppViewModel) {
                         "about" -> {
                             vm.lastCrash?.let { crash ->
                                 item {
-                                    SettingBlock("Last crash", "The app closed unexpectedly. These details stay on this device; share a photo of them to help fix the problem.") {
+                                    SettingBlock("Last crash", "The app closed unexpectedly. Report issue sends these details to bugs@avidviewer.app (no playlists, addresses or logins) and then clears them.") {
                                         Label(crash.lines().take(14).joinToString("\n"), size = 11.sp, color = C.Soft, lines = Int.MAX_VALUE)
-                                        TvButton("Clear crash report") { settingsConfirm = Confirm("Clear the crash report?", "Its details can't be shared after this.", "Clear") { vm.clearCrash() } }
+                                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                            TvButton(if (vm.crashReportBusy) "Sending…" else "Report issue", primary = true, busy = vm.crashReportBusy, modifier = Modifier.testTag("settings-crash-report")) { vm.reportCrash() }
+                                            TvButton("Clear crash report") { settingsConfirm = Confirm("Clear the crash report?", "Its details can't be shared after this.", "Clear") { vm.clearCrash() } }
+                                        }
+                                        vm.crashReportStatus?.let { Label(it, size = 12.sp, color = C.Accent, lines = 3) }
                                     }
                                 }
                             }
