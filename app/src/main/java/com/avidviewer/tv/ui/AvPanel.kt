@@ -51,7 +51,7 @@ fun BoxScope.AvPanel(vm: AppViewModel) {
     val what = vm.vodPlaying?.let { if (it.kind == "episode") "this series" else "this movie" } ?: "this channel"
     Column(
         Modifier.align(Alignment.CenterEnd).width(430.dp).fillMaxHeight()
-            .background(Color(0xF2201B18)).padding(horizontal = 20.dp, vertical = 16.dp),
+            .background(C.Rail.copy(alpha = 0.95f)).padding(horizontal = 20.dp, vertical = 16.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         Label("Picture & sound", size = 20.sp, color = C.Text, weight = FontWeight.Bold)
@@ -117,7 +117,7 @@ private fun <T> ChoiceRow(
                 else -> false
             }
         },
-        color = C.Surface, focusedColor = C.FocusFill,
+        color = C.Surface, focusedColor = C.FocusRaised,
         onClick = { go(1) },
     ) { focused ->
         Column(Modifier.padding(horizontal = 12.dp, vertical = 7.dp)) {
@@ -133,7 +133,7 @@ private fun <T> ChoiceRow(
 
 @Composable
 private fun PanelButton(id: String, text: String, onClick: () -> Unit) {
-    Focusable(Modifier.fillMaxWidth().height(44.dp).testTag("av-$id"), color = C.Surface2, focusedColor = C.FocusFill, onClick = onClick) {
+    Focusable(Modifier.fillMaxWidth().height(44.dp).testTag("av-$id"), color = C.Surface2, focusedColor = C.FocusRaised, onClick = onClick) {
         Box(Modifier.padding(horizontal = 12.dp)) { Label(text, size = 14.sp, color = C.Text, weight = FontWeight.SemiBold) }
     }
 }

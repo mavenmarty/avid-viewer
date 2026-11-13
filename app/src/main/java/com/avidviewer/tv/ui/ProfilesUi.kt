@@ -1,5 +1,11 @@
 package com.avidviewer.tv.ui
 
+import androidx.compose.ui.semantics.selected
+
+import androidx.compose.foundation.border
+
+import androidx.compose.foundation.layout.fillMaxHeight
+
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -312,6 +318,8 @@ private fun LazyListScope.profileEditor(vm: AppViewModel, p: Profile) {
                     }
                 }
             }
+            Label("Theme", size = 13.sp)
+            ThemePicker(p.theme) { vm.setTheme(it, p) }
             if (!p.isOwner && !p.kids) SettingSwitch("Parent", "Can manage profiles and unlock any profile with this profile's PIN.", p.parent, compact = true) {
                 vm.updateProfile(p.copy(parent = !p.parent))
             }
@@ -349,6 +357,44 @@ private fun LazyListScope.profileEditor(vm: AppViewModel, p: Profile) {
             SettingSwitch(label, if (adult) "Adult category: never shown in a Kids profile" else "$n titles", key in p.allowedVodCats && !adult, enabled = !adult, compact = true) {
                 val cur = vm.profiles.get(p.id) ?: return@SettingSwitch
                 vm.updateProfile(cur.copy(allowedVodCats = if (key in cur.allowedVodCats) cur.allowedVodCats - key else cur.allowedVodCats + key))
+            }
+        }
+    }
+}
+
+/** The five colour themes as small previews; OK picks one. Each profile has its own (1.4.0). */
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+@Composable
+internal fun ThemePicker(current: String, onPick: (String) -> Unit) {
+    val chosen = Themes.of(current).id
+    androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Themes.all.forEach { t ->
+            val on = t.id == chosen
+            Focusable(
+                modifier = Modifier.width(150.dp).testTag("theme-${t.id}")
+                    .semantics { contentDescription = t.name + if (on) ", chosen" else ""; if (on) selected = true },
+                shape = RoundedCornerShape(10.dp), color = C.Surface, focusedColor = C.Surface, ringWidth = 3.dp,
+                onClick = { onPick(t.id) },
+            ) {
+                Column(Modifier.padding(6.dp)) {
+                    // A tiny screen in the theme: menu strip, a highlighted row with its text, an accent bar.
+                    Row(Modifier.fillMaxWidth().height(62.dp).clip(RoundedCornerShape(6.dp)).background(t.bg)) {
+                        Box(Modifier.width(16.dp).fillMaxHeight().background(t.rail))
+                        Column(Modifier.padding(6.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Box(Modifier.fillMaxWidth().height(14.dp).clip(RoundedCornerShape(3.dp)).background(t.focusFill)
+                                .then(if (t.focusLight) Modifier else Modifier.border(1.5.dp, t.focusRing, RoundedCornerShape(3.dp)))) {
+                                Box(Modifier.padding(start = 4.dp, top = 5.dp).width(40.dp).height(4.dp).background(if (t.focusLight) t.inkText else t.text))
+                            }
+                            Box(Modifier.fillMaxWidth().height(14.dp).clip(RoundedCornerShape(3.dp)).background(t.surface)) {
+                                Box(Modifier.padding(start = 4.dp, top = 5.dp).width(32.dp).height(4.dp).background(t.soft))
+                            }
+                            Box(Modifier.width(36.dp).height(4.dp).clip(RoundedCornerShape(2.dp)).background(t.accent))
+                        }
+                    }
+                    Row(Modifier.padding(top = 5.dp, start = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Label((if (on) "✓ " else "") + t.name, size = 12.sp, color = if (on) C.Accent else C.Text, weight = if (on) FontWeight.Bold else FontWeight.Normal)
+                    }
+                }
             }
         }
     }

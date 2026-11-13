@@ -450,7 +450,7 @@ fun GuideScreen(vm: AppViewModel) {
                                             }
                                         },
                                     color = if (isNow) C.Surface2 else if (aired) C.Surface.copy(alpha = 0.45f) else C.Surface,
-                                    focusedColor = C.FocusFill,
+                                    focusedColor = C.FocusRaised,
                                     onFocus = {
                                         focusProg = c.key to p
                                         vm.nav.focused(path, c.key, idx); vm.nav.guideOnProgram = true
@@ -496,7 +496,7 @@ private fun DayStrip(vm: AppViewModel, days: List<Long>, winStart: Long, first: 
 
 @Composable
 private fun DayChip(text: String, on: Boolean, modifier: Modifier, onClick: () -> Unit) {
-    Focusable(modifier = modifier.height(26.dp), shape = RoundedCornerShape(13.dp), color = if (on) C.Accent else C.Surface2, focusedColor = if (on) C.AccentFocus else C.FocusFill, onClick = onClick) {
+    Focusable(modifier = modifier.height(26.dp), shape = RoundedCornerShape(13.dp), color = if (on) C.Accent else C.Surface2, focusedColor = if (on) C.AccentFocus else C.FocusRaised, onClick = onClick) {
         Text(text, color = if (on) C.OnAccent else C.Text, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, modifier = Modifier.padding(horizontal = 12.dp))
     }
 }
@@ -634,7 +634,7 @@ fun GroupOptionsDialog(vm: AppViewModel) {
 
 @Composable
 fun OptionRow(label: String, onClick: () -> Unit) {
-    Focusable(Modifier.fillMaxWidth().height(44.dp), color = C.Surface2, focusedColor = C.FocusFill, onClick = onClick) {
+    Focusable(Modifier.fillMaxWidth().height(44.dp), color = C.Surface2, focusedColor = C.FocusRaised, onClick = onClick) {
         Label(label, size = 15.sp, color = C.Text, weight = FontWeight.SemiBold, modifier = Modifier.padding(horizontal = 14.dp))
     }
 }

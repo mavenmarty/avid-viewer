@@ -14,6 +14,7 @@ import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import java.io.File
 import androidx.compose.ui.test.requestFocus
+import androidx.compose.ui.test.onNodeWithTag
 
 /**
  * Pictures of the main screens on a TV-sized screen, saved with the test report (the screens folder), so a change to
@@ -64,6 +65,7 @@ class ScreenshotTest {
             androidx.compose.material3.MaterialTheme(colorScheme = androidx.compose.material3.darkColorScheme(primary = com.avidviewer.tv.ui.C.Accent, background = com.avidviewer.tv.ui.C.Bg, surface = com.avidviewer.tv.ui.C.Surface)) { AppRoot(vm) }
         }
         waitFor { vm.channels.isNotEmpty() }
+        rule.runOnIdle { vm.setTheme("roast") } // the test data is an "existing install", which keeps Midnight blue
         rule.runOnIdle { vm.chooseGroup(TestData.P1, "KIDS") }
         waitFor { vm.guideLastEnd > System.currentTimeMillis() + 24 * 3600_000L }
         shot("01-guide-day-strip")
@@ -126,6 +128,7 @@ class ScreenshotTest {
             androidx.compose.material3.MaterialTheme(colorScheme = androidx.compose.material3.darkColorScheme(primary = com.avidviewer.tv.ui.C.Accent, background = com.avidviewer.tv.ui.C.Bg, surface = com.avidviewer.tv.ui.C.Surface)) { AppRoot(vm) }
         }
         waitFor { vm.channels.isNotEmpty() }
+        rule.runOnIdle { vm.setTheme("roast") }
         rule.runOnIdle { vm.navSelect(Screen.MOVIES) }
         waitFor { vm.vodOf("movie").isNotEmpty() }
         rule.runOnIdle { vm.chooseVodCategory("movie", "Featured") }
@@ -138,7 +141,24 @@ class ScreenshotTest {
             .and(androidx.compose.ui.test.hasText("Sample Feature 9", substring = true))).requestFocus() }
         settle(400)
         shot("14-movies-poster-no-art-highlighted")
-        rule.runOnIdle { vm.navSelect(Screen.SETTINGS); vm.settingsSection = "playback" }
-        shot("15-settings-highlight")
+        fun focusPoster(n: Int) = runCatching { rule.onNode(androidx.compose.ui.test.hasContentDescription("Sample Feature $n", substring = true)).requestFocus() }
+        rule.runOnIdle { vm.setVodLayout("featured") }
+        settle(500); focusPoster(5); settle(800)
+        shot("15-movies-featured")
+        rule.runOnIdle { vm.setVodLayout("showcase") }
+        settle(500); focusPoster(4); settle(800)
+        shot("16-movies-showcase")
+        rule.runOnIdle { vm.setVodLayout("grid") }
+        // Every theme: Settings › Display (the theme picker, one highlighted) and the poster grid.
+        com.avidviewer.tv.ui.Themes.all.forEachIndexed { k, t ->
+            rule.runOnIdle { vm.setTheme(t.id); vm.navSelect(Screen.SETTINGS); vm.settingsSection = "display" }
+            settle(500)
+            runCatching { rule.onNodeWithTag("theme-${t.id}").requestFocus() }
+            settle(500)
+            shot("${17 + 2 * k}-theme-${t.id}-settings")
+            rule.runOnIdle { vm.navSelect(Screen.MOVIES) }
+            settle(500); focusPoster(8); settle(800)
+            shot("${18 + 2 * k}-theme-${t.id}-movies")
+        }
     }
 }

@@ -154,10 +154,21 @@ fun VodScreen(vm: AppViewModel, kind: String) {
             items(cats, key = { "c-" + it.first }) { (name, count) -> catRow(name, count) }
             item { Label("Menu on a category: rename, re-order, hide", size = 11.sp, lines = Int.MAX_VALUE, modifier = Modifier.padding(start = 10.dp, top = 8.dp)) }
         }
-        Column(Modifier.weight(1f).fillMaxHeight().padding(start = 12.dp, end = 16.dp, top = 14.dp).onFocusChanged { if (it.hasFocus) vm.vodOnPoster = true }) {
+        // Layouts (1.4.0, per profile): Grid, Featured (the highlighted title's art and details above the posters)
+        // and Showcase (its art fills the screen, with one row of posters along the bottom).
+        val layout = vm.vodLayout
+        var hero by remember(kind, current, vq) { mutableStateOf<VodItem?>(null) }
+        val shown = hero ?: items.firstOrNull()
+        Box(Modifier.weight(1f).fillMaxHeight()) {
+        if (layout == "showcase" && items.isNotEmpty()) VodHero(vm, shown, full = true, modifier = Modifier.fillMaxSize())
+        Column(Modifier.fillMaxSize().padding(start = 12.dp, end = 16.dp, top = 14.dp).onFocusChanged { if (it.hasFocus) vm.vodOnPoster = true }) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(bottom = 10.dp)) {
-                Label(if (vq.isNotBlank()) "Results for “$vq”  ·  ${items.size} titles" else "${vm.vodCatName(kind, current)}  ·  ${items.size} titles", size = 14.sp, color = C.Soft, weight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                Label(if (vq.isNotBlank()) "Results for “$vq”  ·  ${items.size} titles" else "${vm.vodCatName(kind, current)}  ·  ${items.size} titles", size = 14.sp, color = if (layout == "showcase") Color.White.copy(alpha = 0.85f) else C.Soft, weight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                listOf("grid" to "▦  Grid", "featured" to "▭  Featured", "showcase" to "▣  Showcase").forEach { (id, label) ->
+                    TvButton(label, selected = layout == id, modifier = Modifier.testTag("vod-layout-$id")) { if (layout != id) vm.setVodLayout(id) }
+                }
             }
+            if (layout == "featured" && items.isNotEmpty()) VodHero(vm, shown, full = false, modifier = Modifier.fillMaxWidth().height(190.dp).padding(bottom = 8.dp))
             if (items.isEmpty()) {
                 Label(
                     when (current) {
@@ -192,23 +203,76 @@ fun VodScreen(vm: AppViewModel, kind: String) {
                     if (vis.isEmpty() || idx < vis.first() || idx > vis.last()) gridState.scrollToItem(idx)
                     focusWhenReady(vm) { runCatching { backFr.requestFocus() }.isSuccess }
                 }
-                LazyVerticalGrid(
-                    state = gridState,
-                    columns = GridCells.Fixed(6),
-                    // Room round the edges for the highlighted poster, which grows a little.
-                    horizontalArrangement = Arrangement.spacedBy(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp),
-                    contentPadding = PaddingValues(start = 8.dp, end = 8.dp, top = 8.dp, bottom = 24.dp),
-                ) {
+                val cols = if (layout == "featured") 7 else 6
+                val posters: androidx.compose.foundation.lazy.grid.LazyGridScope.() -> Unit = {
                     itemsIndexed(items, key = { i, v -> "$i-${v.key}" }) { i, v ->
                         Poster(vm, v, Modifier.then(if (v.key == backKey) Modifier.focusRequester(backFr) else Modifier)
                             // Left from the first column: the current category, not the one level with this poster.
-                            .then(if (i % 6 == 0) Modifier.onPreviewKeyEvent { e ->
+                            .then(if ((layout == "showcase" && i == 0) || (layout != "showcase" && i % cols == 0)) Modifier.onPreviewKeyEvent { e ->
                                 if (e.type == androidx.compose.ui.input.key.KeyEventType.KeyDown && e.key == androidx.compose.ui.input.key.Key.DirectionLeft) { vm.vodCatFocus++; true } else false
-                            } else Modifier)) { vm.nav.focused(path, v.key, i) }
+                            } else Modifier)) { vm.nav.focused(path, v.key, i); hero = v }
                     }
                 }
+                if (layout == "showcase") {
+                    Spacer(Modifier.weight(1f))
+                    androidx.compose.foundation.lazy.grid.LazyHorizontalGrid(
+                        state = gridState,
+                        rows = GridCells.Fixed(1),
+                        modifier = Modifier.fillMaxWidth().height(236.dp),
+                        horizontalArrangement = Arrangement.spacedBy(16.dp),
+                        contentPadding = PaddingValues(start = 8.dp, end = 8.dp, top = 10.dp, bottom = 22.dp),
+                        content = posters,
+                    )
+                } else LazyVerticalGrid(
+                    state = gridState,
+                    columns = GridCells.Fixed(cols),
+                    // Room round the edges for the highlighted poster, which grows a little.
+                    horizontalArrangement = Arrangement.spacedBy(if (layout == "featured") 14.dp else 16.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                    contentPadding = PaddingValues(start = 8.dp, end = 8.dp, top = 8.dp, bottom = 24.dp),
+                    content = posters,
+                )
             }
+        }
+        }
+    }
+}
+
+/**
+ * The highlighted title, large (1.4.0). [full] (Showcase): its art fills the screen, darkened from the left and
+ * the bottom so the white text stays readable. Otherwise (Featured): the art sits on the right and fades into the
+ * background, with the details on the left in the theme's colours.
+ */
+@Composable
+private fun VodHero(vm: AppViewModel, v: VodItem?, full: Boolean, modifier: Modifier) {
+    Box(modifier) {
+        if (v == null) return@Box
+        val meta = listOf(v.year, v.rating.takeIf { it.isNotBlank() && it != "0" }?.let { "★ $it" } ?: "", if (v.kind == "series") "Series" else "Movie")
+            .filter { it.isNotBlank() }.joinToString("  ·  ")
+        val black = Color.Black
+        if (full) {
+            Box(Modifier.fillMaxSize().background(badgeColor(v.name)))
+            v.logo?.let { TvImage(model = it, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize()) }
+            Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(0f to black.copy(alpha = 0.9f), 0.34f to black.copy(alpha = 0.72f), 0.7f to black.copy(alpha = 0.15f), 1f to Color.Transparent)))
+            Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0f to Color.Transparent, 0.4f to Color.Transparent, 0.62f to black.copy(alpha = 0.55f), 1f to black.copy(alpha = 0.95f))))
+        } else {
+            Box(Modifier.align(Alignment.TopEnd).fillMaxHeight().fillMaxWidth(0.62f).clip(RoundedCornerShape(10.dp))) {
+                Box(Modifier.fillMaxSize().background(badgeColor(v.name)))
+                v.logo?.let { TvImage(model = it, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize()) }
+                Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(0f to C.Bg, 0.45f to C.Bg.copy(alpha = 0.55f), 1f to Color.Transparent)))
+                Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0.55f to Color.Transparent, 1f to C.Bg.copy(alpha = 0.85f))))
+            }
+        }
+        val ink = if (full) Color.White else C.Text
+        Column(
+            Modifier.align(if (full) Alignment.TopStart else Alignment.CenterStart).fillMaxWidth(if (full) 0.5f else 0.46f)
+                .padding(start = if (full) 20.dp else 4.dp, top = if (full) 64.dp else 0.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Text(v.name, color = ink, fontSize = if (full) 30.sp else 24.sp, fontWeight = FontWeight.Bold, maxLines = 2,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, lineHeight = if (full) 34.sp else 28.sp, modifier = Modifier.testTag("vod-hero-title"))
+            Text(meta, color = ink.copy(alpha = 0.8f), fontSize = 14.sp, maxLines = 1)
+            Text("OK  Open" + if (vm.inMyList(v.key)) "   ·   ✓ In My List" else "   ·   Menu  ＋ My List", color = if (full) Color.White.copy(alpha = 0.7f) else C.Muted, fontSize = 12.sp, maxLines = 1)
         }
     }
 }

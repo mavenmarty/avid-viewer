@@ -232,7 +232,7 @@ fun TvField(
         Focusable(
             modifier = modifier.fillMaxWidth().height(56.dp).focusRequester(boxFocus),
             color = C.Surface2,
-            focusedColor = C.FocusFill,
+            focusedColor = C.FocusRaised,
             onClick = { editing = true },
         ) { focused ->
             Column(Modifier.padding(horizontal = 14.dp)) {
@@ -845,6 +845,11 @@ private fun androidx.compose.foundation.lazy.LazyListScope.locationSettings(vm: 
 
 private fun androidx.compose.foundation.lazy.LazyListScope.displaySettings(vm: AppViewModel) {
     val p = vm.prefs
+    item(key = "display-theme") {
+        SettingBlock("Theme", "Colours for ${vm.profile.name}. Every profile has its own; change another's in Profiles.") {
+            ThemePicker(vm.profile.theme) { vm.setTheme(it) }
+        }
+    }
     item { ToggleRow("Show clock", "Time and date in the menu and the full-screen info bar", p.showClock) { vm.updatePrefs { it.copy(showClock = !it.showClock) } } }
     item {
         SettingBlock("Time zone", "Guide times, program times and the clock use this zone. Now: ${vm.fmtTime(vm.now)} ${vm.zoneLabel()}") {

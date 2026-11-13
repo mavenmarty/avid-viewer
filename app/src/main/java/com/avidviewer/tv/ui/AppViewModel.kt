@@ -118,7 +118,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
      * Who's watching? shows when there are several profiles and the app asks at start, or the last one is locked.
      */
     private val startup: Pair<ProfileSet, Boolean> = run {
-        val s = store.loadProfiles()
+        val existing = !store.isNewInstall()
+        val s = store.loadProfiles().let { s0 -> s0.withThemes(existing)?.also { store.saveProfiles(it) } ?: s0 }
         val last = s.activeProfile
         val locked = s.multiple && s.needsPin(last)
         val id = if (locked) s.list.firstOrNull { it.kids }?.id ?: last.id else last.id
@@ -127,6 +128,13 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
     var profiles by mutableStateOf(startup.first); private set
     val profile: Profile get() = profiles.activeProfile
+    /** The active profile's colour theme; every screen reads its colours through it ([C]). */
+    val theme: Theme get() = Themes.of(profile.theme)
+    init { C.source = { theme } }
+    fun setTheme(id: String, p: Profile = profile) = profiles.get(p.id)?.let { updateProfile(it.copy(theme = id)) }
+    /** Movies and Series layout for the profile: "grid", "featured" or "showcase". */
+    val vodLayout: String get() = profile.vodLayout
+    fun setVodLayout(l: String) = updateProfile(profile.copy(vodLayout = l))
     /** The profile in use is a Kids profile: only its categories, no Settings, Discover or Sports. */
     val kidsMode: Boolean get() = profile.kids
     /** Who's watching? is on screen; nothing plays until a profile is chosen. */
@@ -230,7 +238,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** Adds a profile; returns its id. A Kids profile starts with the categories whose names look made for children. */
     fun addProfile(name: String, kids: Boolean, color: Int): String {
         val id = newProfileId()
-        val p = Profile(id, name.trim().ifEmpty { if (kids) "Kids" else "Profile" }, color, kids = kids,
+        val p = Profile(id, name.trim().ifEmpty { if (kids) "Kids" else "Profile" }, color, kids = kids, theme = com.avidviewer.tv.data.THEME_DEFAULT,
             allowedGroups = if (kids) suggestedKidsGroups() else emptySet(), allowedVodCats = if (kids) suggestedKidsVodCats() else emptySet())
         // A new grown-up profile starts with a copy of the owner's favorites and lists; Kids starts empty.
         if (!kids) store.savePersonal(id, com.avidviewer.tv.data.personalOf(store.loadPrefs(Profile.OWNER)).apply { remove("lastChannel") })
