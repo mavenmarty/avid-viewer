@@ -44,6 +44,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.zIndex
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -190,9 +195,10 @@ fun VodScreen(vm: AppViewModel, kind: String) {
                 LazyVerticalGrid(
                     state = gridState,
                     columns = GridCells.Fixed(6),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                    contentPadding = PaddingValues(bottom = 24.dp),
+                    // Room round the edges for the highlighted poster, which grows a little.
+                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                    contentPadding = PaddingValues(start = 8.dp, end = 8.dp, top = 8.dp, bottom = 24.dp),
                 ) {
                     itemsIndexed(items, key = { i, v -> "$i-${v.key}" }) { i, v ->
                         Poster(vm, v, Modifier.then(if (v.key == backKey) Modifier.focusRequester(backFr) else Modifier)
@@ -207,34 +213,45 @@ fun VodScreen(vm: AppViewModel, kind: String) {
     }
 }
 
+/**
+ * A title in the poster grid (1.4.0): the artwork fills the tile, with no card or text block underneath. The title
+ * and year show on a black fade over the bottom of the art only on the highlighted poster, and on a poster with no
+ * artwork (most posters already carry their title). The highlighted poster grows a little and gets a warm-grey ring.
+ */
 @Composable
 private fun Poster(vm: AppViewModel, v: VodItem, modifier: Modifier = Modifier, onFocus: () -> Unit = {}) {
+    var focused by remember { mutableStateOf(false) }
+    val meta = listOf(v.year, v.rating.takeIf { it.isNotBlank() && it != "0" }?.let { "★ $it" } ?: "").filter { it.isNotBlank() }.joinToString(" · ")
     Focusable(
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth().aspectRatio(2f / 3f)
+            .onFocusChanged { focused = it.hasFocus }
+            .zIndex(if (focused) 1f else 0f)
+            .graphicsLayer { val k = if (focused) 1.07f else 1f; scaleX = k; scaleY = k }
+            // TalkBack: the title is read from the art when it isn't written on it.
+            .semantics { if (v.logo != null && !focused) contentDescription = listOf(v.name, meta).filter { it.isNotBlank() }.joinToString(", ") },
         onFocus = onFocus,
         shape = RoundedCornerShape(8.dp),
-        color = Color.Transparent,
-        focusedColor = C.Surface2,
+        color = badgeColor(v.name),
+        focusedColor = badgeColor(v.name),
+        ringWidth = 3.dp,
         onMenu = { vm.toggleMyList(v) },
         onClick = { vm.openVodDetail(v) },
-    ) { focused ->
-        Column(Modifier.fillMaxWidth().padding(3.dp)) {
-            Box(Modifier.fillMaxWidth().aspectRatio(2f / 3f).clip(RoundedCornerShape(6.dp)).background(badgeColor(v.name))) {
-                Text(
-                    v.name, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold, maxLines = 4,
-                    modifier = Modifier.align(Alignment.BottomStart).padding(8.dp),
-                )
-                if (v.logo != null) {
-                    TvImage(model = v.logo, contentDescription = v.name, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
-                }
-                if (vm.inMyList(v.key)) {
-                    Text("✓", color = C.OnAccent, fontSize = 12.sp, fontWeight = FontWeight.Bold,
-                        modifier = Modifier.align(Alignment.TopEnd).padding(5.dp).clip(RoundedCornerShape(4.dp)).background(C.Accent).padding(horizontal = 5.dp))
+    ) {
+        Box(Modifier.fillMaxSize()) {
+            if (v.logo != null) TvImage(model = v.logo, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+            if (focused || v.logo == null) {
+                Box(Modifier.fillMaxSize().background(Brush.verticalGradient(
+                    0f to Color.Transparent, 0.38f to Color.Transparent, 0.66f to Color.Black.copy(alpha = 0.62f), 1f to Color.Black.copy(alpha = 0.92f))))
+                Column(Modifier.align(Alignment.BottomStart).padding(start = 10.dp, end = 10.dp, bottom = 9.dp)) {
+                    Text(v.name, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold, maxLines = 3,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, lineHeight = 16.sp)
+                    if (meta.isNotBlank()) Text(meta, color = Color.White.copy(alpha = 0.78f), fontSize = 11.sp, maxLines = 1, modifier = Modifier.padding(top = 2.dp))
                 }
             }
-            Label(v.name, size = 12.sp, color = if (focused) C.Text else C.Soft, weight = if (focused) FontWeight.Bold else FontWeight.Normal, lines = 2, modifier = Modifier.padding(top = 4.dp))
-            val meta = listOf(v.year, v.rating.takeIf { it.isNotBlank() && it != "0" }?.let { "★ $it" } ?: "").filter { it.isNotBlank() }.joinToString(" · ")
-            if (meta.isNotBlank()) Label(meta, size = 12.sp)
+            if (vm.inMyList(v.key)) {
+                Text("✓", color = C.OnAccent, fontSize = 12.sp, fontWeight = FontWeight.Bold,
+                    modifier = Modifier.align(Alignment.TopEnd).padding(6.dp).clip(RoundedCornerShape(4.dp)).background(C.Accent).padding(horizontal = 5.dp))
+            }
         }
     }
 }

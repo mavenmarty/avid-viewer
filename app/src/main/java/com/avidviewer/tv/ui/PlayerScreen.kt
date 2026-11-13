@@ -107,7 +107,7 @@ fun PlayerScreen(vm: AppViewModel) {
             Text(
                 it, color = C.Text, fontSize = 14.sp, fontWeight = FontWeight.SemiBold,
                 modifier = Modifier.align(Alignment.TopCenter).padding(top = 20.dp)
-                    .clip(RoundedCornerShape(20.dp)).background(Color(0xF2132A52)).padding(horizontal = 16.dp, vertical = 8.dp),
+                    .clip(RoundedCornerShape(20.dp)).background(Color(0xF237302B)).padding(horizontal = 16.dp, vertical = 8.dp),
             )
         }
 
@@ -132,7 +132,7 @@ private fun VodBar(vm: AppViewModel, modifier: Modifier) {
         }
     }
     fun t(ms: Long): String { val s = ms / 1000; return if (s >= 3600) "%d:%02d:%02d".format(s / 3600, (s / 60) % 60, s % 60) else "%d:%02d".format(s / 60, s % 60) }
-    Column(modifier.fillMaxWidth().background(Color(0xF5071022)).padding(horizontal = 28.dp, vertical = 16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    Column(modifier.fillMaxWidth().background(Color(0xF5201B18)).padding(horizontal = 28.dp, vertical = 16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Label(item.name, size = 20.sp, color = C.Text, weight = FontWeight.Bold)
         Row(verticalAlignment = Alignment.CenterVertically) {
             Label(t(pos), size = 12.sp)
@@ -154,7 +154,7 @@ private fun InfoBar(vm: AppViewModel, modifier: Modifier) {
     val c = vm.channel(vm.currentKey) ?: return
     val (now, next) = vm.nowNext(c)
     Row(
-        modifier.fillMaxWidth().background(Color(0xF5071022)).padding(horizontal = 28.dp, vertical = 16.dp),
+        modifier.fillMaxWidth().background(Color(0xF5201B18)).padding(horizontal = 28.dp, vertical = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(18.dp),
     ) {

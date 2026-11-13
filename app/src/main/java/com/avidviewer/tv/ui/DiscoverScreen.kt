@@ -106,7 +106,7 @@ private fun TitleCard(vm: AppViewModel, t: Title) {
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(8.dp),
         color = Color.Transparent,
-        focusedColor = C.Surface2,
+        focusedColor = C.FocusFill,
         onMenu = { vm.discoverMenu(t) },
         onClick = { vm.openTitle(t) },
     ) { focused ->
@@ -191,7 +191,7 @@ private fun TitleDetail(vm: AppViewModel, t: Title) {
             }
             item(key = "where") {
                 // Highlightable, so Down scrolls it into view after the versions.
-                Focusable(Modifier.fillMaxWidth().testTag("where-to-watch"), color = C.Surface, focusedColor = C.Surface2, onClick = {}) {
+                Focusable(Modifier.fillMaxWidth().testTag("where-to-watch"), color = C.Surface, focusedColor = C.FocusFill, onClick = {}) {
                     Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         Label("Where to watch (${vm.region()})", size = 14.sp, color = C.Text, weight = FontWeight.Bold)
                         when {

@@ -120,7 +120,7 @@ fun NavRail(vm: AppViewModel) {
         if (vm.profiles.multiple) {
             Focusable(
                 modifier = Modifier.fillMaxWidth().height(44.dp).padding(bottom = 4.dp),
-                color = Color.Transparent, focusedColor = C.Line,
+                color = Color.Transparent, focusedColor = C.FocusFill,
                 onClick = { vm.profileSwitcher = true },
             ) {
                 ProfileAvatar(vm.profile, 30.dp, Modifier.padding(start = 6.dp))
@@ -135,7 +135,7 @@ fun NavRail(vm: AppViewModel) {
             Focusable(
                 modifier = Modifier.fillMaxWidth().height(36.dp).focusRequester(requesters[i]).activePath(active),
                 color = if (active) C.Surface2 else Color.Transparent,
-                focusedColor = C.Line,
+                focusedColor = C.FocusFill,
                 onClick = { vm.navSelect(s) },
             ) {
                 Icon(icon, contentDescription = if (expanded) null else label, tint = if (active) C.Accent else C.Soft, modifier = Modifier.padding(start = 10.dp).size(20.dp))

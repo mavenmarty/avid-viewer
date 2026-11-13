@@ -232,7 +232,7 @@ fun TvField(
         Focusable(
             modifier = modifier.fillMaxWidth().height(56.dp).focusRequester(boxFocus),
             color = C.Surface2,
-            focusedColor = C.Line,
+            focusedColor = C.FocusFill,
             onClick = { editing = true },
         ) { focused ->
             Column(Modifier.padding(horizontal = 14.dp)) {

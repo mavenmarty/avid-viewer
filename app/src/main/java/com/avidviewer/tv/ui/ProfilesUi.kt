@@ -75,7 +75,7 @@ fun WhoIsWatching(vm: AppViewModel) {
                 Focusable(
                     modifier = Modifier.width(150.dp).then(if (p.id == vm.profile.id || (i == 0 && vm.profiles.get(vm.profile.id) == null)) Modifier.focusRequester(first) else Modifier),
                     shape = RoundedCornerShape(18.dp),
-                    color = Color.Transparent, focusedColor = C.Surface2,
+                    color = Color.Transparent, focusedColor = C.FocusFill,
                     onClick = { vm.chooseProfile(p.id) },
                 ) {
                     Column(Modifier.fillMaxWidth().padding(vertical = 12.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
