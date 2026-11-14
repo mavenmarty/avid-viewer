@@ -86,7 +86,7 @@ fun VodScreen(vm: AppViewModel, kind: String) {
     val cats = vm.vodCategories(kind)
     val vq = (vm.vodQuery[kind] ?: "").trim()
     // Near matches (a typo, a word left out) when few titles hold every word; looked up after a short pause.
-    LaunchedEffect(kind, vq) { if (vq.length >= 2) { kotlinx.coroutines.delay(300); vm.loadVodNear(kind, vq) } }
+    LaunchedEffect(kind, vq, vm.vodVersion) { if (vq.length >= 2) { kotlinx.coroutines.delay(300); vm.loadVodNear(kind, vq) } }
     val items = if (vq.isNotBlank()) vm.vodSearch(kind, vq) else vm.vodItems(kind)
 
     val catState = androidx.compose.foundation.lazy.rememberLazyListState()

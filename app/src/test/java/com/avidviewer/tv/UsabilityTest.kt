@@ -1316,8 +1316,11 @@ class UsabilityTest {
         val movies = vm.searchResults!!.flatMap { it.movies }.map { it.title }
         assertTrue(movies.toString(), movies.isNotEmpty() && movies.first().startsWith("Action Movie 1"))
         // The Movies search box finds near matches too.
-        kotlinx.coroutines.runBlocking { vm.loadVodNear("movie", "drma movie 1") }
-        assertTrue(rule.runOnIdle { vm.vodSearch("movie", "drma movie 1").any { it.name == "Drama Movie 1" } })
+        // (Titles are regrouped in the background after start-up, which renews the catalog version: ask again until settled.)
+        waitFor("near match in the Movies search box") {
+            kotlinx.coroutines.runBlocking { vm.loadVodNear("movie", "drma movie 1") }
+            rule.runOnIdle { vm.vodSearch("movie", "drma movie 1").any { it.name == "Drama Movie 1" } }
+        }
     }
 
     /** Nov 12: on a Discover title page, the remote couldn't reach the versions below the description. */
