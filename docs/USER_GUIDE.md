@@ -258,7 +258,7 @@ Sports lists real games from **ESPN's schedules** for today and the next 2 days,
 
     ![Movies in the Showcase layout](images/movies-showcase.jpg)
 
-- **Each title is listed once.** When your playlists have the same title several times (other languages, qualities such as 4K or HD, or other playlists), it appears once, shown by its English copy (else one with no language marked). This applies to All, Recently added, every category and the search.
+- **Each title is listed once.** When your playlists have the same title several times (other languages, qualities such as 4K or HD, provider tags such as "NF -" in front of the name, or other playlists), it appears once, shown by its English copy (else one with no language marked). This applies to All, Recently added, every category and the search.
 - **🔍 Search movies / 🔍 Search series** is in the category list, below My List. Results replace the poster grid; **✕ Clear search** ends the search.
 - **OK on a poster** opens its page: plot, cast, director, **▶ Play**, or **▶ Resume from [time]** and **Start over**, plus **+ My List**.
 - **⇄ N versions** (on a title with several copies) lists each copy with its language, name, category and playlist; ✓ marks the one shown, and the line **This version: …** under the buttons says which one you're on. **OK** on another copy shows that one, with its own episodes, resume point and My List button. The language comes from codes on the name or category ("EN |", "FR -", "VF", "MULTI"…); copies without one show "Language not marked". Series pages list episodes by **Season**, with resume points; episodes you've played to the end say **✓ Watched**. **A series page opens on the next episode to watch**, with its season chosen: Season 1, Episode 1 for a series you haven't started, otherwise the episode after the last one you finished (or the one you stopped part-way through). The page scrolls as one: **Up** from the episode goes to the season buttons, then the title's buttons; from the buttons, **Down** goes to the season buttons, then through every episode, however long the description. After you watch an episode and press **Back**, that episode is highlighted.
@@ -293,7 +293,7 @@ Settings has sections on the left and the open section's options on the right. *
 
 - **Download from these sources every 4 / 8 / 12 / 24 h**: the same setting as in Settings › TV guide; it applies to every playlist.
 - **Provider's guide** (on/off): the guide that comes with an Xtream login, or the M3U file's own guide link.
-- **＋ Add guide source**: a name, an XMLTV address (`.xml` or `.xml.gz`) and a **time offset** (−12 to +12 hours) for a guide that's consistently early or late.
+- **＋ Add guide source**: a name, an XMLTV address (`.xml` or `.xml.gz`) and a **time offset** (−12 to +12 hours) for a guide that's consistently early or late. The highlight goes to the form's Name field, and back to the button after **Save** or **Cancel**. While you're in Guide sources, the playlist list steps aside; **Left** brings it back.
 - Each source has **Turn off / Turn on**, **✎ Edit**, **▲ ▼** to change the order, and **✕ Delete** (asks first). Each one shows when it last downloaded and how many channels it covered, or why it failed.
 - **Order matters:** sources are read top to bottom, and for each channel the first source with listings is used.
 - **Download now** gets this playlist's guide again.
@@ -589,9 +589,15 @@ Every public release since 1.0.35, newest first. From 1.1.0, versions are number
 
 ### 1.5.1 — November 14, 2026, 8:23 AM CT (current)
 
+**Release notes**
+
+- **Recently added lists each movie once** (#14). A title with more than one provider tag in front of its name ("NF - Allen", "4K-NF - Allen") counted as a different title from "Allen", so it could appear two or three times. Movies already on the TV are put right a few seconds after the update starts; nothing needs downloading again.
+- **Adding a guide source works with the remote** (#15). **Add guide source** and **Edit** now put the highlight in the form (it used to jump to the top left of the screen), and it returns to the button after Save or Cancel. While you're in the form or Guide sources, the playlist list steps aside so there's room.
+
 **Change log**
 
-- Recently added lists each title once; adding a guide source keeps the highlight (#14, #15)
+- Titles compared without any of their leading provider tags; saved catalogs re-checked once in the background (#14)
+- Guide sources: the form takes the highlight and gives it back; the playlist list hides while the right side has the highlight (#15)
 
 ### 1.5.0 — November 13, 2026, 7:25 PM CT
 
