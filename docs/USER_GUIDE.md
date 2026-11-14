@@ -107,7 +107,7 @@ The TV Guide is the home screen for live TV. Next to the main menu it has:
 
 ### Search in the guide
 
-Highlight **🔍 Search** in the category list (just below ＋ New list) and press OK to type. Results appear as you type (after a short pause) and replace the guide. Part of a word is enough ("farg" finds Fargo), and words can come in any order. Results: **Channels** (with what's on now, and **▶ Preview** / **▶ Full screen**) and **Programs** on now or later (**▶ Tune in** / **▶ Channel**). Search covers every playlist; choosing a result from another playlist moves the guide there. **✕ Clear search**, just below, brings the guide back.
+Highlight **🔍 Search** in the category list (just below ＋ New list) and press OK to type. Results appear as you type (after a short pause) and replace the guide. Part of a word is enough ("farg" finds Fargo), and words can come in any order; near matches (a small typo) follow the exact ones, as in [Search](#5-search). Results: **Channels** (with what's on now, and **▶ Preview** / **▶ Full screen**) and **Programs** on now or later (**▶ Tune in** / **▶ Channel**). Search covers every playlist; choosing a result from another playlist moves the guide there. **✕ Clear search**, just below, brings the guide back.
 
 ### Channel options (Menu or hold OK on a channel)
 
@@ -148,7 +148,8 @@ While you're moving it, the item has a blue outline. A category shows its positi
 - **★ Favorites** gathers channels from every playlist in one place and is always shown. Favorites, lists, renames, hidden channels and guide matches stay on the right channels when your provider adds, removes or reorders channels, and after restoring a backup.
 - **Your lists** (for example "Kids" or "News") can also hold channels from any playlist. Make one with **＋ New list** or from Add to List.
 - Press **Menu on a list** to **Rename**, **Move up / Move down** or **Delete** it. Deleting asks you to confirm; the channels stay in your playlists.
-- **Suggested near [your town]**: at the top of Favorites, the app suggests channels from your playlists that look local to your postal code. Press **＋ Add to List** to keep one, or **Hide suggestions**. Dismissed channels aren't suggested again unless you restore them in Settings.
+- **Suggested near [your town]**: at the top of Favorites, the app suggests channels from your playlists that look local to your postal code. Press **＋ Add to List** to keep one; the highlight moves on to the next suggestion. **Hide suggestions** is at the right of the heading: press **▲** from a suggestion to reach it. Dismissed channels aren't suggested again unless you restore them in Settings.
+- **Removing a channel** from Favorites or a list (Menu › Remove, the Add to List picker, or hiding it) keeps the highlight on the channel that takes its place.
 
 ## 4. Full-screen playback
 
@@ -199,7 +200,9 @@ Audio tracks and captions only appear when the stream carries them, so they vary
 The **Search** screen searches **every playlist** at once: TV stations, programs in the TV guide (now and upcoming), movies and series.
 
 - **Results appear as you type**, after a short pause. Pressing **Search** works too.
-- **Forgiving matching:** part of a word is enough ("farg" finds Fargo), every word you type must appear but in any order ("news fargo" finds "KVLY Fargo News HD"), and punctuation doesn't matter ("spider man" finds "Spider-Man: No Way Home").
+- **Forgiving matching:** part of a word is enough ("farg" finds Fargo), words can come in any order ("news fargo" finds "KVLY Fargo News HD"), and punctuation doesn't matter ("spider man" finds "Spider-Man: No Way Home").
+- **Near matches:** a small typo still finds the name ("the ofice" finds The Office, "breking bad" finds Breaking Bad, "godfathr" finds The Godfather), and from a search of three or more words one may be missing ("the office us" finds The Office). A short word such as "tv" may be missing too. Numbers must match ("abc 6" doesn't offer ABC 3).
+- **Best matches first:** names that start with what you typed, then names holding every word, then near matches.
 - **"Nothing found for …"** names what was searched; try fewer letters or another word.
 
 Results are grouped by playlist and by kind, each with an action:
@@ -271,7 +274,7 @@ Sports lists real games from **ESPN's schedules** for today and the next 2 days,
     ![Movies in the Showcase layout](images/movies-showcase.jpg)
 
 - **Each title is listed once.** When your playlists have the same title several times (other languages, qualities such as 4K or HD, provider tags such as "NF -" in front of the name, or other playlists), it appears once, shown by its English copy (else one with no language marked). This applies to All, Recently added, every category and the search.
-- **🔍 Search movies / 🔍 Search series** is in the category list, below My List. Results replace the poster grid; **✕ Clear search** ends the search.
+- **🔍 Search movies / 🔍 Search series** is in the category list, below My List. Results replace the poster grid; **✕ Clear search** ends the search. When fewer than 30 titles hold every word you typed, near matches (a small typo, or a word left out) are added after them.
 - **OK on a poster** opens its page: plot, cast, director, **▶ Play**, or **▶ Resume from [time]** and **Start over**, plus **+ My List**.
 - **⇄ N versions** (on a title with several copies) lists each copy with its language, name, category and playlist; ✓ marks the one shown, and the line **This version: …** under the buttons says which one you're on. **OK** on another copy shows that one, with its own episodes, resume point and My List button. The language comes from codes on the name or category ("EN |", "FR -", "VF", "MULTI"…); copies without one show "Language not marked". Series pages list episodes by **Season**, with resume points; episodes you've played to the end say **✓ Watched**. **A series page opens on the next episode to watch**, with its season chosen: Season 1, Episode 1 for a series you haven't started, otherwise the episode after the last one you finished (or the one you stopped part-way through). The page scrolls as one: **Up** from the episode goes to the season buttons, then the title's buttons; from the buttons, **Down** goes to the season buttons, then through every episode, however long the description. After you watch an episode and press **Back**, that episode is highlighted.
 - **Each category (and each search) keeps its own place.**
@@ -542,6 +545,8 @@ The next time it starts, the app says **Avid Viewer closed unexpectedly**:
 - If it can't be sent (no connection, for example), the message says so and the details stay in **Settings › Updates & about › Last crash**, where **Report issue** can try again.
 - **Cancel** closes the message. Nothing is sent, and the details stay in Last crash.
 
+**If the app vanished to the Fire TV home screen.** Sometimes the TV closes the app itself, usually to free memory, and the app gets no chance to save anything. From 1.7.0 the app notices at its next start and shows the same message, so **Report issue** covers this too. The report says the app **closed while in use**, with the last few steps (screen names such as "Screen: search", or "Search: 2 words"; never what you searched or watched) and the memory in use. On Fire OS 8 and later it also includes the reason the TV gives (low memory, not responding, or a crash in the video code). Leaving the app with Home or Back is never reported, nor is force-stopping it in the TV's settings.
+
 ### Backup questions
 
 **After reinstalling on a newer Fire TV, the app can't see my backup.** On Fire OS 8 (Android 11), a reinstalled app may not be allowed to see a backup the old install saved, and some Fire TVs have no file picker. The app suggests installing a free file manager such as **X-plore**, which lets you pick the file. Backing up to a network share avoids the problem altogether.
@@ -703,12 +708,20 @@ Every public release since 1.0.35, newest first. From 1.1.0, versions are number
 
 ### 1.7.0 — November 14, 2026, 3:05 PM CT (current)
 
+**Release notes**
+
+- **Search no longer closes the app on a two-word search** (#16). On a Fire TV with 1 GB of memory, typing a search such as "the office" in the main menu's Search could send you to the Fire TV home screen: the first word alone matched much of the TV guide, and each pause in typing started another search while the last one kept going. A newer search now stops the older one, and only the best matches are kept.
+- **Near matches in search.** A small typo or a missing word still finds what you mean, after the exact matches: in the main Search, the TV guide's search, and the Movies and Series search. See [Search](#5-search).
+- **Hard closes are reported.** If the TV closes the app while you're using it, the next start says so and **Report issue** sends what happened. See [If the app closes unexpectedly](#if-the-app-closes-unexpectedly).
+- **Favorites and lists keep your place.** Hide suggestions can be reached with the remote (#17); adding a suggested channel moves the highlight to the next suggestion (#18); removing a channel from a list highlights the one that takes its place instead of jumping to the top left (#19).
+
 **Change log**
 
-- Favorites suggestions and list removals keep the highlight (#17, #18, #19)
-- Main Search no longer crashes on two-word searches; near matches for typos and left-out words
-- Report hard closes (sent to the Fire TV home screen) at the next launch
-- Movies near-match check waits for the background regroup; the search box asks again when the catalog changes
+- Search: a newer search stops the one before; at most 60 programs and 50 channels a playlist are kept while searching, by rank then time; each repeated program title is checked once (#16)
+- Ranked, forgiving matching: as typed, every word at a word start, every word anywhere, then near (one slip a word, two for 8+ letters; one word left out of 3+, or a 1–2 letter word; numbers exact); main Search, TV guide search, Movies / Series search (when fewer than 30 exact titles)
+- Closes while on screen (no app error) become a crash report at the next start: last steps, memory, Android's reason on Fire OS 8+; 256 KB set aside so an out-of-memory error can still be written
+- Favorites: ▲ from a suggestion reaches Hide suggestions; after adding or ✕ the highlight goes to the next suggestion; removing a channel highlights its neighbour (#17, #18, #19)
+- Tests: near matches and ranking; two-word search stays bounded; hard close reported at the next launch
 
 ### 1.6.0 — November 14, 2026, 12:13 PM CT
 
