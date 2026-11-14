@@ -130,7 +130,9 @@ object Tmdb {
     }
 
     /** Strips provider decorations like "EN - ", "[4K]", "(2024)" so names can be compared. */
-    private val PREFIX = Regex("^\\s*[A-Z]{2,3}\\s*[-:|]\\s*")
+    // Provider tags before the title, one or several: "EN | ", "NF - ", "4K-NF - ", "EN| AMZN: " (#14: a second tag
+    // such as NF made "NF - Allen" a different title from "Allen", so Recently added showed both).
+    private val PREFIX = Regex("^(?:\\s*(?:[A-Z]{2,3}\\+?|[48]K|UHD|FHD|HDR|DSNP|AMZN|HMAX|ATVP|PCOK)\\s*[-:|]\\s*)+")
     private val BRACKETS = Regex("\\[[^]]*]|\\([^)]*\\)")
     private val QUALITY = Regex("(?i)\\b(4k|uhd|fhd|hd|sd|hevc|multi|sub|dub)\\b")
     private val SPACES = Regex("\\s+")

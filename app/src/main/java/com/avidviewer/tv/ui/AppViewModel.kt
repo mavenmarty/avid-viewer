@@ -806,6 +806,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             // Which copy stands for each title, worked out in the background (not while a list is read).
             delay(3_000)
+            // #14 (1.5.1): titles saved with the older name rules get them again once, so "NF - Allen" and
+            // "Allen" count as one title.
+            val marker = java.io.File(getApplication<android.app.Application>().filesDir, "catalog-names-2")
+            if (!marker.exists()) withContext(Dispatchers.IO) { runCatching { catalog.renormalize(); marker.writeText("1") } }
             regroupLater(0)
             delay(5_000)
             val n = withContext(Dispatchers.IO) { runCatching { if (catalog.needsLanguages()) catalog.fillLanguages() else 0 }.getOrDefault(0) }

@@ -333,8 +333,10 @@ fun PlaylistsScreen(vm: AppViewModel) {
     Row(Modifier.fillMaxSize().padding(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 12.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
         // 1. The list. SET-03, one rule for every settings page: at most three full columns. Settings' own section
         // list already shrinks to icons; with the highlight in the form (the 3rd column) this list narrows too.
-        val listW by androidx.compose.animation.core.animateDpAsState(if (formFocused) 140.dp else 220.dp, label = "playlistList")
-        LazyColumn(Modifier.width(listW).fillMaxHeight().staysInSection().dimWhenInactive(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        // #15: with the highlight in the form or Guide sources, the list steps aside altogether (the actions column
+        // still names the playlist), so the right side has room; Left brings it back.
+        val listW by androidx.compose.animation.core.animateDpAsState(if (formFocused && selP != null) 0.dp else if (formFocused) 140.dp else 220.dp, label = "playlistList")
+        if (listW > 1.dp) LazyColumn(Modifier.width(listW).fillMaxHeight().staysInSection().dimWhenInactive(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             item { Text("Playlists", color = C.Text, fontSize = 22.sp, fontWeight = FontWeight.Bold) }
             if (!formFocused) item { Label("Up/Down to choose · Right for options", size = 12.sp, modifier = Modifier.padding(bottom = 4.dp)) }
             item(key = "add") {

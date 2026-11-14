@@ -86,6 +86,17 @@ fun LazyListScope.guideSettings(vm: AppViewModel, confirm: (title: String, messa
 fun GuideSourcesPane(vm: AppViewModel, pl: Playlist, confirm: (title: String, message: String, yes: String, run: () -> Unit) -> Unit) {
     var editing by remember(pl.id) { mutableStateOf<String?>(null) } // source id, or "new"
     val st = vm.guideSourceStatus
+    // #15: the button pressed (Add guide source, Edit) gives way to the form, so the highlight would be lost and
+    // land at the top left of the screen. It goes to the form's first field, and back to the button after.
+    val addFocus = remember { FocusRequester() }
+    val editFocus = remember(pl.id) { mutableMapOf<String, FocusRequester>() }
+    var returnTo by remember(pl.id) { mutableStateOf<String?>(null) }
+    fun close() { returnTo = editing; editing = null }
+    LaunchedEffect(returnTo) {
+        val r = returnTo ?: return@LaunchedEffect
+        focusWhenReady(vm) { runCatching { (if (r == "new") addFocus else editFocus[r] ?: addFocus).requestFocus() }.isSuccess }
+        returnTo = null
+    }
     LazyColumn(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         item {
             Column {
@@ -115,7 +126,7 @@ fun GuideSourcesPane(vm: AppViewModel, pl: Playlist, confirm: (title: String, me
             }
         }
         items(pl.epgSources, key = { it.id }) { s ->
-            if (editing == s.id) SourceForm(s, onCancel = { editing = null }) { name, url, off -> vm.updateEpgSource(pl.id, s.id, name, url, off); editing = null }
+            if (editing == s.id) SourceForm(vm, s, onCancel = { close() }) { name, url, off -> vm.updateEpgSource(pl.id, s.id, name, url, off); close() }
             else Column(
                 Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(C.Bg).padding(10.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp),
@@ -125,7 +136,7 @@ fun GuideSourcesPane(vm: AppViewModel, pl: Playlist, confirm: (title: String, me
                 Label(listOfNotNull(if (s.offsetHours != 0) "Time offset ${offsetLabel(s.offsetHours)}" else null, st[pl.id + "|" + s.id]?.takeIf { s.enabled }).joinToString(" · ").ifBlank { "Not downloaded yet." }, size = 12.sp, lines = Int.MAX_VALUE)
                 androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     TvButton(if (s.enabled) "Turn off" else "Turn on") { vm.setEpgSourceEnabled(pl.id, s.id, !s.enabled) }
-                    TvButton("✎  Edit", modifier = Modifier.testTag("guide-src-edit")) { editing = s.id }
+                    TvButton("✎  Edit", modifier = Modifier.testTag("guide-src-edit").focusRequester(editFocus.getOrPut(s.id) { FocusRequester() })) { editing = s.id }
                     if (pl.epgSources.first() != s) TvButton("▲") { vm.moveEpgSource(pl.id, s.id, -1) }
                     if (pl.epgSources.last() != s) TvButton("▼") { vm.moveEpgSource(pl.id, s.id, 1) }
                     TvButton("✕  Delete", modifier = Modifier.testTag("guide-src-delete")) {
@@ -135,9 +146,9 @@ fun GuideSourcesPane(vm: AppViewModel, pl: Playlist, confirm: (title: String, me
             }
         }
         item {
-            if (editing == "new") SourceForm(null, onCancel = { editing = null }) { name, url, off -> vm.addEpgSource(pl.id, name, url, off); editing = null }
+            if (editing == "new") SourceForm(vm, null, onCancel = { close() }) { name, url, off -> vm.addEpgSource(pl.id, name, url, off); close() }
             else Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                TvButton("＋  Add guide source", primary = true, modifier = Modifier.testTag("guide-src-add")) { editing = "new" }
+                TvButton("＋  Add guide source", primary = true, modifier = Modifier.testTag("guide-src-add").focusRequester(addFocus)) { editing = "new" }
                 TvButton(if (vm.guideBusy == pl.id) "Downloading…" else "↻  Download now", busy = vm.guideBusy == pl.id) { if (vm.guideBusy == null) vm.refreshGuideNow(pl.id) }
             }
         }
@@ -150,7 +161,9 @@ fun GuideSourcesPane(vm: AppViewModel, pl: Playlist, confirm: (title: String, me
 private fun offsetLabel(h: Int) = if (h > 0) "+$h h" else "$h h"
 
 @Composable
-private fun SourceForm(src: EpgSource?, onCancel: () -> Unit, onSave: (name: String, url: String, offset: Int) -> Unit) {
+private fun SourceForm(vm: AppViewModel, src: EpgSource?, onCancel: () -> Unit, onSave: (name: String, url: String, offset: Int) -> Unit) {
+    val first = remember { FocusRequester() }
+    LaunchedEffect(src?.id) { focusWhenReady(vm) { runCatching { first.requestFocus() }.isSuccess } }
     var name by remember(src?.id) { mutableStateOf(src?.name ?: "") }
     var url by remember(src?.id) { mutableStateOf(src?.url ?: "") }
     var offset by remember(src?.id) { mutableStateOf(src?.offsetHours ?: 0) }
@@ -161,7 +174,7 @@ private fun SourceForm(src: EpgSource?, onCancel: () -> Unit, onSave: (name: Str
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Label(if (src == null) "New guide source" else "Edit guide source", size = 14.sp, color = C.Text, weight = FontWeight.Bold)
-        TvField("Name (e.g. EPG Share US)", name, modifier = Modifier.testTag("guide-src-name")) { name = it }
+        TvField("Name (e.g. EPG Share US)", name, modifier = Modifier.testTag("guide-src-name").focusRequester(first)) { name = it }
         TvField("XMLTV address (http… .xml or .xml.gz)", url, modifier = Modifier.testTag("guide-src-url")) { url = it; problem = null }
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             Label("Time offset", size = 13.sp, color = C.Text, modifier = Modifier.width(90.dp))
