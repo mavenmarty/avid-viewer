@@ -67,6 +67,8 @@ fun AppRoot(vm: AppViewModel) {
         }
         if (vm.choosingProfile) {
             WhoIsWatching(vm)
+        } else if (vm.showWelcome) {
+            WelcomeScreen(vm)
         } else if (vm.screen == Screen.PLAYER) {
             PlayerScreen(vm)
         } else {

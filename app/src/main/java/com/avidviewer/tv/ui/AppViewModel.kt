@@ -511,6 +511,22 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         sendPlaybackLog(auto = true)
     }
 
+    /**
+     * The welcome screen (1.6.0): shown at start while the app has no playlists. It has the user guide's QR code,
+     * Add a playlist (Settings › Playlists, on the add form) and Restore a backup (Settings › Updates & about).
+     */
+    var showWelcome by mutableStateOf(false)
+
+    fun welcomeAddPlaylist() {
+        showWelcome = false
+        screen = Screen.SETTINGS; settingsSection = "playlists"; navMode = NavMode.COLLAPSED
+    }
+
+    fun welcomeRestore() {
+        showWelcome = false
+        screen = Screen.SETTINGS; settingsSection = "about"; navMode = NavMode.COLLAPSED
+    }
+
     private var osdJob: Job? = null
     private var watchStart = 0L
     private var watchKey: String? = null
@@ -884,6 +900,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
         if (prefs.autoUpdateCheck) checkForUpdate(quiet = true)
         if (activePlaylist() == null) { screen = Screen.SETTINGS; settingsSection = "playlists"; navMode = NavMode.COLLAPSED }
+        // First time (1.6.0): with no playlists at all, a welcome screen comes first.
+        if (playlists.isEmpty()) showWelcome = true
         activePlaylist()?.let { loadActive(refresh = false) }
     }
 

@@ -37,6 +37,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
+import org.junit.Assert.assertFalse
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -1561,5 +1562,21 @@ class UsabilityTest {
             )
         }
         settle()
+    }
+
+    /** 1.6.0: a new install (no playlists) opens on the welcome screen; Add a playlist goes to the add form. */
+    @Test
+    fun welcomeScreenOnANewInstall() {
+        rule.runOnIdle { vm.showWelcome = true }
+        waitFor("welcome shown") { rule.onAllNodesWithTag("welcome").fetchSemanticsNodes().isNotEmpty() }
+        assertTrue(rule.onAllNodesWithTag("welcome-guide-qr").fetchSemanticsNodes().isNotEmpty())
+        waitFor("Add a playlist highlighted (focus: ${focused()})") { focused().contains("Add a playlist") }
+        press(listOf(Key.DirectionCenter))
+        waitFor("Settings › Playlists") { !vm.showWelcome && vm.screen == Screen.SETTINGS && vm.settingsSection == "playlists" }
+        // A TV with no playlists at all starts on it; one with playlists doesn't.
+        val app = ApplicationProvider.getApplicationContext<Application>()
+        assertFalse(AppViewModel(app).showWelcome)
+        app.filesDir.listFiles()?.forEach { it.deleteRecursively() }
+        assertTrue(AppViewModel(app).showWelcome)
     }
 }

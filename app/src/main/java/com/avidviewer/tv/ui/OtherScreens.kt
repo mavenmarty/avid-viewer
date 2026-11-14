@@ -956,7 +956,7 @@ private fun androidx.compose.foundation.layout.RowScope.LinkQr(title: String, no
 
 /** A QR code drawn from its modules (white background so phones can read it on a dark screen). */
 @Composable
-private fun QrCode(text: String, modifier: Modifier = Modifier) {
+internal fun QrCode(text: String, modifier: Modifier = Modifier) {
     val matrix = remember(text) {
         runCatching {
             com.google.zxing.qrcode.QRCodeWriter().encode(text, com.google.zxing.BarcodeFormat.QR_CODE, 0, 0,
