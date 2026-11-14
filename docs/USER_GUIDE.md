@@ -2,7 +2,7 @@
 
 <!-- The version below and the Release notes section are updated automatically after each published build
      (.github/workflows/user-guide.yml). Feature descriptions are written by hand. -->
-This guide covers **Avid Viewer 1.4.0**, the current public release. Avid Viewer is an IPTV player for Android TV and Fire TV. You bring your own provider (an Xtream Codes login or an M3U link); the app doesn't include any channels.
+This guide covers **Avid Viewer 1.5.0**, the current public release. Avid Viewer is an IPTV player for Android TV and Fire TV. You bring your own provider (an Xtream Codes login or an M3U link); the app doesn't include any channels.
 
 **Contents:** [Getting started](#1-getting-started) · [Main menu](#2-main-menu) · [TV Guide](#3-tv-guide) · [Full-screen playback](#4-full-screen-playback) · [Search](#5-search) · [Discover](#6-discover) · [Sports](#7-sports) · [Movies and Series](#8-movies-and-series) · [Settings](#9-settings) ([Profiles](#profiles)) · [Privacy](#10-privacy) · [Troubleshooting](#11-troubleshooting) · [Control4](#12-control4) · [Release notes](#release-notes)
 
@@ -567,7 +567,15 @@ Every public release since 1.0.35, newest first. From 1.1.0, versions are number
 
 <!-- new-releases: entries for new builds are added automatically below this line -->
 
-### 1.4.0 — November 13, 2026, 2:38 PM CT (current)
+### 1.5.0 — November 13, 2026, 7:25 PM CT (current)
+
+**Change log**
+
+- Docs: user guide for 1.4.0 (release notes; themes, poster layouts; screenshots; PDF shows images)
+- Playback log and Stream info, to explain freezes
+- Screenshots of every user guide section; Playback log block below App updates
+
+### 1.4.0 — November 13, 2026, 2:38 PM CT
 
 **Release notes**
 
