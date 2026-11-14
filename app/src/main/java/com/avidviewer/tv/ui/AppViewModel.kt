@@ -2179,8 +2179,38 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun toggleInList(group: String, key: String) {
         if (group == FAV_GROUP) return toggleFavorite(key)
         viewModelScope.launch { ensureFavoriteData() }
-        updatePrefs { p -> p.copy(lists = p.lists.map { if (LIST_PREFIX + it.id == group) it.copy(keys = if (key in it.keys) it.keys - key else it.keys + key) else it }) }
+        leavingGuide(key, group) {
+            updatePrefs { p -> p.copy(lists = p.lists.map { if (LIST_PREFIX + it.id == group) it.copy(keys = if (key in it.keys) it.keys - key else it.keys + key) else it }) }
+        }
     }
+
+    /**
+     * #19: [change] may take [key] out of the TV Guide category on screen ([group]: removed from this list, or
+     * hidden). The row that had the highlight is then gone and the highlight went to the top-left of the
+     * screen; instead it goes to the channel that took its place (the next one, or the one before when it was
+     * the last), or to the category in the category list when the list is now empty.
+     */
+    private fun leavingGuide(key: String, group: String?, change: () -> Unit) {
+        val shown = screen == Screen.GUIDE && group != null && group == selectedGroup && guideQuery.isBlank() &&
+            channelsIn(group).any { it.key == key }
+        change()
+        if (shown && channelsIn(group).none { it.key == key }) focusGuideList()
+    }
+
+    /** Puts the highlight back on the guide's channels where it was (or its neighbour), or on the category when it's empty. */
+    fun focusGuideList() {
+        val g = selectedGroup ?: return
+        if (channelsIn(g).isEmpty()) navFocusKey = g
+        else { guideFocusMode = GuideFocus.KEEP; guideFocusTick++ }
+    }
+
+    /**
+     * #18: a local suggestion whose ＋ Add to List (or ✕) was pressed, and the suggestion next to it: once the
+     * picker closes, the highlight goes back to it if it's still suggested, else to that neighbour.
+     */
+    var suggestionReturn by mutableStateOf<Pair<String, String?>?>(null)
+    /** Whether the highlight is in the Favorites suggestions row (the guide doesn't take it away on its own). */
+    var suggestionsFocused = false
 
     /** Makes a new list, optionally starting with one channel. Returns its group id. */
     fun createList(name: String, firstKey: String? = null): String {
@@ -2225,13 +2255,13 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         updatePrefs { p -> p.copy(lists = p.lists.map { if (it.id == lst.id) it.copy(keys = l) else it }) }
     }
 
-    fun hideChannel(key: String) = updatePrefs { it.copy(hiddenChannels = it.hiddenChannels + key) }
+    fun hideChannel(key: String) = leavingGuide(key, selectedGroup) { updatePrefs { it.copy(hiddenChannels = it.hiddenChannels + key) } }
     fun showChannel(key: String) = updatePrefs { it.copy(hiddenChannels = it.hiddenChannels - key) }
 
     fun toggleFavorite(key: String?) {
         key ?: return
         viewModelScope.launch { ensureFavoriteData() }
-        updatePrefs { it.copy(favorites = if (key in it.favorites) it.favorites - key else it.favorites + key) }
+        leavingGuide(key, FAV_GROUP) { updatePrefs { it.copy(favorites = if (key in it.favorites) it.favorites - key else it.favorites + key) } }
     }
 
     fun favoriteChannels(): List<Channel> = prefs.favorites.mapNotNull { channel(it) }
