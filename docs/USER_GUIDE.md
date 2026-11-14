@@ -22,6 +22,18 @@ This guide covers **Avid Viewer 1.6.0**, the current public release. Avid Viewer
 2. Open the file and install it. You may need to allow installs from unknown sources for your browser or file manager.
 3. Every version is signed with the same key, so a new version installs over the old one and keeps your playlists, favorites and settings.
 
+### First start: the welcome screen
+
+![The welcome screen on a new install](images/welcome.jpg)
+
+The first time you open Avid Viewer, and every time it starts while there are no playlists, it shows a welcome screen:
+
+- **＋ Add a playlist** (highlighted): opens **Settings › Playlists** on the add form. See below.
+- **Restore a backup**: opens **Settings › Updates & about**, for moving from another TV. See [Backup & restore](#backup--restore).
+- **User guide**: scan the QR code with your phone's camera to open this guide.
+
+Once a playlist has been added, the app opens on the TV Guide instead.
+
 ### Add your first playlist
 
 ![Settings › Playlists](images/settings-playlists.jpg)
@@ -691,9 +703,14 @@ Every public release since 1.0.35, newest first. From 1.1.0, versions are number
 
 ### 1.6.0 — November 14, 2026, 12:13 PM CT (current)
 
+**Release notes**
+
+- **A welcome screen for new installs.** With no playlists yet, Avid Viewer opens on a welcome screen: a short explanation, **Add a playlist** (highlighted), **Restore a backup**, and the user guide as a QR code to scan with your phone. See [Getting started](#first-start-the-welcome-screen).
+
 **Change log**
 
-- Welcome screen on a new install, with the user guide QR code and Add a playlist
+- Welcome screen at start while there are no playlists: Add a playlist opens the add form; Restore a backup opens Settings › Updates & about; QR code of the user guide
+- Test: a new install opens on the welcome screen and Add a playlist reaches the add form; a TV with playlists skips it
 
 ### 1.5.2 — November 14, 2026, 9:48 AM CT
 
