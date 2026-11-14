@@ -21,7 +21,7 @@ Everything else is automatic.
 
 ## What reporters receive
 
-All emails are replies in the reporter's own email thread, signed "The Avid Viewer team".
+All emails are replies in the reporter's own email thread, sent from **bugs@avidviewer.app** ("Avid Viewer Support") and signed "The Avid Viewer team". Replies come back to bugs@.
 
 - **Acknowledgment** (within the hour): "We've received it", one line per report, and what extra details help.
 - **Status updates**, one email per thread whenever something changes: Under review · Being worked on · We need a bit more information · Fixed, coming in the next update · **Fixed in Avid Viewer X** (or "Done in" for requests) · Closed · Reopened · Same as an earlier report. Released fixes also give the current version and how to update (Settings › Updates & about › Check now).
