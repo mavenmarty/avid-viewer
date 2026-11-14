@@ -729,7 +729,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** Details of the last crash, if the app closed unexpectedly (shown once at start and in Settings › About). */
-    var lastCrash by mutableStateOf(com.avidviewer.tv.data.CrashLog.read(app)); private set
+    // Closed while on screen last time with nothing caught (the TV freed memory, a native crash): that counts too.
+    var lastCrash by mutableStateOf(com.avidviewer.tv.data.CrashLog.run { adoptUncleanExit(app); read(app) }); private set
     var crashNoticeSeen by mutableStateOf(false)
 
     fun clearCrash() { com.avidviewer.tv.data.CrashLog.clear(getApplication()); lastCrash = null }
@@ -814,6 +815,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     init {
         if (prefs.clearCacheOnExit) store.clearCache() // catches exits Android didn't report
+        // Memory in use, every 30 s while on screen, so a hard close shows what it was just before (CrashLog).
+        if (android.os.Build.FINGERPRINT != "robolectric") viewModelScope.launch {
+            while (true) { delay(30_000); com.avidviewer.tv.data.CrashLog.tick(getApplication()) }
+        }
         // The catalog's hidden marks belong to one profile: put this profile's in place if another's are there,
         // or (a Kids profile) its categories may have changed.
         if (store.catalogProfile != profile.id || kidsMode) applyProfileVodLimits()
@@ -1799,6 +1804,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         if (q.isEmpty()) { guideSearchHits = GuideHits(); return }
         guideSearchJob = viewModelScope.launch {
             delay(150) // typing: wait for a pause
+            com.avidviewer.tv.data.CrashLog.note(getApplication(), "TV Guide search: ${com.avidviewer.tv.data.SearchText.words(q).size} word(s)")
             val nowMs = System.currentTimeMillis()
             val sq = com.avidviewer.tv.data.SearchText.prepare(q)
             val hidden = prefs.hiddenChannels
@@ -2891,6 +2897,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         if (q.length < 2) { searchJob?.cancel(); searchResults = null; searchedFor = ""; searching = false; return }
         if (q == searchedFor && searchResults != null && searchJob?.isActive != true) return
         searchJob?.cancel()
+        // Not what was searched: only its shape, in case the app is closed (CrashLog).
+        com.avidviewer.tv.data.CrashLog.note(getApplication(), "Search: ${com.avidviewer.tv.data.SearchText.words(q).size} word(s), ${q.length} letters")
         searchJob = viewModelScope.launch {
             searching = true
             val sq = com.avidviewer.tv.data.SearchText.prepare(q)
