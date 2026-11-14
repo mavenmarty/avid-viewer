@@ -784,7 +784,7 @@ fun SettingsScreen(vm: AppViewModel) {
                             item(key = "playback-log") {
                                 @Suppress("UNUSED_VARIABLE") val rev = vm.playbackLogRev
                                 val log = vm.playbackLog
-                                SettingBlock("Playback log", "When video freezes or stops, the app notes what happened and the likely cause (network, provider or this TV). It's sent to bugs@avidviewer.app with the channel names, never addresses or logins.") {
+                                SettingBlock("Playback log", "When video freezes or stops, the app notes what happened and the likely cause (network, provider or this TV). It's sent to bugs@avidviewer.app without channel or title names: each one is a short code (e.g. Live channel 4F2A) that can't be turned back into a name. Never addresses or logins.") {
                                     Label(log.summary(), size = 13.sp, color = C.Soft, lines = 2, modifier = Modifier.testTag("playback-log-summary"))
                                     log.problems().takeLast(3).reversed().forEach { e ->
                                         Label("• " + e.what + ": " + e.text, size = 11.sp, color = C.Muted, lines = 3)

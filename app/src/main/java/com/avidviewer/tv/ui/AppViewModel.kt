@@ -476,14 +476,12 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     // ---------------- playback log (1.5.0) ----------------
     val playbackLog = com.avidviewer.tv.data.PlaybackLog(java.io.File(app.filesDir, "playback-log.txt"))
-    val playback = PlaybackMonitor(player, bandwidth, playbackLog, { nowPlayingName() })
+    val playback = PlaybackMonitor(player, bandwidth, playbackLog)
     var playbackLogBusy by mutableStateOf(false); private set
     var playbackLogStatus by mutableStateOf<String?>(null)
     /** Changes whenever the log does, so Settings redraws its summary. */
     var playbackLogRev by mutableStateOf(0); private set
     internal var playbackRelay: String = com.avidviewer.tv.data.Links.CRASH_RELAY
-
-    private fun nowPlayingName(): String = vodPlaying?.name ?: channel(currentKey)?.let { channelName(it) } ?: ""
 
     /** Sends the playback log to bugs@avidviewer.app through the crash relay ([auto]: the once-a-day send). */
     fun sendPlaybackLog(auto: Boolean = false) {
@@ -3024,7 +3022,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         if (screen != Screen.PLAYER) lastScreen = screen
         vodPlaying = item
         playerError = null
-        playback.started(item.name, live = false)
+        playback.started(item.key, live = false)
         player.setMediaItem(MediaItem.fromUri(item.url), if (fromStart) 0L else resumeOf(item.key))
         tracksChanged(androidx.media3.common.Tracks.EMPTY)
         player.prepare()
@@ -3259,7 +3257,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         val item = MediaItem.Builder().setUri(c.url).apply {
             if (c.url.contains(".m3u8", ignoreCase = true)) setMimeType(MimeTypes.APPLICATION_M3U8)
         }.build()
-        playback.started(channelName(c), live = true)
+        playback.started(c.key, live = true)
         player.setMediaItem(item)
         tracksChanged(androidx.media3.common.Tracks.EMPTY) // this channel's own choices (captions on/off) from the start
         player.prepare()

@@ -44,7 +44,6 @@ class PlaybackMonitor(
     private val player: ExoPlayer,
     private val meter: DefaultBandwidthMeter,
     private val log: PlaybackLog,
-    private val nameOf: () -> String,
     private val clock: () -> Long = System::currentTimeMillis,
 ) : AnalyticsListener {
     var stats by mutableStateOf(StreamStats()); private set
@@ -63,14 +62,14 @@ class PlaybackMonitor(
     private var droppedWindowAt = 0L
     private val recentLoadErrors = ArrayDeque<Pair<Long, String>>()
 
-    /** A channel or title is starting: ends anything still open on the one before. */
-    fun started(what: String, live: Boolean) {
+    /** A channel or title is starting ([key]: its key, never shown; the log gets a code instead of the name). */
+    fun started(key: String, live: Boolean) {
         endStall(left = true)
         endPicture()
-        name = what
+        name = log.label(key, live)
         everReady = false; lastRendered = -1; dropped = 0; droppedWindow = 0; recentLoadErrors.clear()
         stats = StreamStats()
-        log.add(PlaybackLog.START, what, if (live) "live channel" else "movie or episode")
+        log.add(PlaybackLog.START, name, if (live) "live channel" else "movie or episode")
     }
 
     /** Every second: buffer, speed, frames; spots a picture that stopped while playback goes on. */

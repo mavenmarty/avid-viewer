@@ -72,4 +72,19 @@ class PlaybackLogTest {
         }
         assertFalse(CrashReport.sendLog("1.5.0", "x", text, relay = ""))
     }
+
+    /** Privacy (1.5.2): channels and titles are codes, the same each time on one TV, and old names are taken out. */
+    @Test
+    fun namesNeverReachTheLog() {
+        val f = File(dir, "private.txt")
+        f.writeText("1000\tSTALL\tESPN HD\tFroze 3 s waiting for data. Likely: unclear.\n")
+        val log = PlaybackLog(f)
+        assertEquals("Earlier stream", log.entries().single().what)
+        assertFalse(f.readText().contains("ESPN"))
+        val a = log.label("p1:123", live = true)
+        assertTrue(a, Regex("^Live channel [0-9A-F]{4}$").matches(a))
+        assertEquals(a, PlaybackLog(f).label("p1:123", live = true))
+        assertTrue(log.label("p1:vod9", live = false).startsWith("Title "))
+        assertFalse(log.text().contains("ESPN"))
+    }
 }
