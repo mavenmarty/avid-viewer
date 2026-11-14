@@ -24,6 +24,8 @@ This guide covers **Avid Viewer 1.4.0**, the current public release. Avid Viewer
 
 ### Add your first playlist
 
+![Settings › Playlists](images/settings-playlists.jpg)
+
 1. Open **Settings › Playlists** and choose **Add playlist**.
 2. Pick the type:
    - **Xtream Codes**: enter a playlist name, the **Server (DNS)** (for example `http://example.com:8080`), your **Username** and **Password**. Live TV and the TV guide load from your login.
@@ -45,6 +47,8 @@ Your password is stored encrypted on the device (Android Keystore) and is never 
 
 ## 2. Main menu
 
+![Who's watching? when the TV has more than one profile](images/whos-watching.jpg)
+
 The menu on the left lists **Search, Discover, TV Guide, Sports, Movies, Series** and **Settings**. When the TV has more than one profile, the profile in use is shown at the top (its initial on its colour); **OK** on it opens **Switch profile** (see [Profiles](#profiles)). A Kids profile's menu has only Search, TV Guide, Movies and Series. Picking a screen highlights its first item. The menu is always on screen: once you've chosen a screen it shrinks to icons on the far left, and the labels come back when you move onto it.
 
 At the bottom of the menu you'll see:
@@ -61,6 +65,8 @@ When the TV has more than one profile, the app first asks **Who's watching?** (o
 4. with no favorites, the first channel of the first category.
 
 ## 3. TV Guide
+
+![The TV Guide: preview and details at the top, categories on the left, the grid on the right](images/tv-guide.jpg)
 
 The TV Guide is the home screen for live TV. Next to the main menu it has:
 
@@ -152,6 +158,8 @@ While you're moving it, the item has a blue outline. A category shows its positi
 
 ### Picture & sound
 
+![Full screen › Menu › Picture & sound](images/picture-sound.jpg)
+
 Press **Menu** while watching full screen. A panel opens on the right. **▲▼** move between rows, **◀▶** change a row's value (**OK** steps to the next value), and **Back** or **Menu** closes it.
 
 - **Screen format:** Auto (fit), Fill screen (stretch), Zoom (crop edges), 16:9 or 4:3.
@@ -167,6 +175,8 @@ Press **Menu** while watching full screen. A panel opens on the right. **▲▼*
 Audio tracks and captions only appear when the stream carries them, so they vary from channel to channel.
 
 ## 5. Search
+
+![Search results for “news”](images/search.jpg)
 
 The **Search** screen searches **every playlist** at once: TV stations, programs in the TV guide (now and upcoming), movies and series.
 
@@ -184,6 +194,8 @@ After you play a channel, program, movie or episode from Search, **Back** return
 
 ## 6. Discover
 
+![Discover before a TMDB key is entered](images/discover.jpg)
+
 Discover shows what's new and popular, and where to watch it, using TMDB and JustWatch data.
 
 - **Tabs**: New, Trending, For you, In theaters.
@@ -197,6 +209,8 @@ Discover shows what's new and popular, and where to watch it, using TMDB and Jus
 Discover needs a free **TMDB API key**. Enter it in **Settings › Discover**; it's stored encrypted on the device.
 
 ## 7. Sports
+
+![Sports: a live game with its score, the games list and Where to watch](images/sports.jpg)
 
 Sports lists real games from **ESPN's schedules** for today and the next 2 days, plus recent finals, then finds the channels in your playlists that carry them. Leagues: NFL, NBA, NHL, MLB, WNBA, CFL, college football (FBS) and men's college basketball (Division I).
 
@@ -219,6 +233,8 @@ Sports lists real games from **ESPN's schedules** for today and the next 2 days,
 - **Updates:** each day is asked for separately. Today and yesterday are refreshed about every minute while Sports is open (scores while games are live), the next 2 days every 30 minutes. In the background Sports refreshes every 30 minutes. If ESPN can't be reached, Sports says so and shows the last list saved on the TV.
 
 ## 8. Movies and Series
+
+![Series in the Grid layout](images/series-grid.jpg)
 
 - **Left side**: Playlists, then categories: **All**, **Recently added**, **Continue watching**, **My List**, and your provider's categories.
 - **Right side**: posters for the chosen category. A category you pause on is read ahead, so OK shows it at once.
@@ -249,9 +265,13 @@ Sports lists real games from **ESPN's schedules** for today and the next 2 days,
 
 ## 9. Settings
 
+![Settings: sections on the left, the open section on the right](images/settings-playback.jpg)
+
 Settings has sections on the left and the open section's options on the right. **Up/Down** move through the sections; the section list scrolls to keep the highlighted one in view. **OK** opens the highlighted section and moves into it, on its first option (**Right** also moves into the open section). Inside a section, Up and Down stop at the first and last option. **Left** at the left edge of a section, or **Back**, returns to that section in the list; **Back** again opens the main menu.
 
 ### Playlists
+
+![Settings › Playlists](images/settings-playlists.jpg)
 
 - The list of your playlists (Up/Down to choose, Right for options) and **Add playlist**. While you're in the form on the right, the list narrows, so the page never has more than three full columns.
 - **Back** in the add or edit form with changes that aren't saved asks **Discard changes?**. **Keep editing** has the highlight; **Discard** drops the changes. The guide source form, postal code and TMDB key ask the same way.
@@ -277,6 +297,8 @@ Settings has sections on the left and the open section's options on the right. *
 **Background downloads.** About 10 seconds after the app opens, it updates each switched-on playlist in turn, fetching only what's out of date: channels older than a day, the guide when it's older than your guide setting (8 hours by default), and movies & series older than a day. Content that's switched off is never loaded. The first download of a large movie catalog can make a Fire TV Stick feel slower for a minute or two.
 
 ### Profiles
+
+![Settings › Profiles](images/settings-profiles.jpg)
 
 Each person in the household can have their own profile. A profile has its own ★ Favorites and lists, hidden channels and categories, hidden movie and series categories and titles, My List, last channel, dismissed local suggestions, watch history (and whether it's paused), resume points and watched episodes. Playlists and logins, guide sources and matches, renamed and re-ordered items, Picture & sound and every other setting are shared.
 
@@ -314,11 +336,15 @@ Profiles are included in backups (see [Backup & restore](#backup--restore)).
 
 ### TV guide
 
+![Settings › TV guide](images/settings-tv-guide.jpg)
+
 - **Download the guide every**: 4, 8, 12 or 24 hours (8 is the default). The app also follows this while it stays open. Each download keeps up to 7 days of listings. A guide source that hasn't changed since the last download isn't downloaded again.
 - **Last downloaded**: when each playlist's guide last downloaded and how many sources it has. **Download the guide now** gets every guide again.
 - **Channels matched by hand**: how many there are, with **Clear all matches** (asks first).
 
 ### List Editor
+
+![Settings › List Editor](images/settings-list-editor.jpg)
 
 Show or hide items one at a time with OK, or many at once with the filter and **Show all / Hide all**. It has four tabs:
 
@@ -333,6 +359,8 @@ Rename, re-order and Add to List are done with Menu on the item itself in the TV
 - A hidden list keeps its channels. Add to List marks it "(hidden)".
 
 ### Location & weather
+
+![Settings › Location & weather](images/settings-location.jpg)
 
 - **Postal code**: a US ZIP or Canadian postal code (Done on the keyboard saves it). It's used for weather, local channel suggestions and the Auto time zone. Only the code is sent, to Open-Meteo.
 - **Show weather**: current conditions under the clock, refreshed every 30 minutes.
@@ -355,6 +383,8 @@ Rename, re-order and Add to List are done with Menu on the item itself in the TV
 
 ### Sports tab
 
+![Settings › Sports tab](images/settings-sports.jpg)
+
 - **Leagues**: **OK** switches a league on or off.
   - **Menu** on a league re-orders it: ▲▼ move, ◀ top, ▶ bottom, OK done. The order is the order of the filters on the Sports screen.
 - **Games with no channel found**: Show (greyed out, with ESPN's networks) or Hide.
@@ -364,14 +394,20 @@ Rename, re-order and Add to List are done with Menu on the item itself in the TV
 
 ### Discover
 
+![Settings › Discover](images/settings-discover.jpg)
+
 - **TMDB API key**: Save it (or press Done on the keyboard), or Remove it (asks first).
 - **My streaming services**: pick the services you subscribe to.
 
 ### Playback
 
+![Settings › Playback](images/settings-playback.jpg)
+
 - **Stream format (Xtream)**: **MPEG-TS (.ts)** or **HLS (.m3u8)**. If channels won't play, try the other format. The change applies after a Refresh in Playlists.
 
 ### Privacy & analytics
+
+![Settings › Privacy & analytics](images/settings-privacy.jpg)
 
 Everything here stays on the device; nothing is uploaded or backed up to the cloud. Watch history, the pause switch and the 7-day summary belong to the profile in use.
 
@@ -381,10 +417,14 @@ Everything here stays on the device; nothing is uploaded or backed up to the clo
 
 ### Storage
 
+![Settings › Storage](images/settings-storage.jpg)
+
 - **Clear cache on exit**: empty the cache (logos, posters, recently streamed video) every time you leave the app.
 - **Cache size** and **Clear cache now** (asks first). Clearing never removes your playlists, favorites, lists, guide, history or settings.
 
 ### Updates & about
+
+![Settings › Updates & about: Report a bug and the user guide and Control4 QR codes](images/settings-about.jpg)
 
 - **App updates**: the installed version, **Check now**, **Download and install**, and the **Check for updates automatically** switch.
   - The **Update available** dialog (**Update now** / **Later**) opens by itself only when the app starts, before you press anything. If a new version is found later, the main menu shows **Update x.y.z** instead, so nothing pops up while you're browsing or watching.
@@ -430,6 +470,8 @@ The share password is stored encrypted on the TV and is included in your PIN-loc
 
 ## 10. Privacy
 
+![Settings › Privacy & analytics](images/settings-privacy.jpg)
+
 - All your data stays on the device. Android cloud backup and device-to-device transfer are turned off.
 - Provider passwords and the TMDB key are encrypted with the Android Keystore.
 - Backup files are encrypted and locked with your PIN, because they contain provider logins.
@@ -460,6 +502,8 @@ The share password is stored encrypted on the TV and is included in your PIN-loc
 
 ### If the app closes unexpectedly
 
+![Settings › Updates & about › Last crash, with Report issue](images/last-crash.jpg)
+
 The next time it starts, the app says **Avid Viewer closed unexpectedly**:
 
 - **Report issue** sends the details to **bugs@avidviewer.app**: the app version, the TV model and Android / Fire OS version, and the error. Web addresses, host names, IP addresses, user names, passwords and tokens are removed first; no playlists, logins or keys are sent. When it's sent, the message says thanks, closes after a few seconds, and the details are cleared.
@@ -484,6 +528,8 @@ The next time it starts, the app says **Avid Viewer closed unexpectedly**:
 Every build runs automated usability tests before it's released: the real app screens on a TV-sized screen, driven by simulated remote presses. They cover every screen and Settings section, re-ordering, List Editor bulk actions, search, hold-to-scroll, backups (including a real network share) and a 600-press random-key crash hunt. A failing test stops the release.
 
 ## 12. Control4
+
+![The Control4 driver's QR code, in Settings › Updates & about](images/settings-about.jpg)
 
 The **Avid Viewer** Control4 driver (`um_avid_viewer.c4z`) adds Avid Viewer to the Watch menu. Picking it switches the room to your Fire TV and opens Avid Viewer. Your Control4 installer adds it in Composer.
 
