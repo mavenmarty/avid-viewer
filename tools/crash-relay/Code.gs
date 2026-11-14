@@ -22,7 +22,9 @@
  * Inbox (1.5.2): the script sends from the same mailbox that bugs@ delivers to, and Gmail files mail you send to
  * your own address under Sent only, so reports never reached the Inbox (or the bug-report tasks that read it).
  * Each email now carries a report id; the script finds the sent copy and moves it to the Inbox, unread.
- * This uses GmailApp, so the redeploy asks once more for permission (to read and change the mailbox).
+ * This uses GmailApp (gmail.modify). Apps Script may not ask for that by itself, so the project manifest
+ * (appsscript.json, next to this file) lists both scopes: paste it in too (Project Settings › Show
+ * "appsscript.json"), then Run doPost once in the editor to grant them, then deploy a new version.
  */
 var TO = 'bugs@avidviewer.app';
 var MAX_PER_HOUR = 30;
