@@ -175,4 +175,73 @@ class ScreenshotTest {
             shot("${18 + 2 * k}-theme-${t.id}-movies")
         }
     }
+
+    /**
+     * One picture for each section of the user guide (docs/images/g-*.jpg), in Dark roast. Sports reads games
+     * from a stand-in ESPN; the crash message uses a made-up crash.
+     */
+    @Test
+    fun guideSections() {
+        val app = ApplicationProvider.getApplicationContext<Application>()
+        TestData.seed(app)
+        val now = System.currentTimeMillis()
+        val wings = FakeEspn.Companion.T("DET", "Red Wings", "Detroit", "e30526", "7-8-3", "2")
+        val blues = FakeEspn.Companion.T("STL", "Blues", "St. Louis", "0070b9", "7-8-2", "1")
+        val espn = FakeEspn(mapOf("hockey/nhl" to FakeEspn.board(
+            FakeEspn.event("401", now - 30 * 60_000L, "in", wings, blues, listOf(Triple("TNT", "national", "TV")), "3:44 - 2nd", period = 2, clock = "3:44"),
+            FakeEspn.event("402", now + 3 * 3600_000L, "pre", FakeEspn.Companion.T("COL", "Avalanche", "Colorado"), FakeEspn.Companion.T("TOR", "Maple Leafs", "Toronto"), listOf(Triple("ESPN+", "national", "Streaming"))),
+        )))
+        com.avidviewer.tv.data.EspnFeed.base = espn.base
+        try {
+            vm = AppViewModel(app)
+            rule.setContent {
+                androidx.compose.material3.MaterialTheme(colorScheme = androidx.compose.material3.darkColorScheme(primary = com.avidviewer.tv.ui.C.Accent, background = com.avidviewer.tv.ui.C.Bg, surface = com.avidviewer.tv.ui.C.Surface)) { AppRoot(vm) }
+            }
+            waitFor { vm.channels.isNotEmpty() }
+            rule.runOnIdle { vm.setTheme("roast") }
+            rule.runOnIdle { vm.chooseGroup(TestData.P1, "NEWS") }
+            settle(800)
+            shot("g-tv-guide")
+            // The main menu with its names: Left from the channels steps out to it.
+            repeat(4) { key(androidx.compose.ui.input.key.Key.DirectionLeft) }
+            settle(400)
+            shot("g-main-menu")
+            rule.runOnIdle { vm.channelMenu = vm.channels.first().key }
+            settle(400)
+            shot("g-channel-options")
+            rule.runOnIdle { vm.channelMenu = null; vm.navSelect(Screen.SEARCH); vm.searchQuery = "news"; vm.search("news") }
+            settle(1500)
+            shot("g-search")
+            rule.runOnIdle { vm.navSelect(Screen.DISCOVER) }
+            settle(400)
+            shot("g-discover")
+            rule.runOnIdle { vm.openSportsScreen() }
+            waitFor { vm.sportGames.isNotEmpty() }
+            settle(800)
+            shot("g-sports")
+            rule.runOnIdle { vm.navSelect(Screen.SERIES) }
+            settle(600)
+            shot("g-series")
+            for (sec in listOf("playlists", "channels", "guide", "location", "display", "sports", "discover", "playback", "privacy", "storage", "about")) {
+                rule.runOnIdle { vm.navSelect(Screen.SETTINGS); vm.settingsSection = sec }
+                settle(500)
+                shot("g-settings-$sec")
+            }
+            // Full screen with Picture & sound open (the stand-in stream doesn't play).
+            rule.runOnIdle { vm.tuneAnywhere(vm.channels.first().key) }
+            settle(400)
+            rule.runOnIdle { vm.navSelect(Screen.PLAYER); vm.avPanel = true }
+            settle(800)
+            shot("g-picture-sound")
+            rule.runOnIdle { vm.avPanel = false }
+            // The crash message (Troubleshooting).
+            java.io.File(app.filesDir, "last_crash.txt").writeText("Avid Viewer 1.4.0 · Fire TV Stick 4K Max\n\njava.lang.IllegalStateException: sample crash for the guide\n  at com.avidviewer.tv.ui.Sample.run(Sample.kt:1)\n")
+            rule.runOnIdle { vm.navSelect(Screen.SETTINGS); vm.settingsSection = "about"; vm.reloadCrash() }
+            settle(600)
+            shot("g-crash-message")
+        } finally {
+            espn.close()
+            com.avidviewer.tv.data.EspnFeed.base = "http://127.0.0.1:9/espn/"
+        }
+    }
 }

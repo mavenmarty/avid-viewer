@@ -765,6 +765,20 @@ fun SettingsScreen(vm: AppViewModel) {
                                     }
                                 }
                             }
+                            item { BugReportBlock(vm) }
+                            item { GuideAndDriverBlock() }
+                            item { BackupBlock(vm) }
+                            item {
+                                SettingBlock("App updates", "Installed: version ${vm.installed.second}" + (vm.update?.let { " · version ${it.versionName} available" } ?: "")) {
+                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        if (vm.update != null) TvButton(if (vm.updateBusy) "Working…" else "Download and install", primary = true, busy = vm.updateBusy) { if (!vm.updateBusy) vm.installUpdate() }
+                                        if (vm.updateFile != null && !vm.updateBusy) TvButton("Open installer", modifier = Modifier.testTag("update-open-installer")) { vm.openInstaller() }
+                                        TvButton("Check now") { vm.checkForUpdate() }
+                                    }
+                                    SettingSwitch("Check for updates automatically", "Looks for a new version when the app starts.", p.autoUpdateCheck, compact = true) { vm.updatePrefs { it.copy(autoUpdateCheck = !it.autoUpdateCheck) } }
+                                    vm.updateStatus?.let { Label(it, size = 12.sp, color = C.Soft, lines = 3) }
+                                }
+                            }
                             item(key = "playback-log") {
                                 @Suppress("UNUSED_VARIABLE") val rev = vm.playbackLogRev
                                 val log = vm.playbackLog
@@ -779,20 +793,6 @@ fun SettingsScreen(vm: AppViewModel) {
                                     }
                                     SettingSwitch("Send it automatically", "At most once a day, when there were freezes or errors since the last send.", p.autoSendPlaybackLog, compact = true) { vm.updatePrefs { it.copy(autoSendPlaybackLog = !it.autoSendPlaybackLog) } }
                                     vm.playbackLogStatus?.let { Label(it, size = 12.sp, color = C.Accent, lines = 2) }
-                                }
-                            }
-                            item { BugReportBlock(vm) }
-                            item { GuideAndDriverBlock() }
-                            item { BackupBlock(vm) }
-                            item {
-                                SettingBlock("App updates", "Installed: version ${vm.installed.second}" + (vm.update?.let { " · version ${it.versionName} available" } ?: "")) {
-                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                        if (vm.update != null) TvButton(if (vm.updateBusy) "Working…" else "Download and install", primary = true, busy = vm.updateBusy) { if (!vm.updateBusy) vm.installUpdate() }
-                                        if (vm.updateFile != null && !vm.updateBusy) TvButton("Open installer", modifier = Modifier.testTag("update-open-installer")) { vm.openInstaller() }
-                                        TvButton("Check now") { vm.checkForUpdate() }
-                                    }
-                                    SettingSwitch("Check for updates automatically", "Looks for a new version when the app starts.", p.autoUpdateCheck, compact = true) { vm.updatePrefs { it.copy(autoUpdateCheck = !it.autoUpdateCheck) } }
-                                    vm.updateStatus?.let { Label(it, size = 12.sp, color = C.Soft, lines = 3) }
                                 }
                             }
                             item { Label("Avid Viewer ${appVersion(vm)} · Bring your own provider; no channels are included.", size = 12.sp, lines = Int.MAX_VALUE) }
