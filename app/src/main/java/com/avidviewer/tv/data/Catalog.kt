@@ -374,6 +374,25 @@ class Catalog(context: Context) : SQLiteOpenHelper(context.applicationContext, "
         }
     }
 
+    /**
+     * Titles a forgiving search for [q]'s name may accept ([SearchText.score]: a typo, or a word left out),
+     * best first: read by the letters a typo usually leaves whole, at most [scan] rows.
+     */
+    fun near(q: Query, limit: Int, scan: Int = 2000): List<VodItem> {
+        if (q.playlists.isEmpty()) return emptyList()
+        val sq = SearchText.prepare(q.nameContains ?: return emptyList())
+        val pats = SearchText.nearPatterns(sq)
+        if (pats.isEmpty()) return emptyList()
+        val (w, a) = q.copy(nameContains = null, limit = null).where()
+        val like = pats.joinToString(" OR ") { "n LIKE ? ESCAPE '\\'" }
+        val sql = "SELECT $COLS FROM title WHERE $w AND ($like) ORDER BY ${q.order()} LIMIT $scan"
+        val rows = readableDatabase.rawQuery(sql, a + pats).use { c ->
+            val out = ArrayList<VodItem>(c.count); while (c.moveToNext()) out.add(read(c)); out
+        }
+        return rows.map { it to SearchText.score(it.name, sq) }.filter { it.second > 0 }
+            .sortedByDescending { it.second }.take(limit).map { it.first }
+    }
+
     /** Categories with title counts, per playlist, in the provider's order: (playlist, category, count). */
     fun categories(group: String, playlists: List<String>, includeHidden: Boolean): List<Triple<String, String, Int>> {
         if (playlists.isEmpty()) return emptyList()

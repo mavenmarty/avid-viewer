@@ -132,6 +132,21 @@ class LiveDb(private val catalog: Catalog) {
         }
     }
 
+    /**
+     * Channels a forgiving search may accept ([SearchText.score]: a typo, or a word left out), read by
+     * the letters a typo usually leaves whole, at most [scan] rows; only those that score are returned.
+     */
+    fun nearChannels(pid: String, needle: String, limit: Int, scan: Int = 1500): List<Channel> {
+        val q = SearchText.prepare(needle)
+        val pats = SearchText.nearPatterns(q)
+        if (pats.isEmpty()) return emptyList()
+        val where = pats.joinToString(" OR ") { "n LIKE ? ESCAPE '\\'" }
+        val rows = db.rawQuery("SELECT $CH_COLS FROM channel WHERE p = ? AND ($where) ORDER BY o LIMIT $scan", arrayOf(pid) + pats).use { c ->
+            val l = ArrayList<Channel>(); while (c.moveToNext()) l.add(channel(c)); l
+        }
+        return rows.filter { SearchText.near(it.name, q) }.take(limit)
+    }
+
     /** Channels that carry one of these guide ids (as saved by the provider). */
     fun channelsWithEpg(pid: String, ids: Collection<String>): List<Channel> {
         if (ids.isEmpty()) return emptyList()
@@ -261,6 +276,19 @@ class LiveDb(private val catalog: Catalog) {
             "SELECT e, s, x, t, st, nw FROM prog WHERE p = ? AND x > ? AND $where ORDER BY s LIMIT $limit",
             arrayOf(pid, after.toString()) + words.map { contains(it) },
         ).use { c -> val l = ArrayList<Pair<String, Program>>(); while (c.moveToNext()) l.add(c.getString(0) to program(c, 1)); l }
+    }
+
+    /** Programmes on now or later that a forgiving search may accept (see [nearChannels]). */
+    fun nearPrograms(pid: String, needle: String, after: Long, limit: Int, scan: Int = 3000): List<Pair<String, Program>> {
+        val q = SearchText.prepare(needle)
+        val pats = SearchText.nearPatterns(q)
+        if (pats.isEmpty()) return emptyList()
+        val where = pats.joinToString(" OR ") { "(t || ' ' || IFNULL(st, '')) LIKE ? ESCAPE '\\'" }
+        val rows = db.rawQuery(
+            "SELECT e, s, x, t, st, nw FROM prog WHERE p = ? AND x > ? AND ($where) ORDER BY s LIMIT $scan",
+            arrayOf(pid, after.toString()) + pats,
+        ).use { c -> val l = ArrayList<Pair<String, Program>>(); while (c.moveToNext()) l.add(c.getString(0) to program(c, 1)); l }
+        return rows.filter { (_, p) -> SearchText.near(p.title + " " + p.subtitle.orEmpty(), q) }.take(limit)
     }
 
     /** How many channels have programmes saved. */

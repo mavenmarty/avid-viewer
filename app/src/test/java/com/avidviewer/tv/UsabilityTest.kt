@@ -1291,6 +1291,35 @@ class UsabilityTest {
         waitFor("guide search finds the channels") { vm.guideSearchHits.channels.any { vm.channelName(it).contains("Fargo") } }
     }
 
+    /**
+     * #16 (Nov 14): a two-word search crashed a 1 GB Fire TV: the first word alone matched much of the
+     * guide, every match was collected, and each pause in typing started another full search while the
+     * last kept running. Now a newer search stops the older one and only the best matches are kept.
+     * Same day: searches were too strict, so a typo or a word left out now finds near matches, ranked last.
+     */
+    @Test
+    fun twoWordSearchStaysBoundedAndNearMatchesAreFound() {
+        go(Screen.SEARCH)
+        for (t in listOf("pr", "pro", "program", "program e", "program episode")) rule.runOnIdle { vm.search(t) }
+        waitFor("results for the two words (searched=${vm.searchedFor})") { vm.searchedFor == "program episode" && !vm.searching && vm.searchResults != null }
+        val res = vm.searchResults!!
+        assertTrue("found programmes", res.sumOf { it.programs.size } > 0)
+        assertTrue("at most 60 programmes a playlist", res.all { it.programs.size <= 60 })
+        // A typo in a channel name, and in a movie title.
+        rule.runOnIdle { vm.search("wdya fargo") }
+        waitFor("near match for a channel") { vm.searchedFor == "wdya fargo" && !vm.searching && vm.searchResults?.flatMap { it.stations }?.any { it.title.contains("WDAY ABC") } == true }
+        rule.runOnIdle { vm.search("drma movie 1") }
+        waitFor("near match for a movie") { vm.searchedFor == "drma movie 1" && !vm.searching && vm.searchResults?.flatMap { it.movies }?.any { it.title == "Drama Movie 1" } == true }
+        // Exact matches before near ones.
+        rule.runOnIdle { vm.search("action movie 1") }
+        waitFor("exact movie search") { vm.searchedFor == "action movie 1" && !vm.searching && vm.searchResults != null }
+        val movies = vm.searchResults!!.flatMap { it.movies }.map { it.title }
+        assertTrue(movies.toString(), movies.isNotEmpty() && movies.first().startsWith("Action Movie 1"))
+        // The Movies search box finds near matches too.
+        kotlinx.coroutines.runBlocking { vm.loadVodNear("movie", "drma movie 1") }
+        assertTrue(rule.runOnIdle { vm.vodSearch("movie", "drma movie 1").any { it.name == "Drama Movie 1" } })
+    }
+
     /** Nov 12: on a Discover title page, the remote couldn't reach the versions below the description. */
     @Test
     fun discoverTitlePageReachesEveryVersionWithTheRemote() {

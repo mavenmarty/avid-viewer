@@ -56,7 +56,9 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
@@ -1798,7 +1800,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         guideSearchJob = viewModelScope.launch {
             delay(150) // typing: wait for a pause
             val nowMs = System.currentTimeMillis()
-            val words = com.avidviewer.tv.data.SearchText.words(q)
+            val sq = com.avidviewer.tv.data.SearchText.prepare(q)
             val hidden = prefs.hiddenChannels
             val others = HashMap<String, Pair<List<Channel>, Map<String, List<Program>>>>()
             for (p in livePlaylists) {
@@ -1814,9 +1816,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                     val pid = c.key.substringBefore(':')
                     return (if (pid == activePlaylist()?.id) activeGuide[id] else others[pid]?.second?.get(id)).orEmpty()
                 }
-                val chHits = all.filter { com.avidviewer.tv.data.SearchText.matches(channelName(it), words) }.take(60)
-                val progHits = all.flatMap { c -> progs(c).filter { it.end > nowMs && com.avidviewer.tv.data.SearchText.matches(it.title + " " + it.subtitle.orEmpty(), words) }.map { c to it } }
-                    .sortedBy { it.second.start }.take(80)
+                val chHits = bestChannels(all, sq, 60)
+                val progHits = bestPrograms(all, sq, nowMs, 80) { progs(it) }
                 GuideHits(query, chHits, progHits)
             }
             searchLive = others
@@ -1833,15 +1834,58 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
+     * The [limit] channels whose names match [sq] best ([SearchText.score]), in list order within each rank.
+     * Stops when cancelled (a newer search started), so searches never pile up.
+     */
+    private suspend fun bestChannels(chs: List<Channel>, sq: com.avidviewer.tv.data.SearchText.Prepared, limit: Int): List<Channel> {
+        val byRank = Array(5) { ArrayList<Channel>() }
+        for ((i, c) in chs.withIndex()) {
+            if (i and 255 == 0) currentCoroutineContext().ensureActive()
+            val s = com.avidviewer.tv.data.SearchText.score(channelName(c), sq)
+            if (s > 0 && byRank[s].size < limit) byRank[s].add(c)
+        }
+        return (4 downTo 1).flatMap { byRank[it] }.take(limit)
+    }
+
+    /**
+     * The [limit] programmes (on now or later) that match [sq] best, soonest first within each rank.
+     * Only [limit] are kept per rank while the guide is read, however many match: a short word such as
+     * "the" matches much of a week's guide, and collecting all of it ran a 1 GB Fire TV out of memory (#16).
+     */
+    private suspend fun bestPrograms(
+        chs: List<Channel>, sq: com.avidviewer.tv.data.SearchText.Prepared, nowMs: Long, limit: Int, progs: (Channel) -> List<Program>,
+    ): List<Pair<Channel, Program>> {
+        val cmp = compareByDescending<Pair<Channel, Program>> { it.second.start } // the head is the latest: dropped first
+        val byRank = Array(5) { java.util.PriorityQueue(limit + 1, cmp) }
+        var n = 0
+        // A programme title repeats across a week: score each title once.
+        val seen = HashMap<String, Int>()
+        for (c in chs) {
+            for (pr in progs(c)) {
+                if (n++ and 1023 == 0) currentCoroutineContext().ensureActive()
+                if (pr.end <= nowMs) continue
+                val text = pr.title + " " + pr.subtitle.orEmpty()
+                val s = seen[text] ?: com.avidviewer.tv.data.SearchText.score(text, sq).also { if (seen.size < 20_000) seen[text] = it }
+                if (s <= 0) continue
+                val q = byRank[s]
+                if (q.size < limit) q.add(c to pr)
+                else if (pr.start < q.peek()!!.second.start) { q.poll(); q.add(c to pr) }
+            }
+        }
+        return (4 downTo 1).flatMap { r -> byRank[r].sortedBy { it.second.start } }.take(limit)
+    }
+
+    /**
      * Another playlist's channels matching [q] by name (own or renamed) plus the channels of programmes
      * matching it, with those channels' guide — looked up in the database, nothing else loaded.
      */
     private fun liveHits(p: Playlist, q: String, maxChannels: Int, maxPrograms: Int, nowMs: Long): Pair<List<Channel>, Map<String, List<Program>>> {
         liveReady()
-        val words = com.avidviewer.tv.data.SearchText.words(q)
-        val renamed = prefs.channelNames.filter { (k, v) -> k.startsWith(p.id + ":") && com.avidviewer.tv.data.SearchText.matches(v, words) }.keys
-        val byName = live.searchChannels(p.id, q, maxChannels) + live.channelsByKeys(renamed)
-        val progs = live.searchPrograms(p.id, q, nowMs, maxPrograms * 2)
+        val sq = com.avidviewer.tv.data.SearchText.prepare(q)
+        val renamed = prefs.channelNames.filter { (k, v) -> k.startsWith(p.id + ":") && com.avidviewer.tv.data.SearchText.near(v, sq) }.keys
+        // Every word first, then near matches (a typo, or a word left out); the screen ranks them.
+        val byName = live.searchChannels(p.id, q, maxChannels) + live.nearChannels(p.id, q, maxChannels) + live.channelsByKeys(renamed)
+        val progs = live.searchPrograms(p.id, q, nowMs, maxPrograms * 2) + live.nearPrograms(p.id, q, nowMs, maxPrograms)
         val ids = progs.map { it.first }.toHashSet()
         val mapped = prefs.epgMap.filter { (k, v) -> k.startsWith(p.id + ":") && v in ids }.keys
         val byProg = (live.channelsWithEpg(p.id, ids) + live.channelsByKeys(mapped)).filter { epgIdOf(it) in ids }
@@ -2849,42 +2893,40 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         searchJob?.cancel()
         searchJob = viewModelScope.launch {
             searching = true
-            val words = com.avidviewer.tv.data.SearchText.words(q)
+            val sq = com.avidviewer.tv.data.SearchText.prepare(q)
             val nowMs = System.currentTimeMillis()
             val out = ArrayList<PlaylistHits>()
             for (p in shownPlaylists) {
                 if (!p.liveOn && !p.vodOn) continue
+                ensureActive()
                 val isActive = p.id == activePlaylist()?.id
                 // The playlist being watched is in memory; the others are searched in the database.
                 val (chsAll, g) = if (isActive || !p.liveOn || !p.enabled) liveFor(p) else withContext(Dispatchers.IO) { liveHits(p, q, 50, 60, nowMs) }
                 val chs = chsAll.filter { channelAllowed(it) } // a Kids profile: only its categories
-                // Titles: searched in the catalog database, not loaded.
+                // Titles: searched in the catalog database, not loaded. Every word first, then near matches.
                 if (p.vodOn && p.enabled) importOldTitles(p)
                 val vodHitList = if (!p.vodOn || !p.enabled) emptyList() else withContext(Dispatchers.IO) {
-                    catalog.page(Catalog.Query("movie", listOf(p.id), nameContains = q, kind = "movie"), 0, 50) +
-                        catalog.page(Catalog.Query("series", listOf(p.id), nameContains = q), 0, 50) +
-                        catalog.page(Catalog.Query("movie", listOf(p.id), nameContains = q, kind = "episode"), 0, 50)
+                    fun find(query: Catalog.Query) = (catalog.page(query, 0, 50) + catalog.near(query, 50)).distinctBy { it.key }
+                    find(Catalog.Query("movie", listOf(p.id), nameContains = q, kind = "movie")) +
+                        find(Catalog.Query("series", listOf(p.id), nameContains = q)) +
+                        find(Catalog.Query("movie", listOf(p.id), nameContains = q, kind = "episode"))
                 }
                 val res = withContext(Dispatchers.Default) {
-                    val names = chs.associate { it.key to channelName(it) }
-                    val stations = chs.filter { com.avidviewer.tv.data.SearchText.matches(names[it.key] ?: it.name, words) }.take(50)
-                        .map { Hit("channel", p.id, names[it.key] ?: it.name, groupName(it.group), it.logo, channelKey = it.key) }
-                    val progs = ArrayList<Pair<Long, Hit>>()
-                    for (c in chs) {
-                        val list = epgIdOf(c)?.let { g[it] } ?: continue
-                        for (pr in list) {
-                            if (pr.end <= nowMs) continue
-                            if (com.avidviewer.tv.data.SearchText.matches(pr.title + " " + pr.subtitle.orEmpty(), words)) {
-                                val whenText = if (pr.start <= nowMs) "On now" else "${dayLabel(pr.start)} ${fmtTime(pr.start)}"
-                                progs.add(pr.start to Hit("program", p.id, pr.title + (pr.subtitle?.let { " · $it" } ?: ""), "${names[c.key] ?: c.name} · $whenText", c.logo, channelKey = c.key))
-                            }
-                        }
+                    val names = HashMap<String, String>()
+                    fun nameOf(c: Channel) = names.getOrPut(c.key) { channelName(c) }
+                    val stations = bestChannels(chs, sq, 50)
+                        .map { Hit("channel", p.id, nameOf(it), groupName(it.group), it.logo, channelKey = it.key) }
+                    val progs = bestPrograms(chs, sq, nowMs, 60) { c -> epgIdOf(c)?.let { g[it] }.orEmpty() }.map { (c, pr) ->
+                        val whenText = if (pr.start <= nowMs) "On now" else "${dayLabel(pr.start)} ${fmtTime(pr.start)}"
+                        Hit("program", p.id, pr.title + (pr.subtitle?.let { " · $it" } ?: ""), "${nameOf(c)} · $whenText", c.logo, channelKey = c.key)
                     }
-                    val vodHits = vodHitList
+                    // Best matches first (provider order kept within each).
+                    val vodHits = vodHitList.map { it to com.avidviewer.tv.data.SearchText.score(it.name, sq) }
+                        .filter { it.second > 0 }.sortedByDescending { it.second }.map { it.first }
                     PlaylistHits(
                         playlist = p,
                         stations = stations,
-                        programs = progs.sortedBy { it.first }.take(60).map { it.second },
+                        programs = progs,
                         movies = vodHits.filter { it.kind == "movie" }.take(50).map { Hit("movie", p.id, it.name, "Movie", it.logo, vod = it) },
                         series = vodHits.filter { it.kind != "movie" }.take(50).map { Hit(it.kind, p.id, it.name, if (it.kind == "series") "Series" else "Episode", it.logo, vod = it) },
                     )
@@ -3125,9 +3167,42 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         titles(com.avidviewer.tv.data.Catalog.Query(vodKindKey(kind), vodPids(), includeHidden = true))
     }
 
-    /** Titles whose name contains [q] (the Movies / Series search). */
-    fun vodSearch(kind: String, q: String): List<VodItem> =
-        titles(com.avidviewer.tv.data.Catalog.Query(vodKindKey(kind), vodPids(), nameContains = q.trim(), grouped = true))
+    /**
+     * Titles whose name contains every word of [q] (the Movies / Series search). When few do, near
+     * matches follow once [loadVodNear] has found them: a typo ("godfathr") or a word left out.
+     */
+    fun vodSearch(kind: String, q: String): List<VodItem> {
+        val t = q.trim()
+        vodNear[kind]?.takeIf { it.first == t && it.third == vodVersion }?.second?.let { return it }
+        return titles(vodSearchQuery(kind, t))
+    }
+
+    private fun vodSearchQuery(kind: String, t: String) =
+        com.avidviewer.tv.data.Catalog.Query(vodKindKey(kind), vodPids(), nameContains = t, grouped = true)
+
+    /** Per kind: the search, its titles with near matches (null: enough exact ones), and the catalog version. */
+    private val vodNear = androidx.compose.runtime.mutableStateMapOf<String, Triple<String, List<VodItem>?, Int>>()
+
+    /** The Movies / Series search box settled on [q]: look for near matches when fewer than 30 titles hold every word. */
+    suspend fun loadVodNear(kind: String, q: String) {
+        val t = q.trim()
+        if (t.length < 2) return
+        val version = vodVersion
+        if (vodNear[kind]?.let { it.first == t && it.third == version } == true) return
+        val query = vodSearchQuery(kind, t)
+        val list = withContext(Dispatchers.IO) {
+            runCatching {
+                if (catalog.count(query) >= 30) null
+                else {
+                    val sq = com.avidviewer.tv.data.SearchText.prepare(t)
+                    (catalog.page(query, 0, 30) + catalog.near(query, 100)).distinctBy { it.key }
+                        .map { it to com.avidviewer.tv.data.SearchText.score(it.name, sq) }
+                        .sortedByDescending { it.second }.map { it.first }
+                }
+            }.getOrNull()
+        }
+        vodNear[kind] = Triple(t, list, version)
+    }
 
     /** List Editor: one playlist's categories of this kind with counts, hidden ones included. */
     fun vodEditorCategories(kind: String, pid: String): List<Pair<String, Int>> {
