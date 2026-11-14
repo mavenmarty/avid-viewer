@@ -4,7 +4,7 @@
      (.github/workflows/user-guide.yml). Feature descriptions are written by hand. -->
 This guide covers **Avid Viewer 1.5.2**, the current public release. Avid Viewer is an IPTV player for Android TV and Fire TV. You bring your own provider (an Xtream Codes login or an M3U link); the app doesn't include any channels.
 
-**Contents:** [Getting started](#1-getting-started) · [Main menu](#2-main-menu) · [TV Guide](#3-tv-guide) · [Full-screen playback](#4-full-screen-playback) · [Search](#5-search) · [Discover](#6-discover) · [Sports](#7-sports) · [Movies and Series](#8-movies-and-series) · [Settings](#9-settings) ([Profiles](#profiles)) · [Privacy](#10-privacy) · [Troubleshooting](#11-troubleshooting) · [Control4](#12-control4) · [Release notes](#release-notes)
+**Contents:** [Getting started](#1-getting-started) · [Main menu](#2-main-menu) · [TV Guide](#3-tv-guide) · [Full-screen playback](#4-full-screen-playback) · [Search](#5-search) · [Discover](#6-discover) · [Sports](#7-sports) · [Movies and Series](#8-movies-and-series) · [Settings](#9-settings) ([Profiles](#profiles)) · [Privacy](#10-privacy) · [Troubleshooting](#11-troubleshooting) · [Control4](#12-control4) · [Supplemental services](#13-supplemental-services) · [Release notes](#release-notes)
 
 ## 1. Getting started
 
@@ -212,7 +212,7 @@ Discover shows what's new and popular, and where to watch it, using TMDB and Jus
 - **Every version on your provider:** when your playlists have the title more than once (other languages, qualities or playlists), its page lists **N versions on your provider**, English first, each with its language, category and playlist. The page scrolls as one: **Down** from the buttons moves through the versions and then **Where to watch**. **OK** on a version plays that movie or opens that series. The main button plays the first and says which ("Plays: English · EN | Drama · My provider").
 - **Where to watch** lists Stream, Free, Rent and Buy options for your region.
 
-Discover needs a free **TMDB API key**. Enter it in **Settings › Discover**; it's stored encrypted on the device.
+Discover needs a free **TMDB API key**. Enter it in **Settings › Discover**; it's stored encrypted on the device. How to get one: [TMDB](#tmdb-discover) in Supplemental services.
 
 ## 7. Sports
 
@@ -580,6 +580,108 @@ The **Avid Viewer** Control4 driver (`um_avid_viewer.c4z`) adds Avid Viewer to t
 - **To see what the driver sends:** turn on its **Debug Mode** property. Its **Fire TV Package** property shows `com.avidviewer.tv`.
 
 ---
+
+## 13. Supplemental services
+
+Optional services that work alongside Avid Viewer. None of them is required; each adds something the app can't do on its own.
+
+### EPGenius: curated playlists
+
+[EPGenius](https://epgenius.org) turns your provider's login into a cleaned-up playlist you add to Avid Viewer as an **M3U link**. Community members curate each list: they trim it to the useful channels, sort them into categories, add logos and fix the TV guide. EPGenius saves the playlist to your Google Drive and keeps it updated, so you set it up once.
+
+**What you need**
+
+- Your provider's login: an Xtream login (server, username, password) or an M3U link. EPGenius doesn't supply one.
+- A Google account, where the playlist file is saved.
+- A Discord account, used to register the playlist for automatic updates. A brand-new account has to wait about 24 hours (see below).
+
+**Create the playlist**
+
+1. On a computer or phone, go to [epgenius.org](https://epgenius.org) (not .com) and click **I AGREE** on the Terms & Disclaimer.
+2. Under **Choose a Playlist**, pick a list made for your provider, for example "jams | Strong 8k". **Preview List + EPG** shows the channels first.
+3. Choose **Automatic**, then enter your login. If you have both an Xtream login and an M3U link, use Xtream.
+4. Tick **Upload to Google Drive**, click **Generate**, then **Upload to Google Drive**, and sign in to Google. Allow pop-ups for epgenius.org, because Google sign-in opens in one.
+5. Copy the two links it shows: the **Drive URL** (the playlist) and the **EPG URL** (the guide).
+
+**Add it to Avid Viewer**
+
+1. Open **Settings › Playlists** and choose **Add playlist**.
+2. Pick **M3U link**, not Xtream Codes, even if you gave EPGenius an Xtream login.
+3. Enter a name, paste the **Drive URL** as the **M3U playlist link**, and paste the **EPG URL** as the **TV guide (XMLTV) link**. The EPG link is a compressed `.xml.gz` file; Avid Viewer reads it directly.
+4. Choose what to load and press **Add playlist**.
+
+The Drive URL never changes, so Avid Viewer picks up updates on its normal refresh. You can rename the file in Google Drive without breaking the link.
+
+**Register for automatic updates (Discord)**
+
+1. Create a Discord account at [discord.com/register](https://discord.com/register) and verify your email.
+2. Join the EPGenius server: [discord.gg/pZwcncweFc](https://discord.gg/pZwcncweFc).
+3. **New accounts are timed out for about 24 hours** on joining and can't type during that time. When the timeout ends, rejoin with the same link if you were removed.
+4. In **✅〢verify**, click **Verify** on the Wick bot's message and pass the image check. If the image doesn't appear, turn on **User Settings → Chat → Embeds and link previews**.
+5. In the help channel, run `/register` and paste your Drive URL. Run `/info` any time to get your links back or to unregister a playlist.
+
+**Good to know**
+
+- Free lists update once a day by 04:00 UTC, and the guide refreshes every 4 hours. Supporters (after a donation of any amount) get updates instantly.
+- You can register up to 5 playlists.
+- Pick a list for the provider you actually have. Some sellers advertise one service but give you another.
+
+### TMDB: Discover
+
+[Discover](#6-discover) uses a free key from **TMDB** (The Movie Database) to show what's new, trending and in theaters, and where to watch it. Without a key, Discover only shows how to add one.
+
+**Get a key** (on a computer; TMDB's sign-up pages aren't made for phones)
+
+1. Create a free account at [themoviedb.org](https://www.themoviedb.org/signup) and confirm your email.
+2. Open your account **Settings › API** ([themoviedb.org/settings/api](https://www.themoviedb.org/settings/api)) and click **Create** (or **Request an API key**).
+3. For the type of use choose **Personal** (non-commercial), and accept the terms of use.
+4. Fill in the form. TMDB also asks for your name, email, phone and address; those are your own. For the application details you can use:
+   - **Application name:** `Avid Viewer`
+   - **Application URL:** `https://github.com/mavenmarty/avid-viewer`
+   - **Application summary:** `Avid Viewer is a free, non-commercial media player for Android TV and Fire TV that brings the live TV, movies and series from services I already subscribe to into one guide. It uses TMDB only to show titles, artwork, descriptions and where-to-watch information on its Discover screen, for my household. No TMDB data is resold or redistributed, and the app credits TMDB as its source.`
+5. Submit. The API page then shows two values: the **API Key** (32 characters) and the **API Read Access Token** (a long one). Either works in Avid Viewer; the API Key is shorter to type.
+
+**Add it to Avid Viewer**
+
+1. Open **Settings › Discover**, highlight **TMDB API key** and press **OK**.
+2. Type or paste the key and press **Save** (or Done on the keyboard). It's stored encrypted on the TV.
+3. Open **Discover**. If TMDB doesn't accept the key, Discover says so; check for a typo.
+
+**Good to know**
+
+- **Several TVs:** the same key works on all your TVs. Enter it on each one, or restore a backup, which includes it. Keep it to your household: it's linked to your TMDB account, and a misused key can be turned off, which stops Discover on every TV that uses it.
+- **How much it's used:** Avid Viewer contacts TMDB only while Discover is open: roughly 100–150 requests when you go through all four tabs, and a tab refreshes after 6 hours. TMDB limits requests per home connection (about 50 a second), not per key, with no daily cap.
+- **My streaming services** (Settings › Discover) tells Discover which services you subscribe to, so "New" and "where to watch" favour them.
+
+### Homestead: a cleaner Fire TV home screen
+
+[Homestead](https://github.com/Sarg338/Homestead) is a free, open-source replacement home screen for Fire TV, made by a separate project. It removes the ad rows and switches off Amazon's bloat and telemetry apps, all from the remote, with no computer needed. These steps are for version 2.2.0 (Nov 9, 2026).
+
+**Before you start**
+
+- **The VPN prompt only covers the TV itself.** Homestead routes just one private range (10.113.77.x) so it can talk to the TV's own debugging service. Your normal internet traffic isn't touched, and the tunnel turns off when setup ends.
+- **Nothing is deleted.** Debloat switches packages off, and you can switch any of them back on from the same screen.
+- **Its only outside connection is GitHub.** It checks GitHub once a day for updates and installs one only when you press Install.
+- **One permission is broad:** reading the system log, which makes the Home button work reliably. You can take it away later (see below).
+
+**Set it up** (about 10 minutes, remote only)
+
+1. **Developer options and Downloader:** if you installed Avid Viewer with Downloader, these are already done. Otherwise follow [Installing the Downloader app](#installing-the-downloader-app): Developer options on, **ADB debugging** on, Downloader installed and allowed to install apps.
+2. **Download Homestead.** In Downloader, enter `github.com/Sarg338/Homestead/releases/latest/download/homestead.apk` and install the app.
+3. **Start setup.** Open Homestead and choose **Set it up**. Accept Android's VPN prompt: press **Down** to reach **OK**.
+4. **Approve the ADB key.** When the TV asks, check that the fingerprint matches the one Homestead shows. Tick **Always allow from this computer**, then select **OK**.
+5. **Let setup finish.** Homestead turns on its Home button by itself. If not, go to its **Settings › Setup › Finish setup automatically**.
+6. **Debloat.** Open Homestead's **Settings › Debloat** and use the one-press option. Skip the option marked risky, which switches off Amazon's launcher.
+7. **Test it.** Press **Home**. Homestead should open instead of Amazon's home screen. Avid Viewer is in its app list like any other app.
+
+**After setup**
+
+- **ADB debugging trade-off.** Leaving it on keeps a door open on your network. Homestead needs it to switch Amazon packages off again after each reboot. If you turn it off, some packages may come back after a restart or firmware update.
+- **Update warning (optional).** Homestead's **Settings › Warn if the system undoes Debloat** shows a tile for 10 seconds offering to switch packages off again after an update.
+- **Home button stops working after an update:** run **Settings › Setup › Finish setup automatically** again.
+- **Take back the log permission (optional).** From a computer, run `adb shell pm revoke com.homestead.launcher android.permission.READ_LOGS`. After that, Home briefly flashes Amazon's screen first.
+- **Undo anything.** Any debloated package can be switched back on from the Debloat page. Uninstalling Homestead brings back Amazon's home screen.
+- **Problems with Homestead** itself go to its GitHub page; bugs@avidviewer.app is for Avid Viewer.
 
 ## Release notes
 
