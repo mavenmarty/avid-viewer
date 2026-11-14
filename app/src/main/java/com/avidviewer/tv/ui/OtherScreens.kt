@@ -765,6 +765,22 @@ fun SettingsScreen(vm: AppViewModel) {
                                     }
                                 }
                             }
+                            item(key = "playback-log") {
+                                @Suppress("UNUSED_VARIABLE") val rev = vm.playbackLogRev
+                                val log = vm.playbackLog
+                                SettingBlock("Playback log", "When video freezes or stops, the app notes what happened and the likely cause (network, provider or this TV). It's sent to bugs@avidviewer.app with the channel names, never addresses or logins.") {
+                                    Label(log.summary(), size = 13.sp, color = C.Soft, lines = 2, modifier = Modifier.testTag("playback-log-summary"))
+                                    log.problems().takeLast(3).reversed().forEach { e ->
+                                        Label("• " + e.what + ": " + e.text, size = 11.sp, color = C.Muted, lines = 3)
+                                    }
+                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        TvButton(if (vm.playbackLogBusy) "Sending…" else "Send playback log", primary = true, busy = vm.playbackLogBusy, modifier = Modifier.testTag("settings-send-playback-log")) { vm.sendPlaybackLog() }
+                                        TvButton("Clear log") { settingsConfirm = Confirm("Clear the playback log?", "Freezes logged so far can't be sent after this.", "Clear") { vm.clearPlaybackLog() } }
+                                    }
+                                    SettingSwitch("Send it automatically", "At most once a day, when there were freezes or errors since the last send.", p.autoSendPlaybackLog, compact = true) { vm.updatePrefs { it.copy(autoSendPlaybackLog = !it.autoSendPlaybackLog) } }
+                                    vm.playbackLogStatus?.let { Label(it, size = 12.sp, color = C.Accent, lines = 2) }
+                                }
+                            }
                             item { BugReportBlock(vm) }
                             item { GuideAndDriverBlock() }
                             item { BackupBlock(vm) }

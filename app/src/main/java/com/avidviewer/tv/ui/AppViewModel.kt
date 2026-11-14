@@ -461,7 +461,11 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     var weatherError by mutableStateOf<String?>(null); private set
     var postalStatus by mutableStateOf<String?>(null); private set
 
+    /** Download speed while streaming, for Stream info and the playback log. */
+    private val bandwidth = androidx.media3.exoplayer.upstream.DefaultBandwidthMeter.Builder(app).build()
+
     val player: ExoPlayer = ExoPlayer.Builder(app)
+        .setBandwidthMeter(bandwidth)
         .setMediaSourceFactory(
             DefaultMediaSourceFactory(app).setDataSourceFactory(
                 DefaultHttpDataSource.Factory().setUserAgent(USER_AGENT).setAllowCrossProtocolRedirects(true)
@@ -469,6 +473,45 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             )
         )
         .build()
+
+    // ---------------- playback log (1.5.0) ----------------
+    val playbackLog = com.avidviewer.tv.data.PlaybackLog(java.io.File(app.filesDir, "playback-log.txt"))
+    val playback = PlaybackMonitor(player, bandwidth, playbackLog, { nowPlayingName() })
+    var playbackLogBusy by mutableStateOf(false); private set
+    var playbackLogStatus by mutableStateOf<String?>(null)
+    /** Changes whenever the log does, so Settings redraws its summary. */
+    var playbackLogRev by mutableStateOf(0); private set
+    internal var playbackRelay: String = com.avidviewer.tv.data.Links.CRASH_RELAY
+
+    private fun nowPlayingName(): String = vodPlaying?.name ?: channel(currentKey)?.let { channelName(it) } ?: ""
+
+    /** Sends the playback log to bugs@avidviewer.app through the crash relay ([auto]: the once-a-day send). */
+    fun sendPlaybackLog(auto: Boolean = false) {
+        if (playbackLogBusy) return
+        val newest = playbackLog.entries().lastOrNull()?.time ?: return
+        playbackLogBusy = true
+        if (!auto) playbackLogStatus = "Sending…"
+        viewModelScope.launch {
+            val ok = withContext(Dispatchers.IO) {
+                com.avidviewer.tv.data.CrashReport.sendLog(installed.second, playbackLog.summary(), playbackLog.text(), playbackRelay)
+            }
+            playbackLogBusy = false
+            if (ok) playbackLog.markSent(newest, auto)
+            if (!auto) playbackLogStatus = if (ok) "Sent to bugs@avidviewer.app. Thanks." else "Couldn't send the log. Check the connection and try again."
+            playbackLogRev++
+        }
+    }
+
+    fun clearPlaybackLog() { playbackLog.clear(); playbackLogStatus = null; playbackLogRev++ }
+
+    /** At most once a day, when freezes or errors happened since the last send ([Prefs.autoSendPlaybackLog]). */
+    private fun maybeAutoSendPlaybackLog() {
+        if (!prefs.autoSendPlaybackLog || playbackLogBusy) return
+        if (android.os.Build.FINGERPRINT == "robolectric") return // never from tests
+        if (playbackLog.unsent().isEmpty()) return
+        if (System.currentTimeMillis() - playbackLog.lastAutoSend < 24 * 3_600_000L) return
+        sendPlaybackLog(auto = true)
+    }
 
     private var osdJob: Job? = null
     private var watchStart = 0L
@@ -767,6 +810,18 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             delay(5_000)
             val n = withContext(Dispatchers.IO) { runCatching { if (catalog.needsLanguages()) catalog.fillLanguages() else 0 }.getOrDefault(0) }
             if (n > 0) regroupLater(0) // English copies first now that languages are known
+        }
+        player.addAnalyticsListener(playback)
+        viewModelScope.launch {
+            var tick = 0
+            while (true) {
+                delay(1_000)
+                val before = playbackLog.entries().size
+                playback.sample()
+                if (playbackLog.entries().size != before) playbackLogRev++
+                // Not while a stream is starting; checked every minute.
+                if (++tick % 60 == 30) maybeAutoSendPlaybackLog()
+            }
         }
         player.addListener(object : Player.Listener {
             override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) { paused = !playWhenReady }
@@ -2965,6 +3020,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         if (screen != Screen.PLAYER) lastScreen = screen
         vodPlaying = item
         playerError = null
+        playback.started(item.name, live = false)
         player.setMediaItem(MediaItem.fromUri(item.url), if (fromStart) 0L else resumeOf(item.key))
         tracksChanged(androidx.media3.common.Tracks.EMPTY)
         player.prepare()
@@ -3199,6 +3255,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         val item = MediaItem.Builder().setUri(c.url).apply {
             if (c.url.contains(".m3u8", ignoreCase = true)) setMimeType(MimeTypes.APPLICATION_M3U8)
         }.build()
+        playback.started(channelName(c), live = true)
         player.setMediaItem(item)
         tracksChanged(androidx.media3.common.Tracks.EMPTY) // this channel's own choices (captions on/off) from the start
         player.prepare()
