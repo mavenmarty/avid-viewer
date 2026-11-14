@@ -437,7 +437,7 @@ Everything here stays on the device; nothing is uploaded or backed up to the clo
   - The download shows its progress. If the connection stalls, the app waits 15 seconds and continues from where it stopped (up to 8 tries). The finished file is checked before installing, and a damaged download is refused.
   - If Android's installer doesn't appear within about 25 seconds, an **Open installer** button opens Android's own install screen for the same file.
 - **Last crash**: if the app closed unexpectedly, the details are kept here on the device, with **Report issue** and **Clear crash report** (asks first). **Report issue** sends them to **bugs@avidviewer.app** and then clears them (see *If the app closes unexpectedly* below).
-- **Playback log**: a summary ("Playback log: 3 freezes (longest 12 s), 1 error today") and the latest problems, each with its likely cause. **Send playback log** sends it to bugs@avidviewer.app; **Clear log** asks first. **Send it automatically** (on by default) sends it at most once a day, and only when there were freezes or errors since the last send.
+- **Playback log**: a summary ("Playback log: 3 freezes (longest 12 s), 1 error today") and the latest problems, each with its likely cause. Channels and titles appear as short codes ("Live channel 4F2A", "Title 9C01"), never by name. **Send playback log** sends it to bugs@avidviewer.app; **Clear log** asks first. **Send it automatically** (on by default) sends it at most once a day, and only when there were freezes or errors since the last send.
 - **Report a bug**: email **bugs@avidviewer.app** with what happened and the steps that lead to it. The section lists the details to include, read from the TV (app version, device model, Android and Fire OS versions, and the last crash's error). Scan the **QR code** with a phone camera to start that email with the details filled in; **Open email app** appears only on TVs that have one. No playlists, logins or provider addresses are included.
 - **User guide and Control4 driver**: two QR codes to scan with a phone. **User guide (PDF)** opens the latest version of this guide; **Control4 mini driver** downloads `um_avid_viewer.c4z` (see [Control4](#12-control4)).
 - **Moving through this section:** opening it (OK on Updates & about) highlights **Report a bug** first; **Down** moves to the QR codes, then to Backup & restore and App updates. Blocks without buttons (Report a bug on TVs without an email app, and the QR codes) take the highlight themselves, with a ring around the whole block, so the page scrolls each one fully into view.
@@ -483,7 +483,7 @@ The share password is stored encrypted on the TV and is included in your PIN-loc
 - Provider passwords and the TMDB key are encrypted with the Android Keystore.
 - Backup files are encrypted and locked with your PIN, because they contain provider logins.
 - Profile PINs are stored only as salted one-way hashes, never as the digits.
-- The **playback log** (freezes and errors, with channel names) is sent to bugs@avidviewer.app at most once a day when there were problems, or when you choose Send playback log. Turn off **Send it automatically** in Settings › Updates & about to send it only by hand. Addresses, logins and IP addresses are removed first.
+- The **playback log** (freezes and errors) never records what you watch: each channel or title is a short code made from a random number kept on your TV, which can't be turned back into a name. It is sent to bugs@avidviewer.app at most once a day when there were problems, or when you choose Send playback log. Turn off **Send it automatically** in Settings › Updates & about to send it only by hand. Addresses, logins and IP addresses are removed first.
 - Crash details leave the TV only when you choose **Report issue**. They go to bugs@avidviewer.app through a small mail relay, with web addresses, server and host names, IP addresses, user names, passwords and tokens removed first.
 - Outside services get only what they need: your postal code (Open-Meteo, for weather), title lookups (TMDB/JustWatch, if you add a key), scoreboards (ESPN), update checks (GitHub) and, when you choose Report issue, the crash report (the Avid Viewer crash relay, a Google Apps Script web app).
 
@@ -589,10 +589,15 @@ Every public release since 1.0.35, newest first. From 1.1.0, versions are number
 
 ### 1.5.2 — November 14, 2026, 9:48 AM CT (current)
 
+**Release notes**
+
+- **The playback log no longer records what you watch.** Each channel or title is a short code instead, such as "Live channel 4F2A" or "Title 9C01". It's the same every time on your TV, so freezes on one channel still show up together, but it can't be turned back into a name. Names already in the log from 1.5.0–1.5.1 are replaced with "Earlier stream" when you update.
+- **Crash reports and playback logs now reach us.** Until now they were sent but filed where the bug workflow didn't see them.
+
 **Change log**
 
-- Playback log keeps no channel or title names; relay puts reports in the Inbox
-- Crash relay: manifest with the Gmail scope it needs
+- Playback log: a code per channel or title (from a random number kept on the TV) instead of its name; older names replaced with "Earlier stream"
+- Crash relay: each report gets an id and is moved to the Inbox, unread (the relay's sent copy used to stay in Sent only); its manifest lists the Gmail permission this needs
 
 ### 1.5.1 — November 14, 2026, 8:23 AM CT
 
