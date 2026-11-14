@@ -171,6 +171,12 @@ Press **Menu** while watching full screen. A panel opens on the right. **▲▼*
   - **All channels:** the setting for everything.
   - A channel's own choices win over the ones for all channels. **Use the settings for all channels here** clears this channel's own choices.
 - **＋ Add to List…** (live TV): add the channel to ★ Favorites or one of your lists.
+- **Stream info** (at the bottom of the panel): what the TV is getting right now.
+  - **Video**: picture size, codec (H.264, HEVC…), frame rate and bitrate, when the stream says.
+  - **Download speed**: how fast the stream is arriving, and what the stream needs.
+  - **Buffered ahead**: seconds of video already downloaded. Near 0 means a freeze is likely.
+  - **Freezes here** and **Dropped frames** on this channel so far, and the last problem with its likely cause.
+  - **Send playback log to bugs@avidviewer.app**.
 
 Audio tracks and captions only appear when the stream carries them, so they vary from channel to channel.
 
@@ -431,6 +437,7 @@ Everything here stays on the device; nothing is uploaded or backed up to the clo
   - The download shows its progress. If the connection stalls, the app waits 15 seconds and continues from where it stopped (up to 8 tries). The finished file is checked before installing, and a damaged download is refused.
   - If Android's installer doesn't appear within about 25 seconds, an **Open installer** button opens Android's own install screen for the same file.
 - **Last crash**: if the app closed unexpectedly, the details are kept here on the device, with **Report issue** and **Clear crash report** (asks first). **Report issue** sends them to **bugs@avidviewer.app** and then clears them (see *If the app closes unexpectedly* below).
+- **Playback log**: a summary ("Playback log: 3 freezes (longest 12 s), 1 error today") and the latest problems, each with its likely cause. **Send playback log** sends it to bugs@avidviewer.app; **Clear log** asks first. **Send it automatically** (on by default) sends it at most once a day, and only when there were freezes or errors since the last send.
 - **Report a bug**: email **bugs@avidviewer.app** with what happened and the steps that lead to it. The section lists the details to include, read from the TV (app version, device model, Android and Fire OS versions, and the last crash's error). Scan the **QR code** with a phone camera to start that email with the details filled in; **Open email app** appears only on TVs that have one. No playlists, logins or provider addresses are included.
 - **User guide and Control4 driver**: two QR codes to scan with a phone. **User guide (PDF)** opens the latest version of this guide; **Control4 mini driver** downloads `um_avid_viewer.c4z` (see [Control4](#12-control4)).
 - **Moving through this section:** opening it (OK on Updates & about) highlights **Report a bug** first; **Down** moves to the QR codes, then to Backup & restore and App updates. Blocks without buttons (Report a bug on TVs without an email app, and the QR codes) take the highlight themselves, with a ring around the whole block, so the page scrolls each one fully into view.
@@ -476,10 +483,23 @@ The share password is stored encrypted on the TV and is included in your PIN-loc
 - Provider passwords and the TMDB key are encrypted with the Android Keystore.
 - Backup files are encrypted and locked with your PIN, because they contain provider logins.
 - Profile PINs are stored only as salted one-way hashes, never as the digits.
+- The **playback log** (freezes and errors, with channel names) is sent to bugs@avidviewer.app at most once a day when there were problems, or when you choose Send playback log. Turn off **Send it automatically** in Settings › Updates & about to send it only by hand. Addresses, logins and IP addresses are removed first.
 - Crash details leave the TV only when you choose **Report issue**. They go to bugs@avidviewer.app through a small mail relay, with web addresses, server and host names, IP addresses, user names, passwords and tokens removed first.
 - Outside services get only what they need: your postal code (Open-Meteo, for weather), title lookups (TMDB/JustWatch, if you add a key), scoreboards (ESPN), update checks (GitHub) and, when you choose Report issue, the crash report (the Avid Viewer crash relay, a Google Apps Script web app).
 
 ## 11. Troubleshooting
+
+### If video freezes
+
+The app notes every freeze in the playback log, with its likely cause. Open **Menu** › Stream info while it happens, or Settings › Updates & about › Playback log afterwards:
+
+- **"the provider (HTTP 503…)"**: the provider's server refused or failed. Usually busy times or a problem on their side; try again later or contact the provider.
+- **"the network or the provider's server (connection timed out…)"**: the connection dropped. Check Wi-Fi (a wired connection or a closer router helps), or the provider may be overloaded.
+- **"too slow (getting 3.1 Mb/s, the stream needs 8 Mb/s)"**: the stream needs more than the TV is getting. Try an HD instead of a 4K channel, or improve the connection.
+- **"data stopped arriving… the provider's server paused the stream"**: no error, but nothing came. Usually the provider.
+- **"the TV's video decoder"** (picture stopped while the sound went on, or many dropped frames): the TV struggled with the video, often 4K or HEVC on a Fire TV Stick. Try the HD version of the channel.
+
+Sending the log (Send playback log) helps us find a pattern across days.
 
 - **Channels won't play**: switch the Stream format in Settings › Playback, then Refresh the playlist.
 - **No channels or guide**: check that the playlist, and its Live TV switch, are on in Settings › Playlists, then choose Refresh.
@@ -569,11 +589,18 @@ Every public release since 1.0.35, newest first. From 1.1.0, versions are number
 
 ### 1.5.0 — November 13, 2026, 7:25 PM CT (current)
 
+**Release notes**
+
+- **Finding out why video freezes.** The app now keeps a **playback log**: each time the picture freezes or stops, it notes the channel, how long it lasted and the likely cause, whether the provider's server, your network, or the TV itself. See [If video freezes](#if-video-freezes).
+- **Stream info** in full screen (**Menu** › Stream info): the video format, your download speed next to what the stream needs, how much is buffered, freezes and dropped frames, live.
+- **Playback log** in Settings › Updates & about: a summary and the latest problems, **Send playback log**, **Clear log**, and **Send it automatically** (on: at most once a day, only when there were freezes or errors). The log goes to bugs@avidviewer.app the same way crash reports do, without addresses or logins.
+- **Screenshots** in every section of this guide.
+
 **Change log**
 
-- Docs: user guide for 1.4.0 (release notes; themes, poster layouts; screenshots; PDF shows images)
-- Playback log and Stream info, to explain freezes
-- Screenshots of every user guide section; Playback log block below App updates
+- Playback log: freezes (waiting for data), picture stops (sound goes on), player errors, failed stream downloads and dropped-frame bursts, each with the channel and a likely cause; kept on the TV (last 400 entries)
+- Stream info in Picture & sound; Playback log in Settings › Updates & about, sent through the crash relay by hand or once a day automatically
+- User guide: a screenshot in every section
 
 ### 1.4.0 — November 13, 2026, 2:38 PM CT
 
