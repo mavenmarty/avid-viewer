@@ -62,11 +62,33 @@ fun AppRoot(vm: AppViewModel) {
         val rescueFm = androidx.compose.ui.platform.LocalFocusManager.current
         LaunchedEffect(vm.focusRescue) {
             if (vm.focusRescue == 0) return@LaunchedEffect
+            // The item nearest to the one that disappeared first; else the first item on screen.
+            if (!vm.anyFocus && vm.screen != Screen.PLAYER && FocusSpots.lostScreen == vm.screen && FocusSpots.recover()) return@LaunchedEffect
             for (frame in 0 until 10) {
                 androidx.compose.runtime.withFrameNanos { }
                 if (vm.anyFocus) break
                 if (!rescueFm.moveFocus(androidx.compose.ui.focus.FocusDirection.Down)) rescueFm.moveFocus(androidx.compose.ui.focus.FocusDirection.Next)
             }
+        }
+        // The highlighted item disappeared (hidden, deleted, moved away) and nothing named a new place for it
+        // within a moment: the item nearest to where it was takes it (BUG-036). Before, the highlight went to
+        // the first item on screen (the main menu or ‹ Menu). Not while a dialog has the remote, after a screen
+        // change, or once a button has been pressed since.
+        FocusSpots.screenNow = vm.screen
+        val rootView = androidx.compose.ui.platform.LocalView.current.rootView
+        if (FocusSpots.mainRoot?.get() !== rootView) FocusSpots.mainRoot = java.lang.ref.WeakReference(rootView)
+        val windowInfo = androidx.compose.ui.platform.LocalWindowInfo.current
+        LaunchedEffect(FocusSpots.lostTick, windowInfo.isWindowFocused) {
+            if (FocusSpots.lostTick == 0 || !windowInfo.isWindowFocused) return@LaunchedEffect
+            val lostAt = FocusSpots.lostAt
+            kotlinx.coroutines.delay(260)
+            val screen = vm.screen
+            if (FocusSpots.lostAt != lostAt || vm.lastKeyAt > lostAt || screen == Screen.PLAYER || FocusSpots.lostScreen != screen) return@LaunchedEffect
+            // Something that isn't a list item has it (a text field being typed in): leave it there.
+            if (vm.anyFocus && !FocusSpots.hasCurrent()) return@LaunchedEffect
+            val ok = FocusSpots.recover()
+            vm.trail("recover $ok")
+            if (ok) com.avidviewer.tv.data.CrashLog.note(appCtx, "Highlight lost on ${screen.name.lowercase()}; given to the nearest item")
         }
         if (vm.choosingProfile) {
             WhoIsWatching(vm)

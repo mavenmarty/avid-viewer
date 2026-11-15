@@ -1,6 +1,7 @@
 package com.avidviewer.tv.ui
 
 import androidx.compose.runtime.withFrameNanos
+import androidx.compose.ui.layout.boundsInWindow
 
 /**
  * Puts the highlight somewhere as soon as it can hold (menu audit work plan 2.2, FOCUS-01): asks
@@ -30,4 +31,105 @@ suspend fun focusWhenReady(
         } else if (request() && frame > 0) return true
     }
     return isFocused?.invoke() ?: false
+}
+
+/**
+ * Where the highlight goes when the item that had it disappears (navigation audit, Nov 15; BUG-036).
+ *
+ * Every [Focusable] registers here with its place on screen. When the highlighted one is removed (a hidden
+ * category, a deleted list, a poster taken off My List, a button that no longer applies), nothing on screen
+ * has the highlight. Before, the next button press put it on the first item on screen (the main menu or
+ * ‹ Menu). Now [recover] gives it at once to the item nearest to where it was, preferring the same column:
+ * usually the item that took its place.
+ */
+object FocusSpots {
+    class Spot {
+        val requester = androidx.compose.ui.focus.FocusRequester()
+        var coords: androidx.compose.ui.layout.LayoutCoordinates? = null
+        /** The window this item is drawn in (dialogs have their own). */
+        var root: android.view.View? = null
+        var focused = false
+    }
+
+    private val spots = java.util.Collections.newSetFromMap(java.util.WeakHashMap<Spot, Boolean>())
+    /** The highlighted item in the app's window, and where it was (window coordinates). */
+    private var current: java.lang.ref.WeakReference<Spot>? = null
+    private var currentBounds: androidx.compose.ui.geometry.Rect? = null
+    private var currentScreen: Screen? = null
+    /** Where the highlighted item was when it disappeared, on which screen, and when. */
+    var lostBounds: androidx.compose.ui.geometry.Rect? = null; private set
+    var lostScreen: Screen? = null; private set
+    var lostAt = 0L; private set
+    /** Counts disappearances of the highlighted item (AppRoot watches it). */
+    var lostTick by androidx.compose.runtime.mutableIntStateOf(0)
+        private set
+
+    /** The screen on show (set by AppRoot): a highlight lost on one screen isn't given back on another. */
+    @Volatile var screenNow: Screen? = null
+    /** The app's own window (set by AppRoot); highlights in dialogs, which have their own windows, aren't tracked. */
+    var mainRoot: java.lang.ref.WeakReference<android.view.View>? = null
+
+    fun add(s: Spot) = synchronized(spots) { spots.add(s) }
+
+    /** [s] left the screen; if it had the highlight, remember where, so its neighbour can take it. */
+    fun remove(s: Spot) {
+        synchronized(spots) { spots.remove(s) }
+        if (current?.get() === s) {
+            lostBounds = currentBounds
+            lostScreen = currentScreen
+            lostAt = android.os.SystemClock.uptimeMillis()
+            current = null
+            lostTick++
+        }
+    }
+
+    /** [s] has the highlight (or moved while it has it): remember where it is. */
+    fun focused(s: Spot) {
+        val c = s.coords ?: return
+        if (!c.isAttached) return
+        val main = mainRoot?.get()
+        if (main != null && s.root !== main) return
+        currentBounds = runCatching { c.boundsInWindow() }.getOrNull() ?: return
+        current = java.lang.ref.WeakReference(s)
+        currentScreen = screenNow
+    }
+
+    /** Whether one of the app window's items has the highlight now. */
+    fun hasCurrent() = current?.get()?.focused == true
+
+    private fun boundsOf(s: Spot) = runCatching { s.coords!!.boundsInWindow() }.getOrNull()
+    private fun sameColumn(a: androidx.compose.ui.geometry.Rect, b: androidx.compose.ui.geometry.Rect) = a.left < b.right && a.right > b.left
+
+    /**
+     * Gives the highlight to the item nearest to where the lost one was, in the app's window: same column first
+     * (overlapping left and right edges), by vertical distance; then anything, by distance. Returns whether one
+     * took it.
+     *
+     * When something already has the highlight (Android puts it on the first item on screen when a dialog
+     * closes onto nothing), it's moved only if that item is in another column and an item in the lost one's
+     * column is there to take it: a deliberate landing nearby (the next channel) stays.
+     */
+    fun recover(): Boolean {
+        val b = lostBounds ?: return false
+        val root = mainRoot?.get() ?: return false
+        val candidates = synchronized(spots) { spots.filter { it.root === root && it.coords?.isAttached == true } }
+            .mapNotNull { s -> boundsOf(s)?.takeIf { it.width > 1f && it.height > 1f }?.let { s to it } }
+        if (candidates.isEmpty()) return false
+        val now = current?.get()?.takeIf { it.focused }?.let { boundsOf(it) }
+        if (now != null) {
+            if (sameColumn(now, b)) return false
+            if (candidates.none { sameColumn(it.second, b) }) return false
+        }
+        fun score(r: androidx.compose.ui.geometry.Rect): Float {
+            val dy = kotlin.math.abs(r.center.y - b.center.y)
+            val dx = kotlin.math.abs(r.center.x - b.center.x)
+            // Below the old place wins a tie: the item after the removed one usually moves up into it.
+            val below = if (r.center.y >= b.center.y - 1f) 0f else 0.5f
+            return if (sameColumn(r, b)) dy + below else 100_000f + dx + dy
+        }
+        for ((s, _) in candidates.sortedBy { score(it.second) }.take(4)) {
+            if (runCatching { s.requester.requestFocus() }.isSuccess) return true
+        }
+        return false
+    }
 }

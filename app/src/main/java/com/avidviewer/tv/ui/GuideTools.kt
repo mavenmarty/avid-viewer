@@ -90,6 +90,24 @@ fun GuideSourcesPane(vm: AppViewModel, pl: Playlist, confirm: (title: String, me
     // land at the top left of the screen. It goes to the form's first field, and back to the button after.
     val addFocus = remember { FocusRequester() }
     val editFocus = remember(pl.id) { mutableMapOf<String, FocusRequester>() }
+    // ▲ / ▼ moves a source: the highlight stays on it, on the arrow that still applies (BUG-041).
+    val upFocus = remember(pl.id) { HashMap<String, FocusRequester>() }
+    val downFocus = remember(pl.id) { HashMap<String, FocusRequester>() }
+    var moved by remember(pl.id) { mutableStateOf<Pair<String, Int>?>(null) }
+    LaunchedEffect(moved) {
+        val (id, dir) = moved ?: return@LaunchedEffect
+        val srcs = vm.playlists.firstOrNull { it.id == pl.id }?.epgSources.orEmpty()
+        val isFirst = srcs.firstOrNull()?.id == id
+        val isLast = srcs.lastOrNull()?.id == id
+        val target = when {
+            dir < 0 && !isFirst -> upFocus[id]
+            dir > 0 && !isLast -> downFocus[id]
+            dir < 0 -> downFocus[id]
+            else -> upFocus[id]
+        }
+        focusWhenReady(vm, frames = 30) { target != null && runCatching { target.requestFocus() }.isSuccess }
+        moved = null
+    }
     var returnTo by remember(pl.id) { mutableStateOf<String?>(null) }
     fun close() { returnTo = editing; editing = null }
     LaunchedEffect(returnTo) {
@@ -137,8 +155,8 @@ fun GuideSourcesPane(vm: AppViewModel, pl: Playlist, confirm: (title: String, me
                 androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     TvButton(if (s.enabled) "Turn off" else "Turn on") { vm.setEpgSourceEnabled(pl.id, s.id, !s.enabled) }
                     TvButton("✎  Edit", modifier = Modifier.testTag("guide-src-edit").focusRequester(editFocus.getOrPut(s.id) { FocusRequester() })) { editing = s.id }
-                    if (pl.epgSources.first() != s) TvButton("▲") { vm.moveEpgSource(pl.id, s.id, -1) }
-                    if (pl.epgSources.last() != s) TvButton("▼") { vm.moveEpgSource(pl.id, s.id, 1) }
+                    if (pl.epgSources.first() != s) TvButton("▲", modifier = Modifier.focusRequester(upFocus.getOrPut(s.id) { FocusRequester() })) { vm.moveEpgSource(pl.id, s.id, -1); moved = s.id to -1 }
+                    if (pl.epgSources.last() != s) TvButton("▼", modifier = Modifier.focusRequester(downFocus.getOrPut(s.id) { FocusRequester() })) { vm.moveEpgSource(pl.id, s.id, 1); moved = s.id to 1 }
                     TvButton("✕  Delete", modifier = Modifier.testTag("guide-src-delete")) {
                         confirm("Delete ${s.name}?", "This guide source is removed from ${pl.name} and its listings disappear after the next download. This can't be undone.", "Delete") { vm.removeEpgSource(pl.id, s.id) }
                     }
@@ -174,8 +192,18 @@ private fun SourceForm(vm: AppViewModel, src: EpgSource?, onCancel: () -> Unit, 
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Label(if (src == null) "New guide source" else "Edit guide source", size = 14.sp, color = C.Text, weight = FontWeight.Bold)
-        TvField("Name (e.g. EPG Share US)", name, modifier = Modifier.testTag("guide-src-name").focusRequester(first)) { name = it }
-        TvField("XMLTV address (http… .xml or .xml.gz)", url, modifier = Modifier.testTag("guide-src-url")) { url = it; problem = null }
+        var openUrl by remember(src?.id) { mutableStateOf(0) }
+        fun save() {
+            val u = url.trim()
+            if (!(u.startsWith("http://", true) || u.startsWith("https://", true))) problem = "Enter an address that starts with http:// or https://."
+            else onSave(name, u, offset)
+        }
+        // A new source opens the keyboard on Name; Next goes on to the address; Done there saves (BUG-044).
+        TvField(
+            "Name (e.g. EPG Share US)", name, modifier = Modifier.testTag("guide-src-name").focusRequester(first),
+            imeAction = androidx.compose.ui.text.input.ImeAction.Next, autoOpen = src == null, next = { openUrl++ },
+        ) { name = it }
+        TvField("XMLTV address (http… .xml or .xml.gz)", url, modifier = Modifier.testTag("guide-src-url"), openSignal = openUrl, next = { save() }) { url = it; problem = null }
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             Label("Time offset", size = 13.sp, color = C.Text, modifier = Modifier.width(90.dp))
             TvButton("−") { offset = (offset - 1).coerceAtLeast(-12) }
@@ -185,11 +213,7 @@ private fun SourceForm(vm: AppViewModel, src: EpgSource?, onCancel: () -> Unit, 
         Label("Use an offset only if this guide's times are consistently early or late.", size = 12.sp, color = C.Muted, lines = Int.MAX_VALUE)
         problem?.let { Label(it, size = 12.sp, color = C.Accent, lines = 2) }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            TvButton("Save", primary = true, modifier = Modifier.testTag("guide-src-save")) {
-                val u = url.trim()
-                if (!(u.startsWith("http://", true) || u.startsWith("https://", true))) problem = "Enter an address that starts with http:// or https://."
-                else onSave(name, u, offset)
-            }
+            TvButton("Save", primary = true, modifier = Modifier.testTag("guide-src-save")) { save() }
             TvButton("Cancel") { onCancel() }
         }
     }

@@ -120,6 +120,8 @@ fun NewListDialog(vm: AppViewModel, onDone: () -> Unit) {
         val g = vm.createList(name)
         onDone()
         vm.chooseGroup(vm.activePlaylist()?.id ?: "", g)
+        // The new (empty) list's row takes the highlight, not ＋ New list.
+        vm.navFocusKey = g
     }
 }
 
