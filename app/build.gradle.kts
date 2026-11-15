@@ -1,3 +1,4 @@
+import java.io.File
 import java.security.KeyStore
 import java.security.MessageDigest
 import java.security.cert.X509Certificate
@@ -19,7 +20,7 @@ fun signingCertSha256(ksPath: String?, storePassword: String?, alias: String?): 
     if (ksPath.isNullOrBlank() || storePassword.isNullOrBlank() || alias.isNullOrBlank()) return ""
     return runCatching {
         val ks = KeyStore.getInstance("PKCS12")
-        java.io.File(ksPath).inputStream().use { ks.load(it, storePassword.toCharArray()) }
+        File(ksPath).inputStream().use { ks.load(it, storePassword.toCharArray()) }
         val cert = ks.getCertificate(alias) as X509Certificate
         MessageDigest.getInstance("SHA-256").digest(cert.encoded).joinToString("") { "%02x".format(it) }
     }.getOrDefault("")
