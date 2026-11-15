@@ -51,6 +51,8 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.TextRange
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
@@ -192,11 +194,12 @@ fun ManageScreen(vm: AppViewModel) {
 @Composable
 fun RenameDialog(title: String, current: String, onDismiss: () -> Unit, onSave: (String) -> Unit) {
     var text by remember { mutableStateOf(current) }
+    // The keyboard opens with the dialog, the current name selected; Done saves (BUG-043: 9 presses → 5).
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = C.Surface,
         title = { Text(title, color = C.Text) },
-        text = { TvField("Name", text) { text = it } },
+        text = { TvField("Name", text, autoOpen = true, selectAll = true, next = { onSave(text) }) { text = it } },
         confirmButton = { TvButton("Save", primary = true) { onSave(text) } },
         dismissButton = { TvButton("Cancel") { onDismiss() } },
     )
@@ -205,6 +208,14 @@ fun RenameDialog(title: String, current: String, onDismiss: () -> Unit, onSave: 
 /**
  * Remote-friendly text field. Moving onto it only highlights it; pressing OK opens the
  * on-screen keyboard. Done (or Back) closes the keyboard and leaves focus on the field.
+ *
+ * Navigation audit (Nov 15):
+ * - [autoOpen]: the keyboard opens as soon as the field appears (a dialog with one field), with the text
+ *   selected when [selectAll].
+ * - [next]: what the keyboard's Next / Done does instead of staying on the field: open the next field
+ *   ([openSignal] on it), save, or move to Save (BUG-044). The field doesn't take the highlight back then.
+ * - After the keyboard closes, the field asks for the highlight until it has it (BUG-042): asking once could
+ *   come too early on a Fire TV, leaving nothing highlighted.
  */
 @Composable
 fun TvField(
@@ -214,14 +225,22 @@ fun TvField(
     password: Boolean = false,
     imeAction: ImeAction = ImeAction.Done,
     onSubmit: (() -> Unit)? = null,
+    autoOpen: Boolean = false,
+    selectAll: Boolean = false,
+    openSignal: Int = 0,
+    next: (() -> Unit)? = null,
     onChange: (String) -> Unit,
 ) {
-    var editing by remember { mutableStateOf(false) }
+    var editing by remember { mutableStateOf(autoOpen) }
     var wasEditing by remember { mutableStateOf(false) }
     var hadFocus by remember { mutableStateOf(false) }
+    var boxHas by remember { mutableStateOf(false) }
+    var handedOn by remember { mutableStateOf(false) }
     val fieldFocus = remember { FocusRequester() }
     val boxFocus = remember { FocusRequester() }
     val keyboard = LocalSoftwareKeyboardController.current
+    // The previous field's Next opens this one.
+    LaunchedEffect(openSignal) { if (openSignal > 0) editing = true }
 
     fun finish() {
         keyboard?.hide()
@@ -230,7 +249,7 @@ fun TvField(
 
     if (!editing) {
         Focusable(
-            modifier = modifier.fillMaxWidth().height(56.dp).focusRequester(boxFocus),
+            modifier = modifier.fillMaxWidth().height(56.dp).focusRequester(boxFocus).onFocusChanged { boxHas = it.isFocused },
             color = C.Surface2,
             focusedColor = C.FocusRaised,
             onClick = { editing = true },
@@ -248,13 +267,24 @@ fun TvField(
         LaunchedEffect(Unit) {
             if (wasEditing) {
                 wasEditing = false
-                runCatching { boxFocus.requestFocus() }
+                if (handedOn) { handedOn = false; return@LaunchedEffect }
+                // Keep asking until the field really has the highlight (~1 s at most).
+                for (frame in 0 until 60) {
+                    androidx.compose.runtime.withFrameNanos { }
+                    if (boxHas) break
+                    runCatching { boxFocus.requestFocus() }
+                }
             }
         }
     } else {
+        var tfv by remember { mutableStateOf(TextFieldValue(value, if (selectAll) TextRange(0, value.length) else TextRange(value.length))) }
+        if (tfv.text != value) tfv = TextFieldValue(value, TextRange(value.length))
+        val submit = {
+            if (next != null) { handedOn = true; finish(); next() } else { finish(); onSubmit?.invoke() }
+        }
         OutlinedTextField(
-            value = value,
-            onValueChange = onChange,
+            value = tfv,
+            onValueChange = { tfv = it; if (it.text != value) onChange(it.text) },
             label = { Text(label) },
             singleLine = true,
             modifier = modifier.fillMaxWidth().focusRequester(fieldFocus).onFocusChanged {
@@ -264,21 +294,27 @@ fun TvField(
             visualTransformation = if (password) PasswordVisualTransformation() else VisualTransformation.None,
             keyboardOptions = KeyboardOptions(keyboardType = if (password) KeyboardType.Password else KeyboardType.Uri, imeAction = imeAction),
             keyboardActions = KeyboardActions(
-                onDone = { finish(); onSubmit?.invoke() },
-                onSearch = { finish(); onSubmit?.invoke() },
-                onGo = { finish(); onSubmit?.invoke() },
-                onNext = { finish(); onSubmit?.invoke() },
+                onDone = { submit() },
+                onSearch = { submit() },
+                onGo = { submit() },
+                onNext = { submit() },
             ),
             colors = OutlinedTextFieldDefaults.colors(
                 focusedTextColor = C.Text, unfocusedTextColor = C.Text,
                 focusedBorderColor = C.Accent, unfocusedBorderColor = C.Line,
-                focusedLabelColor = C.Accent, unfocusedLabelColor = C.Muted, cursorColor = C.Accent,
+                focusedLabelColor = C.Accent, unfocusedLabelColor = C.Muted,
+                // No cursor in the JVM tests: its endless blinking would never let them settle.
+                cursorColor = if (android.os.Build.FINGERPRINT == "robolectric") androidx.compose.ui.graphics.Color.Unspecified else C.Accent,
             ),
         )
         BackHandler { finish() }
         LaunchedEffect(Unit) {
             wasEditing = true
-            runCatching { fieldFocus.requestFocus() }
+            // In a dialog that has just opened the field may not be ready on the first frame: retry briefly.
+            for (frame in 0 until 30) {
+                if (runCatching { fieldFocus.requestFocus() }.isSuccess && frame > 0) break
+                androidx.compose.runtime.withFrameNanos { }
+            }
             keyboard?.show()
         }
     }

@@ -60,9 +60,6 @@ android {
             isIncludeAndroidResources = true
             all {
                 it.maxHeapSize = "3g"
-                // ci-check (navigation audit): only the probe, one JVM per test class.
-                it.filter.includeTestsMatching("*NavAuditTest")
-                it.setForkEvery(1)
                 System.getenv("SMB_TEST_ADDRESS")?.let { v -> it.environment("SMB_TEST_ADDRESS", v) }
                 // Print the full reason for any failure in the build log.
                 it.testLogging {
