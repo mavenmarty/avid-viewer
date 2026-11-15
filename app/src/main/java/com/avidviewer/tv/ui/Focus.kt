@@ -71,6 +71,9 @@ object FocusSpots {
     /** The app's own window (set by AppRoot); highlights in dialogs, which have their own windows, aren't tracked. */
     var mainRoot: java.lang.ref.WeakReference<android.view.View>? = null
 
+    /** Diagnostics (AppViewModel.trail). */
+    var log: (String) -> Unit = {}
+
     fun add(s: Spot) = synchronized(spots) { spots.add(s) }
 
     /** [s] left the screen; if it had the highlight, remember where, so its neighbour can take it. */
@@ -82,6 +85,7 @@ object FocusSpots {
             lostAt = android.os.SystemClock.uptimeMillis()
             current = null
             lostTick++
+            log("lost ${lostBounds?.let { "${it.left.toInt()},${it.top.toInt()}" }} on $lostScreen")
         }
     }
 
@@ -121,6 +125,7 @@ object FocusSpots {
             .mapNotNull { s -> boundsOf(s)?.takeIf { it.width > 1f && it.height > 1f }?.let { s to it } }
         if (candidates.isEmpty()) return false
         val now = current?.get()?.takeIf { it.focused }?.let { boundsOf(it) }
+        log("recover from ${b.left.toInt()},${b.top.toInt()} now=${now?.let { "${it.left.toInt()},${it.top.toInt()}" }} other=$somethingFocused")
         if (now != null || somethingFocused) {
             // A deliberate landing next to where the item was (the next channel) stays.
             if (now != null && sameColumn(now, b) && kotlin.math.abs(now.center.y - b.center.y) <= b.height * 1.6f) return false
@@ -133,9 +138,10 @@ object FocusSpots {
             val below = if (r.center.y >= b.center.y - 1f) 0f else 0.5f
             return if (sameColumn(r, b)) dy + below else 100_000f + dx + dy
         }
-        for ((s, _) in candidates.sortedBy { score(it.second) }.take(4)) {
-            if (runCatching { s.requester.requestFocus() }.isSuccess) return true
+        for ((s, r) in candidates.sortedBy { score(it.second) }.take(4)) {
+            if (runCatching { s.requester.requestFocus() }.isSuccess) { log("to ${r.left.toInt()},${r.top.toInt()} of ${candidates.size}"); return true }
         }
+        log("none of ${candidates.size}")
         return false
     }
 }

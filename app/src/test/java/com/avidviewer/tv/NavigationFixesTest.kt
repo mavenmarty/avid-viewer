@@ -133,7 +133,7 @@ class NavigationFixesTest {
 
     private fun expectFocus(what: String, cond: (String) -> Boolean) {
         val ok = waitFor(4_000) { cond(focused()) }
-        assertTrue("$what (highlight: ${where()}; trail: ${vm.focusTrail.toList().takeLast(8)})", ok)
+        assertTrue("$what (highlight: ${where()}; trail: ${vm.focusTrail.toList().takeLast(14)})", ok)
     }
 
     @Test fun hidingATvCategoryHighlightsTheNextOne() {
