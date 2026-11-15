@@ -234,16 +234,16 @@ class UsabilityTest {
         focusKidsProgramme()
         hold(Key.DirectionLeft, 6)
         waitFor("held Left back at now (start ${vm.nav.guideWindowStart}, base $base)") { vm.nav.guideWindowStart == base }
-        // Left from the first programme goes back up to 2 hours, no further; aired programmes say so.
+        // Nov 15: the guide never scrolls into the past. Left from the first programme goes to the channel name
+        // (the window stays on now), and Left again leaves the guide for the categories.
         focusKidsProgramme()
-        var lefts = 0
-        while (vm.nav.guideWindowStart != base - 2 * 3600_000L && lefts < 10) { press(listOf(Key.DirectionLeft)); lefts++ }
-        assertEquals("window 2 h back (focus: ${focused()})", base - 2 * 3600_000L, vm.nav.guideWindowStart)
-        waitFor("an aired programme highlighted and marked (focus: ${focused()})") {
-            rule.onAllNodes(androidx.compose.ui.test.isFocused()).fetchSemanticsNodes().any { it.config.getOrNull(androidx.compose.ui.semantics.SemanticsProperties.StateDescription) == "Already aired" }
+        press(listOf(Key.DirectionLeft))
+        assertEquals("not scrolled back (focus: ${focused()})", base, vm.nav.guideWindowStart)
+        waitFor("Left again leaves the guide for the categories (focus: ${focused()})") {
+            if (vm.guideHasFocus) press(listOf(Key.DirectionLeft))
+            !vm.guideHasFocus
         }
-        press(listOf(Key.DirectionLeft)) // to the channel name: the window stays
-        assertEquals("never more than 2 h back", base - 2 * 3600_000L, vm.nav.guideWindowStart)
+        assertEquals("still on now", base, vm.nav.guideWindowStart)
         // Now, in the day strip, comes back.
         rule.onAllNodesWithText("Now").onFirst().performClick()
         settle()

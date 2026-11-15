@@ -61,11 +61,30 @@ class PlaybackMonitor(
     private var droppedWindow = 0
     private var droppedWindowAt = 0L
     private val recentLoadErrors = ArrayDeque<Pair<Long, String>>()
+    private var live = false
+    private var startedAt = 0L
+
+    // ---- Reconnecting (Nov 15) ----
+    /** Reconnects the stream ([live]: at the live point; else where it was). Set by AppViewModel. */
+    var onReconnect: ((live: Boolean) -> Unit)? = null
+    private val reconnects = ArrayDeque<Long>()
+    private var reconnectAt = 0L
+    private var reconnectWhy = ""
+
+    // ---- Buffer while playing (Nov 15): one sample a second ----
+    private val bufferSeconds = IntArray(61) // 0..59 s, 60 = a minute or more
+    private var bufferSamples = 0
+    private var bufferMinMs = Long.MAX_VALUE
+    private var bufferUnder6 = 0
 
     /** A channel or title is starting ([key]: its key, never shown; the log gets a code instead of the name). */
     fun started(key: String, live: Boolean) {
         endStall(left = true)
         endPicture()
+        logBuffer()
+        this.live = live
+        startedAt = clock(); reconnects.clear(); reconnectAt = 0
+        DataFlow.lastBytesAt = startedAt
         name = log.label(key, live)
         everReady = false; lastRendered = -1; dropped = 0; droppedWindow = 0; recentLoadErrors.clear()
         stats = StreamStats()
@@ -89,6 +108,13 @@ class PlaybackMonitor(
             } else endPicture()
         } else if (!player.isPlaying) endPicture()
         lastRendered = rendered; lastPosition = pos
+        if (player.isPlaying) {
+            bufferSamples++
+            bufferSeconds[(buffered / 1000).toInt().coerceIn(0, 60)]++
+            if (buffered < bufferMinMs) bufferMinMs = buffered
+            if (buffered < 6_000) bufferUnder6++
+        }
+        checkReconnect(now, buffered)
         if (droppedWindowAt > 0 && now - droppedWindowAt > 10_000) {
             if (droppedWindow >= 30) log.add(PlaybackLog.DROPPED, name, "$droppedWindow frames dropped in 10 s (the TV struggled to decode${videoText().let { if (it.isBlank()) "" else ": $it" }})")
             droppedWindow = 0; droppedWindowAt = 0
@@ -100,6 +126,54 @@ class PlaybackMonitor(
             bufferedMs = buffered,
             droppedFrames = dropped,
         )
+    }
+
+    /**
+     * Reconnects when the picture has stood still for 5 seconds while the sound plays (usually a jump in the
+     * provider's timestamps the player doesn't recover from), or when no data has arrived for 4 seconds and
+     * less than 8 seconds is left in the buffer (the provider's server stopped sending), before the screen
+     * freezes. Not in the first 10 seconds of a channel or after a reconnect, and at most 3 times in 3 minutes on
+     * one channel, so a channel that keeps failing isn't reconnected over and over.
+     */
+    private fun checkReconnect(now: Long, buffered: Long) {
+        if (onReconnect == null || name.isEmpty() || !player.playWhenReady) return
+        val state = player.playbackState
+        if (state != Player.STATE_READY && state != Player.STATE_BUFFERING) return
+        if (reconnectAt > 0 && player.isPlaying && now - reconnectAt in 1..60_000 && reconnectWhy.isNotEmpty()) {
+            log.add(PlaybackLog.RECOVER, name, "Playing again ${((now - reconnectAt) / 1000).coerceAtLeast(1)} s after reconnecting ($reconnectWhy).")
+            reconnectWhy = ""
+        }
+        while (reconnects.isNotEmpty() && now - reconnects.first() > 180_000) reconnects.removeFirst()
+        val why = reconnectReason(now, startedAt, reconnectAt, picStuckSince, DataFlow.lastBytesAt, buffered, everReady) ?: return
+        if (reconnects.size >= 3) {
+            if (reconnects.size == 3) log.add(PlaybackLog.RECOVER, name, "Not reconnecting again: 3 reconnects in 3 minutes ($why).")
+            reconnects.addLast(now)
+            return
+        }
+        reconnects.addLast(now)
+        if (why.startsWith("the picture")) endPicture() else endStall(left = false)
+        log.add(PlaybackLog.RECOVER, name, "Reconnected: $why.")
+        reconnectAt = now; reconnectWhy = why
+        DataFlow.lastBytesAt = now
+        onReconnect?.invoke(live)
+    }
+
+    /** The previous channel's buffer, once it has played for at least 30 seconds. */
+    private fun logBuffer() {
+        if (name.isNotEmpty() && bufferSamples >= 30) {
+            var acc = 0; var median = 0
+            for (i in bufferSeconds.indices) { acc += bufferSeconds[i]; if (acc * 2 >= bufferSamples) { median = i; break } }
+            val mins = bufferSamples / 60
+            log.add(PlaybackLog.BUFFER, name,
+                "Buffer while playing (${if (mins > 0) "$mins min" else "$bufferSamples s"}): typical ${if (median >= 60) "60+" else median} s, lowest ${bufferMinMs / 1000} s, under 6 s for ${bufferUnder6 * 100 / bufferSamples}% of the time.")
+        }
+        bufferSeconds.fill(0); bufferSamples = 0; bufferMinMs = Long.MAX_VALUE; bufferUnder6 = 0
+    }
+
+    /** Playback stopped (leaving full screen or the app): logs the buffer seen. */
+    fun finished() {
+        logBuffer()
+        name = ""
     }
 
     private fun endPicture() {
@@ -161,7 +235,32 @@ class PlaybackMonitor(
     private fun videoText() = player.videoFormat?.let { formatText(it) } ?: ""
     private fun streamKbps(): Int = player.videoFormat?.let { f -> listOf(f.bitrate, f.peakBitrate, f.averageBitrate).firstOrNull { it > 0 } }?.let { it / 1000 } ?: 0
 
+    /** When stream data last arrived (any bytes from the provider). Fed by [transfer]. */
+    object DataFlow {
+        @Volatile var lastBytesAt = 0L
+    }
+
     companion object {
+        /**
+         * Why the stream should be reconnected now, or null (see checkReconnect): the picture still for 5 s, or no
+         * data for 4 s with under 8 s buffered; never in the first 10 s of a channel or of a reconnect.
+         */
+        fun reconnectReason(now: Long, startedAt: Long, reconnectAt: Long, picStuckSince: Long, lastBytesAt: Long, bufferedMs: Long, everReady: Boolean): String? {
+            if (now - startedAt < 10_000 || (reconnectAt > 0 && now - reconnectAt < 10_000)) return null
+            if (picStuckSince > 0 && now - picStuckSince >= 5_000) return "the picture stood still for ${(now - picStuckSince) / 1000} s"
+            val quiet = now - lastBytesAt
+            if (everReady && quiet >= 4_000 && bufferedMs < 8_000) return "no data for ${quiet / 1000} s with ${bufferedMs / 1000} s left in the buffer"
+            return null
+        }
+
+        /** Notes each piece of data that arrives, for the "no data for 4 s" rule. */
+        val transfer = object : androidx.media3.datasource.TransferListener {
+            override fun onTransferInitializing(source: androidx.media3.datasource.DataSource, dataSpec: androidx.media3.datasource.DataSpec, isNetwork: Boolean) {}
+            override fun onTransferStart(source: androidx.media3.datasource.DataSource, dataSpec: androidx.media3.datasource.DataSpec, isNetwork: Boolean) { DataFlow.lastBytesAt = System.currentTimeMillis() }
+            override fun onBytesTransferred(source: androidx.media3.datasource.DataSource, dataSpec: androidx.media3.datasource.DataSpec, isNetwork: Boolean, bytesTransferred: Int) { if (bytesTransferred > 0) DataFlow.lastBytesAt = System.currentTimeMillis() }
+            override fun onTransferEnd(source: androidx.media3.datasource.DataSource, dataSpec: androidx.media3.datasource.DataSpec, isNetwork: Boolean) {}
+        }
+
         /** "1920×1080 · H.264 · 30 fps · 6.2 Mb/s" */
         fun formatText(f: Format): String = listOfNotNull(
             if (f.width > 0 && f.height > 0) "${f.width}×${f.height}" else null,

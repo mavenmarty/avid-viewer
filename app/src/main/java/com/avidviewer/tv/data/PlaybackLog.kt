@@ -96,13 +96,15 @@ class PlaybackLog(private val file: File, private val max: Int = 400, private va
         val stalls = list.filter { it.kind == STALL }
         val pics = list.count { it.kind == PICTURE }
         val errors = list.count { it.kind == ERROR }
-        if (stalls.isEmpty() && pics == 0 && errors == 0) return "Playback log: no freezes or errors"
+        val recovers = list.count { it.kind == RECOVER && it.text.startsWith("Reconnected") }
+        if (stalls.isEmpty() && pics == 0 && errors == 0 && recovers == 0) return "Playback log: no freezes or errors"
         val longest = stalls.maxOfOrNull { secondsIn(it.text) } ?: 0
         val days = list.firstOrNull()?.let { ((clock() - it.time) / 86_400_000L).toInt() + 1 } ?: 1
         return "Playback log: " + listOfNotNull(
             stalls.size.takeIf { it > 0 }?.let { "$it freeze" + (if (it == 1) "" else "s") + (if (longest > 0) " (longest $longest s)" else "") },
             pics.takeIf { it > 0 }?.let { "$it picture stop" + if (it == 1) "" else "s" },
             errors.takeIf { it > 0 }?.let { "$it error" + if (it == 1) "" else "s" },
+            recovers.takeIf { it > 0 }?.let { "$it reconnect" + if (it == 1) "" else "s" },
         ).joinToString(", ") + if (days <= 1) " today" else " in the last $days days"
     }
 
@@ -132,7 +134,11 @@ class PlaybackLog(private val file: File, private val max: Int = 400, private va
         const val ERROR = "ERROR"
         const val LOAD = "LOAD"
         const val DROPPED = "DROPPED"
-        val PROBLEMS = setOf(STALL, PICTURE, ERROR)
+        /** The app reconnected to the stream itself (a stuck picture, or data that stopped arriving). */
+        const val RECOVER = "RECOVER"
+        /** How much was buffered while a channel or title played (typical, lowest, time under 6 s). */
+        const val BUFFER = "BUFFER"
+        val PROBLEMS = setOf(STALL, PICTURE, ERROR, RECOVER)
         val LABEL = Regex("^(Live channel|Title) [0-9A-F]{4}$|^Earlier stream$")
     }
 }
