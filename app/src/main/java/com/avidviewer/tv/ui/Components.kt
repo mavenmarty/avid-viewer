@@ -27,6 +27,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.layout.onPlaced
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.input.key.Key
@@ -106,8 +107,14 @@ fun Focusable(
 ) {
     var focused by remember { mutableStateOf(false) }
     val menuDown = remember { booleanArrayOf(false) }
+    // Registered so a removed item's highlight can go to its neighbour (FocusSpots).
+    val spot = remember { FocusSpots.Spot() }
+    val view = androidx.compose.ui.platform.LocalView.current
+    androidx.compose.runtime.DisposableEffect(spot) { FocusSpots.add(spot); onDispose { FocusSpots.remove(spot) } }
     Row(
         modifier
+            .focusRequester(spot.requester)
+            .onPlaced { spot.coords = it; spot.root = view.rootView; if (spot.focused) FocusSpots.focused(spot) }
             .onPreviewKeyEvent {
                 // Menu acts on release (so the same press doesn't reach what it opens). Its press is taken here
                 // too: left to the system it beeped as an unhandled key, and on 1.0.170 a tester saw only the beep
@@ -119,7 +126,8 @@ fun Focusable(
             }
             .onFocusChanged {
                 focused = it.isFocused
-                if (it.isFocused) onFocus?.invoke()
+                spot.focused = it.isFocused
+                if (it.isFocused) { FocusSpots.focused(spot); onFocus?.invoke() }
             }
             .clip(shape)
             .background(if (focused) focusedColor else color)

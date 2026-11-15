@@ -44,6 +44,8 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.setText
+import androidx.compose.ui.semantics.onImeAction
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.toggleableState
 import androidx.compose.ui.focus.FocusRequester
@@ -51,6 +53,8 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.TextRange
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
@@ -192,11 +196,12 @@ fun ManageScreen(vm: AppViewModel) {
 @Composable
 fun RenameDialog(title: String, current: String, onDismiss: () -> Unit, onSave: (String) -> Unit) {
     var text by remember { mutableStateOf(current) }
+    // The keyboard opens with the dialog, the current name selected; Done saves (BUG-043: 9 presses → 5).
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = C.Surface,
         title = { Text(title, color = C.Text) },
-        text = { TvField("Name", text) { text = it } },
+        text = { TvField("Name", text, autoOpen = true, selectAll = true, next = { onSave(text) }) { text = it } },
         confirmButton = { TvButton("Save", primary = true) { onSave(text) } },
         dismissButton = { TvButton("Cancel") { onDismiss() } },
     )
@@ -205,6 +210,14 @@ fun RenameDialog(title: String, current: String, onDismiss: () -> Unit, onSave: 
 /**
  * Remote-friendly text field. Moving onto it only highlights it; pressing OK opens the
  * on-screen keyboard. Done (or Back) closes the keyboard and leaves focus on the field.
+ *
+ * Navigation audit (Nov 15):
+ * - [autoOpen]: the keyboard opens as soon as the field appears (a dialog with one field), with the text
+ *   selected when [selectAll].
+ * - [next]: what the keyboard's Next / Done does instead of staying on the field: open the next field
+ *   ([openSignal] on it), save, or move to Save (BUG-044). The field doesn't take the highlight back then.
+ * - After the keyboard closes, the field asks for the highlight until it has it (BUG-042): asking once could
+ *   come too early on a Fire TV, leaving nothing highlighted.
  */
 @Composable
 fun TvField(
@@ -214,23 +227,48 @@ fun TvField(
     password: Boolean = false,
     imeAction: ImeAction = ImeAction.Done,
     onSubmit: (() -> Unit)? = null,
+    autoOpen: Boolean = false,
+    selectAll: Boolean = false,
+    openSignal: Int = 0,
+    next: (() -> Unit)? = null,
     onChange: (String) -> Unit,
 ) {
-    var editing by remember { mutableStateOf(false) }
+    // JVM tests only: a text field being edited inside a dialog never lets a test settle, so there the field
+    // stays closed and the tests type through its accessibility actions (below), as TalkBack can.
+    val inTestDialog = android.os.Build.FINGERPRINT == "robolectric" &&
+        androidx.compose.ui.platform.LocalView.current.rootView !== FocusSpots.mainRoot?.get()
+    var editing by remember { mutableStateOf(autoOpen && !inTestDialog) }
     var wasEditing by remember { mutableStateOf(false) }
     var hadFocus by remember { mutableStateOf(false) }
+    var boxHas by remember { mutableStateOf(false) }
+    var handedOn by remember { mutableStateOf(false) }
     val fieldFocus = remember { FocusRequester() }
     val boxFocus = remember { FocusRequester() }
     val keyboard = LocalSoftwareKeyboardController.current
+    // The previous field's Next opens this one.
+    LaunchedEffect(openSignal) { if (openSignal > 0) editing = true }
 
+    /** Done / Back: the keyboard closes and the field takes the highlight back (unless [next] handed it on). */
+    var reclaim by remember { mutableStateOf(false) }
     fun finish() {
         keyboard?.hide()
+        reclaim = true
         editing = false
+    }
+
+    /** The keyboard's Done / Next. */
+    fun submit() {
+        if (next != null) { handedOn = true; finish(); next() } else { finish(); onSubmit?.invoke() }
     }
 
     if (!editing) {
         Focusable(
-            modifier = modifier.fillMaxWidth().height(56.dp).focusRequester(boxFocus),
+            modifier = modifier.fillMaxWidth().height(56.dp).focusRequester(boxFocus).onFocusChanged { boxHas = it.isFocused }
+                // TalkBack (and the tests) can set the text and submit it without opening the keyboard.
+                .semantics {
+                    setText { onChange(it.text); true }
+                    onImeAction(imeAction) { submit(); true }
+                },
             color = C.Surface2,
             focusedColor = C.FocusRaised,
             onClick = { editing = true },
@@ -248,27 +286,58 @@ fun TvField(
         LaunchedEffect(Unit) {
             if (wasEditing) {
                 wasEditing = false
-                runCatching { boxFocus.requestFocus() }
+                val back = reclaim && !handedOn
+                reclaim = false; handedOn = false
+                // Left by moving to something else: that keeps the highlight.
+                if (!back) return@LaunchedEffect
+                // Keep asking until the field really has the highlight (~1 s at most).
+                for (frame in 0 until 60) {
+                    androidx.compose.runtime.withFrameNanos { }
+                    if (boxHas) break
+                    runCatching { boxFocus.requestFocus() }
+                }
             }
         }
     } else {
-        OutlinedTextField(
-            value = value,
-            onValueChange = onChange,
-            label = { Text(label) },
-            singleLine = true,
-            modifier = modifier.fillMaxWidth().focusRequester(fieldFocus).onFocusChanged {
+        var tfv by remember { mutableStateOf(TextFieldValue(value, if (selectAll) TextRange(0, value.length) else TextRange(value.length))) }
+        if (tfv.text != value) tfv = TextFieldValue(value, TextRange(value.length))
+        val fieldModifier = modifier.fillMaxWidth().focusRequester(fieldFocus).onFocusChanged {
+                FocusSpots.typing = it.isFocused
                 if (it.isFocused) hadFocus = true
                 else if (hadFocus) { hadFocus = false; editing = false }
-            },
-            visualTransformation = if (password) PasswordVisualTransformation() else VisualTransformation.None,
-            keyboardOptions = KeyboardOptions(keyboardType = if (password) KeyboardType.Password else KeyboardType.Uri, imeAction = imeAction),
-            keyboardActions = KeyboardActions(
-                onDone = { finish(); onSubmit?.invoke() },
-                onSearch = { finish(); onSubmit?.invoke() },
-                onGo = { finish(); onSubmit?.invoke() },
-                onNext = { finish(); onSubmit?.invoke() },
-            ),
+            }
+        val actions = KeyboardActions(
+            onDone = { submit() },
+            onSearch = { submit() },
+            onGo = { submit() },
+            onNext = { submit() },
+        )
+        val options = KeyboardOptions(keyboardType = if (password) KeyboardType.Password else KeyboardType.Uri, imeAction = imeAction)
+        val transform = if (password) PasswordVisualTransformation() else VisualTransformation.None
+        androidx.compose.runtime.DisposableEffect(Unit) { onDispose { FocusSpots.typing = false } }
+        if (android.os.Build.FINGERPRINT == "robolectric") {
+            // JVM tests: a plain field with no cursor. The outlined field's endlessly blinking cursor never lets
+            // a test settle while a dialog has the keyboard open.
+            androidx.compose.foundation.text.BasicTextField(
+                value = tfv,
+                onValueChange = { tfv = it; if (it.text != value) onChange(it.text) },
+                singleLine = true,
+                modifier = fieldModifier.height(56.dp),
+                visualTransformation = transform,
+                keyboardOptions = options,
+                keyboardActions = actions,
+                cursorBrush = androidx.compose.ui.graphics.SolidColor(androidx.compose.ui.graphics.Color.Unspecified),
+                textStyle = androidx.compose.ui.text.TextStyle(color = C.Text),
+            )
+        } else OutlinedTextField(
+            value = tfv,
+            onValueChange = { tfv = it; if (it.text != value) onChange(it.text) },
+            label = { Text(label) },
+            singleLine = true,
+            modifier = fieldModifier,
+            visualTransformation = transform,
+            keyboardOptions = options,
+            keyboardActions = actions,
             colors = OutlinedTextFieldDefaults.colors(
                 focusedTextColor = C.Text, unfocusedTextColor = C.Text,
                 focusedBorderColor = C.Accent, unfocusedBorderColor = C.Line,
@@ -278,8 +347,12 @@ fun TvField(
         BackHandler { finish() }
         LaunchedEffect(Unit) {
             wasEditing = true
-            runCatching { fieldFocus.requestFocus() }
-            keyboard?.show()
+            // In a dialog that has just opened the field may not be ready on the first frame: retry briefly.
+            for (frame in 0 until 30) {
+                if (runCatching { fieldFocus.requestFocus() }.isSuccess && frame > 0) break
+                androidx.compose.runtime.withFrameNanos { }
+            }
+            if (android.os.Build.FINGERPRINT != "robolectric") keyboard?.show()
         }
     }
 }

@@ -846,7 +846,7 @@ class UsabilityTest {
         // Back with something typed asks before throwing it away (SET-02); Keep editing is highlighted.
         rule.onNodeWithTag("guide-src-url").performClick()
         settle()
-        rule.onAllNodes(androidx.compose.ui.test.hasSetTextAction()).onFirst().performTextInput("http://example.invalid/guide.xml")
+        rule.onAllNodes(androidx.compose.ui.test.hasSetTextAction() and androidx.compose.ui.test.hasTestTag("guide-src-url")).onFirst().performTextInput("http://example.invalid/guide.xml")
         settle()
         press(listOf(Key.Back)) // closes the keyboard
         if (rule.onAllNodesWithText("Discard changes?").fetchSemanticsNodes().isEmpty()) press(listOf(Key.Back))
