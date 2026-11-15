@@ -98,11 +98,16 @@ fun AppRoot(vm: AppViewModel) {
         } else {
             Row(Modifier.fillMaxSize()) {
                 val browsing = vm.screen == Screen.LIVE || vm.screen == Screen.GUIDE
-                // The main menu is always there: icons only while a lower layer is in use.
-                NavRail(vm)
+                // Inside the TV Guide with a category chosen, the guide takes the whole screen: the main menu and
+                // the category list step aside. ◀ from the channel names, or Back, brings back the category list
+                // (on the current category) with the main menu as icons (both set navFocusKey).
+                val guideFull = browsing && vm.navMode == NavMode.GROUPS && vm.selectedGroup != null &&
+                    vm.guideHasFocus && vm.navFocusKey == null
+                // The main menu is otherwise always there: icons only while a lower layer is in use.
+                if (!guideFull) NavRail(vm)
                 if (browsing && vm.navMode == NavMode.COLLAPSED) PlaylistTree(vm)
-                if (browsing && vm.navMode == NavMode.GROUPS) GroupNav(vm)
-                Box(Modifier.fillMaxHeight().weight(1f)) {
+                if (browsing && vm.navMode == NavMode.GROUPS && !guideFull) GroupNav(vm)
+                Box(Modifier.fillMaxHeight().weight(1f).onFocusChanged { vm.guideHasFocus = browsing && it.hasFocus }) {
                     when (vm.screen) {
                         Screen.SEARCH -> SearchScreen(vm)
                         Screen.DISCOVER -> DiscoverScreen(vm)
