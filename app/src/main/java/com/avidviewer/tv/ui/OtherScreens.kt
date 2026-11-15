@@ -232,7 +232,7 @@ fun TvField(
         Focusable(
             modifier = modifier.fillMaxWidth().height(56.dp).focusRequester(boxFocus),
             color = C.Surface2,
-            focusedColor = C.Line,
+            focusedColor = C.FocusRaised,
             onClick = { editing = true },
         ) { focused ->
             Column(Modifier.padding(horizontal = 14.dp)) {
@@ -333,8 +333,10 @@ fun PlaylistsScreen(vm: AppViewModel) {
     Row(Modifier.fillMaxSize().padding(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 12.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
         // 1. The list. SET-03, one rule for every settings page: at most three full columns. Settings' own section
         // list already shrinks to icons; with the highlight in the form (the 3rd column) this list narrows too.
-        val listW by androidx.compose.animation.core.animateDpAsState(if (formFocused) 140.dp else 220.dp, label = "playlistList")
-        LazyColumn(Modifier.width(listW).fillMaxHeight().staysInSection().dimWhenInactive(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        // #15: with the highlight in the form or Guide sources, the list steps aside altogether (the actions column
+        // still names the playlist), so the right side has room; Left brings it back.
+        val listW by androidx.compose.animation.core.animateDpAsState(if (formFocused && selP != null) 0.dp else if (formFocused) 140.dp else 220.dp, label = "playlistList")
+        if (listW > 1.dp) LazyColumn(Modifier.width(listW).fillMaxHeight().staysInSection().dimWhenInactive(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             item { Text("Playlists", color = C.Text, fontSize = 22.sp, fontWeight = FontWeight.Bold) }
             if (!formFocused) item { Label("Up/Down to choose · Right for options", size = 12.sp, modifier = Modifier.padding(bottom = 4.dp)) }
             item(key = "add") {
@@ -779,6 +781,22 @@ fun SettingsScreen(vm: AppViewModel) {
                                     vm.updateStatus?.let { Label(it, size = 12.sp, color = C.Soft, lines = 3) }
                                 }
                             }
+                            item(key = "playback-log") {
+                                @Suppress("UNUSED_VARIABLE") val rev = vm.playbackLogRev
+                                val log = vm.playbackLog
+                                SettingBlock("Playback log", "When video freezes or stops, the app notes what happened and the likely cause (network, provider or this TV). It's sent to bugs@avidviewer.app without channel or title names: each one is a short code (e.g. Live channel 4F2A) that can't be turned back into a name. Never addresses or logins.") {
+                                    Label(log.summary(), size = 13.sp, color = C.Soft, lines = 2, modifier = Modifier.testTag("playback-log-summary"))
+                                    log.problems().takeLast(3).reversed().forEach { e ->
+                                        Label("• " + e.what + ": " + e.text, size = 11.sp, color = C.Muted, lines = 3)
+                                    }
+                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        TvButton(if (vm.playbackLogBusy) "Sending…" else "Send playback log", primary = true, busy = vm.playbackLogBusy, modifier = Modifier.testTag("settings-send-playback-log")) { vm.sendPlaybackLog() }
+                                        TvButton("Clear log") { settingsConfirm = Confirm("Clear the playback log?", "Freezes logged so far can't be sent after this.", "Clear") { vm.clearPlaybackLog() } }
+                                    }
+                                    SettingSwitch("Send it automatically", "At most once a day, when there were freezes or errors since the last send.", p.autoSendPlaybackLog, compact = true) { vm.updatePrefs { it.copy(autoSendPlaybackLog = !it.autoSendPlaybackLog) } }
+                                    vm.playbackLogStatus?.let { Label(it, size = 12.sp, color = C.Accent, lines = 2) }
+                                }
+                            }
                             item { Label("Avid Viewer ${appVersion(vm)} · Bring your own provider; no channels are included.", size = 12.sp, lines = Int.MAX_VALUE) }
                             item {
                                 SettingBlock("Credits", "This product uses the TMDB API but is not endorsed or certified by TMDB.") {
@@ -845,6 +863,11 @@ private fun androidx.compose.foundation.lazy.LazyListScope.locationSettings(vm: 
 
 private fun androidx.compose.foundation.lazy.LazyListScope.displaySettings(vm: AppViewModel) {
     val p = vm.prefs
+    item(key = "display-theme") {
+        SettingBlock("Theme", "Colours for ${vm.profile.name}. Every profile has its own; change another's in Profiles.") {
+            ThemePicker(vm.profile.theme) { vm.setTheme(it) }
+        }
+    }
     item { ToggleRow("Show clock", "Time and date in the menu and the full-screen info bar", p.showClock) { vm.updatePrefs { it.copy(showClock = !it.showClock) } } }
     item {
         SettingBlock("Time zone", "Guide times, program times and the clock use this zone. Now: ${vm.fmtTime(vm.now)} ${vm.zoneLabel()}") {
@@ -933,7 +956,7 @@ private fun androidx.compose.foundation.layout.RowScope.LinkQr(title: String, no
 
 /** A QR code drawn from its modules (white background so phones can read it on a dark screen). */
 @Composable
-private fun QrCode(text: String, modifier: Modifier = Modifier) {
+internal fun QrCode(text: String, modifier: Modifier = Modifier) {
     val matrix = remember(text) {
         runCatching {
             com.google.zxing.qrcode.QRCodeWriter().encode(text, com.google.zxing.BarcodeFormat.QR_CODE, 0, 0,

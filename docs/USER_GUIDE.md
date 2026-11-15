@@ -2,9 +2,9 @@
 
 <!-- The version below and the Release notes section are updated automatically after each published build
      (.github/workflows/user-guide.yml). Feature descriptions are written by hand. -->
-This guide covers **Avid Viewer 1.2.0**, the current public release. Avid Viewer is an IPTV player for Android TV and Fire TV. You bring your own provider (an Xtream Codes login or an M3U link); the app doesn't include any channels.
+This guide covers **Avid Viewer 1.7.0**, the current public release. Avid Viewer is an IPTV player for Android TV and Fire TV. You bring your own provider (an Xtream Codes login or an M3U link); the app doesn't include any channels.
 
-**Contents:** [Getting started](#1-getting-started) · [Main menu](#2-main-menu) · [TV Guide](#3-tv-guide) · [Full-screen playback](#4-full-screen-playback) · [Search](#5-search) · [Discover](#6-discover) · [Sports](#7-sports) · [Movies and Series](#8-movies-and-series) · [Settings](#9-settings) ([Profiles](#profiles)) · [Privacy](#10-privacy) · [Troubleshooting](#11-troubleshooting) · [Control4](#12-control4) · [Release notes](#release-notes)
+**Contents:** [Getting started](#1-getting-started) · [Main menu](#2-main-menu) · [TV Guide](#3-tv-guide) · [Full-screen playback](#4-full-screen-playback) · [Search](#5-search) · [Discover](#6-discover) · [Sports](#7-sports) · [Movies and Series](#8-movies-and-series) · [Settings](#9-settings) ([Profiles](#profiles)) · [Privacy](#10-privacy) · [Troubleshooting](#11-troubleshooting) · [Control4](#12-control4) · [Supplemental services](#13-supplemental-services) · [Release notes](#release-notes)
 
 ## 1. Getting started
 
@@ -22,7 +22,21 @@ This guide covers **Avid Viewer 1.2.0**, the current public release. Avid Viewer
 2. Open the file and install it. You may need to allow installs from unknown sources for your browser or file manager.
 3. Every version is signed with the same key, so a new version installs over the old one and keeps your playlists, favorites and settings.
 
+### First start: the welcome screen
+
+![The welcome screen on a new install](images/welcome.jpg)
+
+The first time you open Avid Viewer, and every time it starts while there are no playlists, it shows a welcome screen:
+
+- **＋ Add a playlist** (highlighted): opens **Settings › Playlists** on the add form. See below.
+- **Restore a backup**: opens **Settings › Updates & about**, for moving from another TV. See [Backup & restore](#backup--restore).
+- **User guide**: scan the QR code with your phone's camera to open this guide.
+
+Once a playlist has been added, the app opens on the TV Guide instead.
+
 ### Add your first playlist
+
+![Settings › Playlists](images/settings-playlists.jpg)
 
 1. Open **Settings › Playlists** and choose **Add playlist**.
 2. Pick the type:
@@ -45,6 +59,8 @@ Your password is stored encrypted on the device (Android Keystore) and is never 
 
 ## 2. Main menu
 
+![Who's watching? when the TV has more than one profile](images/whos-watching.jpg)
+
 The menu on the left lists **Search, Discover, TV Guide, Sports, Movies, Series** and **Settings**. When the TV has more than one profile, the profile in use is shown at the top (its initial on its colour); **OK** on it opens **Switch profile** (see [Profiles](#profiles)). A Kids profile's menu has only Search, TV Guide, Movies and Series. Picking a screen highlights its first item. The menu is always on screen: once you've chosen a screen it shrinks to icons on the far left, and the labels come back when you move onto it.
 
 At the bottom of the menu you'll see:
@@ -61,6 +77,8 @@ When the TV has more than one profile, the app first asks **Who's watching?** (o
 4. with no favorites, the first channel of the first category.
 
 ## 3. TV Guide
+
+![The TV Guide: preview and details at the top, categories on the left, the grid on the right](images/tv-guide.jpg)
 
 The TV Guide is the home screen for live TV. Next to the main menu it has:
 
@@ -89,7 +107,7 @@ The TV Guide is the home screen for live TV. Next to the main menu it has:
 
 ### Search in the guide
 
-Highlight **🔍 Search** in the category list (just below ＋ New list) and press OK to type. Results appear as you type (after a short pause) and replace the guide. Part of a word is enough ("farg" finds Fargo), and words can come in any order. Results: **Channels** (with what's on now, and **▶ Preview** / **▶ Full screen**) and **Programs** on now or later (**▶ Tune in** / **▶ Channel**). Search covers every playlist; choosing a result from another playlist moves the guide there. **✕ Clear search**, just below, brings the guide back.
+Highlight **🔍 Search** in the category list (just below ＋ New list) and press OK to type. Results appear as you type (after a short pause) and replace the guide. Part of a word is enough ("farg" finds Fargo), and words can come in any order; near matches (a small typo) follow the exact ones, as in [Search](#5-search). Results: **Channels** (with what's on now, and **▶ Preview** / **▶ Full screen**) and **Programs** on now or later (**▶ Tune in** / **▶ Channel**). Search covers every playlist; choosing a result from another playlist moves the guide there. **✕ Clear search**, just below, brings the guide back.
 
 ### Channel options (Menu or hold OK on a channel)
 
@@ -130,7 +148,8 @@ While you're moving it, the item has a blue outline. A category shows its positi
 - **★ Favorites** gathers channels from every playlist in one place and is always shown. Favorites, lists, renames, hidden channels and guide matches stay on the right channels when your provider adds, removes or reorders channels, and after restoring a backup.
 - **Your lists** (for example "Kids" or "News") can also hold channels from any playlist. Make one with **＋ New list** or from Add to List.
 - Press **Menu on a list** to **Rename**, **Move up / Move down** or **Delete** it. Deleting asks you to confirm; the channels stay in your playlists.
-- **Suggested near [your town]**: at the top of Favorites, the app suggests channels from your playlists that look local to your postal code. Press **＋ Add to List** to keep one, or **Hide suggestions**. Dismissed channels aren't suggested again unless you restore them in Settings.
+- **Suggested near [your town]**: at the top of Favorites, the app suggests channels from your playlists that look local to your postal code. Press **＋ Add to List** to keep one; the highlight moves on to the next suggestion. **Hide suggestions** is at the right of the heading: press **▲** from a suggestion to reach it. Dismissed channels aren't suggested again unless you restore them in Settings.
+- **Removing a channel** from Favorites or a list (Menu › Remove, the Add to List picker, or hiding it) keeps the highlight on the channel that takes its place.
 
 ## 4. Full-screen playback
 
@@ -152,6 +171,8 @@ While you're moving it, the item has a blue outline. A category shows its positi
 
 ### Picture & sound
 
+![Full screen › Menu › Picture & sound](images/picture-sound.jpg)
+
 Press **Menu** while watching full screen. A panel opens on the right. **▲▼** move between rows, **◀▶** change a row's value (**OK** steps to the next value), and **Back** or **Menu** closes it.
 
 - **Screen format:** Auto (fit), Fill screen (stretch), Zoom (crop edges), 16:9 or 4:3.
@@ -163,15 +184,25 @@ Press **Menu** while watching full screen. A panel opens on the right. **▲▼*
   - **All channels:** the setting for everything.
   - A channel's own choices win over the ones for all channels. **Use the settings for all channels here** clears this channel's own choices.
 - **＋ Add to List…** (live TV): add the channel to ★ Favorites or one of your lists.
+- **Stream info** (at the bottom of the panel): what the TV is getting right now.
+  - **Video**: picture size, codec (H.264, HEVC…), frame rate and bitrate, when the stream says.
+  - **Download speed**: how fast the stream is arriving, and what the stream needs.
+  - **Buffered ahead**: seconds of video already downloaded. Near 0 means a freeze is likely.
+  - **Freezes here** and **Dropped frames** on this channel so far, and the last problem with its likely cause.
+  - **Send playback log to bugs@avidviewer.app**.
 
 Audio tracks and captions only appear when the stream carries them, so they vary from channel to channel.
 
 ## 5. Search
 
+![Search results for “news”](images/search.jpg)
+
 The **Search** screen searches **every playlist** at once: TV stations, programs in the TV guide (now and upcoming), movies and series.
 
 - **Results appear as you type**, after a short pause. Pressing **Search** works too.
-- **Forgiving matching:** part of a word is enough ("farg" finds Fargo), every word you type must appear but in any order ("news fargo" finds "KVLY Fargo News HD"), and punctuation doesn't matter ("spider man" finds "Spider-Man: No Way Home").
+- **Forgiving matching:** part of a word is enough ("farg" finds Fargo), words can come in any order ("news fargo" finds "KVLY Fargo News HD"), and punctuation doesn't matter ("spider man" finds "Spider-Man: No Way Home").
+- **Near matches:** a small typo still finds the name ("the ofice" finds The Office, "breking bad" finds Breaking Bad, "godfathr" finds The Godfather), and from a search of three or more words one may be missing ("the office us" finds The Office). A short word such as "tv" may be missing too. Numbers must match ("abc 6" doesn't offer ABC 3).
+- **Best matches first:** names that start with what you typed, then names holding every word, then near matches.
 - **"Nothing found for …"** names what was searched; try fewer letters or another word.
 
 Results are grouped by playlist and by kind, each with an action:
@@ -184,6 +215,8 @@ After you play a channel, program, movie or episode from Search, **Back** return
 
 ## 6. Discover
 
+![Discover before a TMDB key is entered](images/discover.jpg)
+
 Discover shows what's new and popular, and where to watch it, using TMDB and JustWatch data.
 
 - **Tabs**: New, Trending, For you, In theaters.
@@ -194,9 +227,11 @@ Discover shows what's new and popular, and where to watch it, using TMDB and Jus
 - **Every version on your provider:** when your playlists have the title more than once (other languages, qualities or playlists), its page lists **N versions on your provider**, English first, each with its language, category and playlist. The page scrolls as one: **Down** from the buttons moves through the versions and then **Where to watch**. **OK** on a version plays that movie or opens that series. The main button plays the first and says which ("Plays: English · EN | Drama · My provider").
 - **Where to watch** lists Stream, Free, Rent and Buy options for your region.
 
-Discover needs a free **TMDB API key**. Enter it in **Settings › Discover**; it's stored encrypted on the device.
+Discover needs a free **TMDB API key**. Enter it in **Settings › Discover**; it's stored encrypted on the device. How to get one: [TMDB](#tmdb-discover) in Supplemental services.
 
 ## 7. Sports
+
+![Sports: a live game with its score, the games list and Where to watch](images/sports.jpg)
 
 Sports lists real games from **ESPN's schedules** for today and the next 2 days, plus recent finals, then finds the channels in your playlists that carry them. Leagues: NFL, NBA, NHL, MLB, WNBA, CFL, college football (FBS) and men's college basketball (Division I).
 
@@ -214,29 +249,50 @@ Sports lists real games from **ESPN's schedules** for today and the next 2 days,
 - **North America only:**
   - US channels come first; Canadian channels are the backup.
   - Channels marked for other countries are left out, for example "UK |" in the name, or a category for another country.
+- **Finding channels…:** the games appear as soon as ESPN answers. Until a game's channels have been looked for, its card says **Finding channels…** (usually a few seconds); games are listed meanwhile even if **Games with no channel found** is set to Hide.
 - **Games further ahead:** guide listings and event channels for later games depend on how far ahead your guide goes (up to 7 days), so some appear closer to the start. **Search the guide for "[team]"** jumps to the TV Guide's search.
 - **Updates:** each day is asked for separately. Today and yesterday are refreshed about every minute while Sports is open (scores while games are live), the next 2 days every 30 minutes. In the background Sports refreshes every 30 minutes. If ESPN can't be reached, Sports says so and shows the last list saved on the TV.
 
 ## 8. Movies and Series
 
+![Series in the Grid layout](images/series-grid.jpg)
+
 - **Left side**: Playlists, then categories: **All**, **Recently added**, **Continue watching**, **My List**, and your provider's categories.
 - **Right side**: posters for the chosen category. A category you pause on is read ahead, so OK shows it at once.
-- **Each title is listed once.** When your playlists have the same title several times (other languages, qualities such as 4K or HD, or other playlists), it appears once, shown by its English copy (else one with no language marked). This applies to All, Recently added, every category and the search.
-- **🔍 Search movies / 🔍 Search series** is in the category list, below My List. Results replace the poster grid; **✕ Clear search** ends the search.
+- **Posters fill their tiles.** The title and year appear on a dark fade only on the highlighted poster, and on titles that have no artwork (most posters already show their title). The highlighted poster grows a little and gets a ring. **✓** in a corner means the title is in My List.
+- **Layouts**: the buttons above the posters switch between three ways of browsing. Each profile remembers its choice; **Up** from the top row of posters reaches them.
+  - **▦ Grid**: rows of posters.
+
+    ![Movies in the Grid layout](images/movies-grid.jpg)
+
+  - **▭ Featured**: the highlighted title's artwork, name, year and rating above the posters.
+
+    ![Movies in the Featured layout](images/movies-featured.jpg)
+
+  - **▣ Showcase**: the highlighted title's artwork fills the screen, with one row of posters along the bottom (**Left/Right** to move along it).
+
+    ![Movies in the Showcase layout](images/movies-showcase.jpg)
+
+- **Each title is listed once.** When your playlists have the same title several times (other languages, qualities such as 4K or HD, provider tags such as "NF -" in front of the name, or other playlists), it appears once, shown by its English copy (else one with no language marked). This applies to All, Recently added, every category and the search.
+- **🔍 Search movies / 🔍 Search series** is in the category list, below My List. Results replace the poster grid; **✕ Clear search** ends the search. When fewer than 30 titles hold every word you typed, near matches (a small typo, or a word left out) are added after them.
 - **OK on a poster** opens its page: plot, cast, director, **▶ Play**, or **▶ Resume from [time]** and **Start over**, plus **+ My List**.
 - **⇄ N versions** (on a title with several copies) lists each copy with its language, name, category and playlist; ✓ marks the one shown, and the line **This version: …** under the buttons says which one you're on. **OK** on another copy shows that one, with its own episodes, resume point and My List button. The language comes from codes on the name or category ("EN |", "FR -", "VF", "MULTI"…); copies without one show "Language not marked". Series pages list episodes by **Season**, with resume points; episodes you've played to the end say **✓ Watched**. **A series page opens on the next episode to watch**, with its season chosen: Season 1, Episode 1 for a series you haven't started, otherwise the episode after the last one you finished (or the one you stopped part-way through). The page scrolls as one: **Up** from the episode goes to the season buttons, then the title's buttons; from the buttons, **Down** goes to the season buttons, then through every episode, however long the description. After you watch an episode and press **Back**, that episode is highlighted.
 - **Each category (and each search) keeps its own place.**
 - **Back** goes one step at a time: from a title's page to its poster, from a poster to the category you're in (highlighted), then to the main menu, on **Movies** or **Series**.
-- **Left** from the first column of posters goes to the category you're browsing.
+- **Left** from the first column of posters (in Showcase, from the first poster) goes to the category you're browsing.
 - **Category list wraps around**: Up on **All** jumps to the last category, and Down on the last returns to All. The poster grid stops at the end.
 - **Menu on a category**: **Rename**, **Re-order** or **Hide** it. Hidden categories come back in Settings › List Editor.
 - If you have more than one playlist, movies and series from all of them are merged.
 
 ## 9. Settings
 
+![Settings: sections on the left, the open section on the right](images/settings-playback.jpg)
+
 Settings has sections on the left and the open section's options on the right. **Up/Down** move through the sections; the section list scrolls to keep the highlighted one in view. **OK** opens the highlighted section and moves into it, on its first option (**Right** also moves into the open section). Inside a section, Up and Down stop at the first and last option. **Left** at the left edge of a section, or **Back**, returns to that section in the list; **Back** again opens the main menu.
 
 ### Playlists
+
+![Settings › Playlists](images/settings-playlists.jpg)
 
 - The list of your playlists (Up/Down to choose, Right for options) and **Add playlist**. While you're in the form on the right, the list narrows, so the page never has more than three full columns.
 - **Back** in the add or edit form with changes that aren't saved asks **Discard changes?**. **Keep editing** has the highlight; **Discard** drops the changes. The guide source form, postal code and TMDB key ask the same way.
@@ -252,7 +308,7 @@ Settings has sections on the left and the open section's options on the right. *
 
 - **Download from these sources every 4 / 8 / 12 / 24 h**: the same setting as in Settings › TV guide; it applies to every playlist.
 - **Provider's guide** (on/off): the guide that comes with an Xtream login, or the M3U file's own guide link.
-- **＋ Add guide source**: a name, an XMLTV address (`.xml` or `.xml.gz`) and a **time offset** (−12 to +12 hours) for a guide that's consistently early or late.
+- **＋ Add guide source**: a name, an XMLTV address (`.xml` or `.xml.gz`) and a **time offset** (−12 to +12 hours) for a guide that's consistently early or late. The highlight goes to the form's Name field, and back to the button after **Save** or **Cancel**. While you're in Guide sources, the playlist list steps aside; **Left** brings it back.
 - Each source has **Turn off / Turn on**, **✎ Edit**, **▲ ▼** to change the order, and **✕ Delete** (asks first). Each one shows when it last downloaded and how many channels it covered, or why it failed.
 - **Order matters:** sources are read top to bottom, and for each channel the first source with listings is used.
 - **Download now** gets this playlist's guide again.
@@ -263,16 +319,20 @@ Settings has sections on the left and the open section's options on the right. *
 
 ### Profiles
 
+![Settings › Profiles](images/settings-profiles.jpg)
+
 Each person in the household can have their own profile. A profile has its own ★ Favorites and lists, hidden channels and categories, hidden movie and series categories and titles, My List, last channel, dismissed local suggestions, watch history (and whether it's paused), resume points and watched episodes. Playlists and logins, guide sources and matches, renamed and re-ordered items, Picture & sound and every other setting are shared.
 
 When you update from an earlier version, everything you had becomes the owner's profile, **Me**. Nothing changes until you add a second profile.
+
+Each profile also has its own **theme** (colours) and its own Movies and Series **layout**. See [Display & time](#display--time).
 
 **Settings › Profiles** (second in the list of sections)
 
 - **＋ Add profile**: a name and a colour.
 - **＋ Add Kids profile**: the same, for a child. If no grown-up has a PIN yet, the app asks you to set the owner's PIN first.
 - For each profile:
-  - **Edit**: name and colour; for a Kids profile, also the categories it can watch.
+  - **Edit**: name, colour and **Theme**; for a Kids profile, also the categories it can watch.
   - **Set PIN / Change PIN**: a 4-digit PIN, entered twice. **Remove PIN** appears only while there's no Kids profile.
   - **Parent** (grown-up profiles other than the owner): a parent can manage profiles, and their PIN opens any profile. The owner is always a parent.
   - **Delete…**: asks first, then deletes that profile's favorites, lists, hidden items and history. It can't be undone. The owner's profile and the profile in use can't be deleted.
@@ -297,11 +357,15 @@ Profiles are included in backups (see [Backup & restore](#backup--restore)).
 
 ### TV guide
 
+![Settings › TV guide](images/settings-tv-guide.jpg)
+
 - **Download the guide every**: 4, 8, 12 or 24 hours (8 is the default). The app also follows this while it stays open. Each download keeps up to 7 days of listings. A guide source that hasn't changed since the last download isn't downloaded again.
 - **Last downloaded**: when each playlist's guide last downloaded and how many sources it has. **Download the guide now** gets every guide again.
 - **Channels matched by hand**: how many there are, with **Clear all matches** (asks first).
 
 ### List Editor
+
+![Settings › List Editor](images/settings-list-editor.jpg)
 
 Show or hide items one at a time with OK, or many at once with the filter and **Show all / Hide all**. It has four tabs:
 
@@ -317,6 +381,8 @@ Rename, re-order and Add to List are done with Menu on the item itself in the TV
 
 ### Location & weather
 
+![Settings › Location & weather](images/settings-location.jpg)
+
 - **Postal code**: a US ZIP or Canadian postal code (Done on the keyboard saves it). It's used for weather, local channel suggestions and the Auto time zone. Only the code is sent, to Open-Meteo.
 - **Show weather**: current conditions under the clock, refreshed every 30 minutes.
 - **Suggest local channels**: on or off. **Show them again** restores suggestions you dismissed.
@@ -324,10 +390,21 @@ Rename, re-order and Add to List are done with Menu on the item itself in the TV
 
 ### Display & time
 
+- **Theme**: the colours of the profile you're using. Each profile has its own; change another profile's in Settings › Profiles › Edit. **OK** on a preview picks it, and ✓ marks the one in use.
+  - **Dark roast**: dark brown, a soft warm-grey highlight with dark text, muted gold. New installs and new profiles start on it.
+  - **Midnight blue**: navy with a bright blue ring, the look up to 1.3.0. Profiles that existed before 1.4.0 keep it until you change it.
+  - **Espresso & cream**, **Espresso & ivory** and **Mocha & latte**: other warm themes, from darkest to lightest base.
+
+  ![Settings › Display & time › Theme](images/settings-theme.jpg)
+
+  ![Movies in Midnight blue](images/theme-midnight-blue.jpg)
+
 - **Show clock**: time and date in the menu and in the full-screen info bar.
 - **Time zone**: Auto (from your postal code), Device, Eastern, Central, Mountain, Arizona, Pacific, Alaska, Hawaii or Atlantic. Guide and program times use this zone.
 
 ### Sports tab
+
+![Settings › Sports tab](images/settings-sports.jpg)
 
 - **Leagues**: **OK** switches a league on or off.
   - **Menu** on a league re-orders it: ▲▼ move, ◀ top, ▶ bottom, OK done. The order is the order of the filters on the Sports screen.
@@ -338,14 +415,20 @@ Rename, re-order and Add to List are done with Menu on the item itself in the TV
 
 ### Discover
 
+![Settings › Discover](images/settings-discover.jpg)
+
 - **TMDB API key**: Save it (or press Done on the keyboard), or Remove it (asks first).
 - **My streaming services**: pick the services you subscribe to.
 
 ### Playback
 
+![Settings › Playback](images/settings-playback.jpg)
+
 - **Stream format (Xtream)**: **MPEG-TS (.ts)** or **HLS (.m3u8)**. If channels won't play, try the other format. The change applies after a Refresh in Playlists.
 
 ### Privacy & analytics
+
+![Settings › Privacy & analytics](images/settings-privacy.jpg)
 
 Everything here stays on the device; nothing is uploaded or backed up to the cloud. Watch history, the pause switch and the 7-day summary belong to the profile in use.
 
@@ -355,16 +438,21 @@ Everything here stays on the device; nothing is uploaded or backed up to the clo
 
 ### Storage
 
+![Settings › Storage](images/settings-storage.jpg)
+
 - **Clear cache on exit**: empty the cache (logos, posters, recently streamed video) every time you leave the app.
 - **Cache size** and **Clear cache now** (asks first). Clearing never removes your playlists, favorites, lists, guide, history or settings.
 
 ### Updates & about
 
+![Settings › Updates & about: Report a bug and the user guide and Control4 QR codes](images/settings-about.jpg)
+
 - **App updates**: the installed version, **Check now**, **Download and install**, and the **Check for updates automatically** switch.
   - The **Update available** dialog (**Update now** / **Later**) opens by itself only when the app starts, before you press anything. If a new version is found later, the main menu shows **Update x.y.z** instead, so nothing pops up while you're browsing or watching.
   - The download shows its progress. If the connection stalls, the app waits 15 seconds and continues from where it stopped (up to 8 tries). The finished file is checked before installing, and a damaged download is refused.
   - If Android's installer doesn't appear within about 25 seconds, an **Open installer** button opens Android's own install screen for the same file.
-- **Last crash**: if the app closed unexpectedly, the details are kept here on the device (nothing is sent anywhere), with **Clear crash report** (asks first).
+- **Last crash**: if the app closed unexpectedly, the details are kept here on the device, with **Report issue** and **Clear crash report** (asks first). **Report issue** sends them to **bugs@avidviewer.app** and then clears them (see *If the app closes unexpectedly* below).
+- **Playback log**: a summary ("Playback log: 3 freezes (longest 12 s), 1 error today") and the latest problems, each with its likely cause. Channels and titles appear as short codes ("Live channel 4F2A", "Title 9C01"), never by name. **Send playback log** sends it to bugs@avidviewer.app; **Clear log** asks first. **Send it automatically** (on by default) sends it at most once a day, and only when there were freezes or errors since the last send.
 - **Report a bug**: email **bugs@avidviewer.app** with what happened and the steps that lead to it. The section lists the details to include, read from the TV (app version, device model, Android and Fire OS versions, and the last crash's error). Scan the **QR code** with a phone camera to start that email with the details filled in; **Open email app** appears only on TVs that have one. No playlists, logins or provider addresses are included.
 - **User guide and Control4 driver**: two QR codes to scan with a phone. **User guide (PDF)** opens the latest version of this guide; **Control4 mini driver** downloads `um_avid_viewer.c4z` (see [Control4](#12-control4)).
 - **Moving through this section:** opening it (OK on Updates & about) highlights **Report a bug** first; **Down** moves to the QR codes, then to Backup & restore and App updates. Blocks without buttons (Report a bug on TVs without an email app, and the QR codes) take the highlight themselves, with a ring around the whole block, so the page scrolls each one fully into view.
@@ -404,18 +492,35 @@ The share password is stored encrypted on the TV and is included in your PIN-loc
 
 ## 10. Privacy
 
+![Settings › Privacy & analytics](images/settings-privacy.jpg)
+
 - All your data stays on the device. Android cloud backup and device-to-device transfer are turned off.
 - Provider passwords and the TMDB key are encrypted with the Android Keystore.
 - Backup files are encrypted and locked with your PIN, because they contain provider logins.
 - Profile PINs are stored only as salted one-way hashes, never as the digits.
-- Outside services get only what they need: your postal code (Open-Meteo, for weather), title lookups (TMDB/JustWatch, if you add a key), scoreboards (ESPN) and update checks (GitHub).
+- The **playback log** (freezes and errors) never records what you watch: each channel or title is a short code made from a random number kept on your TV, which can't be turned back into a name. It is sent to bugs@avidviewer.app at most once a day when there were problems, or when you choose Send playback log. Turn off **Send it automatically** in Settings › Updates & about to send it only by hand. Addresses, logins and IP addresses are removed first.
+- Crash details leave the TV only when you choose **Report issue**. They go to bugs@avidviewer.app through a small mail relay, with web addresses, server and host names, IP addresses, user names, passwords and tokens removed first.
+- Outside services get only what they need: your postal code (Open-Meteo, for weather), title lookups (TMDB/JustWatch, if you add a key), scoreboards (ESPN), update checks (GitHub) and, when you choose Report issue, the crash report (the Avid Viewer crash relay, a Google Apps Script web app).
 
 ## 11. Troubleshooting
+
+### If video freezes
+
+The app notes every freeze in the playback log, with its likely cause. Open **Menu** › Stream info while it happens, or Settings › Updates & about › Playback log afterwards:
+
+- **"the provider (HTTP 503…)"**: the provider's server refused or failed. Usually busy times or a problem on their side; try again later or contact the provider.
+- **"the network or the provider's server (connection timed out…)"**: the connection dropped. Check Wi-Fi (a wired connection or a closer router helps), or the provider may be overloaded.
+- **"too slow (getting 3.1 Mb/s, the stream needs 8 Mb/s)"**: the stream needs more than the TV is getting. Try an HD instead of a 4K channel, or improve the connection.
+- **"data stopped arriving… the provider's server paused the stream"**: no error, but nothing came. Usually the provider.
+- **"the TV's video decoder"** (picture stopped while the sound went on, or many dropped frames): the TV struggled with the video, often 4K or HEVC on a Fire TV Stick. Try the HD version of the channel.
+
+Sending the log (Send playback log) helps us find a pattern across days.
 
 - **Channels won't play**: switch the Stream format in Settings › Playback, then Refresh the playlist.
 - **No channels or guide**: check that the playlist, and its Live TV switch, are on in Settings › Playlists, then choose Refresh.
 - **No movies or series**: turn on Movies & series for the playlist and Refresh.
 - **Discover is empty**: add a TMDB API key in Settings › Discover, or turn off "My services".
+- **Sports showed no games for a long time after updating to 1.2.0** (with a big TV guide and several playlists): update to 1.3.0 or later; games now appear at once.
 - **Sports is empty**: check the leagues in Settings › Sports tab; off-season leagues have no games. "Couldn't reach ESPN" means the schedules couldn't be downloaded, so the last list is shown. On 1.0.141 this appeared for every league; update to 1.0.147 or later.
 - **A game shows "No channel yet"**: your playlists have no channel named for its network, and no guide listing or event channel for it yet. Those often appear closer to the start. You can also use **Search the guide** on the game.
 - **Discover froze or the app closed after about 20 seconds** (1.0.137 and earlier, with large movie catalogs): update the app.
@@ -429,6 +534,18 @@ The share password is stored encrypted on the TV and is included in your PIN-loc
 - **A channel shows the wrong listings, or none**: press Menu on it and choose **Match guide…**. If a whole guide is consistently early or late, set a **time offset** on its source in Settings › Playlists › ▤ Guide sources.
 - **Favorites landed one channel off after a restore** (on a version before 1.0.94): that backup can't fix them automatically. Set them once, then make a new backup; newer backups record which channel each favorite points to.
 - **An update hangs at about 95%** (updating from 1.0.82 or earlier, which have the old updater): try again. If it still hangs, install the new version once by hand with the Downloader app; later updates resume stalled downloads.
+
+### If the app closes unexpectedly
+
+![Settings › Updates & about › Last crash, with Report issue](images/last-crash.jpg)
+
+The next time it starts, the app says **Avid Viewer closed unexpectedly**:
+
+- **Report issue** sends the details to **bugs@avidviewer.app**: the app version, the TV model and Android / Fire OS version, and the error. Web addresses, host names, IP addresses, user names, passwords and tokens are removed first; no playlists, logins or keys are sent. When it's sent, the message says thanks, closes after a few seconds, and the details are cleared.
+- If it can't be sent (no connection, for example), the message says so and the details stay in **Settings › Updates & about › Last crash**, where **Report issue** can try again.
+- **Cancel** closes the message. Nothing is sent, and the details stay in Last crash.
+
+**If the app vanished to the Fire TV home screen.** Sometimes the TV closes the app itself, usually to free memory, and the app gets no chance to save anything. From 1.7.0 the app notices at its next start and shows the same message, so **Report issue** covers this too. The report says the app **closed while in use**, with the last few steps (screen names such as "Screen: search", or "Search: 2 words"; never what you searched or watched) and the memory in use. On Fire OS 8 and later it also includes the reason the TV gives (low memory, not responding, or a crash in the video code). Leaving the app with Home or Back is never reported, nor is force-stopping it in the TV's settings.
 
 ### Backup questions
 
@@ -448,6 +565,8 @@ The share password is stored encrypted on the TV and is included in your PIN-loc
 Every build runs automated usability tests before it's released: the real app screens on a TV-sized screen, driven by simulated remote presses. They cover every screen and Settings section, re-ordering, List Editor bulk actions, search, hold-to-scroll, backups (including a real network share) and a 600-press random-key crash hunt. A failing test stops the release.
 
 ## 12. Control4
+
+![The Control4 driver's QR code, in Settings › Updates & about](images/settings-about.jpg)
 
 The **Avid Viewer** Control4 driver (`um_avid_viewer.c4z`) adds Avid Viewer to the Watch menu. Picking it switches the room to your Fire TV and opens Avid Viewer. Your Control4 installer adds it in Composer.
 
@@ -479,13 +598,211 @@ The **Avid Viewer** Control4 driver (`um_avid_viewer.c4z`) adds Avid Viewer to t
 
 ---
 
+## 13. Supplemental services
+
+Optional services that work alongside Avid Viewer. None of them is required; each adds something the app can't do on its own.
+
+### EPGenius: curated playlists
+
+[EPGenius](https://epgenius.org) turns your provider's login into a cleaned-up playlist you add to Avid Viewer as an **M3U link**. Community members curate each list: they trim it to the useful channels, sort them into categories, add logos and fix the TV guide. EPGenius saves the playlist to your Google Drive and keeps it updated, so you set it up once.
+
+**What you need**
+
+- Your provider's login: an Xtream login (server, username, password) or an M3U link. EPGenius doesn't supply one.
+- A Google account, where the playlist file is saved.
+- A Discord account, used to register the playlist for automatic updates. A brand-new account has to wait about 24 hours (see below).
+
+**Create the playlist**
+
+1. On a computer or phone, go to [epgenius.org](https://epgenius.org) (not .com) and click **I AGREE** on the Terms & Disclaimer.
+2. Under **Choose a Playlist**, pick a list made for your provider, for example "jams | Strong 8k". **Preview List + EPG** shows the channels first.
+3. Choose **Automatic**, then enter your login. If you have both an Xtream login and an M3U link, use Xtream.
+4. Tick **Upload to Google Drive**, click **Generate**, then **Upload to Google Drive**, and sign in to Google. Allow pop-ups for epgenius.org, because Google sign-in opens in one.
+5. Copy the two links it shows: the **Drive URL** (the playlist) and the **EPG URL** (the guide).
+
+**Add it to Avid Viewer**
+
+1. Open **Settings › Playlists** and choose **Add playlist**.
+2. Pick **M3U link**, not Xtream Codes, even if you gave EPGenius an Xtream login.
+3. Enter a name, paste the **Drive URL** as the **M3U playlist link**, and paste the **EPG URL** as the **TV guide (XMLTV) link**. The EPG link is a compressed `.xml.gz` file; Avid Viewer reads it directly.
+4. Choose what to load and press **Add playlist**.
+
+The Drive URL never changes, so Avid Viewer picks up updates on its normal refresh. You can rename the file in Google Drive without breaking the link.
+
+**Register for automatic updates (Discord)**
+
+1. Create a Discord account at [discord.com/register](https://discord.com/register) and verify your email.
+2. Join the EPGenius server: [discord.gg/pZwcncweFc](https://discord.gg/pZwcncweFc).
+3. **New accounts are timed out for about 24 hours** on joining and can't type during that time. When the timeout ends, rejoin with the same link if you were removed.
+4. In **✅〢verify**, click **Verify** on the Wick bot's message and pass the image check. If the image doesn't appear, turn on **User Settings → Chat → Embeds and link previews**.
+5. In the help channel, run `/register` and paste your Drive URL. Run `/info` any time to get your links back or to unregister a playlist.
+
+**Good to know**
+
+- Free lists update once a day by 04:00 UTC, and the guide refreshes every 4 hours. Supporters (after a donation of any amount) get updates instantly.
+- You can register up to 5 playlists.
+- Pick a list for the provider you actually have. Some sellers advertise one service but give you another.
+
+### TMDB: Discover
+
+[Discover](#6-discover) uses a free key from **TMDB** (The Movie Database) to show what's new, trending and in theaters, and where to watch it. Without a key, Discover only shows how to add one.
+
+**Get a key** (on a computer; TMDB's sign-up pages aren't made for phones)
+
+1. Create a free account at [themoviedb.org](https://www.themoviedb.org/signup) and confirm your email.
+2. Open your account **Settings › API** ([themoviedb.org/settings/api](https://www.themoviedb.org/settings/api)) and click **Create** (or **Request an API key**).
+3. For the type of use choose **Personal** (non-commercial), and accept the terms of use.
+4. Fill in the form. TMDB also asks for your name, email, phone and address; those are your own. For the application details you can use:
+   - **Application name:** `Avid Viewer`
+   - **Application URL:** `https://github.com/mavenmarty/avid-viewer`
+   - **Application summary:** `Avid Viewer is a free, non-commercial media player for Android TV and Fire TV that brings the live TV, movies and series from services I already subscribe to into one guide. It uses TMDB only to show titles, artwork, descriptions and where-to-watch information on its Discover screen, for my household. No TMDB data is resold or redistributed, and the app credits TMDB as its source.`
+5. Submit. The API page then shows two values: the **API Key** (32 characters) and the **API Read Access Token** (a long one). Either works in Avid Viewer; the API Key is shorter to type.
+
+**Add it to Avid Viewer**
+
+1. Open **Settings › Discover**, highlight **TMDB API key** and press **OK**.
+2. Type or paste the key and press **Save** (or Done on the keyboard). It's stored encrypted on the TV.
+3. Open **Discover**. If TMDB doesn't accept the key, Discover says so; check for a typo.
+
+**Good to know**
+
+- **Several TVs:** the same key works on all your TVs. Enter it on each one, or restore a backup, which includes it. Keep it to your household: it's linked to your TMDB account, and a misused key can be turned off, which stops Discover on every TV that uses it.
+- **How much it's used:** Avid Viewer contacts TMDB only while Discover is open: roughly 100–150 requests when you go through all four tabs, and a tab refreshes after 6 hours. TMDB limits requests per home connection (about 50 a second), not per key, with no daily cap.
+- **My streaming services** (Settings › Discover) tells Discover which services you subscribe to, so "New" and "where to watch" favour them.
+
+### Homestead: a cleaner Fire TV home screen
+
+[Homestead](https://github.com/Sarg338/Homestead) is a free, open-source replacement home screen for Fire TV, made by a separate project. It removes the ad rows and switches off Amazon's bloat and telemetry apps, all from the remote, with no computer needed. These steps are for version 2.2.0 (Nov 9, 2026).
+
+**Before you start**
+
+- **The VPN prompt only covers the TV itself.** Homestead routes just one private range (10.113.77.x) so it can talk to the TV's own debugging service. Your normal internet traffic isn't touched, and the tunnel turns off when setup ends.
+- **Nothing is deleted.** Debloat switches packages off, and you can switch any of them back on from the same screen.
+- **Its only outside connection is GitHub.** It checks GitHub once a day for updates and installs one only when you press Install.
+- **One permission is broad:** reading the system log, which makes the Home button work reliably. You can take it away later (see below).
+
+**Set it up** (about 10 minutes, remote only)
+
+1. **Developer options and Downloader:** if you installed Avid Viewer with Downloader, these are already done. Otherwise follow [Installing the Downloader app](#installing-the-downloader-app): Developer options on, **ADB debugging** on, Downloader installed and allowed to install apps.
+2. **Download Homestead.** In Downloader, enter `github.com/Sarg338/Homestead/releases/latest/download/homestead.apk` and install the app.
+3. **Start setup.** Open Homestead and choose **Set it up**. Accept Android's VPN prompt: press **Down** to reach **OK**.
+4. **Approve the ADB key.** When the TV asks, check that the fingerprint matches the one Homestead shows. Tick **Always allow from this computer**, then select **OK**.
+5. **Let setup finish.** Homestead turns on its Home button by itself. If not, go to its **Settings › Setup › Finish setup automatically**.
+6. **Debloat.** Open Homestead's **Settings › Debloat** and use the one-press option. Skip the option marked risky, which switches off Amazon's launcher.
+7. **Test it.** Press **Home**. Homestead should open instead of Amazon's home screen. Avid Viewer is in its app list like any other app.
+
+**After setup**
+
+- **ADB debugging trade-off.** Leaving it on keeps a door open on your network. Homestead needs it to switch Amazon packages off again after each reboot. If you turn it off, some packages may come back after a restart or firmware update.
+- **Update warning (optional).** Homestead's **Settings › Warn if the system undoes Debloat** shows a tile for 10 seconds offering to switch packages off again after an update.
+- **Home button stops working after an update:** run **Settings › Setup › Finish setup automatically** again.
+- **Take back the log permission (optional).** From a computer, run `adb shell pm revoke com.homestead.launcher android.permission.READ_LOGS`. After that, Home briefly flashes Amazon's screen first.
+- **Undo anything.** Any debloated package can be switched back on from the Debloat page. Uninstalling Homestead brings back Amazon's home screen.
+- **Problems with Homestead** itself go to its GitHub page; bugs@avidviewer.app is for Avid Viewer.
+
 ## Release notes
 
 Every public release since 1.0.35, newest first. From 1.1.0, versions are numbered major.minor.patch: new features raise the middle number, fixes the last one (the GitHub tag adds a build number, for example `v1.1.0.186`). Releases are published on GitHub (`mavenmarty/avid-viewer`) as `AvidViewer.apk`. The app offers each new version itself, or you can check in Settings › Updates & about › **Check now**.
 
 <!-- new-releases: entries for new builds are added automatically below this line -->
 
-### 1.2.0 — November 13, 2026, 10:22 AM CT (current)
+### 1.7.0 — November 14, 2026, 3:05 PM CT (current)
+
+**Release notes**
+
+- **Search no longer closes the app on a two-word search** (#16). On a Fire TV with 1 GB of memory, typing a search such as "the office" in the main menu's Search could send you to the Fire TV home screen: the first word alone matched much of the TV guide, and each pause in typing started another search while the last one kept going. A newer search now stops the older one, and only the best matches are kept.
+- **Near matches in search.** A small typo or a missing word still finds what you mean, after the exact matches: in the main Search, the TV guide's search, and the Movies and Series search. See [Search](#5-search).
+- **Hard closes are reported.** If the TV closes the app while you're using it, the next start says so and **Report issue** sends what happened. See [If the app closes unexpectedly](#if-the-app-closes-unexpectedly).
+- **Favorites and lists keep your place.** Hide suggestions can be reached with the remote (#17); adding a suggested channel moves the highlight to the next suggestion (#18); removing a channel from a list highlights the one that takes its place instead of jumping to the top left (#19).
+
+**Change log**
+
+- Search: a newer search stops the one before; at most 60 programs and 50 channels a playlist are kept while searching, by rank then time; each repeated program title is checked once (#16)
+- Ranked, forgiving matching: as typed, every word at a word start, every word anywhere, then near (one slip a word, two for 8+ letters; one word left out of 3+, or a 1–2 letter word; numbers exact); main Search, TV guide search, Movies / Series search (when fewer than 30 exact titles)
+- Closes while on screen (no app error) become a crash report at the next start: last steps, memory, Android's reason on Fire OS 8+; 256 KB set aside so an out-of-memory error can still be written
+- Favorites: ▲ from a suggestion reaches Hide suggestions; after adding or ✕ the highlight goes to the next suggestion; removing a channel highlights its neighbour (#17, #18, #19)
+- Tests: near matches and ranking; two-word search stays bounded; hard close reported at the next launch
+
+### 1.6.0 — November 14, 2026, 12:13 PM CT
+
+**Release notes**
+
+- **A welcome screen for new installs.** With no playlists yet, Avid Viewer opens on a welcome screen: a short explanation, **Add a playlist** (highlighted), **Restore a backup**, and the user guide as a QR code to scan with your phone. See [Getting started](#first-start-the-welcome-screen).
+
+**Change log**
+
+- Welcome screen at start while there are no playlists: Add a playlist opens the add form; Restore a backup opens Settings › Updates & about; QR code of the user guide
+- Test: a new install opens on the welcome screen and Add a playlist reaches the add form; a TV with playlists skips it
+
+### 1.5.2 — November 14, 2026, 9:48 AM CT
+
+**Release notes**
+
+- **The playback log no longer records what you watch.** Each channel or title is a short code instead, such as "Live channel 4F2A" or "Title 9C01". It's the same every time on your TV, so freezes on one channel still show up together, but it can't be turned back into a name. Names already in the log from 1.5.0–1.5.1 are replaced with "Earlier stream" when you update.
+- **Crash reports and playback logs now reach us.** Until now they were sent but filed where the bug workflow didn't see them.
+
+**Change log**
+
+- Playback log: a code per channel or title (from a random number kept on the TV) instead of its name; older names replaced with "Earlier stream"
+- Crash relay: each report gets an id and is moved to the Inbox, unread (the relay's sent copy used to stay in Sent only); its manifest lists the Gmail permission this needs
+
+### 1.5.1 — November 14, 2026, 8:23 AM CT
+
+**Release notes**
+
+- **Recently added lists each movie once** (#14). A title with more than one provider tag in front of its name ("NF - Allen", "4K-NF - Allen") counted as a different title from "Allen", so it could appear two or three times. Movies already on the TV are put right a few seconds after the update starts; nothing needs downloading again.
+- **Adding a guide source works with the remote** (#15). **Add guide source** and **Edit** now put the highlight in the form (it used to jump to the top left of the screen), and it returns to the button after Save or Cancel. While you're in the form or Guide sources, the playlist list steps aside so there's room.
+
+**Change log**
+
+- Titles compared without any of their leading provider tags; saved catalogs re-checked once in the background (#14)
+- Guide sources: the form takes the highlight and gives it back; the playlist list hides while the right side has the highlight (#15)
+
+### 1.5.0 — November 13, 2026, 7:25 PM CT
+
+**Release notes**
+
+- **Finding out why video freezes.** The app now keeps a **playback log**: each time the picture freezes or stops, it notes the channel, how long it lasted and the likely cause, whether the provider's server, your network, or the TV itself. See [If video freezes](#if-video-freezes).
+- **Stream info** in full screen (**Menu** › Stream info): the video format, your download speed next to what the stream needs, how much is buffered, freezes and dropped frames, live.
+- **Playback log** in Settings › Updates & about: a summary and the latest problems, **Send playback log**, **Clear log**, and **Send it automatically** (on: at most once a day, only when there were freezes or errors). The log goes to bugs@avidviewer.app the same way crash reports do, without addresses or logins.
+- **Screenshots** in every section of this guide.
+
+**Change log**
+
+- Playback log: freezes (waiting for data), picture stops (sound goes on), player errors, failed stream downloads and dropped-frame bursts, each with the channel and a likely cause; kept on the TV (last 400 entries)
+- Stream info in Picture & sound; Playback log in Settings › Updates & about, sent through the crash relay by hand or once a day automatically
+- User guide: a screenshot in every section
+
+### 1.4.0 — November 13, 2026, 2:38 PM CT
+
+**Release notes**
+
+- **A new look: themes.** Each profile picks its own colours in Settings › Profiles (Edit), or for the profile you're using in Settings › Display & time › **Theme**. There are five: **Dark roast** (dark brown with a soft warm-grey highlight), **Midnight blue** (the look up to 1.3.0), **Espresso & cream**, **Espresso & ivory** and **Mocha & latte**. If you're updating, your profiles keep Midnight blue until you change them; new installs and new profiles start on Dark roast. In the warm themes the highlight is a light tile with dark text, which is easier on the eyes than the blue ring.
+- **Posters first in Movies and Series.** Posters fill their tiles, with no frame or text block under them. The title and year show on a dark fade only on the highlighted poster (and on titles with no artwork); the highlighted poster grows a little and gets a ring.
+- **Three layouts for Movies and Series**: **Grid**, **Featured** (the highlighted title's artwork and details above the posters) and **Showcase** (its artwork fills the screen, with one row of posters along the bottom). Switch with the buttons above the posters; each profile remembers its choice. See [Movies and Series](#8-movies-and-series).
+
+**Change log**
+
+- Themes: five colour themes, one per profile (Settings › Profiles › Edit, and Settings › Display & time for the profile in use); profiles from before 1.4.0 keep Midnight blue, new installs and new profiles get Dark roast; themes and layouts are saved with profiles (and in backups)
+- Movies and Series: posters fill their tiles; title and year on a fade on the highlighted poster and on posters with no artwork; the highlighted poster grows and gets a ring
+- Movies and Series: Grid, Featured and Showcase layouts, remembered per profile
+- Tests for themes on existing and new installs; screenshots of the layouts and every theme
+
+### 1.3.0 — November 13, 2026, 1:18 PM CT
+
+**Release notes**
+
+- **Sports lists games straight away again.** In 1.2.0, Sports could show no games for 20 minutes or more after updating, with a big TV guide and several playlists. The schedule now appears as soon as ESPN answers, with **Finding channels…** on each game until its channels are found, which now takes seconds.
+- **Report issue after a crash.** The "Avid Viewer closed unexpectedly" message now has **Report issue** and **Cancel**. Report issue sends the crash details to bugs@avidviewer.app (with addresses and logins removed), then clears them; Cancel keeps them on the TV. The same button is in Settings › Updates & about › Last crash. See *If the app closes unexpectedly*.
+
+**Change log**
+
+- Sports: the guide and channels are read in index order, so finding a game's channels takes seconds; games are listed before their channels are found ("Finding channels…"); overlapping re-matches become one more pass
+- Crash message: Report issue (sends to bugs@avidviewer.app, then clears) and Cancel (keeps); Report issue in Settings › Last crash; addresses, hosts, IPs and logins removed before sending
+- The crash relay that emails reports (a Google Apps Script web app)
+- Tests for the faster guide reads, the crash message's Report issue and Cancel, and what's removed from reports
+
+### 1.2.0 — November 13, 2026, 10:22 AM CT
 
 **Release notes**
 

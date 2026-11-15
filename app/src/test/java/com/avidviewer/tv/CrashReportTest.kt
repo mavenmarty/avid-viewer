@@ -38,4 +38,30 @@ class CrashReportTest {
     fun noRelayMeansNothingIsSent() {
         assertFalse(CrashReport.send("1.2.1", "boom", relay = ""))
     }
+
+    /**
+     * #16 (Nov 14): the app was closed hard (to the Fire TV home screen) with no report. Closed while on
+     * screen now counts as a crash at the next launch, with the last steps and memory, never names or searches.
+     */
+    @Test
+    fun closedWhileOnScreenIsReportedAtTheNextLaunch() {
+        val app = androidx.test.core.app.ApplicationProvider.getApplicationContext<android.app.Application>()
+        val log = com.avidviewer.tv.data.CrashLog
+        log.clear(app)
+        // Left normally (Home): nothing to report.
+        log.inUse(app); log.note(app, "Screen: search"); log.leftNormally(app)
+        Thread.sleep(300)
+        assertFalse(log.adoptUncleanExit(app))
+        assertEquals(null, log.read(app))
+        // Closed while on screen: the next launch makes a report the dialog can send.
+        log.inUse(app); log.note(app, "Screen: search"); log.note(app, "Search: 2 word(s), 10 letters")
+        Thread.sleep(300)
+        assertTrue(log.adoptUncleanExit(app))
+        val report = log.read(app)!!
+        assertTrue(report, report.contains("closed while in use") && report.contains("Search: 2 word(s)") && report.contains("Memory: app"))
+        assertTrue(report, com.avidviewer.tv.data.BugReport.crashSummary(report)!!.startsWith("Error: Avid Viewer closed while in use"))
+        // Once only.
+        assertFalse(log.adoptUncleanExit(app))
+        log.leftNormally(app); log.clear(app)
+    }
 }

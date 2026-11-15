@@ -76,4 +76,22 @@ class VersionsTest {
         catalog.regroup(listOf("d"))
         assertEquals(2, catalog.count(Catalog.Query("series", listOf("d"), grouped = true)))
     }
+
+    /** #14: provider tags in front of a title (one or several) don't make it a different title. */
+    @Test
+    fun taggedCopiesAreOneTitleInRecentlyAdded() {
+        assertEquals(Tmdb.normalize("Allen"), Tmdb.normalize("NF - Allen (2025)"))
+        assertEquals(Tmdb.normalize("Allen"), Tmdb.normalize("4K-NF - Allen"))
+        assertEquals(Tmdb.normalize("The Christmas Switch"), Tmdb.normalize("EN| NF - The Christmas Switch (2025)"))
+        assertEquals("300riseofanempire", Tmdb.normalize("300: Rise of an Empire"))
+        fun m(key: String, p: String, name: String, cat: String, added: Long) = VodItem(key, p, "movie", name, null, "http://x/$key.mp4", category = cat, added = added)
+        catalog.replace("a", sequenceOf(m("a:1", "a", "NF - Allen (2025)", "EN | Netflix", 30), m("a:2", "a", "4K-NF - Allen", "EN | 4K", 31), m("a:3", "a", "Allen", "EN | Latest", 29), m("a:4", "a", "Other Film", "EN | Latest", 28))) { false }
+        catalog.regroup(listOf("a"))
+        val recent = catalog.page(com.avidviewer.tv.data.Catalog.Query("movie", listOf("a"), newestFirst = true, limit = 200, grouped = true), 0, 50)
+        assertEquals(recent.map { it.name }.toString(), 2, recent.size)
+        // A catalog saved with the older rules is put right once.
+        catalog.writableDatabase.execSQL("UPDATE title SET nn = 'nfallen' WHERE k = 'a:1'")
+        assertEquals(1, catalog.renormalize())
+        assertEquals(0, catalog.renormalize())
+    }
 }

@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -47,24 +48,47 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.composed
 
-/** Palette taken from the Avid Viewer icon: deep navy, electric blue and silver. */
+/**
+ * True inside a highlighted tile whose fill is the theme's light highlight ([C.FocusFill] on a theme with
+ * [Theme.focusLight]): the text and accent colours read from [C] turn dark there, so they stay readable.
+ */
+val LocalOnLight = androidx.compose.runtime.compositionLocalOf { false }
+
+/**
+ * The colours of the profile's theme ([Theme], [Themes]). [source] gives the theme in use (the view model sets it
+ * to the active profile's); it reads Compose state, so screens redraw when the theme changes. Text and accent
+ * colours are read in composition and follow [LocalOnLight].
+ */
 object C {
-    val Bg = Color(0xFF040915)
-    val Rail = Color(0xFF071022)
-    val Surface = Color(0xFF0C1A33)
-    val Surface2 = Color(0xFF132A52)
-    val Line = Color(0xFF1E3B6B)
-    val Text = Color(0xFFEAF2FF)
-    val Soft = Color(0xFFBCCBE4)
-    val Muted = Color(0xFF98AFD2)
-    val Accent = Color(0xFF1E9BFF)
-    val AccentFocus = Color(0xFF6CC2FF)
-    val OnAccent = Color(0xFF02132E)
-    val Live = Color(0xFFD13438)
+    @Volatile var source: () -> Theme = { Themes.of(Themes.DEFAULT) }
+    val theme: Theme get() = source()
+    val Bg get() = theme.bg
+    val Rail get() = theme.rail
+    val Surface get() = theme.surface
+    val Surface2 get() = theme.surface2
+    val Line get() = theme.line
+    /** The highlight's fill; on a light theme what's inside it is drawn in dark colours. */
+    val FocusFill get() = theme.focusFill
+    /** The highlight of rows and buttons that used [Line] for it before 1.4.0: the light fill on a light theme. */
+    val FocusRaised get() = if (theme.focusLight) theme.focusFill else theme.line
+    /** The ring round a highlighted tile that keeps its own fill (posters, coloured buttons), or every one on a dark theme. */
+    val FocusRing get() = theme.focusRing
+    /** The highlight is a light fill with dark text inside. */
+    val FocusLight get() = theme.focusLight
+    /** The accent as a plain value, for drawing code outside composition. */
+    val Gold get() = theme.accent
+    val Live get() = theme.live
+    val Text: Color @Composable @ReadOnlyComposable get() = if (LocalOnLight.current) theme.inkText else theme.text
+    val Soft: Color @Composable @ReadOnlyComposable get() = if (LocalOnLight.current) theme.inkSoft else theme.soft
+    val Muted: Color @Composable @ReadOnlyComposable get() = if (LocalOnLight.current) theme.inkMuted else theme.muted
+    val Accent: Color @Composable @ReadOnlyComposable get() = if (LocalOnLight.current) theme.inkAccent else theme.accent
+    val AccentFocus: Color @Composable @ReadOnlyComposable get() = if (LocalOnLight.current) theme.inkAccentFocus else theme.accentFocus
+    val OnAccent: Color @Composable @ReadOnlyComposable get() = if (LocalOnLight.current) theme.inkOnAccent else theme.onAccent
 }
 
 /**
- * A remote-friendly focusable box: shows a white ring when focused, OK = click,
+ * A remote-friendly focusable box. Highlighted, it fills with [focusedColor]: the warm-grey [C.FocusFill] by
+ * default, with dark text inside; a tile that keeps its own fill gets a [C.FocusRing] ring instead. OK = click,
  * long-press OK or the Menu key = [onMenu].
  */
 @OptIn(ExperimentalFoundationApi::class)
@@ -73,7 +97,8 @@ fun Focusable(
     modifier: Modifier = Modifier,
     shape: Shape = RoundedCornerShape(10.dp),
     color: Color = C.Surface,
-    focusedColor: Color = C.Surface2,
+    focusedColor: Color = C.FocusFill,
+    ringWidth: Dp = 2.dp,
     onFocus: (() -> Unit)? = null,
     onMenu: (() -> Unit)? = null,
     onClick: () -> Unit,
@@ -98,10 +123,10 @@ fun Focusable(
             }
             .clip(shape)
             .background(if (focused) focusedColor else color)
-            .then(if (focused) Modifier.border(2.dp, C.AccentFocus, shape) else Modifier)
+            .then(if (focused && (focusedColor != C.FocusFill || !C.FocusLight)) Modifier.border(ringWidth, C.FocusRing, shape) else Modifier)
             .combinedClickable(onLongClick = onMenu, onClick = onClick),
         verticalAlignment = Alignment.CenterVertically,
-    ) { content(focused) }
+    ) { androidx.compose.runtime.CompositionLocalProvider(LocalOnLight provides (focused && focusedColor == C.FocusFill && C.FocusLight)) { content(focused) } }
 }
 
 @Composable
@@ -124,7 +149,7 @@ fun TvButton(
             .alpha(if (busy) 0.6f else 1f),
         shape = RoundedCornerShape(20.dp),
         color = if (primary) C.Accent else C.Surface2,
-        focusedColor = if (primary) C.AccentFocus else C.Line,
+        focusedColor = if (primary) C.AccentFocus else C.FocusRaised,
         onClick = { if (!busy) onClick() },
     ) {
         Row(Modifier.padding(horizontal = 14.dp, vertical = 7.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -154,7 +179,7 @@ fun Modifier.dimWhenInactive(): Modifier = composed {
  * every list: a raised row with an accent bar down its left edge and a bold label. TalkBack hears "selected".
  */
 fun Modifier.activePath(on: Boolean): Modifier = semantics { selected = on }.then(
-    if (on) Modifier.drawWithContent { drawContent(); drawRect(C.Accent, size = androidx.compose.ui.geometry.Size(3.dp.toPx(), size.height)) } else Modifier,
+    if (on) Modifier.drawWithContent { drawContent(); drawRect(C.Gold, size = androidx.compose.ui.geometry.Size(3.dp.toPx(), size.height)) } else Modifier,
 )
 
 @Composable
@@ -193,8 +218,10 @@ fun initials(n: String): String =
     n.replace(Regex("^[A-Z]{2,3}[:|] *"), "").split(' ', '-').filter { it.isNotBlank() && it[0].isLetterOrDigit() }
         .take(2).joinToString("") { it.take(1) }.uppercase().ifBlank { "TV" }
 
-private val palette = listOf(0xFF1D4ED8, 0xFF7C3AED, 0xFF0F766E, 0xFFB91C1C, 0xFFB45309, 0xFF0E7490, 0xFF9D174D, 0xFF4D7C0F, 0xFF6D28D9, 0xFF334155)
-fun badgeColor(name: String) = Color(palette[(name.hashCode() and 0x7fffffff) % palette.size])
+// Muted earth tones that sit with the dark-roast palette (tiles with no artwork, channel badges).
+private val classicPalette = listOf(0xFF1D4ED8, 0xFF7C3AED, 0xFF0F766E, 0xFFB91C1C, 0xFFB45309, 0xFF0E7490, 0xFF9D174D, 0xFF4D7C0F, 0xFF6D28D9, 0xFF334155)
+private val palette = listOf(0xFF6B4A3A, 0xFF4E5A44, 0xFF6A3F44, 0xFF7A5A32, 0xFF3F5157, 0xFF5A4A5E, 0xFF4A5560, 0xFF6E5A3E, 0xFF5B4636, 0xFF455046)
+fun badgeColor(name: String) = (if (C.FocusLight) palette else classicPalette).let { Color(it[(name.hashCode() and 0x7fffffff) % it.size]) }
 
 /**
  * Put on a screen's first item: when the screen is picked in the left menu, the highlight goes here

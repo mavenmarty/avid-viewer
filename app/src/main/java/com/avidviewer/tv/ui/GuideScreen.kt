@@ -153,6 +153,8 @@ fun GuideScreen(vm: AppViewModel) {
         vm.trail("go $mode")
         // Only now is the request used up (if the screen was rebuilt during the pause, the new one uses it).
         vm.guideFocusMode = GuideFocus.CURRENT
+        // The first favorite was just added from the suggestions row: the highlight stays there (#18).
+        if (mode != GuideFocus.KEEP && vm.suggestionsFocused && vm.suggestions().isNotEmpty()) return@LaunchedEffect
         when (mode) {
             // Newly chosen category: start at the top.
             GuideFocus.TOP -> { scope.launch { listState.scrollToItem(0) }; pendingFocus = 0 }
@@ -450,7 +452,7 @@ fun GuideScreen(vm: AppViewModel) {
                                             }
                                         },
                                     color = if (isNow) C.Surface2 else if (aired) C.Surface.copy(alpha = 0.45f) else C.Surface,
-                                    focusedColor = C.Line,
+                                    focusedColor = C.FocusRaised,
                                     onFocus = {
                                         focusProg = c.key to p
                                         vm.nav.focused(path, c.key, idx); vm.nav.guideOnProgram = true
@@ -496,7 +498,7 @@ private fun DayStrip(vm: AppViewModel, days: List<Long>, winStart: Long, first: 
 
 @Composable
 private fun DayChip(text: String, on: Boolean, modifier: Modifier, onClick: () -> Unit) {
-    Focusable(modifier = modifier.height(26.dp), shape = RoundedCornerShape(13.dp), color = if (on) C.Accent else C.Surface2, focusedColor = if (on) C.AccentFocus else C.Line, onClick = onClick) {
+    Focusable(modifier = modifier.height(26.dp), shape = RoundedCornerShape(13.dp), color = if (on) C.Accent else C.Surface2, focusedColor = if (on) C.AccentFocus else C.FocusRaised, onClick = onClick) {
         Text(text, color = if (on) C.OnAccent else C.Text, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, modifier = Modifier.padding(horizontal = 12.dp))
     }
 }
@@ -578,16 +580,51 @@ private fun DetailsPanel(vm: AppViewModel, c: com.avidviewer.tv.data.Channel?, c
 @Composable
 private fun LocalSuggestions(vm: AppViewModel) {
     val list = vm.suggestions()
+    val rowState = rememberLazyListState()
+    // Focus handles: each suggestion's ＋ Add to List, and Hide suggestions.
+    val addFr = remember { HashMap<String, FocusRequester>() }
+    fun addFor(key: String) = addFr.getOrPut(key) { FocusRequester() }
+    val hideFr = remember { FocusRequester() }
+    // #18: adding a suggestion to a list (or ✕) takes it out of this row, and the highlight went with it to the
+    // top-left of the screen. It goes to the next suggestion (the one before when it was the last), back to the
+    // same one when the picker was closed without adding it, or to the channels when none are left.
+    LaunchedEffect(vm.listPickerKey, vm.suggestionReturn) {
+        val (opened, next) = vm.suggestionReturn ?: return@LaunchedEffect
+        if (vm.listPickerKey != null) return@LaunchedEffect // the picker is still open
+        vm.suggestionReturn = null
+        val keys = vm.suggestions().map { it.key }
+        val target = when {
+            opened in keys -> opened
+            next != null && next in keys -> next
+            else -> keys.firstOrNull()
+        }
+        if (target == null) { vm.suggestionsFocused = false; vm.focusGuideList(); return@LaunchedEffect }
+        val i = keys.indexOf(target)
+        val vis = rowState.layoutInfo.visibleItemsInfo
+        if (vis.none { it.index == i && it.offset >= 0 }) rowState.scrollToItem(i)
+        focusWhenReady(vm) { runCatching { addFor(target).requestFocus() }.isSuccess }
+    }
     if (list.isEmpty()) return
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    fun neighbour(i: Int) = (list.getOrNull(i + 1) ?: list.getOrNull(i - 1))?.key
+    Column(
+        Modifier.onFocusChanged { vm.suggestionsFocused = it.hasFocus },
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Label("Suggested near ${vm.suggestionPlace()}", size = 13.sp, color = C.Text, weight = FontWeight.Bold)
             Label("from your postal code · ${list.size}", size = 12.sp, modifier = Modifier.weight(1f))
-            TvButton("Hide suggestions") { vm.setShowSuggestions(false) }
+            // #17: Down goes to the suggestion at the start of the row (it's far to the right of the cards).
+            TvButton("Hide suggestions", modifier = Modifier.focusRequester(hideFr).focusProperties {
+                down = list.getOrNull(rowState.firstVisibleItemIndex)?.let { addFor(it.key) } ?: FocusRequester.Default
+            }) {
+                vm.suggestionsFocused = false
+                vm.setShowSuggestions(false)
+                vm.focusGuideList() // the row is gone: to the channels, not the top-left
+            }
         }
-        androidx.compose.foundation.lazy.LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            items(list, key = { it.key }) { s ->
-                val c = vm.channel(s.key) ?: return@items
+        LazyRow(state = rowState, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            itemsIndexed(list, key = { _, s -> s.key }) { i, s ->
+                val c = vm.channel(s.key) ?: return@itemsIndexed
                 Row(
                     Modifier.width(300.dp).height(60.dp).clip(RoundedCornerShape(10.dp)).background(C.Surface).padding(horizontal = 8.dp),
                     verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -597,8 +634,15 @@ private fun LocalSuggestions(vm: AppViewModel) {
                         Label(vm.channelName(c), size = 13.sp, color = C.Text, weight = FontWeight.SemiBold)
                         Label(listOf(s.reason, vm.playlistName(c)).filter { it.isNotBlank() }.joinToString(" · "), size = 12.sp)
                     }
-                    TvButton("＋ Add to List") { vm.listPickerKey = s.key }
-                    TvButton("✕") { vm.dismissSuggestion(s.key) }
+                    // #17: Up from a suggestion reaches Hide suggestions (it isn't straight above most cards).
+                    TvButton("＋ Add to List", modifier = Modifier.focusRequester(addFor(s.key)).focusProperties { up = hideFr }) {
+                        vm.suggestionReturn = s.key to neighbour(i)
+                        vm.listPickerKey = s.key
+                    }
+                    TvButton("✕", modifier = Modifier.focusProperties { up = hideFr }) {
+                        vm.suggestionReturn = s.key to neighbour(i)
+                        vm.dismissSuggestion(s.key)
+                    }
                 }
             }
         }
@@ -634,7 +678,7 @@ fun GroupOptionsDialog(vm: AppViewModel) {
 
 @Composable
 fun OptionRow(label: String, onClick: () -> Unit) {
-    Focusable(Modifier.fillMaxWidth().height(44.dp), color = C.Surface2, focusedColor = C.Line, onClick = onClick) {
+    Focusable(Modifier.fillMaxWidth().height(44.dp), color = C.Surface2, focusedColor = C.FocusRaised, onClick = onClick) {
         Label(label, size = 15.sp, color = C.Text, weight = FontWeight.SemiBold, modifier = Modifier.padding(horizontal = 14.dp))
     }
 }

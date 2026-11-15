@@ -113,6 +113,9 @@ class Store(private val context: Context) {
         if (f.exists()) ProfileSet.fromJson(JSONObject(f.readText())) else ProfileSet()
     }.getOrDefault(ProfileSet())
 
+    /** Nothing saved yet: a new install (the app had no playlists, settings or profiles). */
+    fun isNewInstall(): Boolean = listOf("prefs.json", "playlists.json", "profiles.json").none { File(dir, it).exists() }
+
     fun saveProfiles(s: ProfileSet) = writeAtomic(File(dir, "profiles.json"), s.toJson().toString())
 
     /**

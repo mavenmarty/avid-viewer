@@ -14,9 +14,17 @@
  *   4. Put that URL in Links.CRASH_RELAY (app/src/main/java/com/avidviewer/tv/data/Links.kt).
  * After editing this script, use Deploy › Manage deployments › Edit › New version, so the URL stays.
  *
- * What it accepts: {"app":"avid-viewer","version","device","crash","summary"} with size limits.
+ * What it accepts: {"app":"avid-viewer","version","device","crash","summary","kind"?} with size limits
+ * ("kind":"playback" = the playback log, from 1.5.0; anything else is a crash report).
  * The app removes web addresses, user names and passwords from the crash text before sending.
  * At most 30 reports an hour are mailed (Apps Script also caps mail per day).
+ *
+ * Inbox (1.5.2): the script sends from the same mailbox that bugs@ delivers to, and Gmail files mail you send to
+ * your own address under Sent only, so reports never reached the Inbox (or the bug-report tasks that read it).
+ * Each email now carries a report id; the script finds the sent copy and moves it to the Inbox, unread.
+ * This uses GmailApp (gmail.modify). Apps Script may not ask for that by itself, so the project manifest
+ * (appsscript.json, next to this file) lists both scopes: paste it in too (Project Settings › Show
+ * "appsscript.json"), then Run doPost once in the editor to grant them, then deploy a new version.
  */
 var TO = 'bugs@avidviewer.app';
 var MAX_PER_HOUR = 30;
@@ -36,20 +44,36 @@ function doPost(e) {
     cache.put(hour, String(n + 1), 3600);
 
     var first = (summary || crash).split('\n')[0];
+    var id = 'AVR-' + Utilities.getUuid().slice(0, 8);
+    // "kind": "playback" (from 1.5.0) is the playback log: freezes and errors with their likely causes.
+    var playback = r.kind === 'playback';
     MailApp.sendEmail({
       to: TO,
-      subject: 'Avid Viewer crash report (' + version + ') · ' + first.slice(0, 120),
-      body: 'Sent automatically from the app ("Report issue" after a crash).\n\n' +
+      subject: 'Avid Viewer ' + (playback ? 'playback log' : 'crash report') + ' (' + version + ') · ' + first.slice(0, 120),
+      body: (playback ? 'Sent from the app (Settings › Updates & about › Playback log, or automatically once a day).\n\n'
+          : 'Sent automatically from the app ("Report issue" after a crash).\n\n') +
         'App version: ' + version + '\n' +
         'Device: ' + device + '\n' +
-        (summary ? 'Error: ' + summary + '\n' : '') +
-        '\n--- Crash report ---\n' + crash,
-      name: 'Avid Viewer crash reports',
+        (summary ? (playback ? 'Summary: ' : 'Error: ') + summary + '\n' : '') +
+        '\n--- ' + (playback ? 'Playback log' : 'Crash report') + ' ---\n' + crash +
+        '\n\nReport id: ' + id,
+      name: playback ? 'Avid Viewer playback logs' : 'Avid Viewer crash reports',
     });
+    toInbox_(id);
     return reply_(200, 'sent');
   } catch (err) {
     return reply_(500, String(err));
   }
+}
+
+/** Moves the sent copy (found by its report id) into the Inbox, unread. Search can lag a few seconds. */
+function toInbox_(id) {
+  for (var i = 0; i < 8; i++) {
+    Utilities.sleep(1500);
+    var found = GmailApp.search('"' + id + '"', 0, 1);
+    if (found.length) { found[0].moveToInbox(); found[0].markUnread(); return true; }
+  }
+  return false;
 }
 
 function clip_(v, n) { return typeof v === 'string' ? v.slice(0, n) : ''; }

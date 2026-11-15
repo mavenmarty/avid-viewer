@@ -108,6 +108,34 @@ class Catalog(context: Context) : SQLiteOpenHelper(context.applicationContext, "
     }
 
     /** True while some titles still wait for [fillLanguages]. */
+    /**
+     * Works out every title's normalized name again with today's rules ([Tmdb.normalize]), in short batches, and
+     * returns how many changed. For catalogs saved before a rule changed (#14, 1.5.1); call off the main thread,
+     * then [regroup].
+     */
+    fun renormalize(batch: Int = 2000): Int {
+        var changed = 0
+        var last = 0L
+        val db = writableDatabase
+        while (true) {
+            val rows = db.rawQuery("SELECT rowid, n, nn FROM title WHERE rowid > ? ORDER BY rowid LIMIT $batch", arrayOf(last.toString())).use { c ->
+                val l = ArrayList<Triple<Long, String, String>>(batch); while (c.moveToNext()) l.add(Triple(c.getLong(0), c.getString(1), c.getString(2))); l
+            }
+            if (rows.isEmpty()) return changed
+            last = rows.last().first
+            val updates = rows.mapNotNull { (id, n, nn) -> Tmdb.normalize(n).takeIf { it != nn }?.let { id to it } }
+            if (updates.isNotEmpty()) {
+                db.beginTransaction()
+                try {
+                    val st = db.compileStatement("UPDATE title SET nn = ? WHERE rowid = ?")
+                    updates.forEach { (id, nn) -> st.clearBindings(); st.bindString(1, nn); st.bindLong(2, id); st.executeUpdateDelete() }
+                    db.setTransactionSuccessful()
+                } finally { db.endTransaction() }
+                changed += updates.size
+            }
+        }
+    }
+
     fun needsLanguages(): Boolean = readableDatabase.rawQuery("SELECT 1 FROM title WHERE lr < 0 LIMIT 1", null).use { it.moveToFirst() }
 
     override fun onConfigure(db: SQLiteDatabase) { db.enableWriteAheadLogging() }
@@ -344,6 +372,25 @@ class Catalog(context: Context) : SQLiteOpenHelper(context.applicationContext, "
         return readableDatabase.rawQuery(sql, a).use { c ->
             val out = ArrayList<VodItem>(c.count); while (c.moveToNext()) out.add(read(c)); out
         }
+    }
+
+    /**
+     * Titles a forgiving search for [q]'s name may accept ([SearchText.score]: a typo, or a word left out),
+     * best first: read by the letters a typo usually leaves whole, at most [scan] rows.
+     */
+    fun near(q: Query, limit: Int, scan: Int = 2000): List<VodItem> {
+        if (q.playlists.isEmpty()) return emptyList()
+        val sq = SearchText.prepare(q.nameContains ?: return emptyList())
+        val pats = SearchText.nearPatterns(sq)
+        if (pats.isEmpty()) return emptyList()
+        val (w, a) = q.copy(nameContains = null, limit = null).where()
+        val like = pats.joinToString(" OR ") { "n LIKE ? ESCAPE '\\'" }
+        val sql = "SELECT $COLS FROM title WHERE $w AND ($like) ORDER BY ${q.order()} LIMIT $scan"
+        val rows = readableDatabase.rawQuery(sql, a + pats).use { c ->
+            val out = ArrayList<VodItem>(c.count); while (c.moveToNext()) out.add(read(c)); out
+        }
+        return rows.map { it to SearchText.score(it.name, sq) }.filter { it.second > 0 }
+            .sortedByDescending { it.second }.take(limit).map { it.first }
     }
 
     /** Categories with title counts, per playlist, in the provider's order: (playlist, category, count). */
