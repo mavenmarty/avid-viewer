@@ -125,7 +125,9 @@ class NavigationFixesTest {
     /** Types into the open keyboard (letters not counted) and presses its Done / Next (1 press). */
     private fun typeAndSubmit(text: String?) {
         waitFor { rule.onAllNodes(hasSetTextAction()).fetchSemanticsNodes().isNotEmpty() }
-        val n = rule.onAllNodes(hasSetTextAction()).onFirst()
+        // The field with the keyboard open (it has the highlight), else the dialog's field (listed last).
+        val n = if (rule.onAllNodes(hasSetTextAction() and isFocused()).fetchSemanticsNodes().isNotEmpty())
+            rule.onAllNodes(hasSetTextAction() and isFocused()).onFirst() else rule.onAllNodes(hasSetTextAction()).onLast()
         if (text != null) { n.performTextReplacement(text); settle() }
         presses++
         n.performImeAction()
