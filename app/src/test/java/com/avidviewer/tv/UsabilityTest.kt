@@ -399,6 +399,7 @@ class UsabilityTest {
     fun categoryReorderJumpsToTopAndBottom() {
         rule.runOnIdle { vm.chooseGroup(TestData.P1, "NEWS") }
         settle()
+        showCategories()
         // Highlight the category in the left list, press Menu, choose Re-order.
         rule.onNode(androidx.compose.ui.test.hasText("KIDS") and androidx.compose.ui.test.hasClickAction()).requestFocus()
         settle()
@@ -759,6 +760,7 @@ class UsabilityTest {
     fun searchSitsInTheCategoryListsAndTheHeaderHasNoInstructions() {
         rule.runOnIdle { vm.chooseGroup(TestData.P1, "KIDS") }
         settle()
+        showCategories()
         assertTrue("search in the guide's category list", rule.onAllNodesWithTag("nav-search").fetchSemanticsNodes().isNotEmpty())
         assertTrue("no key instructions in the header", rule.onAllNodesWithText("OK: preview", substring = true).fetchSemanticsNodes().isEmpty())
         assertTrue("no category label next to search", rule.onAllNodesWithText("KIDS  ·  12 channels").fetchSemanticsNodes().isEmpty())
@@ -1032,12 +1034,21 @@ class UsabilityTest {
         }
     }
 
+    /** The guide fills the screen while it has the highlight (Nov 15): ◀'s way back to the category list. */
+    private fun showCategories() {
+        rule.runOnIdle { vm.navFocusKey = vm.selectedGroup }
+        waitFor("the category list (focus: ${focused()})") { vm.inGroupNav }
+    }
+
     @Test
     fun theMainMenuShowsAsIconsAtLaunchOnTheGuide() {
         settle()
         assertEquals(Screen.GUIDE, vm.screen)
         assertEquals(NavMode.GROUPS, vm.navMode)
-        assertTrue("main menu icons are on screen", rule.onAllNodesWithContentDescription("Settings").fetchSemanticsNodes().isNotEmpty())
+        // Nov 15: on the guide, with a category chosen, the guide fills the screen; ◀ brings the category list and the menu icons.
+        waitFor("the guide fills the screen") { vm.guideHasFocus && rule.onAllNodesWithContentDescription("Settings").fetchSemanticsNodes().isEmpty() }
+        press(listOf(Key.DirectionLeft))
+        waitFor("main menu icons are on screen after ◀ (focus: ${focused()})") { rule.onAllNodesWithContentDescription("Settings").fetchSemanticsNodes().isNotEmpty() && vm.inGroupNav }
     }
 
     @Test
@@ -1513,6 +1524,7 @@ class UsabilityTest {
         hold(Key.DirectionUp, 30)
         assertTrue("holding wrapped (focus: ${focused()})", !focused().contains("KIDS Channel 12 "))
         // Categories: Down on the last one goes to the top of the list.
+        showCategories()
         rule.onNode(androidx.compose.ui.test.hasText("BIG") and androidx.compose.ui.test.hasClickAction()).requestFocus()
         settle()
         val last = vm.groups().last().name
