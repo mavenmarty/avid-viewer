@@ -77,6 +77,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onStop() {
         super.onStop()
+        com.avidviewer.tv.data.CrashLog.leftNormally(this)
         // Leaving the app (Home button or Back) stops playback so it doesn't run in the background.
         vm.stop()
         vm.onAppExit()
@@ -84,6 +85,8 @@ class MainActivity : ComponentActivity() {
 
     override fun onStart() {
         super.onStart()
+        // On screen: if the app is closed before onStop, the next launch reports it (CrashLog.adoptUncleanExit).
+        com.avidviewer.tv.data.CrashLog.inUse(this)
         if (vm.player.mediaItemCount > 0) {
             vm.player.prepare()
             vm.player.play()

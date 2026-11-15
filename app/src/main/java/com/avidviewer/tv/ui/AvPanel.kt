@@ -51,7 +51,7 @@ fun BoxScope.AvPanel(vm: AppViewModel) {
     val what = vm.vodPlaying?.let { if (it.kind == "episode") "this series" else "this movie" } ?: "this channel"
     Column(
         Modifier.align(Alignment.CenterEnd).width(430.dp).fillMaxHeight()
-            .background(Color(0xF2071022)).padding(horizontal = 20.dp, vertical = 16.dp),
+            .background(C.Rail.copy(alpha = 0.95f)).padding(horizontal = 20.dp, vertical = 16.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         Label("Picture & sound", size = 20.sp, color = C.Text, weight = FontWeight.Bold)
@@ -89,6 +89,18 @@ fun BoxScope.AvPanel(vm: AppViewModel) {
                 PanelButton("reset", "Use the settings for all channels here") { runCatching { first.requestFocus() }; vm.resetAvForChannel() }
             }
             if (live) PanelButton("add-to-list", "＋  Add to List…") { vm.avPanel = false; vm.listPickerKey = vm.currentKey }
+
+            // Stream info (1.5.0): what the TV is getting right now, to tell a slow network or provider from the TV.
+            SectionTitle("Stream info", Modifier.padding(top = 6.dp))
+            val st = vm.playback.stats
+            InfoLine("Video", st.video.ifBlank { "Not known yet" })
+            InfoLine("Download speed", if (st.downloadKbps > 0) PlaybackMonitor.mbps(st.downloadKbps) + (if (st.streamKbps > 0) "  (stream needs ${PlaybackMonitor.mbps(st.streamKbps)})" else "") else "Measuring…")
+            InfoLine("Buffered ahead", "${st.bufferedMs / 1000} s")
+            InfoLine("Freezes here", if (st.freezes == 0) "None so far" else "${st.freezes}" + (if (st.longestFreezeS > 0) " · longest ${st.longestFreezeS} s" else ""))
+            InfoLine("Dropped frames", "${st.droppedFrames}")
+            st.lastProblem?.let { Label(it, size = 12.sp, color = C.Soft, lines = 4, modifier = Modifier.testTag("stream-last-problem")) }
+            PanelButton("send-playback-log", if (vm.playbackLogBusy) "Sending…" else "Send playback log to bugs@avidviewer.app") { vm.sendPlaybackLog() }
+            vm.playbackLogStatus?.let { Label(it, size = 12.sp, color = C.Accent, lines = 2) }
         }
         Label("◀ ▶ change  ·  Back close", size = 12.sp)
     }
@@ -117,7 +129,7 @@ private fun <T> ChoiceRow(
                 else -> false
             }
         },
-        color = C.Surface, focusedColor = C.Line,
+        color = C.Surface, focusedColor = C.FocusRaised,
         onClick = { go(1) },
     ) { focused ->
         Column(Modifier.padding(horizontal = 12.dp, vertical = 7.dp)) {
@@ -133,7 +145,15 @@ private fun <T> ChoiceRow(
 
 @Composable
 private fun PanelButton(id: String, text: String, onClick: () -> Unit) {
-    Focusable(Modifier.fillMaxWidth().height(44.dp).testTag("av-$id"), color = C.Surface2, focusedColor = C.Line, onClick = onClick) {
+    Focusable(Modifier.fillMaxWidth().height(44.dp).testTag("av-$id"), color = C.Surface2, focusedColor = C.FocusRaised, onClick = onClick) {
         Box(Modifier.padding(horizontal = 12.dp)) { Label(text, size = 14.sp, color = C.Text, weight = FontWeight.SemiBold) }
+    }
+}
+
+@Composable
+private fun InfoLine(label: String, value: String) {
+    Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+        Label(label, size = 13.sp, color = C.Muted, modifier = Modifier.width(130.dp))
+        Label(value, size = 13.sp, color = C.Text, lines = 2, modifier = Modifier.testTag("stream-" + label.lowercase().replace(' ', '-')))
     }
 }

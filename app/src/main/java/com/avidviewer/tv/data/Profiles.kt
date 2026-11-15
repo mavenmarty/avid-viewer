@@ -28,6 +28,10 @@ data class Profile(
     val allowedGroups: Set<String> = emptySet(),
     /** Kids: movie and series categories allowed, as "movie|playlistId|category" / "series|…". */
     val allowedVodCats: Set<String> = emptySet(),
+    /** Colour theme (ui.Themes) id; empty = not chosen yet (resolved at start: see [ProfileSet.withThemes]). */
+    val theme: String = "",
+    /** Movies and Series layout: "grid", "featured" or "showcase". */
+    val vodLayout: String = "grid",
 ) {
     val isOwner get() = id == OWNER
     val isParent get() = isOwner || parent
@@ -44,6 +48,7 @@ data class Profile(
     fun toJson(): JSONObject = JSONObject()
         .put("id", id).put("name", name).put("color", color).put("kids", kids).put("parent", parent).put("pin", pinHash)
         .put("allowedGroups", JSONArray(allowedGroups.toList())).put("allowedVodCats", JSONArray(allowedVodCats.toList()))
+        .put("theme", theme).put("vodLayout", vodLayout)
 
     companion object {
         const val OWNER = "main"
@@ -52,6 +57,7 @@ data class Profile(
             id = o.getString("id"), name = o.optString("name", "Profile"), color = o.optInt("color", 0),
             kids = o.optBoolean("kids"), parent = o.optBoolean("parent"), pinHash = o.optString("pin"),
             allowedGroups = strings(o.optJSONArray("allowedGroups")), allowedVodCats = strings(o.optJSONArray("allowedVodCats")),
+            theme = o.optString("theme", ""), vodLayout = o.optString("vodLayout", "grid"),
         )
 
         fun hashPin(pin: String): String {
@@ -88,6 +94,14 @@ data class ProfileSet(
 
     fun get(id: String) = list.firstOrNull { it.id == id }
 
+    /**
+     * Gives every profile without a theme one: [THEME_LEGACY] (the look they had) when the app was already set up
+     * before 1.4.0, else [THEME_DEFAULT]. Null when nothing needed one.
+     */
+    fun withThemes(existingInstall: Boolean): ProfileSet? =
+        if (list.none { it.theme.isEmpty() }) null
+        else copy(list = list.map { if (it.theme.isEmpty()) it.copy(theme = if (existingInstall) THEME_LEGACY else THEME_DEFAULT) else it })
+
     fun toJson(): JSONObject = JSONObject().put("active", active).put("startMode", startMode)
         .put("profiles", JSONArray().apply { list.forEach { put(it.toJson()) } })
 
@@ -101,6 +115,11 @@ data class ProfileSet(
         }
     }
 }
+
+/** New installs and new profiles. */
+const val THEME_DEFAULT = "roast"
+/** Profiles from before themes (1.4.0) keep the original look. */
+const val THEME_LEGACY = "midnight"
 
 /** The colours a profile can have (tile background to letter colour). */
 val PROFILE_COLORS = listOf(

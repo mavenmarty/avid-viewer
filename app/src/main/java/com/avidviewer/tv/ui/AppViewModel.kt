@@ -56,7 +56,9 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
@@ -118,7 +120,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
      * Who's watching? shows when there are several profiles and the app asks at start, or the last one is locked.
      */
     private val startup: Pair<ProfileSet, Boolean> = run {
-        val s = store.loadProfiles()
+        val existing = !store.isNewInstall()
+        val s = store.loadProfiles().let { s0 -> s0.withThemes(existing)?.also { store.saveProfiles(it) } ?: s0 }
         val last = s.activeProfile
         val locked = s.multiple && s.needsPin(last)
         val id = if (locked) s.list.firstOrNull { it.kids }?.id ?: last.id else last.id
@@ -127,6 +130,13 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
     var profiles by mutableStateOf(startup.first); private set
     val profile: Profile get() = profiles.activeProfile
+    /** The active profile's colour theme; every screen reads its colours through it ([C]). */
+    val theme: Theme get() = Themes.of(profile.theme)
+    init { C.source = { theme } }
+    fun setTheme(id: String, p: Profile = profile) = profiles.get(p.id)?.let { updateProfile(it.copy(theme = id)) }
+    /** Movies and Series layout for the profile: "grid", "featured" or "showcase". */
+    val vodLayout: String get() = profile.vodLayout
+    fun setVodLayout(l: String) = updateProfile(profile.copy(vodLayout = l))
     /** The profile in use is a Kids profile: only its categories, no Settings, Discover or Sports. */
     val kidsMode: Boolean get() = profile.kids
     /** Who's watching? is on screen; nothing plays until a profile is chosen. */
@@ -230,7 +240,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** Adds a profile; returns its id. A Kids profile starts with the categories whose names look made for children. */
     fun addProfile(name: String, kids: Boolean, color: Int): String {
         val id = newProfileId()
-        val p = Profile(id, name.trim().ifEmpty { if (kids) "Kids" else "Profile" }, color, kids = kids,
+        val p = Profile(id, name.trim().ifEmpty { if (kids) "Kids" else "Profile" }, color, kids = kids, theme = com.avidviewer.tv.data.THEME_DEFAULT,
             allowedGroups = if (kids) suggestedKidsGroups() else emptySet(), allowedVodCats = if (kids) suggestedKidsVodCats() else emptySet())
         // A new grown-up profile starts with a copy of the owner's favorites and lists; Kids starts empty.
         if (!kids) store.savePersonal(id, com.avidviewer.tv.data.personalOf(store.loadPrefs(Profile.OWNER)).apply { remove("lastChannel") })
@@ -453,7 +463,11 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     var weatherError by mutableStateOf<String?>(null); private set
     var postalStatus by mutableStateOf<String?>(null); private set
 
+    /** Download speed while streaming, for Stream info and the playback log. */
+    private val bandwidth = androidx.media3.exoplayer.upstream.DefaultBandwidthMeter.Builder(app).build()
+
     val player: ExoPlayer = ExoPlayer.Builder(app)
+        .setBandwidthMeter(bandwidth)
         .setMediaSourceFactory(
             DefaultMediaSourceFactory(app).setDataSourceFactory(
                 DefaultHttpDataSource.Factory().setUserAgent(USER_AGENT).setAllowCrossProtocolRedirects(true)
@@ -461,6 +475,59 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             )
         )
         .build()
+
+    // ---------------- playback log (1.5.0) ----------------
+    val playbackLog = com.avidviewer.tv.data.PlaybackLog(java.io.File(app.filesDir, "playback-log.txt"))
+    val playback = PlaybackMonitor(player, bandwidth, playbackLog)
+    var playbackLogBusy by mutableStateOf(false); private set
+    var playbackLogStatus by mutableStateOf<String?>(null)
+    /** Changes whenever the log does, so Settings redraws its summary. */
+    var playbackLogRev by mutableStateOf(0); private set
+    internal var playbackRelay: String = com.avidviewer.tv.data.Links.CRASH_RELAY
+
+    /** Sends the playback log to bugs@avidviewer.app through the crash relay ([auto]: the once-a-day send). */
+    fun sendPlaybackLog(auto: Boolean = false) {
+        if (playbackLogBusy) return
+        val newest = playbackLog.entries().lastOrNull()?.time ?: return
+        playbackLogBusy = true
+        if (!auto) playbackLogStatus = "Sending…"
+        viewModelScope.launch {
+            val ok = withContext(Dispatchers.IO) {
+                com.avidviewer.tv.data.CrashReport.sendLog(installed.second, playbackLog.summary(), playbackLog.text(), playbackRelay)
+            }
+            playbackLogBusy = false
+            if (ok) playbackLog.markSent(newest, auto)
+            if (!auto) playbackLogStatus = if (ok) "Sent to bugs@avidviewer.app. Thanks." else "Couldn't send the log. Check the connection and try again."
+            playbackLogRev++
+        }
+    }
+
+    fun clearPlaybackLog() { playbackLog.clear(); playbackLogStatus = null; playbackLogRev++ }
+
+    /** At most once a day, when freezes or errors happened since the last send ([Prefs.autoSendPlaybackLog]). */
+    private fun maybeAutoSendPlaybackLog() {
+        if (!prefs.autoSendPlaybackLog || playbackLogBusy) return
+        if (android.os.Build.FINGERPRINT == "robolectric") return // never from tests
+        if (playbackLog.unsent().isEmpty()) return
+        if (System.currentTimeMillis() - playbackLog.lastAutoSend < 24 * 3_600_000L) return
+        sendPlaybackLog(auto = true)
+    }
+
+    /**
+     * The welcome screen (1.6.0): shown at start while the app has no playlists. It has the user guide's QR code,
+     * Add a playlist (Settings › Playlists, on the add form) and Restore a backup (Settings › Updates & about).
+     */
+    var showWelcome by mutableStateOf(false)
+
+    fun welcomeAddPlaylist() {
+        showWelcome = false
+        screen = Screen.SETTINGS; settingsSection = "playlists"; navMode = NavMode.COLLAPSED
+    }
+
+    fun welcomeRestore() {
+        showWelcome = false
+        screen = Screen.SETTINGS; settingsSection = "about"; navMode = NavMode.COLLAPSED
+    }
 
     private var osdJob: Job? = null
     private var watchStart = 0L
@@ -662,7 +729,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** Details of the last crash, if the app closed unexpectedly (shown once at start and in Settings › About). */
-    var lastCrash by mutableStateOf(com.avidviewer.tv.data.CrashLog.read(app)); private set
+    // Closed while on screen last time with nothing caught (the TV freed memory, a native crash): that counts too.
+    var lastCrash by mutableStateOf(com.avidviewer.tv.data.CrashLog.run { adoptUncleanExit(app); read(app) }); private set
     var crashNoticeSeen by mutableStateOf(false)
 
     fun clearCrash() { com.avidviewer.tv.data.CrashLog.clear(getApplication()); lastCrash = null }
@@ -747,6 +815,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     init {
         if (prefs.clearCacheOnExit) store.clearCache() // catches exits Android didn't report
+        // Memory in use, every 30 s while on screen, so a hard close shows what it was just before (CrashLog).
+        if (android.os.Build.FINGERPRINT != "robolectric") viewModelScope.launch {
+            while (true) { delay(30_000); com.avidviewer.tv.data.CrashLog.tick(getApplication()) }
+        }
         // The catalog's hidden marks belong to one profile: put this profile's in place if another's are there,
         // or (a Kids profile) its categories may have changed.
         if (store.catalogProfile != profile.id || kidsMode) applyProfileVodLimits()
@@ -755,10 +827,26 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             // Which copy stands for each title, worked out in the background (not while a list is read).
             delay(3_000)
+            // #14 (1.5.1): titles saved with the older name rules get them again once, so "NF - Allen" and
+            // "Allen" count as one title.
+            val marker = java.io.File(getApplication<android.app.Application>().filesDir, "catalog-names-2")
+            if (!marker.exists()) withContext(Dispatchers.IO) { runCatching { catalog.renormalize(); marker.writeText("1") } }
             regroupLater(0)
             delay(5_000)
             val n = withContext(Dispatchers.IO) { runCatching { if (catalog.needsLanguages()) catalog.fillLanguages() else 0 }.getOrDefault(0) }
             if (n > 0) regroupLater(0) // English copies first now that languages are known
+        }
+        player.addAnalyticsListener(playback)
+        viewModelScope.launch {
+            var tick = 0
+            while (true) {
+                delay(1_000)
+                val before = playbackLog.entries().size
+                playback.sample()
+                if (playbackLog.entries().size != before) playbackLogRev++
+                // Not while a stream is starting; checked every minute.
+                if (++tick % 60 == 30) maybeAutoSendPlaybackLog()
+            }
         }
         player.addListener(object : Player.Listener {
             override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) { paused = !playWhenReady }
@@ -819,6 +907,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
         if (prefs.autoUpdateCheck) checkForUpdate(quiet = true)
         if (activePlaylist() == null) { screen = Screen.SETTINGS; settingsSection = "playlists"; navMode = NavMode.COLLAPSED }
+        // First time (1.6.0): with no playlists at all, a welcome screen comes first.
+        if (playlists.isEmpty()) showWelcome = true
         activePlaylist()?.let { loadActive(refresh = false) }
     }
 
@@ -1714,8 +1804,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         if (q.isEmpty()) { guideSearchHits = GuideHits(); return }
         guideSearchJob = viewModelScope.launch {
             delay(150) // typing: wait for a pause
+            com.avidviewer.tv.data.CrashLog.note(getApplication(), "TV Guide search: ${com.avidviewer.tv.data.SearchText.words(q).size} word(s)")
             val nowMs = System.currentTimeMillis()
-            val words = com.avidviewer.tv.data.SearchText.words(q)
+            val sq = com.avidviewer.tv.data.SearchText.prepare(q)
             val hidden = prefs.hiddenChannels
             val others = HashMap<String, Pair<List<Channel>, Map<String, List<Program>>>>()
             for (p in livePlaylists) {
@@ -1731,9 +1822,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                     val pid = c.key.substringBefore(':')
                     return (if (pid == activePlaylist()?.id) activeGuide[id] else others[pid]?.second?.get(id)).orEmpty()
                 }
-                val chHits = all.filter { com.avidviewer.tv.data.SearchText.matches(channelName(it), words) }.take(60)
-                val progHits = all.flatMap { c -> progs(c).filter { it.end > nowMs && com.avidviewer.tv.data.SearchText.matches(it.title + " " + it.subtitle.orEmpty(), words) }.map { c to it } }
-                    .sortedBy { it.second.start }.take(80)
+                val chHits = bestChannels(all, sq, 60)
+                val progHits = bestPrograms(all, sq, nowMs, 80) { progs(it) }
                 GuideHits(query, chHits, progHits)
             }
             searchLive = others
@@ -1750,15 +1840,58 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
+     * The [limit] channels whose names match [sq] best ([SearchText.score]), in list order within each rank.
+     * Stops when cancelled (a newer search started), so searches never pile up.
+     */
+    private suspend fun bestChannels(chs: List<Channel>, sq: com.avidviewer.tv.data.SearchText.Prepared, limit: Int): List<Channel> {
+        val byRank = Array(5) { ArrayList<Channel>() }
+        for ((i, c) in chs.withIndex()) {
+            if (i and 255 == 0) currentCoroutineContext().ensureActive()
+            val s = com.avidviewer.tv.data.SearchText.score(channelName(c), sq)
+            if (s > 0 && byRank[s].size < limit) byRank[s].add(c)
+        }
+        return (4 downTo 1).flatMap { byRank[it] }.take(limit)
+    }
+
+    /**
+     * The [limit] programmes (on now or later) that match [sq] best, soonest first within each rank.
+     * Only [limit] are kept per rank while the guide is read, however many match: a short word such as
+     * "the" matches much of a week's guide, and collecting all of it ran a 1 GB Fire TV out of memory (#16).
+     */
+    private suspend fun bestPrograms(
+        chs: List<Channel>, sq: com.avidviewer.tv.data.SearchText.Prepared, nowMs: Long, limit: Int, progs: (Channel) -> List<Program>,
+    ): List<Pair<Channel, Program>> {
+        val cmp = compareByDescending<Pair<Channel, Program>> { it.second.start } // the head is the latest: dropped first
+        val byRank = Array(5) { java.util.PriorityQueue(limit + 1, cmp) }
+        var n = 0
+        // A programme title repeats across a week: score each title once.
+        val seen = HashMap<String, Int>()
+        for (c in chs) {
+            for (pr in progs(c)) {
+                if (n++ and 1023 == 0) currentCoroutineContext().ensureActive()
+                if (pr.end <= nowMs) continue
+                val text = pr.title + " " + pr.subtitle.orEmpty()
+                val s = seen[text] ?: com.avidviewer.tv.data.SearchText.score(text, sq).also { if (seen.size < 20_000) seen[text] = it }
+                if (s <= 0) continue
+                val q = byRank[s]
+                if (q.size < limit) q.add(c to pr)
+                else if (pr.start < q.peek()!!.second.start) { q.poll(); q.add(c to pr) }
+            }
+        }
+        return (4 downTo 1).flatMap { r -> byRank[r].sortedBy { it.second.start } }.take(limit)
+    }
+
+    /**
      * Another playlist's channels matching [q] by name (own or renamed) plus the channels of programmes
      * matching it, with those channels' guide — looked up in the database, nothing else loaded.
      */
     private fun liveHits(p: Playlist, q: String, maxChannels: Int, maxPrograms: Int, nowMs: Long): Pair<List<Channel>, Map<String, List<Program>>> {
         liveReady()
-        val words = com.avidviewer.tv.data.SearchText.words(q)
-        val renamed = prefs.channelNames.filter { (k, v) -> k.startsWith(p.id + ":") && com.avidviewer.tv.data.SearchText.matches(v, words) }.keys
-        val byName = live.searchChannels(p.id, q, maxChannels) + live.channelsByKeys(renamed)
-        val progs = live.searchPrograms(p.id, q, nowMs, maxPrograms * 2)
+        val sq = com.avidviewer.tv.data.SearchText.prepare(q)
+        val renamed = prefs.channelNames.filter { (k, v) -> k.startsWith(p.id + ":") && com.avidviewer.tv.data.SearchText.near(v, sq) }.keys
+        // Every word first, then near matches (a typo, or a word left out); the screen ranks them.
+        val byName = live.searchChannels(p.id, q, maxChannels) + live.nearChannels(p.id, q, maxChannels) + live.channelsByKeys(renamed)
+        val progs = live.searchPrograms(p.id, q, nowMs, maxPrograms * 2) + live.nearPrograms(p.id, q, nowMs, maxPrograms)
         val ids = progs.map { it.first }.toHashSet()
         val mapped = prefs.epgMap.filter { (k, v) -> k.startsWith(p.id + ":") && v in ids }.keys
         val byProg = (live.channelsWithEpg(p.id, ids) + live.channelsByKeys(mapped)).filter { epgIdOf(it) in ids }
@@ -2096,8 +2229,38 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun toggleInList(group: String, key: String) {
         if (group == FAV_GROUP) return toggleFavorite(key)
         viewModelScope.launch { ensureFavoriteData() }
-        updatePrefs { p -> p.copy(lists = p.lists.map { if (LIST_PREFIX + it.id == group) it.copy(keys = if (key in it.keys) it.keys - key else it.keys + key) else it }) }
+        leavingGuide(key, group) {
+            updatePrefs { p -> p.copy(lists = p.lists.map { if (LIST_PREFIX + it.id == group) it.copy(keys = if (key in it.keys) it.keys - key else it.keys + key) else it }) }
+        }
     }
+
+    /**
+     * #19: [change] may take [key] out of the TV Guide category on screen ([group]: removed from this list, or
+     * hidden). The row that had the highlight is then gone and the highlight went to the top-left of the
+     * screen; instead it goes to the channel that took its place (the next one, or the one before when it was
+     * the last), or to the category in the category list when the list is now empty.
+     */
+    private fun leavingGuide(key: String, group: String?, change: () -> Unit) {
+        val shown = screen == Screen.GUIDE && group != null && group == selectedGroup && guideQuery.isBlank() &&
+            channelsIn(group).any { it.key == key }
+        change()
+        if (shown && channelsIn(group).none { it.key == key }) focusGuideList()
+    }
+
+    /** Puts the highlight back on the guide's channels where it was (or its neighbour), or on the category when it's empty. */
+    fun focusGuideList() {
+        val g = selectedGroup ?: return
+        if (channelsIn(g).isEmpty()) navFocusKey = g
+        else { guideFocusMode = GuideFocus.KEEP; guideFocusTick++ }
+    }
+
+    /**
+     * #18: a local suggestion whose ＋ Add to List (or ✕) was pressed, and the suggestion next to it: once the
+     * picker closes, the highlight goes back to it if it's still suggested, else to that neighbour.
+     */
+    var suggestionReturn by mutableStateOf<Pair<String, String?>?>(null)
+    /** Whether the highlight is in the Favorites suggestions row (the guide doesn't take it away on its own). */
+    var suggestionsFocused = false
 
     /** Makes a new list, optionally starting with one channel. Returns its group id. */
     fun createList(name: String, firstKey: String? = null): String {
@@ -2142,13 +2305,13 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         updatePrefs { p -> p.copy(lists = p.lists.map { if (it.id == lst.id) it.copy(keys = l) else it }) }
     }
 
-    fun hideChannel(key: String) = updatePrefs { it.copy(hiddenChannels = it.hiddenChannels + key) }
+    fun hideChannel(key: String) = leavingGuide(key, selectedGroup) { updatePrefs { it.copy(hiddenChannels = it.hiddenChannels + key) } }
     fun showChannel(key: String) = updatePrefs { it.copy(hiddenChannels = it.hiddenChannels - key) }
 
     fun toggleFavorite(key: String?) {
         key ?: return
         viewModelScope.launch { ensureFavoriteData() }
-        updatePrefs { it.copy(favorites = if (key in it.favorites) it.favorites - key else it.favorites + key) }
+        leavingGuide(key, FAV_GROUP) { updatePrefs { it.copy(favorites = if (key in it.favorites) it.favorites - key else it.favorites + key) } }
     }
 
     fun favoriteChannels(): List<Channel> = prefs.favorites.mapNotNull { channel(it) }
@@ -2734,44 +2897,44 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         if (q.length < 2) { searchJob?.cancel(); searchResults = null; searchedFor = ""; searching = false; return }
         if (q == searchedFor && searchResults != null && searchJob?.isActive != true) return
         searchJob?.cancel()
+        // Not what was searched: only its shape, in case the app is closed (CrashLog).
+        com.avidviewer.tv.data.CrashLog.note(getApplication(), "Search: ${com.avidviewer.tv.data.SearchText.words(q).size} word(s), ${q.length} letters")
         searchJob = viewModelScope.launch {
             searching = true
-            val words = com.avidviewer.tv.data.SearchText.words(q)
+            val sq = com.avidviewer.tv.data.SearchText.prepare(q)
             val nowMs = System.currentTimeMillis()
             val out = ArrayList<PlaylistHits>()
             for (p in shownPlaylists) {
                 if (!p.liveOn && !p.vodOn) continue
+                ensureActive()
                 val isActive = p.id == activePlaylist()?.id
                 // The playlist being watched is in memory; the others are searched in the database.
                 val (chsAll, g) = if (isActive || !p.liveOn || !p.enabled) liveFor(p) else withContext(Dispatchers.IO) { liveHits(p, q, 50, 60, nowMs) }
                 val chs = chsAll.filter { channelAllowed(it) } // a Kids profile: only its categories
-                // Titles: searched in the catalog database, not loaded.
+                // Titles: searched in the catalog database, not loaded. Every word first, then near matches.
                 if (p.vodOn && p.enabled) importOldTitles(p)
                 val vodHitList = if (!p.vodOn || !p.enabled) emptyList() else withContext(Dispatchers.IO) {
-                    catalog.page(Catalog.Query("movie", listOf(p.id), nameContains = q, kind = "movie"), 0, 50) +
-                        catalog.page(Catalog.Query("series", listOf(p.id), nameContains = q), 0, 50) +
-                        catalog.page(Catalog.Query("movie", listOf(p.id), nameContains = q, kind = "episode"), 0, 50)
+                    fun find(query: Catalog.Query) = (catalog.page(query, 0, 50) + catalog.near(query, 50)).distinctBy { it.key }
+                    find(Catalog.Query("movie", listOf(p.id), nameContains = q, kind = "movie")) +
+                        find(Catalog.Query("series", listOf(p.id), nameContains = q)) +
+                        find(Catalog.Query("movie", listOf(p.id), nameContains = q, kind = "episode"))
                 }
                 val res = withContext(Dispatchers.Default) {
-                    val names = chs.associate { it.key to channelName(it) }
-                    val stations = chs.filter { com.avidviewer.tv.data.SearchText.matches(names[it.key] ?: it.name, words) }.take(50)
-                        .map { Hit("channel", p.id, names[it.key] ?: it.name, groupName(it.group), it.logo, channelKey = it.key) }
-                    val progs = ArrayList<Pair<Long, Hit>>()
-                    for (c in chs) {
-                        val list = epgIdOf(c)?.let { g[it] } ?: continue
-                        for (pr in list) {
-                            if (pr.end <= nowMs) continue
-                            if (com.avidviewer.tv.data.SearchText.matches(pr.title + " " + pr.subtitle.orEmpty(), words)) {
-                                val whenText = if (pr.start <= nowMs) "On now" else "${dayLabel(pr.start)} ${fmtTime(pr.start)}"
-                                progs.add(pr.start to Hit("program", p.id, pr.title + (pr.subtitle?.let { " · $it" } ?: ""), "${names[c.key] ?: c.name} · $whenText", c.logo, channelKey = c.key))
-                            }
-                        }
+                    val names = HashMap<String, String>()
+                    fun nameOf(c: Channel) = names.getOrPut(c.key) { channelName(c) }
+                    val stations = bestChannels(chs, sq, 50)
+                        .map { Hit("channel", p.id, nameOf(it), groupName(it.group), it.logo, channelKey = it.key) }
+                    val progs = bestPrograms(chs, sq, nowMs, 60) { c -> epgIdOf(c)?.let { g[it] }.orEmpty() }.map { (c, pr) ->
+                        val whenText = if (pr.start <= nowMs) "On now" else "${dayLabel(pr.start)} ${fmtTime(pr.start)}"
+                        Hit("program", p.id, pr.title + (pr.subtitle?.let { " · $it" } ?: ""), "${nameOf(c)} · $whenText", c.logo, channelKey = c.key)
                     }
-                    val vodHits = vodHitList
+                    // Best matches first (provider order kept within each).
+                    val vodHits = vodHitList.map { it to com.avidviewer.tv.data.SearchText.score(it.name, sq) }
+                        .filter { it.second > 0 }.sortedByDescending { it.second }.map { it.first }
                     PlaylistHits(
                         playlist = p,
                         stations = stations,
-                        programs = progs.sortedBy { it.first }.take(60).map { it.second },
+                        programs = progs,
                         movies = vodHits.filter { it.kind == "movie" }.take(50).map { Hit("movie", p.id, it.name, "Movie", it.logo, vod = it) },
                         series = vodHits.filter { it.kind != "movie" }.take(50).map { Hit(it.kind, p.id, it.name, if (it.kind == "series") "Series" else "Episode", it.logo, vod = it) },
                     )
@@ -2957,6 +3120,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         if (screen != Screen.PLAYER) lastScreen = screen
         vodPlaying = item
         playerError = null
+        playback.started(item.key, live = false)
         player.setMediaItem(MediaItem.fromUri(item.url), if (fromStart) 0L else resumeOf(item.key))
         tracksChanged(androidx.media3.common.Tracks.EMPTY)
         player.prepare()
@@ -3011,9 +3175,42 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         titles(com.avidviewer.tv.data.Catalog.Query(vodKindKey(kind), vodPids(), includeHidden = true))
     }
 
-    /** Titles whose name contains [q] (the Movies / Series search). */
-    fun vodSearch(kind: String, q: String): List<VodItem> =
-        titles(com.avidviewer.tv.data.Catalog.Query(vodKindKey(kind), vodPids(), nameContains = q.trim(), grouped = true))
+    /**
+     * Titles whose name contains every word of [q] (the Movies / Series search). When few do, near
+     * matches follow once [loadVodNear] has found them: a typo ("godfathr") or a word left out.
+     */
+    fun vodSearch(kind: String, q: String): List<VodItem> {
+        val t = q.trim()
+        vodNear[kind]?.takeIf { it.first == t && it.third == vodVersion }?.second?.let { return it }
+        return titles(vodSearchQuery(kind, t))
+    }
+
+    private fun vodSearchQuery(kind: String, t: String) =
+        com.avidviewer.tv.data.Catalog.Query(vodKindKey(kind), vodPids(), nameContains = t, grouped = true)
+
+    /** Per kind: the search, its titles with near matches (null: enough exact ones), and the catalog version. */
+    private val vodNear = androidx.compose.runtime.mutableStateMapOf<String, Triple<String, List<VodItem>?, Int>>()
+
+    /** The Movies / Series search box settled on [q]: look for near matches when fewer than 30 titles hold every word. */
+    suspend fun loadVodNear(kind: String, q: String) {
+        val t = q.trim()
+        if (t.length < 2) return
+        val version = vodVersion
+        if (vodNear[kind]?.let { it.first == t && it.third == version } == true) return
+        val query = vodSearchQuery(kind, t)
+        val list = withContext(Dispatchers.IO) {
+            runCatching {
+                if (catalog.count(query) >= 30) null
+                else {
+                    val sq = com.avidviewer.tv.data.SearchText.prepare(t)
+                    (catalog.page(query, 0, 30) + catalog.near(query, 100)).distinctBy { it.key }
+                        .map { it to com.avidviewer.tv.data.SearchText.score(it.name, sq) }
+                        .sortedByDescending { it.second }.map { it.first }
+                }
+            }.getOrNull()
+        }
+        vodNear[kind] = Triple(t, list, version)
+    }
 
     /** List Editor: one playlist's categories of this kind with counts, hidden ones included. */
     fun vodEditorCategories(kind: String, pid: String): List<Pair<String, Int>> {
@@ -3191,6 +3388,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         val item = MediaItem.Builder().setUri(c.url).apply {
             if (c.url.contains(".m3u8", ignoreCase = true)) setMimeType(MimeTypes.APPLICATION_M3U8)
         }.build()
+        playback.started(c.key, live = true)
         player.setMediaItem(item)
         tracksChanged(androidx.media3.common.Tracks.EMPTY) // this channel's own choices (captions on/off) from the start
         player.prepare()

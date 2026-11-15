@@ -136,6 +136,8 @@ data class Prefs(
     val sportsFinalHours: Int = 12,
     val sportsShowScores: Boolean = true,
     val autoUpdateCheck: Boolean = true,
+    /** Send the playback log (freezes and errors) to bugs@avidviewer.app automatically, at most once a day (1.5.0). */
+    val autoSendPlaybackLog: Boolean = true,
     val myList: List<VodItem> = emptyList(),
     val tmdbKeyEnc: String = "",
     /** SAMBA backup share: address like \\server\share\folder, user, password (encrypted on this device). */
@@ -192,6 +194,7 @@ data class Prefs(
         o.put("sportLeagues", JSONArray().apply { sportLeagues.forEach { put(it.toJson()) } })
         o.put("sportsShowUnmatched", sportsShowUnmatched); o.put("sportsFinalHours", sportsFinalHours); o.put("sportsShowScores", sportsShowScores)
         o.put("autoUpdateCheck", autoUpdateCheck)
+        o.put("autoSendPlaybackLog", autoSendPlaybackLog)
         o.put("myList", JSONArray().apply { myList.forEach { put(it.toJson()) } })
         o.put("tmdbKeyEnc", tmdbKeyEnc)
         o.put("smbAddress", smbAddress).put("smbUser", smbUser).put("smbPassEnc", smbPassEnc)
@@ -247,6 +250,7 @@ data class Prefs(
                 sportsFinalHours = o.optInt("sportsFinalHours", 12).let { if (it in listOf(6, 12, 24)) it else 12 },
                 sportsShowScores = o.optBoolean("sportsShowScores", true),
                 autoUpdateCheck = o.optBoolean("autoUpdateCheck", true),
+                autoSendPlaybackLog = o.optBoolean("autoSendPlaybackLog", true),
                 myList = o.optJSONArray("myList")?.let { a -> List(a.length()) { VodItem.fromJson(a.getJSONObject(it)) } } ?: emptyList(),
                 tmdbKeyEnc = o.optString("tmdbKeyEnc"),
                 smbAddress = o.optString("smbAddress"), smbUser = o.optString("smbUser"), smbPassEnc = o.optString("smbPassEnc"),

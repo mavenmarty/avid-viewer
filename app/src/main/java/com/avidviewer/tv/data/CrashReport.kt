@@ -45,9 +45,27 @@ object CrashReport {
      * Sends the report; true when the relay says it was emailed. Apps Script answers a POST with a
      * redirect to the result, which OkHttp follows (as a GET).
      */
-    fun send(appVersion: String, crash: String, relay: String = Links.CRASH_RELAY): Boolean {
+    fun send(appVersion: String, crash: String, relay: String = Links.CRASH_RELAY): Boolean = post(payload(appVersion, crash), relay)
+
+    /**
+     * The playback log (1.5.0) for the same relay: "kind" = "playback" (the relay titles the email "playback log";
+     * an older relay ignores it and still emails it), the log's one-line summary, and the log with addresses removed.
+     */
+    fun logPayload(appVersion: String, summary: String, log: String): JSONObject = JSONObject()
+        .put("app", "avid-viewer")
+        .put("kind", "playback")
+        .put("version", appVersion)
+        .put("device", BugReport.device())
+        .put("summary", redact(summary).take(300))
+        // The newest part when it's long: the relay keeps 16,000 characters.
+        .put("crash", redact(log).let { if (it.length > 16_000) it.take(600) + "\n…\n" + it.takeLast(15_300) else it })
+
+    fun sendLog(appVersion: String, summary: String, log: String, relay: String = Links.CRASH_RELAY): Boolean =
+        post(logPayload(appVersion, summary, log), relay)
+
+    private fun post(json: JSONObject, relay: String): Boolean {
         if (relay.isBlank()) return false
-        val body = payload(appVersion, crash).toString().toRequestBody("application/json; charset=utf-8".toMediaType())
+        val body = json.toString().toRequestBody("application/json; charset=utf-8".toMediaType())
         val req = Request.Builder().url(relay).header("User-Agent", USER_AGENT).post(body).build()
         return runCatching {
             Net.client.newCall(req).execute().use { r ->

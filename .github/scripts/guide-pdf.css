@@ -10,3 +10,8 @@ a { color: #1f6feb; text-decoration: none; }
 li { margin: 2px 0; }
 hr { display: none; }
 div.contents { background: #f3f6fb; padding: 8px 10px; border-radius: 6px; font-size: 9.5pt; }
+
+/* Screenshots (1.4.0) */
+img { display: block; max-width: 100%; margin: 6px 0 10px; border-radius: 6px; break-inside: avoid; }
+figure { margin: 0; break-inside: avoid; }
+figcaption { font-size: 9pt; color: #555; margin-bottom: 8px; }

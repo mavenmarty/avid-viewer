@@ -45,6 +45,9 @@ import androidx.media3.ui.PlayerView
 
 @Composable
 fun AppRoot(vm: AppViewModel) {
+    // Which screen was on, in case the app is closed (CrashLog); only the screen's name.
+    val appCtx = androidx.compose.ui.platform.LocalContext.current.applicationContext
+    androidx.compose.runtime.LaunchedEffect(vm.screen) { com.avidviewer.tv.data.CrashLog.note(appCtx, "Screen: ${vm.screen.name.lowercase()}") }
     Box(
         Modifier.fillMaxSize().background(C.Bg)
             .onFocusChanged { vm.anyFocus = it.hasFocus }
@@ -67,6 +70,8 @@ fun AppRoot(vm: AppViewModel) {
         }
         if (vm.choosingProfile) {
             WhoIsWatching(vm)
+        } else if (vm.showWelcome) {
+            WelcomeScreen(vm)
         } else if (vm.screen == Screen.PLAYER) {
             PlayerScreen(vm)
         } else {
