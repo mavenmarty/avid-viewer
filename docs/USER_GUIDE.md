@@ -86,6 +86,8 @@ The TV Guide is the home screen for live TV. Next to the main menu it has:
 - **Category list**: the playlist's categories, with **‹ Menu**, ★ Favorites, your lists, **＋ New list** and **🔍 Search** at the top.
 - **The guide**: the preview window and details panel at the top, the channel grid below.
 
+**The guide fills the screen.** Once you've chosen a category and the highlight is in the guide (channels, programs or the preview), the main menu and the category list step aside and the guide takes the full width. **Left** from the channel names, or **Back**, brings them back, with your current category highlighted. The row above the times always names the category.
+
 **Back and Left step back one layer at a time:** from a channel to your current category in the category list, then to the playlist list (on that same category), then to the main menu. With only one playlist with live TV, the playlist list is skipped: from the categories, Back goes straight to the main menu. Holding Left doesn't skip layers, and inside the grid Left still moves through programs and time.
 
 ### The guide grid
@@ -118,7 +120,9 @@ Highlight **🔍 Search** in the category list (just below ＋ New list) and pre
 - **⊘ Hide channel**: hide it everywhere. You can bring it back in Settings › List Editor.
 - **Match guide…**: pick the guide listings for this channel (see *Matching a channel to the guide* below).
 
-Saving a **Rename** (channels, categories, lists, movie and series categories) closes the dialog; so does **Cancel**. Either way the highlight goes back to the item you renamed. The **Menu** button acts when you let it go.
+**Rename** (channels, categories, lists, movie and series categories) opens with the keyboard up and the current name selected: type the new name and press **Done** on the keyboard to save. **＋ New list** works the same way. **Cancel** closes without saving. Either way the highlight goes back to the item you renamed.
+
+**When an item disappears** (you hide a category, delete a list, take a poster off My List), the highlight goes to the item that took its place, never back to the main menu. The **Menu** button acts when you let it go.
 
 ### Matching a channel to the guide
 
@@ -308,7 +312,7 @@ Settings has sections on the left and the open section's options on the right. *
 
 - **Download from these sources every 4 / 8 / 12 / 24 h**: the same setting as in Settings › TV guide; it applies to every playlist.
 - **Provider's guide** (on/off): the guide that comes with an Xtream login, or the M3U file's own guide link.
-- **＋ Add guide source**: a name, an XMLTV address (`.xml` or `.xml.gz`) and a **time offset** (−12 to +12 hours) for a guide that's consistently early or late. The highlight goes to the form's Name field, and back to the button after **Save** or **Cancel**. While you're in Guide sources, the playlist list steps aside; **Left** brings it back.
+- **＋ Add guide source**: a name, an XMLTV address (`.xml` or `.xml.gz`) and a **time offset** (−12 to +12 hours) for a guide that's consistently early or late. The keyboard opens on **Name**; **Next** on the keyboard moves to the address, and **Done** there saves. The highlight goes back to the button after **Save** or **Cancel**. **▲ / ▼** move a source and keep the highlight on it. While you're in Guide sources, the playlist list steps aside; **Left** brings it back.
 - Each source has **Turn off / Turn on**, **✎ Edit**, **▲ ▼** to change the order, and **✕ Delete** (asks first). Each one shows when it last downloaded and how many channels it covered, or why it failed.
 - **Order matters:** sources are read top to bottom, and for each channel the first source with listings is used.
 - **Download now** gets this playlist's guide again.
@@ -448,7 +452,8 @@ Everything here stays on the device; nothing is uploaded or backed up to the clo
 ![Settings › Updates & about: Report a bug and the user guide and Control4 QR codes](images/settings-about.jpg)
 
 - **App updates**: the installed version, **Check now**, **Download and install**, and the **Check for updates automatically** switch.
-  - The **Update available** dialog (**Update now** / **Later**) opens by itself only when the app starts, before you press anything. If a new version is found later, the main menu shows **Update x.y.z** instead, so nothing pops up while you're browsing or watching.
+  - The main menu shows **Update x.y.z** as soon as a new version is found, and **Download and install** is here.
+  - The **Update available** dialog (**Update now** / **Later**) opens by itself only once the newest version has been out for **24 hours** and isn't installed yet. If an even newer version comes out in the meantime, the 24 hours start again. **Later** waits another 24 hours. It never opens over full-screen video. A TV left running checks for new versions every 6 hours (when **Check for updates automatically** is on).
   - The download shows its progress. If the connection stalls, the app waits 15 seconds and continues from where it stopped (up to 8 tries). The finished file is checked before installing, and a damaged download is refused.
   - If Android's installer doesn't appear within about 25 seconds, an **Open installer** button opens Android's own install screen for the same file.
 - **Last crash**: if the app closed unexpectedly, the details are kept here on the device, with **Report issue** and **Clear crash report** (asks first). **Report issue** sends them to **bugs@avidviewer.app** and then clears them (see *If the app closes unexpectedly* below).
@@ -708,10 +713,22 @@ Every public release since 1.0.35, newest first. From 1.1.0, versions are number
 
 ### 1.8.0 — November 15, 2026, 8:31 AM CT (current)
 
+**Release notes**
+
+- **The highlight no longer jumps to the main menu.** Hiding a category (TV, Movies or Series), deleting a list, taking a poster off My List or moving a guide source used to send the highlight to the main menu or ‹ Menu. It now goes to the item that took its place.
+- **Rename in 5 presses instead of 9.** Rename and ＋ New list open with the keyboard up and the current name selected; **Done** saves.
+- **Forms that flow.** Adding a guide source: the keyboard opens on Name, **Next** goes to the address, **Done** saves (3 presses instead of 11). Playlist forms: **Next** goes from field to field, and **Done** on the last one moves to Add playlist / Save changes.
+- **The TV Guide fills the screen** while you're in it. **Left** from the channel names, or **Back**, brings back the category list and the main menu. See [TV Guide](#3-tv-guide).
+- **Fewer update pop-ups.** The Update available dialog waits until the newest version has been out for 24 hours. See [Updates & about](#updates--about).
+
 **Change log**
 
-- The highlight goes to the nearest item, not the top-left; Rename and forms in fewer presses
-- The TV Guide fills the screen; the update dialog waits until a release is a day old
+- The highlight goes to the nearest remaining item in the same column when the one it was on disappears, also when a dialog closes; deliberate landings and typing are left alone
+- My List: the next poster; guide source ▲ / ▼: the same source; ＋ New list: the new list's row
+- Text fields: the keyboard opens with Rename and New list (name selected); Done saves; Next moves between fields; the field keeps the highlight after the keyboard closes
+- TV Guide: full width while it has the highlight; Left or Back brings back the category list and menu icons
+- Update dialog: 24 hours after the newest release, restarted by a newer build; Later waits 24 hours; checks every 6 hours while running
+- Tests: remote-only tests for each navigation fix, the full-screen guide and the update reminder
 
 ### 1.7.0 — November 14, 2026, 3:05 PM CT
 
