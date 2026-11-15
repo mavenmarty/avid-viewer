@@ -77,16 +77,15 @@ fun AppRoot(vm: AppViewModel) {
         FocusSpots.screenNow = vm.screen
         val rootView = androidx.compose.ui.platform.LocalView.current.rootView
         if (FocusSpots.mainRoot?.get() !== rootView) FocusSpots.mainRoot = java.lang.ref.WeakReference(rootView)
-        val windowInfo = androidx.compose.ui.platform.LocalWindowInfo.current
-        LaunchedEffect(FocusSpots.lostTick, windowInfo.isWindowFocused) {
-            if (FocusSpots.lostTick == 0 || !windowInfo.isWindowFocused) return@LaunchedEffect
+        LaunchedEffect(FocusSpots.lostTick) {
+            if (FocusSpots.lostTick == 0) return@LaunchedEffect
             val lostAt = FocusSpots.lostAt
             kotlinx.coroutines.delay(260)
             val screen = vm.screen
             if (FocusSpots.lostAt != lostAt || vm.lastKeyAt > lostAt || screen == Screen.PLAYER || FocusSpots.lostScreen != screen) return@LaunchedEffect
-            // Something that isn't a list item has it (a text field being typed in): leave it there.
-            if (vm.anyFocus && !FocusSpots.hasCurrent()) return@LaunchedEffect
-            val ok = FocusSpots.recover()
+            // A text field being typed in keeps it.
+            if (FocusSpots.typing) return@LaunchedEffect
+            val ok = FocusSpots.recover(somethingFocused = vm.anyFocus)
             vm.trail("recover $ok")
             if (ok) com.avidviewer.tv.data.CrashLog.note(appCtx, "Highlight lost on ${screen.name.lowercase()}; given to the nearest item")
         }
