@@ -15,6 +15,7 @@ import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
+import androidx.compose.ui.test.onLast
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performImeAction
 import androidx.compose.ui.test.performTextInput
@@ -134,8 +135,10 @@ class NavAuditTest {
         rule.mainClock.autoAdvance = false
         try {
             presses++ // OK on the field
-            val box = rule.onAllNodes(isFocused()).onFirst()
+            // The dialog's field (the app's own window keeps its highlight underneath, listed first).
+            val box = rule.onAllNodes(isFocused()).onLast()
             box.performClick()
+            rule.mainClock.advanceTimeByFrame(); rule.mainClock.advanceTimeByFrame()
             rule.mainClock.advanceTimeBy(200)
             val n = rule.onAllNodes(hasSetTextAction()).onFirst()
             n.performTextInput(text)
@@ -396,7 +399,7 @@ class NavAuditTest {
         key(Key.DirectionCenter); step("OK on My List")
         key(Key.DirectionRight); step("to the posters")
         key(Key.Menu)
-        record("Movies › My List › Menu on a poster (removes it)", "(the next poster)", ok = focused() != "(nothing)" && !focused().contains("Menu") && vm.screen == Screen.MOVIES)
+        record("Movies › My List › Menu on a poster (removes it)", "(the next poster)", ok = focused().contains("Movie") && vm.screen == Screen.MOVIES)
     }
 
     @Test fun d02_vodCategoryRenameAndHide() = guardRun("Movies › category Menu") {
