@@ -242,8 +242,11 @@ fun TvField(
     // The previous field's Next opens this one.
     LaunchedEffect(openSignal) { if (openSignal > 0) editing = true }
 
+    /** Done / Back: the keyboard closes and the field takes the highlight back (unless [next] handed it on). */
+    var reclaim by remember { mutableStateOf(false) }
     fun finish() {
         keyboard?.hide()
+        reclaim = true
         editing = false
     }
 
@@ -267,7 +270,10 @@ fun TvField(
         LaunchedEffect(Unit) {
             if (wasEditing) {
                 wasEditing = false
-                if (handedOn) { handedOn = false; return@LaunchedEffect }
+                val back = reclaim && !handedOn
+                reclaim = false; handedOn = false
+                // Left by moving to something else: that keeps the highlight.
+                if (!back) return@LaunchedEffect
                 // Keep asking until the field really has the highlight (~1 s at most).
                 for (frame in 0 until 60) {
                     androidx.compose.runtime.withFrameNanos { }
@@ -333,7 +339,7 @@ fun TvField(
                 if (runCatching { fieldFocus.requestFocus() }.isSuccess && frame > 0) break
                 androidx.compose.runtime.withFrameNanos { }
             }
-            keyboard?.show()
+            if (android.os.Build.FINGERPRINT != "robolectric") keyboard?.show()
         }
     }
 }

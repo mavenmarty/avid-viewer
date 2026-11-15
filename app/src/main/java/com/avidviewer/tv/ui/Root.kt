@@ -75,6 +75,7 @@ fun AppRoot(vm: AppViewModel) {
         // the first item on screen (the main menu or ‹ Menu). Not while a dialog has the remote, after a screen
         // change, or once a button has been pressed since.
         FocusSpots.screenNow = vm.screen
+        FocusSpots.log = vm::trail
         val rootView = androidx.compose.ui.platform.LocalView.current.rootView
         if (FocusSpots.mainRoot?.get() !== rootView) FocusSpots.mainRoot = java.lang.ref.WeakReference(rootView)
         LaunchedEffect(FocusSpots.lostTick) {
@@ -82,7 +83,9 @@ fun AppRoot(vm: AppViewModel) {
             val lostAt = FocusSpots.lostAt
             kotlinx.coroutines.delay(260)
             val screen = vm.screen
-            if (FocusSpots.lostAt != lostAt || vm.lastKeyAt > lostAt || screen == Screen.PLAYER || FocusSpots.lostScreen != screen) return@LaunchedEffect
+            if (FocusSpots.lostAt != lostAt || vm.lastKeyAt > lostAt || screen == Screen.PLAYER || FocusSpots.lostScreen != screen) {
+                vm.trail("skip key=${vm.lastKeyAt > lostAt} screen=$screen/${FocusSpots.lostScreen}"); return@LaunchedEffect
+            }
             // A text field being typed in keeps it.
             if (FocusSpots.typing) return@LaunchedEffect
             val ok = FocusSpots.recover(somethingFocused = vm.anyFocus)
