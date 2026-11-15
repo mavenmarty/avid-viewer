@@ -151,7 +151,7 @@ class PlaybackMonitor(
             return
         }
         reconnects.addLast(now)
-        if (picture) endPicture() else endStall(left = false)
+        if (why.startsWith("the picture")) endPicture() else endStall(left = false)
         log.add(PlaybackLog.RECOVER, name, "Reconnected: $why.")
         reconnectAt = now; reconnectWhy = why
         DataFlow.lastBytesAt = now

@@ -60,7 +60,8 @@ private const val WINDOW_MIN = 150
 private const val AHEAD_MIN = 12 * 60
 private const val HALF_MS = 30 * 60 * 1000L
 /** How far back the guide can scroll, in half hours: 2 hours of programmes that have aired, dimmed (GUIDE-04). */
-private const val BACK_SLOTS = -4
+/** How far back the guide scrolls: not before the current half hour (Nov 15), so Left from the first program goes to the channel and on to the categories. */
+private const val BACK_SLOTS = 0
 /** Key repeats of a held Left before the guide jumps back to now. */
 private const val HOLD_TO_NOW = 4
 
@@ -454,7 +455,7 @@ fun GuideScreen(vm: AppViewModel) {
                                                 // Last program in view: scroll the guide forward to the next program.
                                                 Key.DirectionRight -> if (pi == laid.lastIndex && slots < maxSlots) { shiftTo(maxOf(p.end, winEnd - 60_000L), idx, true); true } else false
                                                 // Holding Left on a later window jumps straight back to now (NAV-15).
-                                                // First program in view: scroll back, up to 2 hours (at the end, Left goes to the channel name).
+                                                // First program in view: scroll back to now at most; then Left goes to the channel name.
                                                 Key.DirectionLeft -> when {
                                                     slots > 0 && e.nativeKeyEvent.repeatCount >= HOLD_TO_NOW -> { jumpTo(vm.now, idx); true }
                                                     pi == 0 && slots > BACK_SLOTS -> { shiftTo(minOf(p.start, winStart) - 60_000L, idx, false); true }
