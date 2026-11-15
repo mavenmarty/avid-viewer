@@ -159,7 +159,7 @@ object FocusSpots {
             else {
                 val windowHeight = root.height.toFloat().takeIf { it > 0f } ?: return false
                 val atTop = now.top < windowHeight * 0.25f
-                if (!atTop || b.top <= now.top + 1f) return false
+                if (!atTop) return false
                 if (candidates.none { sameColumn(it.second, b) && it.second != now }) return false
             }
         }
