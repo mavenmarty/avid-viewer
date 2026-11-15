@@ -94,8 +94,8 @@ The TV Guide is the home screen for live TV. Next to the main menu it has:
 
 - The top shows a **preview window** and a **details panel** for the highlighted channel or program: channel number and name (plus the playlist name when you have more than one), the program title with a **New** tag for new episodes, the times with **N min left** and a progress bar (or **starts in …** for a later program), up to two lines about the show, and what's **Next**.
 - Below it is a **timeline grid**: two-line channel names on the left, programs across 2 hours (full width) or 2.5 hours (with the category list), with a line marking "now". Above the times, the row names the category, the day and the time zone ("KIDS · Today · CST"). The columns sit on your clock's :00 and :30.
-- **Left/Right** move between programs. Going past the last program in view scrolls the guide forward by half hours, **as far as the guide has listings, up to 7 days**. Left on the first program scrolls back, **up to 2 hours before now**; one more Left moves to the channel name.
-- **Programs that have aired** (in those 2 hours) are dimmed and marked **already aired**. There's no catch-up: OK on one plays the channel live.
+- **Left/Right** move between programs. Going past the last program in view scrolls the guide forward by half hours, **as far as the guide has listings, up to 7 days**. The guide doesn't scroll back before now (1.10.0): Left on the first program moves to the channel name, and Left again to the category list.
+- **The program airing now** starts at the left edge; any part that has already aired isn't shown. There's no catch-up: OK plays the channel live.
 - **Day strip:** when the guide reaches past today, a row of buttons sits above the times: **Now**, **Tomorrow**, then the next days (**Sat**, **Sun**…). **OK** on a day moves the guide to that day at the same time as now; **Now** comes back. The day on screen is filled in.
 - **Hold Left** on a later time to jump straight back to now.
 - **Up/Down** move one channel and land on the program airing at the same time, so the highlighted time stays put as you move between rows. Quick taps are counted, so a fast run of presses lands about where you'd expect, even in a category with thousands of channels.
@@ -519,6 +519,8 @@ The app notes every freeze in the playback log, with its likely cause. Open **Me
 - **"data stopped arriving… the provider's server paused the stream"**: no error, but nothing came. Usually the provider.
 - **"the TV's video decoder"** (picture stopped while the sound went on, or many dropped frames): the TV struggled with the video, often 4K or HEVC on a Fire TV Stick. Try the HD version of the channel.
 
+**Automatic reconnect (1.10.0).** When the picture stands still for 5 seconds while the sound plays, or no data has arrived for 4 seconds with less than 8 seconds left in the buffer, the app reopens the stream by itself and shows "Reconnecting…". Live channels come back at the live point, movies and episodes where they were. It doesn't reconnect in a channel's first 10 seconds, and stops after 3 reconnects in 3 minutes on one channel (a channel that keeps failing usually has a provider problem). Each reconnect is in the playback log, with whether the picture came back.
+
 Sending the log (Send playback log) helps us find a pattern across days.
 
 - **Channels won't play**: switch the Stream format in Settings › Playback, then Refresh the playlist.
@@ -713,9 +715,18 @@ Every public release since 1.0.35, newest first. From 1.1.0, versions are number
 
 ### 1.10.0 — November 15, 2026, 11:46 AM CT (current)
 
+**Release notes**
+
+- **Frozen channels reconnect by themselves.** When the picture stands still for 5 seconds while the sound plays, or the provider stops sending and the buffer is nearly empty, the app reopens the stream ("Reconnecting…" shows briefly). A live channel comes back at the live point; a movie or episode where it was. It tries at most 3 times in 3 minutes on one channel.
+- **The guide stays on now.** It no longer scrolls back into programs that already aired. Left on the first program goes to the channel name, and Left again to the category list.
+- **The playback log notes each channel's buffer** (how many seconds were held, typical and lowest) and each reconnect, so freezes can be compared across channels. This measurement is temporary.
+
 **Change log**
 
-- Reconnect frozen streams, measure buffer, guide stays on now
+- PlaybackMonitor: reconnect on a picture still for 5 s or no data for 4 s with under 8 s buffered; not in the first 10 s of a channel or of a reconnect; at most 3 in 3 minutes
+- Playback log: RECOVER (reconnected / playing again / gave up) and BUFFER entries; reconnects counted in the summary
+- Guide: no scrolling before the current half hour
+- Tests: reconnect rules, reconnects in the summary, Left from the first program at now
 
 ### 1.9.0 — November 15, 2026, 9:19 AM CT
 
