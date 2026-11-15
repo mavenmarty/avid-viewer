@@ -352,7 +352,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** The Movies / Series grid's place for a category and search. */
     fun vodPath(kind: String, category: String, query: String) = "vod/$kind/$category|$query"
     /** Set when a title's page closes: the grid puts the highlight back on that title. */
-    var vodFocusBack by mutableStateOf(0); private set
+    var vodFocusBack by mutableStateOf(0)
 
     /** Movies / Series category: each category keeps its own place (a new one starts at the top). */
     fun chooseVodCategory(kind: String, name: String) {
