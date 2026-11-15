@@ -147,15 +147,21 @@ class NavAuditTest {
             line.append("    next ▼ :  ").append(where()).append('\n')
         }
         line.append(log)
-        out.appendText(line.toString() + "\n")
+        mine.append(line.toString() + "\n")
         log.clear()
     }
 
+    private val mine = StringBuilder()
+
+    /** Runs a scenario; its results are reported as this test's failure message, so they show in the build log. */
     private fun guardRun(name: String, body: () -> Unit) {
         try { body() } catch (t: Throwable) {
-            out.appendText("ERR  $name: ${t.javaClass.simpleName}: ${t.message?.take(300)}\n$log\n")
+            mine.append("ERR  $name: ${t.javaClass.simpleName}: ${t.message?.take(400)}\n$log\n")
             log.clear()
         }
+        val rt = Runtime.getRuntime()
+        mine.append("    (heap ${(rt.totalMemory() - rt.freeMemory()) / 1_048_576} MB)\n")
+        throw AssertionError("NAV-AUDIT\n$mine")
     }
 
     // ------------------------------------------------------------------ TV Guide: channel menu
@@ -406,11 +412,4 @@ class NavAuditTest {
         record("Full screen › Picture & sound › Add to List › a list", "(still full screen, panel or player)", ok = vm.screen == Screen.PLAYER)
     }
 
-    // ------------------------------------------------------------------ report
-
-    @Test fun zz_report() {
-        val text = if (out.exists()) out.readText() else "(no results)"
-        out.delete()
-        throw AssertionError("NAV-AUDIT-BEGIN\n$text\nNAV-AUDIT-END")
-    }
 }
