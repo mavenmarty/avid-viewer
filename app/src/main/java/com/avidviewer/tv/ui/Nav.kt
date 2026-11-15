@@ -316,7 +316,7 @@ fun GroupNav(vm: AppViewModel) {
         item(key = "fav") {
             val on = vm.selectedGroup == FAV_GROUP
             Focusable(
-                modifier = Modifier.fillMaxWidth().height(38.dp).navFocusTarget(vm, FAV_GROUP).activePath(on),
+                modifier = Modifier.fillMaxWidth().height(38.dp).navFocusTarget(vm, FAV_GROUP).rightIntoGuide(vm, FAV_GROUP).activePath(on),
                 color = if (on) C.Surface2 else Color.Transparent,
                 onClick = { vm.ensureFavoriteData(); vm.chooseGroup(vm.activePlaylist()?.id ?: "", FAV_GROUP) },
             ) {
@@ -329,7 +329,7 @@ fun GroupNav(vm: AppViewModel) {
             val g = LIST_PREFIX + l.id
             val on = vm.selectedGroup == g
             Focusable(
-                modifier = Modifier.fillMaxWidth().height(38.dp).navFocusTarget(vm, g).activePath(on),
+                modifier = Modifier.fillMaxWidth().height(38.dp).navFocusTarget(vm, g).rightIntoGuide(vm, g).activePath(on),
                 color = if (on) C.Surface2 else Color.Transparent,
                 onMenu = { vm.listMenu = g },
                 onClick = { vm.ensureFavoriteData(); vm.chooseGroup(vm.activePlaylist()?.id ?: "", g) },
@@ -365,7 +365,7 @@ fun GroupNav(vm: AppViewModel) {
                 if (isMoving) focusWhenReady(vm, frames = 30, isFocused = { hasFocus }) { runCatching { fr.requestFocus() }.isSuccess }
             }
             Focusable(
-                modifier = Modifier.fillMaxWidth().height(38.dp).focusRequester(fr).onFocusChanged { hasFocus = it.isFocused }.navFocusTarget(vm, g.raw).activePath(on && !isMoving)
+                modifier = Modifier.fillMaxWidth().height(38.dp).focusRequester(fr).onFocusChanged { hasFocus = it.isFocused }.navFocusTarget(vm, g.raw).then(if (!isMoving) Modifier.rightIntoGuide(vm, g.raw) else Modifier).activePath(on && !isMoving)
                     .then(if (!isMoving) Modifier.wrapEnds(wrap, isFirst = false, isLast = g == groups.last()) else Modifier)
                     .then(if (isMoving) Modifier.border(2.dp, C.AccentFocus, androidx.compose.foundation.shape.RoundedCornerShape(8.dp)) else Modifier)
                     .onPreviewKeyEvent { e ->
@@ -385,3 +385,14 @@ fun GroupNav(vm: AppViewModel) {
         }
     }
 }
+
+
+/**
+ * ▶ on a category (or ★ Favorites, a list) in the category list goes into the guide (Nov 15): to the first channel
+ * on screen for the category being shown (its scroll kept), or opens another category as OK does. Before,
+ * ▶ landed on the day strip at the top.
+ */
+fun Modifier.rightIntoGuide(vm: AppViewModel, group: String): Modifier = this.then(Modifier.onPreviewKeyEvent { e ->
+    if (e.type != androidx.compose.ui.input.key.KeyEventType.KeyDown || e.key != androidx.compose.ui.input.key.Key.DirectionRight || e.nativeKeyEvent.repeatCount != 0) return@onPreviewKeyEvent false
+    vm.intoGuide(group); true
+})

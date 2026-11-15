@@ -79,7 +79,11 @@ enum class PlayContext { GROUP, FAVORITES, SPORTS }
 enum class NavMode { FULL, COLLAPSED, GROUPS }
 
 /** The combined Favorites category shown first in the TV Guide. */
-enum class GuideFocus { TOP, KEEP, CURRENT }
+enum class GuideFocus {
+    TOP, KEEP, CURRENT,
+    /** The first channel fully on screen (▶ from the category list). */
+    VISIBLE,
+}
 
 /** How many days of guide a download keeps (the guide scrolls as far as its data goes, up to this). */
 const val GUIDE_DAYS = 7
@@ -3037,6 +3041,15 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** Picking a category: switch playlist if needed, hide the menu and show categories as the left nav. */
+    /** ▶ from the category list: into the guide on the first channel on screen, or another category as OK opens it. */
+    fun intoGuide(group: String) {
+        if (group == FAV_GROUP || isListGroup(group)) ensureFavoriteData()
+        if (group != selectedGroup) { chooseGroup(activePlaylist()?.id ?: "", group); return }
+        if (channelsIn(group).isEmpty()) return
+        guideFocusMode = GuideFocus.VISIBLE
+        guideFocusTick++
+    }
+
     fun chooseGroup(pid: String, raw: String) {
         viewModelScope.launch {
             val same = raw == selectedGroup && pid == activePlaylist()?.id
@@ -3054,6 +3067,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     var inGroupNav = false
     /** The TV Guide itself (channels, programmes, preview) has the highlight: it then fills the screen. */
     var guideHasFocus by mutableStateOf(false)
+    /** The guide is drawn full width (main menu and category list hidden): 2 hours across the screen. */
+    var guideFullLayout by mutableStateOf(false)
     var inPlaylistTree = false
     /** Whether the highlight is inside a Settings section (not on the section list). */
     var settingsInContent = false
