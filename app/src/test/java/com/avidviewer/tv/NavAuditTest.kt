@@ -349,8 +349,15 @@ class NavAuditTest {
         key(Key.DirectionCenter); step("OK on Add guide source")
         typeInto("guide-src-name", "Mine"); step("name typed, Done")
         moveTo("XMLTV"); typeInto("guide-src-url", "http://127.0.0.1:9/g.xml"); step("address typed, Done")
-        moveTo("Save", Key.DirectionDown, 6); step("to Save"); key(Key.DirectionCenter)
+        moveTo("Save", Key.DirectionDown, 3) || moveTo("Save", Key.DirectionLeft, 2); step("to Save"); key(Key.DirectionCenter)
+        waitFor(3_000) { false }
         record("Guide sources › Add › Save", "Add guide source")
+        rule.onAllNodesWithTag("guide-src-edit").onFirst().requestFocus(); settle(); presses = 0
+        key(Key.DirectionCenter); step("OK on Edit")
+        typeInto("guide-src-name", " 2"); step("name changed, Done")
+        moveTo("Save", Key.DirectionDown, 3) || moveTo("Save", Key.DirectionLeft, 2); step("to Save"); key(Key.DirectionCenter)
+        waitFor(3_000) { false }
+        record("Guide sources › Edit › Save", "Edit")
     }
 
     @Test fun c02_moveAndDeleteGuideSource() = guardRun("Guide sources › ▲ / Delete") {
