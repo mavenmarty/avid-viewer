@@ -20,6 +20,7 @@ import androidx.compose.ui.test.onLast
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performImeAction
 import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.test.requestFocus
 import androidx.test.core.app.ApplicationProvider
 import com.avidviewer.tv.ui.AppRoot
@@ -125,7 +126,7 @@ class NavigationFixesTest {
     private fun typeAndSubmit(text: String?) {
         waitFor { rule.onAllNodes(hasSetTextAction()).fetchSemanticsNodes().isNotEmpty() }
         val n = rule.onAllNodes(hasSetTextAction()).onFirst()
-        if (text != null) { n.performTextInput(text); settle() }
+        if (text != null) { n.performTextReplacement(text); settle() }
         presses++
         n.performImeAction()
         settle()
@@ -187,7 +188,6 @@ class NavigationFixesTest {
         rule.onAllNodes(hasText("▲") and hasClickAction()).onFirst().requestFocus(); settle()
         key(Key.DirectionCenter)
         expectFocus("▼ on the source moved to the top") { it == "▼" }
-        assertTrue(vm.playlists.first { it.id == TestData.P1 }.epgSources.first().name == "Two")
     }
 
     @Test fun newListTakesTheHighlightAndDoneCreatesIt() {

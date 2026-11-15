@@ -77,7 +77,7 @@ fun AppRoot(vm: AppViewModel) {
         FocusSpots.screenNow = vm.screen
         FocusSpots.log = vm::trail
         val rootView = androidx.compose.ui.platform.LocalView.current.rootView
-        if (FocusSpots.mainRoot?.get() !== rootView) FocusSpots.mainRoot = java.lang.ref.WeakReference(rootView)
+        if (FocusSpots.mainRoot?.get() !== rootView) { FocusSpots.reset(); FocusSpots.mainRoot = java.lang.ref.WeakReference(rootView) }
         LaunchedEffect(FocusSpots.lostTick) {
             if (FocusSpots.lostTick == 0) return@LaunchedEffect
             val lostAt = FocusSpots.lostAt
