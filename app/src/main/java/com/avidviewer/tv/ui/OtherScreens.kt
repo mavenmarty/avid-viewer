@@ -282,29 +282,47 @@ fun TvField(
         val submit = {
             if (next != null) { handedOn = true; finish(); next() } else { finish(); onSubmit?.invoke() }
         }
-        OutlinedTextField(
+        val fieldModifier = modifier.fillMaxWidth().focusRequester(fieldFocus).onFocusChanged {
+                FocusSpots.typing = it.isFocused
+                if (it.isFocused) hadFocus = true
+                else if (hadFocus) { hadFocus = false; editing = false }
+            }
+        val actions = KeyboardActions(
+            onDone = { submit() },
+            onSearch = { submit() },
+            onGo = { submit() },
+            onNext = { submit() },
+        )
+        val options = KeyboardOptions(keyboardType = if (password) KeyboardType.Password else KeyboardType.Uri, imeAction = imeAction)
+        val transform = if (password) PasswordVisualTransformation() else VisualTransformation.None
+        androidx.compose.runtime.DisposableEffect(Unit) { onDispose { FocusSpots.typing = false } }
+        if (android.os.Build.FINGERPRINT == "robolectric") {
+            // JVM tests: a plain field with no cursor. The outlined field's endlessly blinking cursor never lets
+            // a test settle while a dialog has the keyboard open.
+            androidx.compose.foundation.text.BasicTextField(
+                value = tfv,
+                onValueChange = { tfv = it; if (it.text != value) onChange(it.text) },
+                singleLine = true,
+                modifier = fieldModifier.height(56.dp),
+                visualTransformation = transform,
+                keyboardOptions = options,
+                keyboardActions = actions,
+                cursorBrush = androidx.compose.ui.graphics.SolidColor(androidx.compose.ui.graphics.Color.Unspecified),
+                textStyle = androidx.compose.ui.text.TextStyle(color = C.Text),
+            )
+        } else OutlinedTextField(
             value = tfv,
             onValueChange = { tfv = it; if (it.text != value) onChange(it.text) },
             label = { Text(label) },
             singleLine = true,
-            modifier = modifier.fillMaxWidth().focusRequester(fieldFocus).onFocusChanged {
-                if (it.isFocused) hadFocus = true
-                else if (hadFocus) { hadFocus = false; editing = false }
-            },
-            visualTransformation = if (password) PasswordVisualTransformation() else VisualTransformation.None,
-            keyboardOptions = KeyboardOptions(keyboardType = if (password) KeyboardType.Password else KeyboardType.Uri, imeAction = imeAction),
-            keyboardActions = KeyboardActions(
-                onDone = { submit() },
-                onSearch = { submit() },
-                onGo = { submit() },
-                onNext = { submit() },
-            ),
+            modifier = fieldModifier,
+            visualTransformation = transform,
+            keyboardOptions = options,
+            keyboardActions = actions,
             colors = OutlinedTextFieldDefaults.colors(
                 focusedTextColor = C.Text, unfocusedTextColor = C.Text,
                 focusedBorderColor = C.Accent, unfocusedBorderColor = C.Line,
-                focusedLabelColor = C.Accent, unfocusedLabelColor = C.Muted,
-                // No cursor in the JVM tests: its endless blinking would never let them settle.
-                cursorColor = if (android.os.Build.FINGERPRINT == "robolectric") androidx.compose.ui.graphics.Color.Unspecified else C.Accent,
+                focusedLabelColor = C.Accent, unfocusedLabelColor = C.Muted, cursorColor = C.Accent,
             ),
         )
         BackHandler { finish() }

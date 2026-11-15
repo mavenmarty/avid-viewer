@@ -96,6 +96,9 @@ object FocusSpots {
         currentScreen = screenNow
     }
 
+    /** A text field is being typed in (its keyboard open): never taken away from it. */
+    @Volatile var typing = false
+
     /** Whether one of the app window's items has the highlight now. */
     fun hasCurrent() = current?.get()?.focused == true
 
@@ -111,15 +114,16 @@ object FocusSpots {
      * closes onto nothing), it's moved only if that item is in another column and an item in the lost one's
      * column is there to take it: a deliberate landing nearby (the next channel) stays.
      */
-    fun recover(): Boolean {
+    fun recover(somethingFocused: Boolean = false): Boolean {
         val b = lostBounds ?: return false
         val root = mainRoot?.get() ?: return false
         val candidates = synchronized(spots) { spots.filter { it.root === root && it.coords?.isAttached == true } }
             .mapNotNull { s -> boundsOf(s)?.takeIf { it.width > 1f && it.height > 1f }?.let { s to it } }
         if (candidates.isEmpty()) return false
         val now = current?.get()?.takeIf { it.focused }?.let { boundsOf(it) }
-        if (now != null) {
-            if (sameColumn(now, b)) return false
+        if (now != null || somethingFocused) {
+            // A deliberate landing next to where the item was (the next channel) stays.
+            if (now != null && sameColumn(now, b) && kotlin.math.abs(now.center.y - b.center.y) <= b.height * 1.6f) return false
             if (candidates.none { sameColumn(it.second, b) }) return false
         }
         fun score(r: androidx.compose.ui.geometry.Rect): Float {
