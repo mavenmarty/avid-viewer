@@ -76,12 +76,30 @@ object FocusSpots {
 
     fun add(s: Spot) = synchronized(spots) { spots.add(s) }
 
-    /** [s] left the screen; if it had the highlight, remember where, so its neighbour can take it. */
+    /** The item that had the highlight before [current], and when [current] took it. */
+    private var previous: java.lang.ref.WeakReference<Spot>? = null
+    private var previousBounds: androidx.compose.ui.geometry.Rect? = null
+    private var previousScreen: Screen? = null
+    private var currentSince = 0L
+
+    /** A new app window (the app restarted in the same process, as in tests): forget everything. */
+    fun reset() {
+        current = null; currentBounds = null; currentScreen = null
+        previous = null; previousBounds = null; previousScreen = null
+        lostBounds = null; lostScreen = null; lostAt = 0L
+    }
+
+    /**
+     * [s] left the screen; if it had the highlight, remember where, so its neighbour can take it. Also when it
+     * had the highlight a moment ago: Android may hand the highlight to the first item on screen as a dialog
+     * closes, just before the item the dialog removed goes.
+     */
     fun remove(s: Spot) {
         synchronized(spots) { spots.remove(s) }
-        if (current?.get() === s) {
-            lostBounds = currentBounds
-            lostScreen = currentScreen
+        val justBefore = previous?.get() === s && android.os.SystemClock.uptimeMillis() - currentSince < 600
+        if (current?.get() === s || justBefore) {
+            lostBounds = if (justBefore) previousBounds else currentBounds
+            lostScreen = if (justBefore) previousScreen else currentScreen
             lostAt = android.os.SystemClock.uptimeMillis()
             current = null
             lostTick++
@@ -95,7 +113,12 @@ object FocusSpots {
         if (!c.isAttached) return
         val main = mainRoot?.get()
         if (main != null && s.root !== main) return
-        currentBounds = runCatching { c.boundsInWindow() }.getOrNull() ?: return
+        val bounds = runCatching { c.boundsInWindow() }.getOrNull() ?: return
+        if (current?.get() !== s) {
+            previous = current; previousBounds = currentBounds; previousScreen = currentScreen
+            currentSince = android.os.SystemClock.uptimeMillis()
+        }
+        currentBounds = bounds
         current = java.lang.ref.WeakReference(s)
         currentScreen = screenNow
     }
