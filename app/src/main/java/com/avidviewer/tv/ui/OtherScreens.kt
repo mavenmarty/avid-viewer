@@ -44,6 +44,8 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.setText
+import androidx.compose.ui.semantics.onImeAction
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.toggleableState
 import androidx.compose.ui.focus.FocusRequester
@@ -231,7 +233,11 @@ fun TvField(
     next: (() -> Unit)? = null,
     onChange: (String) -> Unit,
 ) {
-    var editing by remember { mutableStateOf(autoOpen) }
+    // JVM tests only: a text field being edited inside a dialog never lets a test settle, so there the field
+    // stays closed and the tests type through its accessibility actions (below), as TalkBack can.
+    val inTestDialog = android.os.Build.FINGERPRINT == "robolectric" &&
+        androidx.compose.ui.platform.LocalView.current.rootView !== FocusSpots.mainRoot?.get()
+    var editing by remember { mutableStateOf(autoOpen && !inTestDialog) }
     var wasEditing by remember { mutableStateOf(false) }
     var hadFocus by remember { mutableStateOf(false) }
     var boxHas by remember { mutableStateOf(false) }
@@ -250,9 +256,19 @@ fun TvField(
         editing = false
     }
 
+    /** The keyboard's Done / Next. */
+    fun submit() {
+        if (next != null) { handedOn = true; finish(); next() } else { finish(); onSubmit?.invoke() }
+    }
+
     if (!editing) {
         Focusable(
-            modifier = modifier.fillMaxWidth().height(56.dp).focusRequester(boxFocus).onFocusChanged { boxHas = it.isFocused },
+            modifier = modifier.fillMaxWidth().height(56.dp).focusRequester(boxFocus).onFocusChanged { boxHas = it.isFocused }
+                // TalkBack (and the tests) can set the text and submit it without opening the keyboard.
+                .semantics {
+                    setText { onChange(it.text); true }
+                    onImeAction(imeAction) { submit(); true }
+                },
             color = C.Surface2,
             focusedColor = C.FocusRaised,
             onClick = { editing = true },
@@ -285,9 +301,6 @@ fun TvField(
     } else {
         var tfv by remember { mutableStateOf(TextFieldValue(value, if (selectAll) TextRange(0, value.length) else TextRange(value.length))) }
         if (tfv.text != value) tfv = TextFieldValue(value, TextRange(value.length))
-        val submit = {
-            if (next != null) { handedOn = true; finish(); next() } else { finish(); onSubmit?.invoke() }
-        }
         val fieldModifier = modifier.fillMaxWidth().focusRequester(fieldFocus).onFocusChanged {
                 FocusSpots.typing = it.isFocused
                 if (it.isFocused) hadFocus = true
@@ -332,12 +345,8 @@ fun TvField(
             ),
         )
         BackHandler { finish() }
-        val fieldView = androidx.compose.ui.platform.LocalView.current
         LaunchedEffect(Unit) {
             wasEditing = true
-            // JVM tests only: a text field with the highlight inside a dialog never lets the test settle (its
-            // input session keeps restarting there), so the tests set the text through accessibility instead.
-            if (android.os.Build.FINGERPRINT == "robolectric" && fieldView.rootView !== FocusSpots.mainRoot?.get()) return@LaunchedEffect
             // In a dialog that has just opened the field may not be ready on the first frame: retry briefly.
             for (frame in 0 until 30) {
                 if (runCatching { fieldFocus.requestFocus() }.isSuccess && frame > 0) break

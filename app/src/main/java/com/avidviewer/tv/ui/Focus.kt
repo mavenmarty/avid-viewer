@@ -87,6 +87,7 @@ object FocusSpots {
         current = null; currentBounds = null; currentScreen = null
         previous = null; previousBounds = null; previousScreen = null
         lostBounds = null; lostScreen = null; lostAt = 0L
+        typing = false
     }
 
     /**
@@ -150,9 +151,16 @@ object FocusSpots {
         val now = current?.get()?.takeIf { it.focused }?.let { boundsOf(it) }
         log("recover from ${b.left.toInt()},${b.top.toInt()} now=${now?.let { "${it.left.toInt()},${it.top.toInt()}" }} other=$somethingFocused")
         if (now != null || somethingFocused) {
-            // A deliberate landing next to where the item was (the next channel) stays.
-            if (now != null && sameColumn(now, b) && kotlin.math.abs(now.center.y - b.center.y) <= b.height * 1.6f) return false
-            if (candidates.none { sameColumn(it.second, b) }) return false
+            // Something already has the highlight. Android's own choice when a dialog closes onto nothing is the
+            // first item in the window, at the top (the main menu, ‹ Menu): that is replaced. Anything else was
+            // put there on purpose (the next channel, the button that opened a form) and stays.
+            if (now == null) { if (candidates.none { sameColumn(it.second, b) }) return false }
+            else {
+                val windowHeight = root.height.toFloat().takeIf { it > 0f } ?: return false
+                val atTop = now.top < windowHeight * 0.25f
+                if (!atTop || b.top <= now.top + 1f) return false
+                if (candidates.none { sameColumn(it.second, b) && it.second != now }) return false
+            }
         }
         fun score(r: androidx.compose.ui.geometry.Rect): Float {
             val dy = kotlin.math.abs(r.center.y - b.center.y)
