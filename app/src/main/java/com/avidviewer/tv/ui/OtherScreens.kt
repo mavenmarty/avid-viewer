@@ -587,6 +587,11 @@ private fun PlaylistForm(vm: AppViewModel, existing: com.avidviewer.tv.data.Play
     var server by remember(k) { mutableStateOf(existing?.server ?: "") }
     var user by remember(k) { mutableStateOf(existing?.username ?: "") }
     var pass by remember(k) { mutableStateOf("") }
+    var open2 by remember(existing?.id) { mutableStateOf(0) }
+    var open3 by remember(existing?.id) { mutableStateOf(0) }
+    var open4 by remember(existing?.id) { mutableStateOf(0) }
+    var toSave by remember(existing?.id) { mutableStateOf(0) }
+    val saveFr = remember { FocusRequester() }
     var m3u by remember(k) { mutableStateOf(existing?.m3uUrl ?: "") }
     var epg by remember(k) { mutableStateOf(existing?.epgUrl ?: "") }
     var liveOn by remember(k) { mutableStateOf(true) }
@@ -610,15 +615,17 @@ private fun PlaylistForm(vm: AppViewModel, existing: com.avidviewer.tv.data.Play
                 TvButton("M3U link", selected = type == "m3u") { type = "m3u" }
             }
         }
-        item { TvField("Playlist name", name) { name = it } }
+        // Next on the keyboard opens the next field; Done on the last moves to Add playlist / Save changes (BUG-044).
+        val nx = androidx.compose.ui.text.input.ImeAction.Next
+        item { TvField("Playlist name", name, imeAction = nx, next = { open2++ }) { name = it } }
         if (type == "xtream") {
-            item { TvField("Server (DNS), e.g. http://example.com:8080", server) { server = it } }
-            item { TvField("Username", user) { user = it } }
-            item { TvField(if (existing != null) "Password (leave empty to keep the current one)" else "Password", pass, password = true) { pass = it } }
+            item { TvField("Server (DNS), e.g. http://example.com:8080", server, imeAction = nx, openSignal = open2, next = { open3++ }) { server = it } }
+            item { TvField("Username", user, imeAction = nx, openSignal = open3, next = { open4++ }) { user = it } }
+            item { TvField(if (existing != null) "Password (leave empty to keep the current one)" else "Password", pass, password = true, openSignal = open4, next = { toSave++ }) { pass = it } }
             item { Label("Live TV and the TV guide load from your login. Your password is stored encrypted on this device only.", size = 12.sp, lines = Int.MAX_VALUE) }
         } else {
-            item { TvField("M3U playlist link", m3u) { m3u = it } }
-            if (existing == null) item { TvField("TV guide (XMLTV) link, optional", epg) { epg = it } }
+            item { TvField("M3U playlist link", m3u, imeAction = if (existing == null) nx else androidx.compose.ui.text.input.ImeAction.Done, openSignal = open2, next = { if (existing == null) open3++ else toSave++ }) { m3u = it } }
+            if (existing == null) item { TvField("TV guide (XMLTV) link, optional", epg, openSignal = open3, next = { toSave++ }) { epg = it } }
             else item { Label("Guide sources for this playlist (add, edit, remove, time offset) are under ▤ Guide sources.", size = 12.sp, color = C.Soft, lines = Int.MAX_VALUE) }
         }
         if (existing == null) item {
@@ -632,7 +639,8 @@ private fun PlaylistForm(vm: AppViewModel, existing: com.avidviewer.tv.data.Play
         }
         item {
             Row(Modifier.padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                TvButton(if (vm.busy) "Working…" else if (existing == null) "Add playlist" else "Save changes", primary = true, busy = vm.busy) {
+                LaunchedEffect(toSave) { if (toSave > 0) focusWhenReady(vm, frames = 30) { runCatching { saveFr.requestFocus() }.isSuccess } }
+                TvButton(if (vm.busy) "Working…" else if (existing == null) "Add playlist" else "Save changes", primary = true, busy = vm.busy, modifier = Modifier.focusRequester(saveFr)) {
                     if (!vm.busy) {
                         onSubmit(PlaylistFields(name, type, server, user, pass, m3u, epg, liveOn, vodOn))
                         if (existing == null) pass = ""

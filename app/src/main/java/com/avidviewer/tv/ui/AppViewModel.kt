@@ -3034,6 +3034,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** Back walks up the navigation: categories → playlists → full menu → TV Guide. Returns false to let the app exit. */
     /** Which left-hand list has the highlight, so Back and Left know which layer the viewer is on. */
     var inGroupNav = false
+    /** The TV Guide itself (channels, programmes, preview) has the highlight: it then fills the screen. */
+    var guideHasFocus by mutableStateOf(false)
     var inPlaylistTree = false
     /** Whether the highlight is inside a Settings section (not on the section list). */
     var settingsInContent = false
