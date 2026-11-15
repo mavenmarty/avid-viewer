@@ -1,7 +1,28 @@
+import java.security.KeyStore
+import java.security.MessageDigest
+import java.security.cert.X509Certificate
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
+}
+
+/**
+ * SHA-256 of the signing certificate, read from the keystore at build time. Baked into BuildConfig
+ * so the app can refuse to run if it has been re-signed (see data/Integrity.kt). Returns "" when the
+ * keystore isn't present (local and CI debug/test builds), which turns the runtime check off — so it
+ * only ever enforces on a properly signed release. Never throws the build: a problem here just leaves
+ * the check disabled.
+ */
+fun signingCertSha256(ksPath: String?, storePassword: String?, alias: String?): String {
+    if (ksPath.isNullOrBlank() || storePassword.isNullOrBlank() || alias.isNullOrBlank()) return ""
+    return runCatching {
+        val ks = KeyStore.getInstance("PKCS12")
+        java.io.File(ksPath).inputStream().use { ks.load(it, storePassword.toCharArray()) }
+        val cert = ks.getCertificate(alias) as X509Certificate
+        MessageDigest.getInstance("SHA-256").digest(cert.encoded).joinToString("") { "%02x".format(it) }
+    }.getOrDefault("")
 }
 
 android {
@@ -14,6 +35,13 @@ android {
         targetSdk = 35
         versionCode = (System.getenv("VERSION_CODE") ?: "1").toInt()
         versionName = System.getenv("VERSION_NAME") ?: "1.0.0"
+
+        // Expected signing cert (empty = check off). Read once here so the keystore isn't touched per build type.
+        buildConfigField(
+            "String",
+            "EXPECTED_SIG_SHA256",
+            "\"" + signingCertSha256(System.getenv("SIGNING_KEYSTORE_PATH")?.ifBlank { null }, System.getenv("SIGNING_STORE_PASSWORD"), System.getenv("SIGNING_KEY_ALIAS")) + "\""
+        )
     }
 
     // The release key comes from GitHub Actions secrets. Every build is signed with the
@@ -32,7 +60,7 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             signingConfig = if (ksPath != null) signingConfigs.getByName("release") else signingConfigs.getByName("debug")
         }
@@ -47,6 +75,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
     packaging {
         resources {
