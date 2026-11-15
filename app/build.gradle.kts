@@ -11,10 +11,6 @@ plugins {
     id("app.talsec.plugin")
 }
 
-talsec {
-    sdkVersion = "20.0.1"
-}
-
 /**
  * SHA-256 of the signing certificate, read from the keystore at build time. Baked into BuildConfig
  * so the app can refuse to run if it has been re-signed (see data/Integrity.kt). Returns "" when the
@@ -34,6 +30,10 @@ fun signingCertSha256(ksPath: String?, storePassword: String?, alias: String?): 
 
 android {
     namespace = "com.avidviewer.tv"
+    // freeRASP SDK version (the plugin adds the library)
+    talsec {
+        sdkVersion = "20.0.1"
+    }
     compileSdk = 35
 
     defaultConfig {
