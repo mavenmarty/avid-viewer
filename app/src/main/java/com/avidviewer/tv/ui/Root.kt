@@ -98,11 +98,16 @@ fun AppRoot(vm: AppViewModel) {
         } else {
             Row(Modifier.fillMaxSize()) {
                 val browsing = vm.screen == Screen.LIVE || vm.screen == Screen.GUIDE
-                // The main menu is always there: icons only while a lower layer is in use.
-                NavRail(vm)
+                // Inside the TV Guide with a category chosen, the guide takes the whole screen: the main menu and
+                // the category list step aside. ◀ from the channel names, or Back, brings back the category list
+                // (on the current category) with the main menu as icons (both set navFocusKey).
+                val guideFull = browsing && vm.navMode == NavMode.GROUPS && vm.selectedGroup != null &&
+                    vm.guideHasFocus && vm.navFocusKey == null
+                // The main menu is otherwise always there: icons only while a lower layer is in use.
+                if (!guideFull) NavRail(vm)
                 if (browsing && vm.navMode == NavMode.COLLAPSED) PlaylistTree(vm)
-                if (browsing && vm.navMode == NavMode.GROUPS) GroupNav(vm)
-                Box(Modifier.fillMaxHeight().weight(1f)) {
+                if (browsing && vm.navMode == NavMode.GROUPS && !guideFull) GroupNav(vm)
+                Box(Modifier.fillMaxHeight().weight(1f).onFocusChanged { vm.guideHasFocus = browsing && it.hasFocus }) {
                     when (vm.screen) {
                         Screen.SEARCH -> SearchScreen(vm)
                         Screen.DISCOVER -> DiscoverScreen(vm)
@@ -157,10 +162,10 @@ fun AppRoot(vm: AppViewModel) {
         }
         // New version found: ask before updating (never interrupts full-screen viewing).
         val rel = vm.update
-        // Opens by itself only when found before the first button press (see updatePromptAllowed).
+        // Opens by itself only once the latest release has been out 24 hours (see updatePromptAllowed).
         if (rel != null && vm.updatePromptAllowed && !vm.updatePromptDismissed && vm.screen != Screen.PLAYER) {
             androidx.compose.material3.AlertDialog(
-                onDismissRequest = { if (!vm.updateBusy) vm.updatePromptDismissed = true },
+                onDismissRequest = { if (!vm.updateBusy) vm.remindAboutUpdateLater() },
                 containerColor = C.Surface,
                 title = { Text("Update available", color = C.Text, fontWeight = FontWeight.Bold) },
                 text = {
@@ -174,7 +179,7 @@ fun AppRoot(vm: AppViewModel) {
                     TvButton(if (vm.updateBusy) "Updating…" else "Update now", primary = true, busy = vm.updateBusy) { if (!vm.updateBusy) vm.installUpdate() }
                 },
                 dismissButton = {
-                    TvButton("Later") { vm.updatePromptDismissed = true }
+                    TvButton("Later") { vm.remindAboutUpdateLater() }
                 },
             )
         }

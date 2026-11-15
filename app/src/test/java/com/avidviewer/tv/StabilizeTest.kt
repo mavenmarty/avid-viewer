@@ -179,18 +179,32 @@ class StabilizeTest {
         assertEquals(vm.vodOf("movie").size, vm.vodItems("movie").size)
     }
 
-    // ---- 1.4 the update dialog never opens in the middle of browsing ----
+    // ---- Nov 15: the update dialog waits until the latest release has been out 24 hours ----
 
     @Test
-    fun updateDialogOnlyOpensBeforeTheFirstButtonPress() {
+    fun updateDialogWaits24HoursAndANewerBuildStartsTheWaitAgain() {
         TestData.seed(app)
         val vm = newVm()
-        vm.update = Updater.Release(999_999, "9.9.9", "http://x/a.apk", "")
-        vm.lastKeyAt = 0L
-        vm.onUpdateFound()
-        assertTrue("found at launch: the dialog may open", vm.updatePromptAllowed)
-        vm.lastKeyAt = 12_345L
-        vm.onUpdateFound()
-        assertFalse("found while browsing: wait (menu badge and Settings have it)", vm.updatePromptAllowed)
+        val h = 60 * 60 * 1000L
+        val t0 = System.currentTimeMillis()
+        vm.update = Updater.Release(999_999, "9.9.9", "http://x/a.apk", "", publishedAt = t0 - 2 * h)
+        vm.onUpdateFound(t0)
+        assertFalse("out for 2 hours: no dialog (menu badge and Settings have it)", vm.updatePromptAllowed)
+        vm.onUpdateFound(t0 + 21 * h)
+        assertFalse("out for 23 hours: still waiting", vm.updatePromptAllowed)
+        vm.onUpdateFound(t0 + 23 * h)
+        assertTrue("out for 25 hours: the dialog opens", vm.updatePromptAllowed)
+        // A newer build released during the wait starts the 24 hours again.
+        vm.update = Updater.Release(1_000_000, "9.9.10", "http://x/a.apk", "", publishedAt = t0 + 20 * h)
+        vm.onUpdateFound(t0 + 23 * h)
+        assertFalse("newer build out for 3 hours: waiting again", vm.updatePromptAllowed)
+        vm.onUpdateFound(t0 + 45 * h)
+        assertTrue("newer build out for 25 hours", vm.updatePromptAllowed)
+        // Later: another 24 hours.
+        vm.remindAboutUpdateLater(t0 + 45 * h)
+        vm.onUpdateFound(t0 + 60 * h)
+        assertFalse("Later: quiet for a day", vm.updatePromptAllowed)
+        vm.onUpdateFound(t0 + 70 * h)
+        assertTrue("a day after Later: asks again", vm.updatePromptAllowed && !vm.updatePromptDismissed)
     }
 }

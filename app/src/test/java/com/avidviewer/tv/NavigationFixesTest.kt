@@ -116,7 +116,10 @@ class NavigationFixesTest {
     }
 
     private fun startOn(text: String, substring: Boolean = true) {
-        waitFor { rule.onAllNodes(hasText(text, substring = substring) and hasClickAction()).fetchSemanticsNodes().isNotEmpty() }
+        fun there() = rule.onAllNodes(hasText(text, substring = substring) and hasClickAction()).fetchSemanticsNodes().isNotEmpty()
+        // The guide fills the screen while it has the highlight: bring the category list back as ◀ does.
+        if (!waitFor(1_500) { there() } && vm.screen == Screen.GUIDE) { rule.runOnIdle { vm.navFocusKey = vm.selectedGroup }; waitFor { vm.inGroupNav } }
+        waitFor { there() }
         rule.onAllNodes(hasText(text, substring = substring) and hasClickAction()).onFirst().requestFocus()
         settle()
         presses = 0
@@ -231,5 +234,22 @@ class NavigationFixesTest {
         rule.runOnIdle { vm.settingsSection = "playlists" }; settle()
         rule.onAllNodesWithText("My provider").onFirst().performClick(); settle()
         rule.onAllNodesWithTag("pl-guide-sources").onFirst().performClick(); settle()
+    }
+
+    /** Nov 15: inside the TV Guide the guide fills the screen; ◀ or Back brings the category list and the menu icons back. */
+    @Test fun theGuideFillsTheScreenAndLeftOrBackBringsTheCategoriesBack() {
+        fun categoriesShown() = rule.onAllNodes(hasText("‹", substring = true)).fetchSemanticsNodes().isNotEmpty()
+        rule.runOnIdle { vm.chooseGroup(TestData.P1, "KIDS") }
+        waitFor { focused().contains("KIDS Channel 1 with") }
+        assertTrue("category list and menu hidden while the guide has the highlight (${where()})", waitFor(3_000) { !categoriesShown() && vm.guideHasFocus })
+        key(Key.DirectionLeft)
+        expectFocus("◀ from the channel names: the current category") { it.startsWith("KIDS") && !it.contains("Channel") }
+        assertTrue("category list back", categoriesShown())
+        key(Key.DirectionDown); key(Key.DirectionCenter)
+        expectFocus("the next category's first channel, full screen again") { it.contains("Channel 1 with") }
+        assertTrue(waitFor(3_000) { !categoriesShown() })
+        key(Key.Back)
+        expectFocus("Back: the current category in the list") { !it.contains("Channel") && vm.inGroupNav }
+        assertTrue("category list back after Back", categoriesShown())
     }
 }

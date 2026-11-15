@@ -17,7 +17,8 @@ import java.util.concurrent.TimeUnit
 object Updater {
     const val REPO = "mavenmarty/avid-viewer"
 
-    data class Release(val versionCode: Long, val versionName: String, val apkUrl: String, val notes: String, val size: Long = -1L)
+    /** [publishedAt]: when GitHub published it (ms since 1970; 0 if unknown). */
+    data class Release(val versionCode: Long, val versionName: String, val apkUrl: String, val notes: String, val size: Long = -1L, val publishedAt: Long = 0L)
 
     const val NO_CONFIRM = "The installer screen didn't open."
 
@@ -48,7 +49,8 @@ object Updater {
             val a = assets.getJSONObject(i)
             if (a.optString("name").endsWith(".apk", true)) { url = a.optString("browser_download_url"); size = a.optLong("size", -1L); break }
         }
-        return Release(code, displayVersion(tag), url ?: return null, o.optString("body"), size)
+        val published = runCatching { java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", java.util.Locale.US).apply { timeZone = java.util.TimeZone.getTimeZone("UTC") }.parse(o.optString("published_at"))!!.time }.getOrDefault(0L)
+        return Release(code, displayVersion(tag), url ?: return null, o.optString("body"), size, published)
     }
 
     /** No data for this long means the connection has stalled: pick up where it stopped. */
@@ -177,4 +179,28 @@ class UpdateReceiver : BroadcastReceiver() {
             else -> Updater.onStatus?.invoke("Update didn't install: " + (intent.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE) ?: "unknown error"))
         }
     }
+}
+
+/**
+ * When to ask about an update (Nov 15): never as soon as it's found, but once it has been out for 24 hours
+ * and still isn't installed. A newer build released in the meantime starts the 24 hours again (it's the
+ * latest release that counts). "Later" waits another 24 hours. The menu's Update button and Settings ›
+ * Updates & about offer it at any time.
+ */
+class UpdateReminder(context: Context) {
+    private val prefs = context.getSharedPreferences("update-reminder", Context.MODE_PRIVATE)
+
+    /** When the reminder for [rel] is due: 24 h after its release (or after this TV first saw it), or after "Later". */
+    fun dueAt(rel: Updater.Release, now: Long): Long {
+        if (prefs.getLong("seenCode", -1) != rel.versionCode) prefs.edit().putLong("seenCode", rel.versionCode).putLong("seenAt", now).apply()
+        val since = if (rel.publishedAt > 0) rel.publishedAt else prefs.getLong("seenAt", now)
+        val snooze = if (prefs.getLong("laterCode", -1) == rel.versionCode) prefs.getLong("laterUntil", 0L) else 0L
+        return maxOf(since + WAIT, snooze)
+    }
+
+    fun later(rel: Updater.Release, now: Long) {
+        prefs.edit().putLong("laterCode", rel.versionCode).putLong("laterUntil", now + WAIT).apply()
+    }
+
+    companion object { const val WAIT = 24 * 60 * 60 * 1000L }
 }

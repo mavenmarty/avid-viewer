@@ -433,10 +433,13 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     private var installAnswered = false
     var updatePromptDismissed by mutableStateOf(false)
     /**
-     * The update dialog may open by itself only if the new version was found before the first remote
-     * button press after launch. Found later, it waits: the menu shows "Update …" and Settings › Updates has it.
+     * Whether the "Update available" dialog may open (Nov 15): only once the latest release has been out for
+     * 24 hours without being installed (a newer build starts the 24 hours again), or 24 hours after "Later".
+     * Before that the menu shows "Update …" and Settings › Updates & about has it. Never over full screen.
      */
     var updatePromptAllowed by mutableStateOf(false); private set
+    private val updateReminder = com.avidviewer.tv.data.UpdateReminder(app)
+    private var lastUpdateCheck = 0L
     val installed: Pair<Long, String> = runCatching { Updater.installedVersion(app) }.getOrDefault(0L to "")
     /** The game highlighted on the Sports screen. */
     var selectedGame by mutableStateOf<String?>(null)
@@ -864,6 +867,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             while (true) {
                 now = System.currentTimeMillis()
+                // The update reminder comes due while the app stays open; a TV left on for days still hears
+                // of new versions (checked every 6 hours when automatic checks are on).
+                if (update != null) onUpdateFound(now)
+                if (prefs.autoUpdateCheck && lastUpdateCheck > 0 && now - lastUpdateCheck > 6 * 60 * 60 * 1000L) checkForUpdate(quiet = true)
                 delay(15_000)
             }
         }
@@ -2600,6 +2607,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             if (!quiet) updateStatus = "Checking for updates…"
             val r = runCatching { withContext(Dispatchers.IO) { Updater.latest() } }
+            lastUpdateCheck = System.currentTimeMillis()
             r.onSuccess { rel ->
                 update = rel?.takeIf { it.versionCode > installed.first }
                 onUpdateFound()
@@ -2612,9 +2620,19 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    /** Decides whether a found update may open its dialog now (never in the middle of browsing). */
-    internal fun onUpdateFound() {
-        updatePromptAllowed = update != null && lastKeyAt == 0L
+    /** Decides whether the update dialog is due now (see [updatePromptAllowed]). */
+    internal fun onUpdateFound(at: Long = System.currentTimeMillis()) {
+        val rel = update
+        val due = rel != null && at >= updateReminder.dueAt(rel, at)
+        if (due && !updatePromptAllowed) updatePromptDismissed = false
+        updatePromptAllowed = due
+    }
+
+    /** "Later" (or Back) on the update dialog: ask again in 24 hours. */
+    fun remindAboutUpdateLater(at: Long = System.currentTimeMillis()) {
+        update?.let { updateReminder.later(it, at) }
+        updatePromptDismissed = true
+        updatePromptAllowed = false
     }
 
     /** Second way to install: Android's own install screen for the downloaded file. */
@@ -3034,6 +3052,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** Back walks up the navigation: categories → playlists → full menu → TV Guide. Returns false to let the app exit. */
     /** Which left-hand list has the highlight, so Back and Left know which layer the viewer is on. */
     var inGroupNav = false
+    /** The TV Guide itself (channels, programmes, preview) has the highlight: it then fills the screen. */
+    var guideHasFocus by mutableStateOf(false)
     var inPlaylistTree = false
     /** Whether the highlight is inside a Settings section (not on the section list). */
     var settingsInContent = false
