@@ -7,6 +7,8 @@ plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
+    // freeRASP: runtime checks for root, hooking, tampering, debugging and emulators (data/Security.kt)
+    id("app.talsec.plugin")
 }
 
 /**
@@ -28,6 +30,10 @@ fun signingCertSha256(ksPath: String?, storePassword: String?, alias: String?): 
 
 android {
     namespace = "com.avidviewer.tv"
+    // freeRASP SDK version (the plugin adds the library)
+    talsec {
+        sdkVersion = "20.0.1"
+    }
     compileSdk = 35
 
     defaultConfig {

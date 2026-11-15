@@ -15,7 +15,8 @@
  * After editing this script, use Deploy › Manage deployments › Edit › New version, so the URL stays.
  *
  * What it accepts: {"app":"avid-viewer","version","device","crash","summary","kind"?} with size limits
- * ("kind":"playback" = the playback log, from 1.5.0; anything else is a crash report).
+ * ("kind":"playback" = the playback log, from 1.5.0; "kind":"security" = a freeRASP alert, from 1.11.0;
+ * anything else is a crash report).
  * The app removes web addresses, user names and passwords from the crash text before sending.
  * At most 30 reports an hour are mailed (Apps Script also caps mail per day).
  *
@@ -47,17 +48,21 @@ function doPost(e) {
     var id = 'AVR-' + Utilities.getUuid().slice(0, 8);
     // "kind": "playback" (from 1.5.0) is the playback log: freezes and errors with their likely causes.
     var playback = r.kind === 'playback';
+    // "kind": "security" (from 1.11.0): a freeRASP alert (rooted TV, hooking, tampered copy…).
+    var security = r.kind === 'security';
+    var what = security ? 'security alert' : playback ? 'playback log' : 'crash report';
     MailApp.sendEmail({
       to: TO,
-      subject: 'Avid Viewer ' + (playback ? 'playback log' : 'crash report') + ' (' + version + ') · ' + first.slice(0, 120),
-      body: (playback ? 'Sent from the app (Settings › Updates & about › Playback log, or automatically once a day).\n\n'
+      subject: 'Avid Viewer ' + what + ' (' + version + ') · ' + first.slice(0, 120),
+      body: (security ? 'Sent automatically from the app (freeRASP found something on this TV; each kind once, at most one email a day).\n\n'
+          : playback ? 'Sent from the app (Settings › Updates & about › Playback log, or automatically once a day).\n\n'
           : 'Sent automatically from the app ("Report issue" after a crash).\n\n') +
         'App version: ' + version + '\n' +
         'Device: ' + device + '\n' +
-        (summary ? (playback ? 'Summary: ' : 'Error: ') + summary + '\n' : '') +
-        '\n--- ' + (playback ? 'Playback log' : 'Crash report') + ' ---\n' + crash +
+        (summary ? (playback || security ? 'Summary: ' : 'Error: ') + summary + '\n' : '') +
+        '\n--- ' + (security ? 'Findings' : playback ? 'Playback log' : 'Crash report') + ' ---\n' + crash +
         '\n\nReport id: ' + id,
-      name: playback ? 'Avid Viewer playback logs' : 'Avid Viewer crash reports',
+      name: security ? 'Avid Viewer security alerts' : playback ? 'Avid Viewer playback logs' : 'Avid Viewer crash reports',
     });
     toInbox_(id);
     return reply_(200, 'sent');

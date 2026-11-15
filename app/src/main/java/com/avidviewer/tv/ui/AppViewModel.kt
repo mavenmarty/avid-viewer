@@ -513,6 +513,26 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     fun clearPlaybackLog() { playbackLog.clear(); playbackLogStatus = null; playbackLogRev++ }
 
+    /**
+     * freeRASP alerts (a rooted TV, hooking, a tampered copy…; see SecurityMonitor) go to bugs@avidviewer.app through the
+     * crash relay: each kind once, at most one email a day.
+     */
+    private var securityBusy = false
+    private fun maybeSendSecurityAlert() {
+        val log = com.avidviewer.tv.data.SecurityMonitor.log ?: return
+        if (securityBusy || android.os.Build.FINGERPRINT == "robolectric") return
+        val kinds = log.pending().ifEmpty { return }
+        if (System.currentTimeMillis() - log.lastSent < 24 * 3_600_000L) return
+        securityBusy = true
+        viewModelScope.launch {
+            val ok = withContext(Dispatchers.IO) {
+                com.avidviewer.tv.data.CrashReport.sendSecurity(installed.second, log.summary(kinds), log.text())
+            }
+            if (ok) log.markSent(kinds)
+            securityBusy = false
+        }
+    }
+
     /** At most once a day, when freezes or errors happened since the last send ([Prefs.autoSendPlaybackLog]). */
     private fun maybeAutoSendPlaybackLog() {
         if (!prefs.autoSendPlaybackLog || playbackLogBusy) return
@@ -857,6 +877,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 if (playbackLog.entries().size != before) playbackLogRev++
                 // Not while a stream is starting; checked every minute.
                 if (++tick % 60 == 30) maybeAutoSendPlaybackLog()
+                if (tick % 60 == 45) maybeSendSecurityAlert()
             }
         }
         player.addListener(object : Player.Listener {
