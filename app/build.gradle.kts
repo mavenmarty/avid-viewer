@@ -7,6 +7,12 @@ plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
+    // freeRASP: runtime checks for root, hooking, tampering, debugging and emulators (data/Security.kt)
+    id("app.talsec.plugin")
+}
+
+talsec {
+    sdkVersion = "20.0.1"
 }
 
 /**
