@@ -252,4 +252,22 @@ class NavigationFixesTest {
         expectFocus("Back: the current category in the list") { !it.contains("Channel") && vm.inGroupNav }
         assertTrue("category list back after Back", categoriesShown())
     }
+
+    /** Nov 15: ▶ from the category list goes to the first channel on screen (not the day strip); the guide is then full width. */
+    @Test fun rightFromTheCategoryListGoesToTheFirstChannelOnScreen() {
+        rule.runOnIdle { vm.chooseGroup(TestData.P1, "KIDS") }
+        waitFor { focused().contains("KIDS Channel 1 with") }
+        rule.runOnIdle { vm.navFocusKey = "KIDS" }
+        waitFor { vm.inGroupNav }
+        key(Key.DirectionRight)
+        expectFocus("a KIDS channel, not the day strip") { it.contains("KIDS Channel") }
+        assertTrue("full width, 2 hours", waitFor(3_000) { vm.guideFullLayout })
+        // Another category with ▶ opens it, like OK.
+        rule.runOnIdle { vm.navFocusKey = "KIDS" }
+        waitFor { vm.inGroupNav }
+        val next = vm.groups().map { it.name }.let { it[it.indexOf("KIDS") + 1] }
+        assertTrue(moveTo(next))
+        key(Key.DirectionRight)
+        expectFocus("$next's first channel") { it.contains("$next Channel 1") }
+    }
 }

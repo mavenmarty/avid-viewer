@@ -50,6 +50,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.avidviewer.tv.data.Program
 import kotlinx.coroutines.delay
+import androidx.compose.ui.layout.onSizeChanged
 import kotlinx.coroutines.launch
 
 private const val DP_PER_MIN = 3.3f
@@ -88,19 +89,24 @@ fun GuideScreen(vm: AppViewModel) {
     val list = vm.channelsIn(vm.selectedGroup).distinctBy { it.key }
     val numbers = vm.numbers()
     val half = HALF_MS
+    // Nov 15: the guide fills the screen (full layout: 2 hours across the whole width; with the category list
+    // showing: 2.5 hours). Minutes are as wide as the room allows, measured from the timeline row.
+    val winMin = if (vm.guideFullLayout) 120 else WINDOW_MIN
+    var gridWidthDp by remember { mutableStateOf(0f) }
+    val dpm = if (gridWidthDp > 0f) gridWidthDp / winMin else DP_PER_MIN
     // The visible 2.5-hour window starts at the current (local) half hour plus [slots] × 30 minutes: back 2 hours,
     // ahead as far as the guide data goes (at least 12 hours, at most GUIDE_DAYS days).
     val zone = vm.timeZone
     val base = localHalfHour(vm.now, zone)
     val aheadMs = maxOf(AHEAD_MIN * 60_000L, vm.guideLastEnd - base)
-    val maxSlots = ((aheadMs - WINDOW_MIN * 60_000L) / half).toInt().coerceAtLeast(0) + 1
+    val maxSlots = ((aheadMs - winMin * 60_000L) / half).toInt().coerceAtLeast(0) + 1
     // The window and the highlighted time are kept in the navigation store, so leaving the guide
     // (full screen, another screen) comes back to the same time (NAV-05).
     // A remembered window from long ago (or none yet) opens at now.
     var slots by remember { mutableStateOf(Math.floorDiv(vm.nav.guideWindowStart - base, half).let { if (it < BACK_SLOTS || it > Int.MAX_VALUE) 0 else it.toInt() }) }
     slots = slots.coerceIn(BACK_SLOTS, maxSlots)
     val winStart = base + slots * half
-    val winEnd = winStart + WINDOW_MIN * 60 * 1000L
+    val winEnd = winStart + winMin * 60 * 1000L
     var focusProg by remember { mutableStateOf<Pair<String, Program?>?>(null) }
     /** Which channel name cell has the highlight (-1 = none). */
     var focusedRow by remember { mutableStateOf(-1) }
@@ -163,6 +169,11 @@ fun GuideScreen(vm: AppViewModel) {
                 val idx = rememberedRow().let { if (it < 0) listState.firstVisibleItemIndex.coerceIn(0, list.size - 1) else it }
                 bringIntoView(idx)
                 pendingFocus = idx
+            }
+            // ▶ from the category list: the first channel fully on screen, the scroll as it is.
+            GuideFocus.VISIBLE -> {
+                val vis = listState.layoutInfo.visibleItemsInfo
+                pendingFocus = (vis.firstOrNull { it.offset >= 0 } ?: vis.firstOrNull())?.index ?: listState.firstVisibleItemIndex
             }
             // Startup or back from full screen: the channel that was playing, on the programme that was highlighted.
             GuideFocus.CURRENT -> {
@@ -268,7 +279,7 @@ fun GuideScreen(vm: AppViewModel) {
 
     /** Right on the last program in view (or Left on the first) scrolls the window by whole half hours. */
     fun shiftTo(time: Long, row: Int, forward: Boolean) {
-        val need = if (forward) Math.floorDiv((time + half - (base + WINDOW_MIN * 60 * 1000L)) + half - 1, half) else Math.floorDiv(time - base, half)
+        val need = if (forward) Math.floorDiv((time + half - (base + winMin * 60 * 1000L)) + half - 1, half) else Math.floorDiv(time - base, half)
         val n = need.toInt().coerceIn(BACK_SLOTS, maxSlots)
         if (n == slots) return
         slots = n
@@ -323,10 +334,10 @@ fun GuideScreen(vm: AppViewModel) {
     ) {
         // Preview window + details of the focused show. Up from the top of the screen wraps to the last channel.
         Row(
-            Modifier.fillMaxWidth().height(130.dp),
+            Modifier.fillMaxWidth().height(195.dp), // Nov 15: preview half again as big (was 130 × 231)
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            PreviewWindow(vm, Modifier.width(231.dp).fillMaxHeight().focusRequester(previewFr).onPreviewKeyEvent { e ->
+            PreviewWindow(vm, Modifier.width(347.dp).fillMaxHeight().focusRequester(previewFr).onPreviewKeyEvent { e ->
                 // Up from the preview (the top of the screen) wraps to the last channel; a fresh press only.
                 if (e.type == KeyEventType.KeyDown && e.key == Key.DirectionUp && e.nativeKeyEvent.repeatCount == 0 && list.size > 1) { aim[0] = list.lastIndex; wrapTo(list.lastIndex); true } else false
             }, onOpen = { vm.openFullScreen(vm.currentKey, PlayContext.GROUP) })
@@ -351,9 +362,10 @@ fun GuideScreen(vm: AppViewModel) {
         Row(Modifier.fillMaxWidth().height(18.dp)) {
             Label(listOfNotNull(vm.selectedGroup?.let { vm.groupName(it) }, vm.dayLabel(winStart)).joinToString(" · ") + " · ${vm.zoneLabel()}" + if (slots != 0) "  ◀" else "",
                 size = 12.sp, modifier = Modifier.width((CH_COL + 3).dp))
-            Box(Modifier.weight(1f)) {
-                for (i in 0 until WINDOW_MIN / 30) {
-                    Label(vm.fmtTime(winStart + i * half), size = 12.sp, modifier = Modifier.offset(x = (i * 30 * DP_PER_MIN).dp))
+            val density = androidx.compose.ui.platform.LocalDensity.current
+            Box(Modifier.weight(1f).onSizeChanged { gridWidthDp = with(density) { it.width.toDp().value } - 6f }) {
+                for (i in 0 until winMin / 30) {
+                    Label(vm.fmtTime(winStart + i * half), size = 12.sp, modifier = Modifier.offset(x = (i * 30 * dpm).dp))
                 }
             }
         }
@@ -402,7 +414,7 @@ fun GuideScreen(vm: AppViewModel) {
                         val progs = vm.programsAt(c, winStart, winEnd).filter { it.end > winStart && it.start < winEnd }
                         if (progs.isEmpty()) {
                             Focusable(
-                                modifier = Modifier.width((WINDOW_MIN * DP_PER_MIN).dp).fillMaxHeight().focusRequester(progFr(idx)!!)
+                                modifier = Modifier.width((winMin * dpm).dp).fillMaxHeight().focusRequester(progFr(idx)!!)
                                     .onPreviewKeyEvent { e ->
                                         if (e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
                                         when (e.key) {
@@ -426,12 +438,12 @@ fun GuideScreen(vm: AppViewModel) {
                             val target = (laid.firstOrNull { at >= it.second && at < it.third }
                                 ?: laid.firstOrNull { it.second >= at } ?: laid.last()).first
                             laid.forEachIndexed { pi, (p, a, b) ->
-                                if (a > cursor) Box(Modifier.width((((a - cursor) / 60000f * DP_PER_MIN).dp - 3.dp).coerceAtLeast(0.dp)))
+                                if (a > cursor) Box(Modifier.width((((a - cursor) / 60000f * dpm).dp - 3.dp).coerceAtLeast(0.dp)))
                                 val isNow = vm.now >= p.start && vm.now < p.end
                                 // Already aired: dimmed; OK still tunes the channel live (there's no catch-up).
                                 val aired = p.end <= vm.now
                                 Focusable(
-                                    modifier = Modifier.width(((((b - a) / 60000f) * DP_PER_MIN).dp - 3.dp).coerceAtLeast(4.dp)).fillMaxHeight()
+                                    modifier = Modifier.width(((((b - a) / 60000f) * dpm).dp - 3.dp).coerceAtLeast(4.dp)).fillMaxHeight()
                                         .then(if (p === target) Modifier.focusRequester(progFr(idx)!!) else Modifier)
                                         .then(if (aired) Modifier.semantics { stateDescription = "Already aired" } else Modifier)
                                         .onPreviewKeyEvent { e ->
@@ -475,7 +487,7 @@ fun GuideScreen(vm: AppViewModel) {
             }
             // "Now" line
             if (vm.now in winStart until winEnd) {
-                val nowX = (CH_COL + 3) + ((vm.now - winStart) / 60000f) * DP_PER_MIN
+                val nowX = (CH_COL + 3) + ((vm.now - winStart) / 60000f) * dpm
                 Box(Modifier.offset(x = nowX.dp).width(2.dp).fillMaxHeight().background(C.Accent))
             }
         }

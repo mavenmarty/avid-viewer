@@ -103,11 +103,18 @@ fun AppRoot(vm: AppViewModel) {
                 // (on the current category) with the main menu as icons (both set navFocusKey).
                 val guideFull = browsing && vm.navMode == NavMode.GROUPS && vm.selectedGroup != null &&
                     vm.guideHasFocus && vm.navFocusKey == null
+                androidx.compose.runtime.SideEffect { vm.guideFullLayout = guideFull }
                 // The main menu is otherwise always there: icons only while a lower layer is in use.
                 if (!guideFull) NavRail(vm)
                 if (browsing && vm.navMode == NavMode.COLLAPSED) PlaylistTree(vm)
                 if (browsing && vm.navMode == NavMode.GROUPS && !guideFull) GroupNav(vm)
-                Box(Modifier.fillMaxHeight().weight(1f).onFocusChanged { vm.guideHasFocus = browsing && it.hasFocus }) {
+                Box(Modifier.fillMaxHeight().weight(1f).onFocusChanged {
+                    val now = browsing && it.hasFocus
+                    // Into the guide from the category list (a category chosen, ▶): the full layout at once, even
+                    // if a request to highlight a category was still pending.
+                    if (now && !vm.guideHasFocus) vm.navFocusKey = null
+                    vm.guideHasFocus = now
+                }) {
                     when (vm.screen) {
                         Screen.SEARCH -> SearchScreen(vm)
                         Screen.DISCOVER -> DiscoverScreen(vm)
