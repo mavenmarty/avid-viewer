@@ -107,11 +107,31 @@ jobs:
         if: github.ref != 'refs/heads/ci-check'
         run: cp app/build/outputs/apk/release/app-release.apk AvidViewer.apk
 
+      # R8 renames the app's classes; this file maps them back so an obfuscated crash report can be
+      # read. It's unique to this build, so keep one per release. (No-op if minify is ever turned off.)
+      - name: Save R8 mapping
+        if: github.ref != 'refs/heads/ci-check'
+        run: |
+          m=app/build/outputs/mapping/release/mapping.txt
+          if [ -f "$m" ]; then cp "$m" "AvidViewer-${{ steps.ver.outputs.version }}-mapping.txt"; fi
+
       - uses: actions/upload-artifact@v4
         if: github.ref != 'refs/heads/ci-check'
         with:
           name: AvidViewer-${{ steps.ver.outputs.version }}
           path: AvidViewer.apk
+
+      # The mapping is kept as its own build artifact, NOT a public release asset — the releases are
+      # public, and a published mapping would undo the obfuscation. Only repo collaborators can download
+      # it, from this run. To retrace an old release, open the "Build APK" run that built it.
+      - name: Upload R8 mapping
+        if: github.ref != 'refs/heads/ci-check'
+        uses: actions/upload-artifact@v4
+        with:
+          name: mapping-${{ steps.ver.outputs.version }}
+          path: AvidViewer-${{ steps.ver.outputs.version }}-mapping.txt
+          if-no-files-found: warn
+          retention-days: 90
 
       - name: Publish release
         if: steps.key.outputs.signed == 'true' && github.ref == 'refs/heads/main'
