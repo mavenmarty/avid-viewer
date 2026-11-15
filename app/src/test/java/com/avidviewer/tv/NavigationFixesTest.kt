@@ -116,7 +116,10 @@ class NavigationFixesTest {
     }
 
     private fun startOn(text: String, substring: Boolean = true) {
-        waitFor { rule.onAllNodes(hasText(text, substring = substring) and hasClickAction()).fetchSemanticsNodes().isNotEmpty() }
+        fun there() = rule.onAllNodes(hasText(text, substring = substring) and hasClickAction()).fetchSemanticsNodes().isNotEmpty()
+        // The guide fills the screen while it has the highlight: bring the category list back as ◀ does.
+        if (!waitFor(1_500) { there() } && vm.screen == Screen.GUIDE) { rule.runOnIdle { vm.navFocusKey = vm.selectedGroup }; waitFor { vm.inGroupNav } }
+        waitFor { there() }
         rule.onAllNodes(hasText(text, substring = substring) and hasClickAction()).onFirst().requestFocus()
         settle()
         presses = 0
