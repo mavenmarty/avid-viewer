@@ -505,6 +505,7 @@ The share password is stored encrypted on the TV and is included in your PIN-loc
 - Profile PINs are stored only as salted one-way hashes, never as the digits.
 - The **playback log** (freezes and errors) never records what you watch: each channel or title is a short code made from a random number kept on your TV, which can't be turned back into a name. It is sent to bugs@avidviewer.app at most once a day when there were problems, or when you choose Send playback log. Turn off **Send it automatically** in Settings › Updates & about to send it only by hand. Addresses, logins and IP addresses are removed first.
 - Crash details leave the TV only when you choose **Report issue**. They go to bugs@avidviewer.app through a small mail relay, with web addresses, server and host names, IP addresses, user names, passwords and tokens removed first.
+- **Security checks (1.10.1)** use freeRASP by Talsec. It checks the TV and the app for tampering (root, hooking tools, a modified copy, debuggers, emulators) and sends Talsec anonymous findings about the device and app for its security reports; nothing about what you watch, your playlists or logins. Alerts the app finds are also sent to bugs@avidviewer.app through the crash relay, each kind once and at most once a day.
 - Outside services get only what they need: your postal code (Open-Meteo, for weather), title lookups (TMDB/JustWatch, if you add a key), scoreboards (ESPN), update checks (GitHub) and, when you choose Report issue, the crash report (the Avid Viewer crash relay, a Google Apps Script web app).
 
 ## 11. Troubleshooting
@@ -715,11 +716,18 @@ Every public release since 1.0.35, newest first. From 1.1.0, versions are number
 
 ### 1.10.1 — November 15, 2026, 2:32 PM CT (current)
 
+**Release notes**
+
+- **Security checks.** The app now watches for signs that it's being tampered with: a rooted TV, hooking tools, a modified or re-signed copy, a debugger, an emulator or an app cloner. Nothing changes for viewers; if something is found it is noted on the TV and reported to bugs@avidviewer.app (each kind once, at most one email a day). Developer options, ADB and installing outside an app store are normal on a Fire TV that sideloads the app and are never reported.
+- **A copy re-signed by someone else won't run.** It shows a notice instead of the app. Updates from Avid Viewer itself are unaffected.
+- **Smaller, harder to reverse-engineer app.** Release builds are now shrunk and obfuscated.
+
 **Change log**
 
-- Add R8 code shrinking/obfuscation and a release signature check
-- Fix build script: import java.io.File (java resolves to the Java plugin extension)
-- CI: keep the R8 mapping file as a private build artifact per release
+- freeRASP (Talsec) runtime checks on signed releases, findings kept on the TV, alerts sent through the crash relay
+- Release signature check (Integrity) with a block screen for re-signed copies
+- R8 code shrinking and obfuscation; the mapping file kept as a private build artifact
+- Tests: security findings (alerts once per kind, Fire TV's normal state never sent), certificate hash conversion
 
 ### 1.10.0 — November 15, 2026, 11:46 AM CT
 
