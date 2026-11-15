@@ -125,14 +125,25 @@ class NavAuditTest {
         presses = 0
     }
 
-    /** Types into the open text field, as with the on-screen keyboard (letters not counted), then presses its Done/Next. */
+    /**
+     * Types into the highlighted text field as a viewer would: OK opens the keyboard (1 press), the letters
+     * (not counted), then the keyboard's Done / Next (1 press). The clock is held meanwhile, because the
+     * blinking cursor would otherwise never let the test settle.
+     */
     private fun typeAndDone(text: String) {
-        waitFor { rule.onAllNodes(hasSetTextAction()).fetchSemanticsNodes().isNotEmpty() }
-        val n = rule.onAllNodes(hasSetTextAction()).onFirst()
-        n.performTextInput(text)
-        settle()
-        presses++ // the keyboard's Done / Next key
-        n.performImeAction()
+        rule.mainClock.autoAdvance = false
+        try {
+            presses++ // OK on the field
+            val box = rule.onAllNodes(isFocused()).onFirst()
+            box.performClick()
+            rule.mainClock.advanceTimeBy(200)
+            val n = rule.onAllNodes(hasSetTextAction()).onFirst()
+            n.performTextInput(text)
+            rule.mainClock.advanceTimeBy(100)
+            presses++ // the keyboard's Done / Next
+            n.performImeAction()
+            rule.mainClock.advanceTimeBy(300)
+        } finally { rule.mainClock.autoAdvance = true }
         settle()
     }
 
@@ -174,8 +185,7 @@ class NavAuditTest {
         key(Key.DirectionCenter); step("OK on Rename (dialog opens)")
         val fieldFirst = focused().contains("Name") || focused().contains("[field]")
         if (!fieldFirst) { moveTo("Name"); step("to the Name field") }
-        key(Key.DirectionCenter); step("OK on the field (keyboard)")
-        typeAndDone(" X"); step("typed, keyboard Done/Next")
+        typeAndDone(" X"); step("OK on the field, typed, keyboard Done/Next")
         moveTo("Save", Key.DirectionDown, 4) || moveTo("Save", Key.DirectionRight, 3); step("to Save")
         key(Key.DirectionCenter)
         record("Guide › Rename channel", "KIDS Channel 3 with")
@@ -283,7 +293,7 @@ class NavAuditTest {
         startOn("NEWS", substring = false)
         key(Key.Menu); moveTo("Rename"); key(Key.DirectionCenter); step("Menu › Rename")
         if (!focused().contains("[field]") && !focused().contains("Name")) moveTo("Name")
-        key(Key.DirectionCenter); typeAndDone(" X"); step("typed")
+        typeAndDone(" X"); step("typed")
         moveTo("Save", Key.DirectionDown, 4) || moveTo("Save", Key.DirectionRight, 3); key(Key.DirectionCenter)
         record("Category › Rename", "NEWS X")
     }
@@ -312,7 +322,7 @@ class NavAuditTest {
         startOn("New list")
         key(Key.DirectionCenter); step("OK (dialog)")
         if (!focused().contains("[field]") && !focused().contains("Name")) moveTo("Name")
-        key(Key.DirectionCenter); typeAndDone("Late"); step("typed")
+        typeAndDone("Late"); step("typed")
         moveTo("Save", Key.DirectionDown, 4) || moveTo("Save", Key.DirectionRight, 3); key(Key.DirectionCenter)
         record("＋ New list › Save", "Late")
     }
@@ -322,7 +332,7 @@ class NavAuditTest {
         startOn("Kids night")
         key(Key.Menu); moveTo("Rename"); key(Key.DirectionCenter)
         if (!focused().contains("[field]") && !focused().contains("Name")) moveTo("Name")
-        key(Key.DirectionCenter); typeAndDone(" 2")
+        typeAndDone(" 2")
         moveTo("Save", Key.DirectionDown, 4) || moveTo("Save", Key.DirectionRight, 3); key(Key.DirectionCenter)
         record("List › Rename", "Kids night 2")
     }
@@ -340,8 +350,8 @@ class NavAuditTest {
         openGuideSources()
         rule.onAllNodesWithTag("guide-src-add").onFirst().requestFocus(); settle(); presses = 0
         key(Key.DirectionCenter); step("OK on Add guide source")
-        key(Key.DirectionCenter); typeAndDone("Mine"); step("name typed")
-        moveTo("XMLTV"); key(Key.DirectionCenter); typeAndDone("http://127.0.0.1:9/g.xml"); step("address typed")
+        typeAndDone("Mine"); step("name typed")
+        moveTo("XMLTV"); typeAndDone("http://127.0.0.1:9/g.xml"); step("address typed")
         moveTo("Save", Key.DirectionDown, 6); step("to Save"); key(Key.DirectionCenter)
         record("Guide sources › Add › Save", "Add guide source")
     }
@@ -377,13 +387,25 @@ class NavAuditTest {
         record("Movies › Menu on a poster (+ My List)", title.take(12))
     }
 
+    @Test fun d03_removeFromMyListInMyList() = guardRun("Movies › My List › Menu on a poster") {
+        rule.runOnIdle { vm.navSelect(Screen.MOVIES) }
+        waitFor { vm.vodOf("movie").isNotEmpty() && vm.entryFocusFor == null }
+        val items = vm.vodOf("movie").take(3)
+        rule.runOnIdle { items.forEach { vm.toggleMyList(it) } }; settle()
+        startOn("My List", substring = false)
+        key(Key.DirectionCenter); step("OK on My List")
+        key(Key.DirectionRight); step("to the posters")
+        key(Key.Menu)
+        record("Movies › My List › Menu on a poster (removes it)", "(the next poster)", ok = focused() != "(nothing)" && !focused().contains("Menu") && vm.screen == Screen.MOVIES)
+    }
+
     @Test fun d02_vodCategoryRenameAndHide() = guardRun("Movies › category Menu") {
         rule.runOnIdle { vm.navSelect(Screen.MOVIES) }
         waitFor { vm.vodOf("movie").isNotEmpty() && vm.entryFocusFor == null }
         startOn("Action", substring = false)
         key(Key.Menu); moveTo("Rename"); key(Key.DirectionCenter)
         if (!focused().contains("[field]") && !focused().contains("Name")) moveTo("Name")
-        key(Key.DirectionCenter); typeAndDone(" X")
+        typeAndDone(" X")
         moveTo("Save", Key.DirectionDown, 4) || moveTo("Save", Key.DirectionRight, 3); key(Key.DirectionCenter)
         record("Movies › category › Rename", "Action X")
         startOn("Action X", substring = false)
