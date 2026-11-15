@@ -479,6 +479,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             DefaultMediaSourceFactory(app).setDataSourceFactory(
                 DefaultHttpDataSource.Factory().setUserAgent(USER_AGENT).setAllowCrossProtocolRedirects(true)
                     .setConnectTimeoutMs(15000).setReadTimeoutMs(20000)
+                    // When data last arrived, for reconnecting a stream that stopped (PlaybackMonitor).
+                    .setTransferListener(PlaybackMonitor.transfer)
             )
         )
         .build()
@@ -844,6 +846,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             if (n > 0) regroupLater(0) // English copies first now that languages are known
         }
         player.addAnalyticsListener(playback)
+        // Nov 15: the stream is reopened when the picture sticks or the data stops (PlaybackMonitor.checkReconnect).
+        playback.onReconnect = { live -> reconnectStream(live) }
         viewModelScope.launch {
             var tick = 0
             while (true) {
@@ -3549,7 +3553,21 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun currentCaptions(): com.avidviewer.tv.data.AvTrack? =
         if (avFor(avKey()).captions != true) null else com.avidviewer.tv.data.Av.pick(captionTracks, avFor(avKey()).captionTrack) ?: captionTracks.firstOrNull()
 
+    /**
+     * Reopens the stream: a live channel at the live point, a movie or episode where it was. The picture is back
+     * in a second or two, instead of staying frozen.
+     */
+    private fun reconnectStream(live: Boolean) {
+        val pos = player.currentPosition
+        player.stop()
+        player.prepare()
+        if (live) player.seekToDefaultPosition() else player.seekTo(pos)
+        player.playWhenReady = true
+        showNotice("Reconnecting…", 2000)
+    }
+
     fun stop() {
+        playback.finished()
         if (vodPlaying != null) saveResumePoint()
         recordWatch()
         player.stop()

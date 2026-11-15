@@ -87,4 +87,35 @@ class PlaybackLogTest {
         assertTrue(log.label("p1:vod9", live = false).startsWith("Title "))
         assertFalse(log.text().contains("ESPN"))
     }
+
+    /** Nov 15: when the app reconnects by itself. */
+    @Test
+    fun reconnectRules() {
+        fun r(now: Long, pic: Long = 0, bytes: Long = now, buf: Long = 20_000, start: Long = 0, rec: Long = 0, ready: Boolean = true) =
+            com.avidviewer.tv.ui.PlaybackMonitor.reconnectReason(now, start, rec, pic, bytes, buf, ready)
+        assertEquals(null, r(60_000))
+        // The picture still for 5 s (sound going on): reconnect; 4 s: not yet.
+        assertTrue(r(60_000, pic = 55_000)!!.startsWith("the picture stood still for 5 s"))
+        assertEquals(null, r(60_000, pic = 56_000))
+        // No data for 4 s with under 8 s buffered: reconnect, before the screen freezes.
+        assertTrue(r(60_000, bytes = 56_000, buf = 6_000)!!.startsWith("no data for 4 s"))
+        // A lean but flowing channel (2 s buffered, data arriving) is left alone.
+        assertEquals(null, r(60_000, bytes = 59_500, buf = 2_000))
+        // Plenty buffered: a pause in the data isn't worth a reconnect yet.
+        assertEquals(null, r(60_000, bytes = 50_000, buf = 15_000))
+        // Not in the first 10 s of a channel, nor within 10 s of a reconnect, nor before it ever played.
+        assertEquals(null, r(8_000, pic = 1_000))
+        assertEquals(null, r(60_000, pic = 50_000, rec = 55_000))
+        assertEquals(null, r(60_000, bytes = 50_000, buf = 1_000, ready = false))
+    }
+
+    @Test
+    fun reconnectsAreCountedInTheSummary() {
+        val log = PlaybackLog(File(dir, "recover.txt"))
+        log.add(PlaybackLog.RECOVER, "Live channel 4F2A", "Reconnected: the picture stood still for 5 s.")
+        log.add(PlaybackLog.RECOVER, "Live channel 4F2A", "Playing again 2 s after reconnecting (the picture stood still for 5 s).")
+        log.add(PlaybackLog.BUFFER, "Live channel 4F2A", "Buffer while playing (12 min): typical 4 s, lowest 1 s, under 6 s for 70% of the time.")
+        assertTrue(log.summary(), log.summary().contains("1 reconnect"))
+        assertTrue(log.unsent().any { it.kind == PlaybackLog.RECOVER })
+    }
 }
