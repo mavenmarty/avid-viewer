@@ -5,8 +5,20 @@ import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.material3.darkColorScheme
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.avidviewer.tv.ui.AppRoot
 import com.avidviewer.tv.ui.AppViewModel
 import com.avidviewer.tv.ui.C
@@ -55,9 +67,10 @@ class MainActivity : ComponentActivity() {
         com.avidviewer.tv.data.CrashLog.install(this, runCatching { packageManager.getPackageInfo(packageName, 0).versionName }.getOrNull() ?: "")
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         coil.Coil.setImageLoader(com.avidviewer.tv.ui.Images.imageLoader(applicationContext))
+        val genuine = com.avidviewer.tv.data.Integrity.isGenuine(this)
         setContent {
             MaterialTheme(colorScheme = darkColorScheme(primary = C.Accent, background = C.Bg, surface = C.Surface)) {
-                AppRoot(vm)
+                if (genuine) AppRoot(vm) else TamperBlock()
             }
         }
     }
@@ -96,5 +109,22 @@ class MainActivity : ComponentActivity() {
     override fun onDestroy() {
         if (isFinishing) vm.onAppExit()
         super.onDestroy()
+    }
+}
+
+/** Shown in place of the app when it has been re-signed with a key that isn't Avid Viewer's (see Integrity). */
+@Composable
+private fun TamperBlock() {
+    Box(Modifier.fillMaxSize().padding(48.dp), contentAlignment = Alignment.Center) {
+        Column(Modifier.width(560.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            Text("This copy of Avid Viewer isn’t genuine", fontSize = 24.sp, textAlign = TextAlign.Center)
+            Text(
+                "It was signed by someone other than Avid Viewer, so it won’t run. " +
+                    "Install the official app from the Avid Viewer GitHub Releases page.",
+                fontSize = 16.sp,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(top = 16.dp)
+            )
+        }
     }
 }

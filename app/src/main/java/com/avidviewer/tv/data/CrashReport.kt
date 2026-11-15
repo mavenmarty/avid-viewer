@@ -63,6 +63,21 @@ object CrashReport {
     fun sendLog(appVersion: String, summary: String, log: String, relay: String = Links.CRASH_RELAY): Boolean =
         post(logPayload(appVersion, summary, log), relay)
 
+    /**
+     * A security alert (from freeRASP, see SecurityMonitor): "kind" = "security". The relay titles it "security alert"
+     * once redeployed; an older relay emails it as a crash report.
+     */
+    fun securityPayload(appVersion: String, summary: String, findings: String): JSONObject = JSONObject()
+        .put("app", "avid-viewer")
+        .put("kind", "security")
+        .put("version", appVersion)
+        .put("device", BugReport.device())
+        .put("summary", summary.take(300))
+        .put("crash", findings.take(16_000))
+
+    fun sendSecurity(appVersion: String, summary: String, findings: String, relay: String = Links.CRASH_RELAY): Boolean =
+        post(securityPayload(appVersion, summary, findings), relay)
+
     private fun post(json: JSONObject, relay: String): Boolean {
         if (relay.isBlank()) return false
         val body = json.toString().toRequestBody("application/json; charset=utf-8".toMediaType())
