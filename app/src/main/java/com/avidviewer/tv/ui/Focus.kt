@@ -155,7 +155,8 @@ object FocusSpots {
             // Something already has the highlight. Android's own choice when a dialog closes onto nothing is the
             // first item in the window, at the top (the main menu, ‹ Menu): that is replaced. Anything else was
             // put there on purpose (the next channel, the button that opened a form) and stays.
-            if (now == null) { if (candidates.none { sameColumn(it.second, b) }) return false }
+            // Something that isn't one of these items has it (a guide row, a text field): it was put there on purpose.
+            if (now == null) return false
             else {
                 val windowHeight = root.height.toFloat().takeIf { it > 0f } ?: return false
                 val atTop = now.top < windowHeight * 0.25f

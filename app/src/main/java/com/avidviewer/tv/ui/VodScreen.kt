@@ -212,7 +212,17 @@ fun VodScreen(vm: AppViewModel, kind: String) {
                             // Left from the first column: the current category, not the one level with this poster.
                             .then(if ((layout == "showcase" && i == 0) || (layout != "showcase" && i % cols == 0)) Modifier.onPreviewKeyEvent { e ->
                                 if (e.type == androidx.compose.ui.input.key.KeyEventType.KeyDown && e.key == androidx.compose.ui.input.key.Key.DirectionLeft) { vm.vodCatFocus++; true } else false
-                            } else Modifier)) { vm.nav.focused(path, v.key, i); hero = v }
+                            } else Modifier),
+                            onMenu = {
+                                vm.toggleMyList(v)
+                                // In My List the poster goes: the one that takes its place gets the highlight (BUG-039).
+                                if (current == "My List") {
+                                    val next = items.getOrNull(i + 1) ?: items.getOrNull(i - 1)
+                                    if (next != null) { vm.nav.focused(path, next.key, if (items.getOrNull(i + 1) != null) i else i - 1); vm.vodFocusBack++ }
+                                    else vm.vodCatFocus++
+                                }
+                            },
+                        ) { vm.nav.focused(path, v.key, i); hero = v }
                     }
                 }
                 if (layout == "showcase") {
@@ -285,7 +295,7 @@ private fun VodHero(vm: AppViewModel, v: VodItem?, full: Boolean, modifier: Modi
  * artwork (most posters already carry their title). The highlighted poster grows a little and gets a warm-grey ring.
  */
 @Composable
-private fun Poster(vm: AppViewModel, v: VodItem, modifier: Modifier = Modifier, onFocus: () -> Unit = {}) {
+private fun Poster(vm: AppViewModel, v: VodItem, modifier: Modifier = Modifier, onMenu: () -> Unit = { vm.toggleMyList(v) }, onFocus: () -> Unit = {}) {
     var focused by remember { mutableStateOf(false) }
     val meta = listOf(v.year, v.rating.takeIf { it.isNotBlank() && it != "0" }?.let { "★ $it" } ?: "").filter { it.isNotBlank() }.joinToString(" · ")
     Focusable(
@@ -300,7 +310,7 @@ private fun Poster(vm: AppViewModel, v: VodItem, modifier: Modifier = Modifier, 
         color = badgeColor(v.name),
         focusedColor = badgeColor(v.name),
         ringWidth = 3.dp,
-        onMenu = { vm.toggleMyList(v) },
+        onMenu = onMenu,
         onClick = { vm.openVodDetail(v) },
     ) {
         Box(Modifier.fillMaxSize()) {
