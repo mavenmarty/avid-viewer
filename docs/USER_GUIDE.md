@@ -2,7 +2,7 @@
 
 <!-- The version below and the Release notes section are updated automatically after each published build
      (.github/workflows/user-guide.yml). Feature descriptions are written by hand. -->
-This guide covers **Avid Viewer 1.8.0**, the current public release. Avid Viewer is an IPTV player for Android TV and Fire TV. You bring your own provider (an Xtream Codes login or an M3U link); the app doesn't include any channels.
+This guide covers **Avid Viewer 1.9.0**, the current public release. Avid Viewer is an IPTV player for Android TV and Fire TV. You bring your own provider (an Xtream Codes login or an M3U link); the app doesn't include any channels.
 
 **Contents:** [Getting started](#1-getting-started) · [Main menu](#2-main-menu) · [TV Guide](#3-tv-guide) · [Full-screen playback](#4-full-screen-playback) · [Search](#5-search) · [Discover](#6-discover) · [Sports](#7-sports) · [Movies and Series](#8-movies-and-series) · [Settings](#9-settings) ([Profiles](#profiles)) · [Privacy](#10-privacy) · [Troubleshooting](#11-troubleshooting) · [Control4](#12-control4) · [Supplemental services](#13-supplemental-services) · [Release notes](#release-notes)
 
@@ -86,14 +86,14 @@ The TV Guide is the home screen for live TV. Next to the main menu it has:
 - **Category list**: the playlist's categories, with **‹ Menu**, ★ Favorites, your lists, **＋ New list** and **🔍 Search** at the top.
 - **The guide**: the preview window and details panel at the top, the channel grid below.
 
-**The guide fills the screen.** Once you've chosen a category and the highlight is in the guide (channels, programs or the preview), the main menu and the category list step aside and the guide takes the full width. **Left** from the channel names, or **Back**, brings them back, with your current category highlighted. The row above the times always names the category.
+**The guide fills the screen.** As soon as you've chosen a category and the highlight is in the guide (channels, programs or the preview), the main menu and the category list step aside: the guide shows **2 hours across the full width** (2.5 hours while the category list is showing). **Left** from the channel names, or **Back**, brings them back, with your current category highlighted. **Right** from the category list goes to the first channel on screen (or opens another category, like OK). The row above the times always names the category.
 
 **Back and Left step back one layer at a time:** from a channel to your current category in the category list, then to the playlist list (on that same category), then to the main menu. With only one playlist with live TV, the playlist list is skipped: from the categories, Back goes straight to the main menu. Holding Left doesn't skip layers, and inside the grid Left still moves through programs and time.
 
 ### The guide grid
 
 - The top shows a **preview window** and a **details panel** for the highlighted channel or program: channel number and name (plus the playlist name when you have more than one), the program title with a **New** tag for new episodes, the times with **N min left** and a progress bar (or **starts in …** for a later program), up to two lines about the show, and what's **Next**.
-- Below it is a **timeline grid**: two-line channel names on the left, programs across a 2.5-hour window, with a line marking "now". Above the times, the row names the category, the day and the time zone ("KIDS · Today · CST"). The columns sit on your clock's :00 and :30.
+- Below it is a **timeline grid**: two-line channel names on the left, programs across 2 hours (full width) or 2.5 hours (with the category list), with a line marking "now". Above the times, the row names the category, the day and the time zone ("KIDS · Today · CST"). The columns sit on your clock's :00 and :30.
 - **Left/Right** move between programs. Going past the last program in view scrolls the guide forward by half hours, **as far as the guide has listings, up to 7 days**. Left on the first program scrolls back, **up to 2 hours before now**; one more Left moves to the channel name.
 - **Programs that have aired** (in those 2 hours) are dimmed and marked **already aired**. There's no catch-up: OK on one plays the channel live.
 - **Day strip:** when the guide reaches past today, a row of buttons sits above the times: **Now**, **Tomorrow**, then the next days (**Sat**, **Sun**…). **OK** on a day moves the guide to that day at the same time as now; **Now** comes back. The day on screen is filled in.
@@ -711,7 +711,23 @@ Every public release since 1.0.35, newest first. From 1.1.0, versions are number
 
 <!-- new-releases: entries for new builds are added automatically below this line -->
 
-### 1.8.0 — November 15, 2026, 8:31 AM CT (current)
+### 1.9.0 — November 15, 2026, 9:19 AM CT (current)
+
+**Release notes**
+
+- **2 hours across the whole screen.** In the full-width guide the programs now stretch to fill the screen. With the category list showing, the guide shows 2.5 hours, also filling the width.
+- **A bigger preview.** The preview window is half again as big; the guide shows a few fewer rows and the details panel is narrower.
+- **Right from the category list goes to a channel**: the first channel on screen, where you'd scrolled to, not the day strip. Right on another category opens it, like OK.
+- **Full width as soon as you choose a category.** Before, the category list could stay on screen until you came back from full-screen video.
+
+**Change log**
+
+- Guide: 2 hours (full width) or 2.5 hours (with the category list), scaled to the screen's width; preview 347 × 195 (was 231 × 130)
+- Right in the category list: the first channel fully on screen, scroll kept; another category opens
+- The full layout starts as soon as the guide takes the highlight
+- Test: Right from the category list
+
+### 1.8.0 — November 15, 2026, 8:31 AM CT
 
 **Release notes**
 
