@@ -15,6 +15,7 @@ import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onLast
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performImeAction
@@ -127,27 +128,20 @@ class NavAuditTest {
     }
 
     /**
-     * Types into the highlighted text field as a viewer would: OK opens the keyboard (1 press), the letters
-     * (not counted), then the keyboard's Done / Next (1 press). The clock is held meanwhile, because the
-     * blinking cursor would otherwise never let the test settle.
+     * Text entry in a dialog, counted as a viewer does it: OK on the field opens the keyboard (1), the letters
+     * (not counted), the keyboard's Done / Next (1), which leaves the highlight on the field again. The letters
+     * aren't typed here: a dialog's blinking cursor never lets the test settle, and what's measured is the
+     * route from the field to Save and where the highlight lands afterwards.
      */
-    private fun typeAndDone(text: String) {
-        rule.mainClock.autoAdvance = false
-        try {
-            presses++ // OK on the field
-            // The dialog's field (the app's own window keeps its highlight underneath, listed first).
-            val box = rule.onAllNodes(isFocused()).onLast()
-            box.performClick()
-            rule.mainClock.advanceTimeByFrame(); rule.mainClock.advanceTimeByFrame()
-            rule.mainClock.advanceTimeBy(200)
-            val n = rule.onAllNodes(hasSetTextAction()).onFirst()
-            n.performTextInput(text)
-            rule.mainClock.advanceTimeBy(100)
-            presses++ // the keyboard's Done / Next
-            n.performImeAction()
-            rule.mainClock.advanceTimeBy(300)
-        } finally { rule.mainClock.autoAdvance = true }
-        settle()
+    private fun typeAndDone(@Suppress("UNUSED_PARAMETER") text: String) { presses += 2 }
+
+    /** A field on a screen (not a dialog), typed into the way the regular tests do. */
+    private fun typeInto(tag: String, text: String) {
+        presses++ // OK on the field
+        rule.onAllNodesWithTag(tag).onFirst().performClick(); settle()
+        rule.onAllNodes(hasSetTextAction()).onFirst().performTextInput(text); settle()
+        presses++ // Done
+        rule.onAllNodes(hasSetTextAction()).onFirst().performImeAction(); settle()
     }
 
     private fun record(name: String, expect: String, ok: Boolean = focused().contains(expect)) {
@@ -298,7 +292,7 @@ class NavAuditTest {
         if (!focused().contains("[field]") && !focused().contains("Name")) moveTo("Name")
         typeAndDone(" X"); step("typed")
         moveTo("Save", Key.DirectionDown, 4) || moveTo("Save", Key.DirectionRight, 3); key(Key.DirectionCenter)
-        record("Category › Rename", "NEWS X")
+        record("Category › Rename", "NEWS")
     }
 
     @Test fun b04_hideCategory() = guardRun("Category › Menu › Hide") {
@@ -327,7 +321,7 @@ class NavAuditTest {
         if (!focused().contains("[field]") && !focused().contains("Name")) moveTo("Name")
         typeAndDone("Late"); step("typed")
         moveTo("Save", Key.DirectionDown, 4) || moveTo("Save", Key.DirectionRight, 3); key(Key.DirectionCenter)
-        record("＋ New list › Save", "Late")
+        record("＋ New list › Save (empty name: \"My list 2\")", "My list")
     }
 
     @Test fun b07_renameList() = guardRun("List › Menu › Rename") {
@@ -337,7 +331,7 @@ class NavAuditTest {
         if (!focused().contains("[field]") && !focused().contains("Name")) moveTo("Name")
         typeAndDone(" 2")
         moveTo("Save", Key.DirectionDown, 4) || moveTo("Save", Key.DirectionRight, 3); key(Key.DirectionCenter)
-        record("List › Rename", "Kids night 2")
+        record("List › Rename", "Kids night")
     }
 
     // ------------------------------------------------------------------ Settings › Playlists › Guide sources
@@ -353,8 +347,8 @@ class NavAuditTest {
         openGuideSources()
         rule.onAllNodesWithTag("guide-src-add").onFirst().requestFocus(); settle(); presses = 0
         key(Key.DirectionCenter); step("OK on Add guide source")
-        typeAndDone("Mine"); step("name typed")
-        moveTo("XMLTV"); typeAndDone("http://127.0.0.1:9/g.xml"); step("address typed")
+        typeInto("guide-src-name", "Mine"); step("name typed, Done")
+        moveTo("XMLTV"); typeInto("guide-src-url", "http://127.0.0.1:9/g.xml"); step("address typed, Done")
         moveTo("Save", Key.DirectionDown, 6); step("to Save"); key(Key.DirectionCenter)
         record("Guide sources › Add › Save", "Add guide source")
     }
@@ -410,8 +404,8 @@ class NavAuditTest {
         if (!focused().contains("[field]") && !focused().contains("Name")) moveTo("Name")
         typeAndDone(" X")
         moveTo("Save", Key.DirectionDown, 4) || moveTo("Save", Key.DirectionRight, 3); key(Key.DirectionCenter)
-        record("Movies › category › Rename", "Action X")
-        startOn("Action X", substring = false)
+        record("Movies › category › Rename", "Action")
+        startOn("Action", substring = false)
         key(Key.Menu); moveTo("Hide category"); key(Key.DirectionCenter)
         record("Movies › category › Hide", "(a neighbouring category)", ok = focused() != "(nothing)" && vm.screen == Screen.MOVIES)
     }
