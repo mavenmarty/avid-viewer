@@ -101,7 +101,7 @@ object FocusSpots {
             lostBounds = if (justBefore) previousBounds else currentBounds
             lostScreen = if (justBefore) previousScreen else currentScreen
             lostAt = android.os.SystemClock.uptimeMillis()
-            current = null
+            if (current?.get() === s) current = null
             log("lost ${lostBounds?.let { "${it.left.toInt()},${it.top.toInt()}" }} on $lostScreen")
             // Give whatever else is about to place the highlight a moment, then check (AppRoot's onLost).
             val at = lostAt
@@ -159,8 +159,9 @@ object FocusSpots {
             if (now == null) return false
             else {
                 val windowHeight = root.height.toFloat().takeIf { it > 0f } ?: return false
-                val atTop = now.top < windowHeight * 0.25f
-                if (!atTop) return false
+                // Android's choice sits near the top of the window, above and not to the right of the lost item.
+                val fallback = now.top < windowHeight * 0.25f && now.left <= b.left + 1f && now.top < b.top
+                if (!fallback) return false
                 if (candidates.none { sameColumn(it.second, b) && it.second != now }) return false
             }
         }
