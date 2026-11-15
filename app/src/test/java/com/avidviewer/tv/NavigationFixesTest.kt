@@ -20,7 +20,7 @@ import androidx.compose.ui.test.onLast
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performImeAction
 import androidx.compose.ui.test.performTextInput
-import androidx.compose.ui.test.performTextReplacement
+import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.requestFocus
 import androidx.test.core.app.ApplicationProvider
 import com.avidviewer.tv.ui.AppRoot
@@ -128,7 +128,10 @@ class NavigationFixesTest {
         // The field with the keyboard open (it has the highlight), else the dialog's field (listed last).
         val n = if (rule.onAllNodes(hasSetTextAction() and isFocused()).fetchSemanticsNodes().isNotEmpty())
             rule.onAllNodes(hasSetTextAction() and isFocused()).onFirst() else rule.onAllNodes(hasSetTextAction()).onLast()
-        if (text != null) { n.performTextReplacement(text); settle() }
+        if (text != null) {
+            n.performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.SetText) { it(androidx.compose.ui.text.AnnotatedString(text)) }
+            settle()
+        }
         presses++
         n.performImeAction()
         settle()

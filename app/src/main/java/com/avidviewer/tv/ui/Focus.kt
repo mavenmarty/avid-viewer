@@ -1,7 +1,5 @@
 package com.avidviewer.tv.ui
 
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.layout.boundsInWindow
 
@@ -62,14 +60,15 @@ object FocusSpots {
     var lostBounds: androidx.compose.ui.geometry.Rect? = null; private set
     var lostScreen: Screen? = null; private set
     var lostAt = 0L; private set
-    /** Counts disappearances of the highlighted item (AppRoot watches it). */
-    var lostTick by androidx.compose.runtime.mutableIntStateOf(0)
-        private set
 
     /** The screen on show (set by AppRoot): a highlight lost on one screen isn't given back on another. */
     @Volatile var screenNow: Screen? = null
     /** The app's own window (set by AppRoot); highlights in dialogs, which have their own windows, aren't tracked. */
     var mainRoot: java.lang.ref.WeakReference<android.view.View>? = null
+
+    private val handler = android.os.Handler(android.os.Looper.getMainLooper())
+    /** What AppRoot does once a highlighted item has gone (given the time it went). */
+    var onLost: (Long) -> Unit = {}
 
     /** Diagnostics (AppViewModel.trail). */
     var log: (String) -> Unit = {}
@@ -103,8 +102,10 @@ object FocusSpots {
             lostScreen = if (justBefore) previousScreen else currentScreen
             lostAt = android.os.SystemClock.uptimeMillis()
             current = null
-            lostTick++
             log("lost ${lostBounds?.let { "${it.left.toInt()},${it.top.toInt()}" }} on $lostScreen")
+            // Give whatever else is about to place the highlight a moment, then check (AppRoot's onLost).
+            val at = lostAt
+            handler.postDelayed({ onLost(at) }, 260)
         }
     }
 
