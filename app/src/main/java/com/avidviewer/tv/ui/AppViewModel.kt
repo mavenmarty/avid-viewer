@@ -444,6 +444,85 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     var updatePromptAllowed by mutableStateOf(false); private set
     private val updateReminder = com.avidviewer.tv.data.UpdateReminder(app)
     private var lastUpdateCheck = 0L
+    private val startedAt = System.currentTimeMillis()
+
+    // ---------------- avidviewer.app account (1.11.0; data/Account.kt) ----------------
+    val account = com.avidviewer.tv.data.AccountStore(app)
+    /** Where the account API lives; tests point it at a fake server. */
+    internal var accountApi = com.avidviewer.tv.data.AccountApi.BASE
+    var accountEmail by mutableStateOf(account.email.takeIf { account.linked }); private set
+    var accountTvName by mutableStateOf(account.name); private set
+    /** The code on screen while linking: the 8 characters, the QR code's address, when it runs out. */
+    data class LinkCode(val code: String, val qrUrl: String, val expiresAt: Long)
+    var linkCode by mutableStateOf<LinkCode?>(null); private set
+    var accountStatus by mutableStateOf<String?>(null); private set
+    private var linkJob: Job? = null
+    private var lastAccountCheck = 0L
+
+    private fun accountInfo() = com.avidviewer.tv.data.AccountApi.info(getApplication(), installed.second.ifBlank { com.avidviewer.tv.BuildConfig.VERSION_NAME })
+
+    private fun linkedNow(l: com.avidviewer.tv.data.AccountApi.Linked) {
+        account.save(l)
+        accountEmail = l.email; accountTvName = l.name; linkCode = null
+        accountStatus = "Linked to ${l.email} as \"${l.name}\"."
+        trail("account linked")
+    }
+
+    /** Settings › Account › Link this TV: shows a code + QR code and waits (polling) for approval on the phone. */
+    fun startLinking() {
+        linkJob?.cancel()
+        accountStatus = "Getting a code…"
+        linkJob = viewModelScope.launch {
+            val start = try {
+                withContext(Dispatchers.IO) { com.avidviewer.tv.data.AccountApi.start(accountInfo(), accountApi) }
+            } catch (e: Exception) { accountStatus = e.message; return@launch }
+            linkCode = LinkCode(start.userCode, start.qrUrl, System.currentTimeMillis() + start.expiresIn * 1000L)
+            accountStatus = null
+            while (true) {
+                delay(start.interval * 1000L)
+                val l = try {
+                    withContext(Dispatchers.IO) { com.avidviewer.tv.data.AccountApi.poll(start.deviceCode, accountApi) }
+                } catch (e: com.avidviewer.tv.data.AccountApi.Problem) {
+                    if (System.currentTimeMillis() > (linkCode?.expiresAt ?: 0L)) { linkCode = null; accountStatus = e.message; return@launch }
+                    continue // a network blip: keep trying until the code runs out
+                }
+                if (l != null) { linkedNow(l); return@launch }
+            }
+        }
+    }
+
+    fun cancelLinking() { linkJob?.cancel(); linkJob = null; linkCode = null; accountStatus = null }
+
+    /** Settings › Account › Sign out of this TV: forgets the link here and tells the account (best effort). */
+    fun signOutOfAccount() {
+        val token = account.token
+        account.clear(); accountEmail = null; accountTvName = ""; linkCode = null
+        accountStatus = "This TV is no longer linked to an account. Its playlists and settings stay."
+        if (token != null) viewModelScope.launch(Dispatchers.IO) { com.avidviewer.tv.data.AccountApi.signOut(token, accountApi) }
+    }
+
+    /** Is this TV still linked? A TV removed on the account page unlinks here; network trouble changes nothing. */
+    fun checkAccount() {
+        val token = account.token ?: return
+        lastAccountCheck = System.currentTimeMillis()
+        viewModelScope.launch {
+            val me = runCatching { withContext(Dispatchers.IO) { com.avidviewer.tv.data.AccountApi.me(token, accountInfo().appVersion, accountApi) } }
+            me.onSuccess { m ->
+                if (m == null) {
+                    account.clear(); accountEmail = null; accountTvName = ""
+                    accountStatus = "This TV was removed from your account on avidviewer.app. Link it again any time."
+                } else { account.update(m); accountEmail = m.email; accountTvName = m.name }
+            }
+        }
+    }
+
+    /** A setup code made while signed in also links this TV (when it isn't linked yet). */
+    private suspend fun claimSetupLink(token: String) {
+        if (account.linked) return
+        runCatching { withContext(Dispatchers.IO) { com.avidviewer.tv.data.AccountApi.claim(token, accountInfo(), accountApi) } }
+            .onSuccess { linkedNow(it) }
+            .onFailure { accountStatus = it.message }
+    }
     val installed: Pair<Long, String> = runCatching { Updater.installedVersion(app) }.getOrDefault(0L to "")
     /** The game highlighted on the Sports screen. */
     var selectedGame by mutableStateOf<String?>(null)
@@ -585,6 +664,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 setupStatus = e.message ?: "That didn't work. Try again."; setupBusy = false; return@launch
             }
             trail("setup code: ${setup.playlists.size} playlist(s)${if (setup.backup != null) ", backup" else ""}")
+            setup.link?.let { claimSetupLink(it) }
             if (setup.backup != null) {
                 setupBusy = false; setupCodeOpen = false
                 welcomeRestore()
@@ -969,6 +1049,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 // of new versions (checked every 6 hours when automatic checks are on).
                 if (update != null) onUpdateFound(now)
                 if (prefs.autoUpdateCheck && lastUpdateCheck > 0 && now - lastUpdateCheck > 6 * 60 * 60 * 1000L) checkForUpdate(quiet = true)
+                // Linked to an account: check in a minute after start, then every 6 hours (removed TVs unlink).
+                if (account.linked && now - lastAccountCheck > (if (lastAccountCheck == 0L) 60_000L else 6 * 60 * 60 * 1000L) && now - startedAt > 60_000L) checkAccount()
                 delay(15_000)
             }
         }

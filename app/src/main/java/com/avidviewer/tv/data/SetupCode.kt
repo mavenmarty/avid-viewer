@@ -23,7 +23,8 @@ import javax.crypto.spec.SecretKeySpec
  * - key: PBKDF2-HMAC-SHA256(code, "avidviewer-setup-key:v1", 100,000 rounds, 32 bytes)
  * - data: Base64 of 12-byte IV + AES-256-GCM ciphertext (128-bit tag) of the JSON payload
  * - payload: {"v":1,"playlists":[{"type":"xtream"|"m3u","name","server","username","password","m3u","epg"}],"backup":"…"}
- *   ("backup" is an .avbak file's text, still locked with its own PIN).
+ *   ("backup" is an .avbak file's text, still locked with its own PIN; "link", when the person was signed in, a
+ *   one-time token for [AccountApi.claim]).
  *
  * Codes last 30 minutes. Later (accounts, Phase 2) the payload can also carry an account link and a license.
  */
@@ -38,7 +39,8 @@ object SetupCode {
         val type: String, val name: String, val server: String = "", val username: String = "",
         val password: String = "", val m3u: String = "", val epg: String = "",
     )
-    data class Setup(val playlists: List<Item>, val backup: String?)
+    /** [link]: a one-time token from a setup code made while signed in; the TV trades it for an account link. */
+    data class Setup(val playlists: List<Item>, val backup: String?, val link: String? = null)
 
     class Problem(message: String) : Exception(message)
 
@@ -96,8 +98,9 @@ object SetupCode {
             )
         }
         val backup = o.optString("backup").takeIf { it.isNotBlank() }
+        val link = o.optString("link").takeIf { it.isNotBlank() }
         if (items.isEmpty() && backup == null) throw Problem("This code has nothing to set up. Make a new one on avidviewer.app/setup.")
-        return Setup(items, backup)
+        return Setup(items, backup, link)
     }
 
     /** Fetches and opens a code's setup. Network errors and unknown codes come back as a [Problem] with a plain message. */

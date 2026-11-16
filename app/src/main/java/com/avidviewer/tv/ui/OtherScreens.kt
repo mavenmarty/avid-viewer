@@ -704,6 +704,7 @@ private val SECTIONS = listOf(
     SettingsSection("privacy", "Privacy & analytics", NavIcons.Privacy),
     SettingsSection("storage", "Storage", NavIcons.Storage),
     SettingsSection("about", "Updates & about", NavIcons.Settings),
+    SettingsSection("account", "Account", NavIcons.Profiles),
 )
 
 /**
@@ -812,6 +813,7 @@ fun SettingsScreen(vm: AppViewModel) {
                             }
                         }
                         "privacy" -> privacySettings(vm) { settingsConfirm = it }
+                        "account" -> accountSettings(vm) { settingsConfirm = it }
                         "profiles" -> profilesSettings(vm) { settingsConfirm = it }
                         "storage" -> {
                             item {
@@ -912,6 +914,7 @@ private fun sectionSummary(vm: AppViewModel, id: String): String? = when (id) {
     "privacy" -> if (vm.prefs.historyPaused) "History paused" else "History on"
     "profiles" -> if (vm.profiles.multiple) "${vm.profiles.list.size} profiles · ${vm.profile.name}" else "Just you"
     "about" -> vm.update?.let { "Update ${it.versionName} available" } ?: "Version ${vm.installed.second}"
+    "account" -> vm.accountEmail ?: "Not linked"
     else -> null
 }
 
@@ -969,6 +972,44 @@ private fun androidx.compose.foundation.lazy.LazyListScope.displaySettings(vm: A
 }
 
 /** Watch history and a viewing summary, all computed and kept on this device. */
+/**
+ * Settings › Account (1.11.0): link this TV to an avidviewer.app account with a code shown here (and a QR code for
+ * avidviewer.app/link), or sign it out. Linking sends only the TV's name, model and app version.
+ */
+private fun androidx.compose.foundation.lazy.LazyListScope.accountSettings(vm: AppViewModel, ask: (Confirm) -> Unit) {
+    val email = vm.accountEmail
+    val code = vm.linkCode
+    when {
+        email != null -> item {
+            SettingBlock("Linked to $email", "This TV is \"${vm.accountTvName}\" on your account. Rename or remove it at avidviewer.app/account. Accounts add features such as picking up where you left off on every TV; your playlists stay on this TV.") {
+                TvButton("Sign out of this TV", modifier = Modifier.testTag("account-signout")) {
+                    ask(Confirm("Sign out of this TV?", "It will no longer be linked to $email. Playlists, favorites and settings on this TV stay as they are.", "Sign out") { vm.signOutOfAccount() })
+                }
+            }
+        }
+        code != null -> item {
+            Row(horizontalArrangement = Arrangement.spacedBy(24.dp), verticalAlignment = Alignment.CenterVertically) {
+                QrCode(code.qrUrl, Modifier.size(170.dp).testTag("account-qr"))
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Label("On your phone or computer, go to", size = 14.sp, color = C.Soft)
+                    Label("avidviewer.app/link", size = 22.sp, color = C.Text, weight = FontWeight.Bold)
+                    Label("and enter this code (or scan the QR code):", size = 14.sp, color = C.Soft)
+                    Label(com.avidviewer.tv.data.SetupCode.pretty(code.code), size = 40.sp, color = C.Accent, weight = FontWeight.Bold, modifier = Modifier.testTag("account-code"))
+                    val mins = ((code.expiresAt - vm.now) / 60_000L + 1).coerceAtLeast(1)
+                    Label("The code works for $mins more minute${if (mins == 1L) "" else "s"}. This screen updates by itself once you've approved it.", size = 13.sp, color = C.Muted, lines = 2)
+                    TvButton("Cancel") { vm.cancelLinking() }
+                }
+            }
+        }
+        else -> item {
+            SettingBlock("Link this TV to your account", "Sign in at avidviewer.app to see and manage your TVs in one place; accounts will add features such as picking up where you left off on every TV. Linking shares only this TV's name, model and app version, never your playlists or what you watch.") {
+                TvButton("Link this TV", primary = true, modifier = Modifier.testTag("account-link")) { vm.startLinking() }
+            }
+        }
+    }
+    vm.accountStatus?.let { st -> item { Label(st, size = 13.sp, color = C.Accent, lines = Int.MAX_VALUE, modifier = Modifier.testTag("account-status")) } }
+}
+
 private fun androidx.compose.foundation.lazy.LazyListScope.privacySettings(vm: AppViewModel, ask: (Confirm) -> Unit) {
     val p = vm.prefs
     item { Label("Everything here stays on this device in the app's private storage. Nothing is uploaded or backed up to the cloud.", size = 13.sp, color = C.Soft, lines = Int.MAX_VALUE) }
