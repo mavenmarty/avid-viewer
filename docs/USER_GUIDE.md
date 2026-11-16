@@ -4,7 +4,7 @@
      (.github/workflows/user-guide.yml). Feature descriptions are written by hand. -->
 This guide covers **Avid Viewer 1.10.1**, the current public release. Avid Viewer is an IPTV player for Android TV and Fire TV. You bring your own provider (an Xtream Codes login or an M3U link); the app doesn't include any channels.
 
-**Contents:** [Getting started](#1-getting-started) · [Main menu](#2-main-menu) · [TV Guide](#3-tv-guide) · [Full-screen playback](#4-full-screen-playback) · [Search](#5-search) · [Discover](#6-discover) · [Sports](#7-sports) · [Movies and Series](#8-movies-and-series) · [Settings](#9-settings) ([Profiles](#profiles)) · [Privacy](#10-privacy) · [Troubleshooting](#11-troubleshooting) · [Control4](#12-control4) · [Supplemental services](#13-supplemental-services) · [Release notes](#release-notes)
+**Contents:** [Getting started](#1-getting-started) · [Main menu](#2-main-menu) · [TV Guide](#3-tv-guide) · [Full-screen playback](#4-full-screen-playback) · [Search](#5-search) · [Discover](#6-discover) · [Sports](#7-sports) · [Movies and Series](#8-movies-and-series) · [Settings](#9-settings) ([Profiles](#profiles)) · [Privacy](#10-privacy) · [Troubleshooting](#11-troubleshooting) · [Control4](#12-control4) · [Supplemental services](#13-supplemental-services) · [Cable & satellite](#14-using-your-cable-or-satellite-subscription) · [Release notes](#release-notes)
 
 ## 1. Getting started
 
@@ -45,6 +45,8 @@ Once a playlist has been added, the app opens on the TV Guide instead.
 3. Choose which content to load (Live TV, Movies & series), then press **Add playlist**.
 
 Your password is stored encrypted on the device (Android Keystore) and is never shown again.
+
+Have cable or satellite TV (Xfinity, Spectrum, Cox, DIRECTV, DISH, Midco and others)? Those providers don't offer M3U links; see [Using your cable or satellite subscription](#14-using-your-cable-or-satellite-subscription).
 
 ### Using the remote
 
@@ -707,6 +709,62 @@ The Drive URL never changes, so Avid Viewer picks up updates on its normal refre
 - **Take back the log permission (optional).** From a computer, run `adb shell pm revoke com.homestead.launcher android.permission.READ_LOGS`. After that, Home briefly flashes Amazon's screen first.
 - **Undo anything.** Any debloated package can be switched back on from the Debloat page. Uninstalling Homestead brings back Amazon's home screen.
 - **Problems with Homestead** itself go to its GitHub page; bugs@avidviewer.app is for Avid Viewer.
+
+## 14. Using your cable or satellite subscription
+
+Cable and satellite companies such as Xfinity (Comcast), Spectrum, Cox, DIRECTV, DISH and Midco **don't give subscribers M3U links or Xtream logins**. Their live streams are locked inside their own apps and boxes. Services that sell an "Xfinity" or "Spectrum" M3U are not your TV provider; avoid them.
+
+You can still watch the channels you pay for in Avid Viewer by running software at home that signs in with your provider account and turns your channels into an M3U playlist and a TV guide. Avid Viewer then loads them like any other M3U playlist.
+
+### Option 1: Channels DVR with TV Everywhere (recommended)
+
+[Channels DVR](https://getchannels.com) is paid server software that runs on a computer, NAS or NVIDIA Shield in your home. Its **TV Everywhere** feature signs in with your TV provider account, the same login you use for network apps like FOX or HGTV, and adds the networks your package includes.
+
+1. Install **Channels DVR Server** and start a subscription, following the Channels setup guide.
+2. In the server's web page, add a **TV Everywhere** source and sign in with your provider account.
+3. In Avid Viewer, open **Settings › Playlists › Add playlist** and choose **M3U link**:
+   - **M3U playlist link:** `http://<server address>:8089/devices/ANY/channels.m3u?format=ts`
+   - **TV guide (XMLTV) link:** `http://<server address>:8089/devices/ANY/guide/xmltv`
+
+   Replace `<server address>` with the IP address of the computer running Channels DVR, for example `192.168.1.50`. You can also copy both links from **Settings › Sources** in the Channels DVR web page.
+4. Choose **Add playlist**. The channel numbers in the playlist match the guide, so listings appear without matching channels by hand.
+
+**Good to know:**
+- The channels you get depend on your provider, package and location, and on each network's TV Everywhere agreement. Channels DVR's [availability page](https://getchannels.com/docs/channels-dvr-server/tv-everywhere/availability/) shows them per provider. Some local channels may be missing or need their own sign-in.
+- These links only work on your home network, and the Channels DVR computer must be on.
+
+### Option 2: An HDHomeRun tuner and an antenna (free local channels)
+
+An HDHomeRun network tuner with a TV antenna picks up free over-the-air channels (ABC, CBS, FOX, NBC, PBS and more) and shares them on your home network.
+
+- **M3U playlist link:** `http://hdhomerun.local/lineup.m3u`, or use the tuner's IP address in place of `hdhomerun.local`.
+- **TV guide:** the tuner doesn't supply an XMLTV guide. Add one as a guide source (Settings › Playlists › ▤ Guide sources), or use Option 1: Channels DVR can include HDHomeRun channels and provides their guide.
+- HDHomeRun models that take a CableCARD can tune cable channels, but they're no longer made. Xfinity ends CableCARD support on November 30, 2026, and other providers are phasing it out. Copy-protected cable channels don't play on Fire TV and other Android devices.
+
+### Option 3: FastChannels (advanced)
+
+[FastChannels](https://github.com/kineticman/FastChannels) is free, self-hosted software (run in Docker) that combines free streaming channels and TV Everywhere networks into one M3U playlist and XMLTV guide. Use its feed links, such as `http://<server address>:5523/feeds/default/m3u` and `/feeds/default/epg.xml`, as the M3U and guide links. Its TV Everywhere sign-in is in beta and has only been verified with Xfinity, Cox and Sling TV.
+
+### By provider
+
+| Provider | M3U link from the provider | Channels DVR TV Everywhere |
+|---|---|---|
+| Xfinity (Comcast) | No | Yes, listed as "Xfinity" |
+| Spectrum (Charter) | No | Yes, listed as "Spectrum" |
+| Cox | No | Yes, listed as "Cox" |
+| DIRECTV / DIRECTV STREAM | No | Yes, listed under both names |
+| DISH | No | Yes, listed as "DISH" |
+| Midco | No | Yes, listed as "Midco" |
+| Verizon Fios, Optimum, Mediacom, WOW! | No | Yes, each listed by name |
+| Sling TV, Hulu Live, YouTube TV | No | Yes, each listed by name |
+
+"Listed" means you can choose that provider when you sign in. Which channels work still depends on your package and location; check the availability page before you subscribe.
+
+### Troubleshooting
+
+- **The playlist won't load:** make sure the Fire TV and the server are on the same home network, and that the address and port are right. Open the M3U link in a web browser on a computer at home; it should download a file.
+- **A channel shows "not available" or won't play:** the network may not offer TV Everywhere for your provider or package, or the channel uses copy protection.
+- **No guide listings:** check the TV guide link, then use **Download the guide now** in Settings › TV guide. For a single channel, press Menu on it and choose **Match guide…**.
 
 ## Release notes
 
