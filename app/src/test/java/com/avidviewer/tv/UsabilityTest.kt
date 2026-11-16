@@ -575,6 +575,8 @@ class UsabilityTest {
             rule.onNodeWithTag("backup-now").performScrollTo().performClick()
             settle()
             waitFor("PIN asked") { rule.onAllNodesWithText("Choose a backup PIN").fetchSemanticsNodes().isNotEmpty() }
+            rule.onAllNodesWithText("Cancel").onLast().performClick()
+            waitFor("PIN dialog closed") { rule.onAllNodesWithText("Choose a backup PIN").fetchSemanticsNodes().isEmpty() }
             rule.runOnIdle { vm.backUp(newPin = "2468") }
             waitFor("sent (${vm.backupStatus})") { site.backups["d1"] != null && !vm.backupBusy }
             assertEquals("2468", site.backups["d1"]!!.third)
@@ -860,15 +862,21 @@ class UsabilityTest {
     @Test
     fun everySettingsSectionIsReachableWithDownIncludingTheLast() {
         go(Screen.SETTINGS)
-        waitFor("Settings' first section highlighted (focus: ${focused()})") { focused().contains("Playlists") && vm.settingsSection == "playlists" }
+        waitFor("Settings opens on Playlists (focus: ${focused()})") { focused().contains("Playlists") && vm.settingsSection == "playlists" }
+        // 1.12.0: Account is the first section, just above Playlists.
+        press(listOf(Key.DirectionUp))
+        assertTrue("Up reaches Account (focus: ${focused()})", focused().startsWith("Account"))
+        press(listOf(Key.DirectionUp))
+        assertTrue("no wrap at the top (focus: ${focused()})", focused().startsWith("Account"))
         var tries = 0
-        // 1.11.0: Account is the last section (after Updates & about).
-        while (!focused().startsWith("Account") && tries < 16) { press(listOf(Key.DirectionDown)); tries++ }
-        assertTrue("Down reaches Account, on screen and highlighted (focus: ${focused()})", focused().startsWith("Account"))
+        while (!focused().startsWith("Updates & about") && tries < 16) { press(listOf(Key.DirectionDown)); tries++ }
+        assertTrue("Down reaches the last section, Updates & about (focus: ${focused()})", focused().startsWith("Updates & about"))
         assertEquals("moving the highlight doesn't open sections", "playlists", vm.settingsSection)
         // The section list doesn't wrap: Down at the end stays on the last section.
         press(listOf(Key.DirectionDown))
-        assertTrue("no wrap in the section list (focus: ${focused()})", focused().startsWith("Account"))
+        assertTrue("no wrap in the section list (focus: ${focused()})", focused().startsWith("Updates & about"))
+        tries = 0
+        while (!focused().startsWith("Account") && tries < 16) { press(listOf(Key.DirectionUp)); tries++ }
         press(listOf(Key.DirectionCenter))
         waitFor("OK opens it (section=${vm.settingsSection})") { vm.settingsSection == "account" && vm.settingsInContent }
     }

@@ -308,7 +308,7 @@ Sports lists real games from **ESPN's schedules** for today and the next 2 days,
 
 ![Settings: sections on the left, the open section on the right](images/settings-playback.jpg)
 
-Settings has sections on the left and the open section's options on the right. **Up/Down** move through the sections; the section list scrolls to keep the highlighted one in view. **OK** opens the highlighted section and moves into it, on its first option (**Right** also moves into the open section). Inside a section, Up and Down stop at the first and last option. **Left** at the left edge of a section, or **Back**, returns to that section in the list; **Back** again opens the main menu.
+Settings has sections on the left and the open section's options on the right. **Up/Down** move through the sections; the section list scrolls to keep the highlighted one in view. **OK** opens the highlighted section and moves into it, on its first option (**Right** also moves into the open section). Inside a section, Up and Down stop at the first and last option. **Left** at the left edge of a section, or **Back**, returns to that section in the list; **Back** again opens the main menu. From 1.12.0 **Account** is the first section, just above **Playlists** (Settings still opens on Playlists).
 
 ### Playlists
 
@@ -348,7 +348,7 @@ When you update from an earlier version, everything you had becomes the owner's 
 
 Each profile also has its own **theme** (colours) and its own Movies and Series **layout**. See [Display & time](#display--time).
 
-**Settings › Profiles** (second in the list of sections)
+**Settings › Profiles** (third in the list of sections)
 
 - **＋ Add profile**: a name and a colour.
 - **＋ Add Kids profile**: the same, for a child. If no grown-up has a PIN yet, the app asks you to set the owner's PIN first.
