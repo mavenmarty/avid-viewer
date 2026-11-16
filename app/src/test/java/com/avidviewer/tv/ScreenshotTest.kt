@@ -199,10 +199,13 @@ class ScreenshotTest {
             }
             waitFor { vm.channels.isNotEmpty() }
             rule.runOnIdle { vm.setTheme("roast") }
-            rule.runOnIdle { vm.showWelcome = true }
-            settle(600)
-            shot("g-welcome")
-            rule.runOnIdle { vm.showWelcome = false }
+            FakeAvidSite().use { site ->
+                rule.runOnIdle { vm.accountApi = site.base; vm.showWelcome = true }
+                waitFor { vm.linkCode != null }
+                settle(600)
+                shot("g-welcome")
+                rule.runOnIdle { vm.showWelcome = false }
+            }
             rule.runOnIdle { vm.chooseGroup(TestData.P1, "NEWS") }
             settle(800)
             shot("g-tv-guide")

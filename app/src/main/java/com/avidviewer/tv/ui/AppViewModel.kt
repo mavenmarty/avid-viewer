@@ -449,7 +449,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     // ---------------- avidviewer.app account (1.11.0; data/Account.kt) ----------------
     val account = com.avidviewer.tv.data.AccountStore(app)
     /** Where the account API lives; tests point it at a fake server. */
-    internal var accountApi = com.avidviewer.tv.data.AccountApi.BASE
+    // Tests never reach the real site: under Robolectric the default address goes nowhere (each test sets a fake).
+    internal var accountApi = if (android.os.Build.FINGERPRINT == "robolectric") "http://127.0.0.1:9" else com.avidviewer.tv.data.AccountApi.BASE
     var accountEmail by mutableStateOf(account.email.takeIf { account.linked }); private set
     var accountTvName by mutableStateOf(account.name); private set
     /** The code on screen while linking: the 8 characters, the QR code's address, when it runs out. */
@@ -467,6 +468,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         accountStatus = "Linked to ${l.email} as \"${l.name}\"."
         trail("account linked")
         if (welcomeAccountOpen) loadCloudBackups()
+        // Linked from the welcome screen's code: offer the account's backups straight away.
+        else if (showWelcome) { welcomeAccountOpen = true; backupStatus = null; loadCloudBackups() }
     }
 
     /** Settings › Account › Link this TV: shows a code + QR code and waits (polling) for approval on the phone. */
@@ -484,7 +487,12 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 val l = try {
                     withContext(Dispatchers.IO) { com.avidviewer.tv.data.AccountApi.poll(start.deviceCode, accountApi) }
                 } catch (e: com.avidviewer.tv.data.AccountApi.Problem) {
-                    if (System.currentTimeMillis() > (linkCode?.expiresAt ?: 0L)) { linkCode = null; accountStatus = e.message; return@launch }
+                    if (System.currentTimeMillis() > (linkCode?.expiresAt ?: 0L)) {
+                        linkCode = null
+                        // The welcome screen always shows a working code: an expired one is replaced.
+                        if (showWelcome) { startLinking(); return@launch }
+                        accountStatus = e.message; return@launch
+                    }
                     continue // a network blip: keep trying until the code runs out
                 }
                 if (l != null) { linkedNow(l); return@launch }
@@ -660,7 +668,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
      */
     fun redeemSetupCode(input: String) {
         val code = com.avidviewer.tv.data.SetupCode.normalize(input)
-        if (code == null) { setupStatus = "A setup code has 8 letters and numbers, like K7M2-QX9P."; return }
+        if (code == null) { setupStatus = "A setup code has 8 letters and numbers."; return }
         if (setupBusy) return
         setupBusy = true
         setupStatus = "Getting your setup from avidviewer.app…"
