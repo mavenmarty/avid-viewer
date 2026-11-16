@@ -1670,4 +1670,56 @@ class UsabilityTest {
             assertTrue("the server only ever saw fingerprints: $asked", asked.none { it.contains("K7M2", ignoreCase = true) })
         } finally { server.close() }
     }
+
+    /** 1.11.0: Settings › Account › Link this TV shows a code + QR code, links once approved, and signs out. */
+    @Test
+    fun linkThisTvToAnAccountAndSignOut() {
+        FakeAvidSite().use { site ->
+            rule.runOnIdle {
+                vm.accountApi = site.base
+                vm.screen = Screen.SETTINGS; vm.settingsSection = "account"; vm.navMode = NavMode.COLLAPSED
+            }
+            waitFor("Link this TV") { rule.onAllNodesWithTag("account-link").fetchSemanticsNodes().isNotEmpty() }
+            rule.onNodeWithTag("account-link").performClick()
+            waitFor("code on screen") { rule.onAllNodesWithText("K7M2-QX9P").fetchSemanticsNodes().isNotEmpty() }
+            assertTrue(rule.onAllNodesWithTag("account-qr").fetchSemanticsNodes().isNotEmpty())
+            val started = site.calls.first { it.startsWith("POST /api/tv/link/start") }
+            assertTrue("sends only name, model and version: $started", started.contains("\"appVersion\"") && !started.contains("password"))
+            // Still waiting until the person approves it on their phone.
+            settle(1500); assertEquals(null, vm.accountEmail)
+            site.approved = true
+            waitFor("linked (status: ${vm.accountStatus})") { vm.accountEmail == "viewer@example.com" }
+            waitFor("Sign out shown") { rule.onAllNodesWithTag("account-signout").fetchSemanticsNodes().isNotEmpty() }
+            assertTrue(vm.account.linked)
+            // A TV removed on the account page unlinks itself the next time it checks in.
+            site.removed = true
+            rule.runOnIdle { vm.checkAccount() }
+            waitFor("unlinked after removal") { vm.accountEmail == null && !vm.account.linked }
+            // Link again, then Sign out of this TV.
+            site.removed = false
+            rule.onNodeWithTag("account-link").performClick()
+            waitFor("linked again") { vm.accountEmail != null }
+            rule.onNodeWithTag("account-signout").performClick()
+            waitFor("confirm") { rule.onAllNodesWithText("Sign out").fetchSemanticsNodes().size >= 1 && rule.onAllNodesWithText("Sign out of this TV?").fetchSemanticsNodes().isNotEmpty() }
+            rule.onNodeWithText("Sign out").performClick()
+            waitFor("signed out") { vm.accountEmail == null && !vm.account.linked }
+            waitFor("server told") { site.calls.any { it.startsWith("POST /api/tv/signout") } }
+        }
+    }
+
+    /** 1.11.0: a setup code made while signed in on the website adds its playlist and links the TV too. */
+    @Test
+    fun setupCodeMadeWhileSignedInAlsoLinksTheTv() {
+        FakeAvidSite().use { site ->
+            // Sealed by the website's own public/setup.js (code HQ4T8NWZ, IV 12..1).
+            site.setups["a8b9d0def47bd06b1bfa8d8efdeb28879a62a4db9d2ee99bb77aa759528a8a22"] =
+                "DAsKCQgHBgUEAwIB1rgcCLjeVN2vtsrxbfmOwMUPYs+znTLGIIxjJApL4o5/HWlKrTxXbOrUCSzsyp8sacx5uw9MoUwaJsKKKBm911msT+kMWwfIcbOCZhrqfwkJpU61znlYaIcA4sMGaoUqYLWWu/3LZgPZWuSUkpl1+hHnAQMtUCOohCdJ//UplzwiUQhFQeiTekHnDbWE7sUN/fw2ulZ+z7AMchJnLCpaQxw="
+            rule.runOnIdle { vm.accountApi = site.base; vm.setupApi = site.base + "/api/setup/"; vm.redeemSetupCode("hq4t-8nwz") }
+            waitFor("playlist added (status: ${vm.setupStatus})") { vm.playlists.any { it.name == "Den" } }
+            waitFor("linked by the setup code (status: ${vm.accountStatus})") { vm.accountEmail == "viewer@example.com" }
+            assertEquals("Den TV", vm.accountTvName)
+            assertTrue(site.calls.any { it.startsWith("POST /api/tv/link/claim") && it.contains("LINKTOKEN_abcdefghijklmnopqrstuvwxyz012345") })
+            rule.runOnIdle { vm.signOutOfAccount() }
+        }
+    }
 }
