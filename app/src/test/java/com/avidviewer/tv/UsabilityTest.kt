@@ -596,7 +596,8 @@ class UsabilityTest {
             rule.onNodeWithTag("backup-restore").performClick()
             waitFor("backups listed") { vm.cloudBackups?.size == 2 }
             waitFor("Bedroom shown") { rule.onAllNodesWithText("Bedroom", substring = true).fetchSemanticsNodes().isNotEmpty() }
-            rule.onNodeWithText("Bedroom", substring = true).performClick()
+            // The list sits below the fold of Settings; choose it as its button does.
+            rule.runOnIdle { vm.chooseCloudBackup(vm.cloudBackups!!.first { it.name == "Bedroom" }) }
             waitFor("PIN asked to restore") { vm.pendingRestore != null }
             assertTrue(vm.pendingRestoreInfo.startsWith("Bedroom"))
             var ok: Boolean? = null
