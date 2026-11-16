@@ -94,6 +94,7 @@ fun AppRoot(vm: AppViewModel) {
         } else if (vm.showWelcome) {
             WelcomeScreen(vm)
             if (vm.setupCodeOpen) SetupCodeDialog(vm)
+            if (vm.welcomeAccountOpen) WelcomeAccountDialog(vm)
         } else if (vm.screen == Screen.PLAYER) {
             PlayerScreen(vm)
         } else {

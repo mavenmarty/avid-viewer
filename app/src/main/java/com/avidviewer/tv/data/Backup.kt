@@ -42,7 +42,22 @@ object Backup {
     class NotABackup : Exception("This file isn't an Avid Viewer backup.")
 
     fun write(c: Contents, pin: String): String {
-        val body = JSONObject()
+        val body = body(c)
+        val salt = ByteArray(16).also { SecureRandom().nextBytes(it) }
+        val kdf = bestKdf()
+        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+        cipher.init(Cipher.ENCRYPT_MODE, key(pin, salt, kdf))
+        val data = cipher.doFinal(body.toString().toByteArray(Charsets.UTF_8))
+        return JSONObject()
+            .put("avidViewerBackup", 1)
+            .put("created", c.created)
+            .put("appVersion", c.appVersion)
+            .put("playlistNames", JSONArray(c.playlists.map { it.name }))
+            .put("kdf", kdf).put("salt", b64(salt)).put("iv", b64(cipher.iv)).put("data", b64(data))
+            .toString()
+    }
+
+    private fun body(c: Contents): JSONObject = JSONObject()
             .put("created", c.created)
             .put("appVersion", c.appVersion)
             .put("playlists", JSONArray().apply {
@@ -61,18 +76,15 @@ object Backup {
             .put("resume", JSONObject(c.resume))
             .put("refs", JSONArray().apply { c.refs.forEach { put(it.toJson()) } })
             .apply { c.profiles?.let { put("profiles", it) }; c.profileFiles?.let { put("profileFiles", it) } }
-        val salt = ByteArray(16).also { SecureRandom().nextBytes(it) }
-        val kdf = bestKdf()
-        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
-        cipher.init(Cipher.ENCRYPT_MODE, key(pin, salt, kdf))
-        val data = cipher.doFinal(body.toString().toByteArray(Charsets.UTF_8))
-        return JSONObject()
-            .put("avidViewerBackup", 1)
-            .put("created", c.created)
-            .put("appVersion", c.appVersion)
-            .put("playlistNames", JSONArray(c.playlists.map { it.name }))
-            .put("kdf", kdf).put("salt", b64(salt)).put("iv", b64(cipher.iv)).put("data", b64(data))
-            .toString()
+
+    /**
+     * A fingerprint of what a backup would hold, leaving out when it was made: the same fingerprint as last time
+     * means nothing changed, so the daily cloud backup isn't sent again (1.12.0).
+     */
+    fun fingerprint(c: Contents): String {
+        val b = body(c).apply { remove("created") }
+        return java.security.MessageDigest.getInstance("SHA-256").digest(b.toString().toByteArray(Charsets.UTF_8))
+            .joinToString("") { "%02x".format(it) }
     }
 
     /** What the file says about itself, readable without the PIN: (created, app version, playlist names). */

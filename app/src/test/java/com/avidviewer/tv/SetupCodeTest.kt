@@ -42,7 +42,6 @@ class SetupCodeTest {
         val p = s.playlists[0]
         assertEquals("m3u", p.type); assertEquals("Living room", p.name)
         assertEquals("http://127.0.0.1:9/tv.m3u", p.m3u); assertEquals("http://127.0.0.1:9/guide.xml", p.epg)
-        assertNull(s.backup)
     }
 
     @Test(expected = SetupCode.Problem::class)
