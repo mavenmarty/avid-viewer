@@ -2,6 +2,7 @@ package com.avidviewer.tv
 
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithTag
+import androidx.compose.ui.test.performScrollTo
 import android.app.Application
 import android.view.KeyEvent as AndroidKeyEvent
 import androidx.compose.ui.input.key.Key
