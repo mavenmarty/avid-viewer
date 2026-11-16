@@ -2,9 +2,9 @@
 
 <!-- The version below and the Release notes section are updated automatically after each published build
      (.github/workflows/user-guide.yml). Feature descriptions are written by hand. -->
-This guide covers **Avid Viewer 1.10.0**, the current public release. Avid Viewer is an IPTV player for Android TV and Fire TV. You bring your own provider (an Xtream Codes login or an M3U link); the app doesn't include any channels.
+This guide covers **Avid Viewer 1.10.1**, the current public release. Avid Viewer is an IPTV player for Android TV and Fire TV. You bring your own provider (an Xtream Codes login or an M3U link); the app doesn't include any channels.
 
-**Contents:** [Getting started](#1-getting-started) · [Main menu](#2-main-menu) · [TV Guide](#3-tv-guide) · [Full-screen playback](#4-full-screen-playback) · [Search](#5-search) · [Discover](#6-discover) · [Sports](#7-sports) · [Movies and Series](#8-movies-and-series) · [Settings](#9-settings) ([Profiles](#profiles)) · [Privacy](#10-privacy) · [Troubleshooting](#11-troubleshooting) · [Control4](#12-control4) · [Supplemental services](#13-supplemental-services) · [Release notes](#release-notes)
+**Contents:** [Getting started](#1-getting-started) · [Main menu](#2-main-menu) · [TV Guide](#3-tv-guide) · [Full-screen playback](#4-full-screen-playback) · [Search](#5-search) · [Discover](#6-discover) · [Sports](#7-sports) · [Movies and Series](#8-movies-and-series) · [Settings](#9-settings) ([Profiles](#profiles)) · [Privacy](#10-privacy) · [Troubleshooting](#11-troubleshooting) · [Control4](#12-control4) · [Supplemental services](#13-supplemental-services) · [Cable & satellite](#14-using-your-cable-or-satellite-subscription) · [Release notes](#release-notes)
 
 ## 1. Getting started
 
@@ -45,6 +45,8 @@ Once a playlist has been added, the app opens on the TV Guide instead.
 3. Choose which content to load (Live TV, Movies & series), then press **Add playlist**.
 
 Your password is stored encrypted on the device (Android Keystore) and is never shown again.
+
+Have cable or satellite TV (Xfinity, Spectrum, Cox, DIRECTV, DISH, Midco and others)? Those providers don't offer M3U links; see [Using your cable or satellite subscription](#14-using-your-cable-or-satellite-subscription).
 
 ### Using the remote
 
@@ -459,7 +461,7 @@ Everything here stays on the device; nothing is uploaded or backed up to the clo
 - **Last crash**: if the app closed unexpectedly, the details are kept here on the device, with **Report issue** and **Clear crash report** (asks first). **Report issue** sends them to **bugs@avidviewer.app** and then clears them (see *If the app closes unexpectedly* below).
 - **Playback log**: a summary ("Playback log: 3 freezes (longest 12 s), 1 error today") and the latest problems, each with its likely cause. Channels and titles appear as short codes ("Live channel 4F2A", "Title 9C01"), never by name. **Send playback log** sends it to bugs@avidviewer.app; **Clear log** asks first. **Send it automatically** (on by default) sends it at most once a day, and only when there were freezes or errors since the last send.
 - **Report a bug**: email **bugs@avidviewer.app** with what happened and the steps that lead to it. The section lists the details to include, read from the TV (app version, device model, Android and Fire OS versions, and the last crash's error). Scan the **QR code** with a phone camera to start that email with the details filled in; **Open email app** appears only on TVs that have one. No playlists, logins or provider addresses are included.
-- **User guide and Control4 driver**: two QR codes to scan with a phone. **User guide (PDF)** opens the latest version of this guide; **Control4 mini driver** downloads `um_avid_viewer.c4z` (see [Control4](#12-control4)).
+- **User guide and Control4 driver**: two QR codes to scan with a phone. **User guide** opens this guide on avidviewer.app (always the latest version); **Control4 mini driver** downloads `um_avid_viewer.c4z` (see [Control4](#12-control4)).
 - **Moving through this section:** opening it (OK on Updates & about) highlights **Report a bug** first; **Down** moves to the QR codes, then to Backup & restore and App updates. Blocks without buttons (Report a bug on TVs without an email app, and the QR codes) take the highlight themselves, with a ring around the whole block, so the page scrolls each one fully into view.
 - **Credits**: TMDB, JustWatch, Open-Meteo and ESPN.
 
@@ -505,6 +507,7 @@ The share password is stored encrypted on the TV and is included in your PIN-loc
 - Profile PINs are stored only as salted one-way hashes, never as the digits.
 - The **playback log** (freezes and errors) never records what you watch: each channel or title is a short code made from a random number kept on your TV, which can't be turned back into a name. It is sent to bugs@avidviewer.app at most once a day when there were problems, or when you choose Send playback log. Turn off **Send it automatically** in Settings › Updates & about to send it only by hand. Addresses, logins and IP addresses are removed first.
 - Crash details leave the TV only when you choose **Report issue**. They go to bugs@avidviewer.app through a small mail relay, with web addresses, server and host names, IP addresses, user names, passwords and tokens removed first.
+- **Security checks (1.10.1)** use freeRASP by Talsec. It checks the TV and the app for tampering (root, hooking tools, a modified copy, debuggers, emulators) and sends Talsec anonymous findings about the device and app for its security reports; nothing about what you watch, your playlists or logins. Alerts the app finds are also sent to bugs@avidviewer.app through the crash relay, each kind once and at most once a day.
 - Outside services get only what they need: your postal code (Open-Meteo, for weather), title lookups (TMDB/JustWatch, if you add a key), scoreboards (ESPN), update checks (GitHub) and, when you choose Report issue, the crash report (the Avid Viewer crash relay, a Google Apps Script web app).
 
 ## 11. Troubleshooting
@@ -609,47 +612,6 @@ The **Avid Viewer** Control4 driver (`um_avid_viewer.c4z`) adds Avid Viewer to t
 
 Optional services that work alongside Avid Viewer. None of them is required; each adds something the app can't do on its own.
 
-### EPGenius: curated playlists
-
-[EPGenius](https://epgenius.org) turns your provider's login into a cleaned-up playlist you add to Avid Viewer as an **M3U link**. Community members curate each list: they trim it to the useful channels, sort them into categories, add logos and fix the TV guide. EPGenius saves the playlist to your Google Drive and keeps it updated, so you set it up once.
-
-**What you need**
-
-- Your provider's login: an Xtream login (server, username, password) or an M3U link. EPGenius doesn't supply one.
-- A Google account, where the playlist file is saved.
-- A Discord account, used to register the playlist for automatic updates. A brand-new account has to wait about 24 hours (see below).
-
-**Create the playlist**
-
-1. On a computer or phone, go to [epgenius.org](https://epgenius.org) (not .com) and click **I AGREE** on the Terms & Disclaimer.
-2. Under **Choose a Playlist**, pick a list made for your provider, for example "jams | Strong 8k". **Preview List + EPG** shows the channels first.
-3. Choose **Automatic**, then enter your login. If you have both an Xtream login and an M3U link, use Xtream.
-4. Tick **Upload to Google Drive**, click **Generate**, then **Upload to Google Drive**, and sign in to Google. Allow pop-ups for epgenius.org, because Google sign-in opens in one.
-5. Copy the two links it shows: the **Drive URL** (the playlist) and the **EPG URL** (the guide).
-
-**Add it to Avid Viewer**
-
-1. Open **Settings › Playlists** and choose **Add playlist**.
-2. Pick **M3U link**, not Xtream Codes, even if you gave EPGenius an Xtream login.
-3. Enter a name, paste the **Drive URL** as the **M3U playlist link**, and paste the **EPG URL** as the **TV guide (XMLTV) link**. The EPG link is a compressed `.xml.gz` file; Avid Viewer reads it directly.
-4. Choose what to load and press **Add playlist**.
-
-The Drive URL never changes, so Avid Viewer picks up updates on its normal refresh. You can rename the file in Google Drive without breaking the link.
-
-**Register for automatic updates (Discord)**
-
-1. Create a Discord account at [discord.com/register](https://discord.com/register) and verify your email.
-2. Join the EPGenius server: [discord.gg/pZwcncweFc](https://discord.gg/pZwcncweFc).
-3. **New accounts are timed out for about 24 hours** on joining and can't type during that time. When the timeout ends, rejoin with the same link if you were removed.
-4. In **✅〢verify**, click **Verify** on the Wick bot's message and pass the image check. If the image doesn't appear, turn on **User Settings → Chat → Embeds and link previews**.
-5. In the help channel, run `/register` and paste your Drive URL. Run `/info` any time to get your links back or to unregister a playlist.
-
-**Good to know**
-
-- Free lists update once a day by 04:00 UTC, and the guide refreshes every 4 hours. Supporters (after a donation of any amount) get updates instantly.
-- You can register up to 5 playlists.
-- Pick a list for the provider you actually have. Some sellers advertise one service but give you another.
-
 ### TMDB: Discover
 
 [Discover](#6-discover) uses a free key from **TMDB** (The Movie Database) to show what's new, trending and in theaters, and where to watch it. Without a key, Discover only shows how to add one.
@@ -707,13 +669,84 @@ The Drive URL never changes, so Avid Viewer picks up updates on its normal refre
 - **Undo anything.** Any debloated package can be switched back on from the Debloat page. Uninstalling Homestead brings back Amazon's home screen.
 - **Problems with Homestead** itself go to its GitHub page; bugs@avidviewer.app is for Avid Viewer.
 
+## 14. Using your cable or satellite subscription
+
+Cable and satellite companies such as Xfinity (Comcast), Spectrum, Cox, DIRECTV, DISH and Midco **don't give subscribers M3U links or Xtream logins**. Their live streams are locked inside their own apps and boxes. Services that sell an "Xfinity" or "Spectrum" M3U are not your TV provider; avoid them.
+
+You can still watch the channels you pay for in Avid Viewer by running software at home that signs in with your provider account and turns your channels into an M3U playlist and a TV guide. Avid Viewer then loads them like any other M3U playlist.
+
+### Option 1: Channels DVR with TV Everywhere (recommended)
+
+[Channels DVR](https://getchannels.com) is paid server software that runs on a computer, NAS or NVIDIA Shield in your home. Its **TV Everywhere** feature signs in with your TV provider account, the same login you use for network apps like FOX or HGTV, and adds the networks your package includes.
+
+1. Install **Channels DVR Server** and start a subscription, following the Channels setup guide.
+2. In the server's web page, add a **TV Everywhere** source and sign in with your provider account.
+3. In Avid Viewer, open **Settings › Playlists › Add playlist** and choose **M3U link**:
+   - **M3U playlist link:** `http://<server address>:8089/devices/ANY/channels.m3u?format=ts`
+   - **TV guide (XMLTV) link:** `http://<server address>:8089/devices/ANY/guide/xmltv`
+
+   Replace `<server address>` with the IP address of the computer running Channels DVR, for example `192.168.1.50`. You can also copy both links from **Settings › Sources** in the Channels DVR web page.
+4. Choose **Add playlist**. The channel numbers in the playlist match the guide, so listings appear without matching channels by hand.
+
+**Good to know:**
+- The channels you get depend on your provider, package and location, and on each network's TV Everywhere agreement. Channels DVR's [availability page](https://getchannels.com/docs/channels-dvr-server/tv-everywhere/availability/) shows them per provider. Some local channels may be missing or need their own sign-in.
+- These links only work on your home network, and the Channels DVR computer must be on.
+
+### Option 2: An HDHomeRun tuner and an antenna (free local channels)
+
+An HDHomeRun network tuner with a TV antenna picks up free over-the-air channels (ABC, CBS, FOX, NBC, PBS and more) and shares them on your home network.
+
+- **M3U playlist link:** `http://hdhomerun.local/lineup.m3u`, or use the tuner's IP address in place of `hdhomerun.local`.
+- **TV guide:** the tuner doesn't supply an XMLTV guide. Add one as a guide source (Settings › Playlists › ▤ Guide sources), or use Option 1: Channels DVR can include HDHomeRun channels and provides their guide.
+- HDHomeRun models that take a CableCARD can tune cable channels, but they're no longer made. Xfinity ends CableCARD support on November 30, 2026, and other providers are phasing it out. Copy-protected cable channels don't play on Fire TV and other Android devices.
+
+### Option 3: FastChannels (advanced)
+
+[FastChannels](https://github.com/kineticman/FastChannels) is free, self-hosted software (run in Docker) that combines free streaming channels and TV Everywhere networks into one M3U playlist and XMLTV guide. Use its feed links, such as `http://<server address>:5523/feeds/default/m3u` and `/feeds/default/epg.xml`, as the M3U and guide links. Its TV Everywhere sign-in is in beta and has only been verified with Xfinity, Cox and Sling TV.
+
+### By provider
+
+| Provider | M3U link from the provider | Channels DVR TV Everywhere |
+|---|---|---|
+| Xfinity (Comcast) | No | Yes, listed as "Xfinity" |
+| Spectrum (Charter) | No | Yes, listed as "Spectrum" |
+| Cox | No | Yes, listed as "Cox" |
+| DIRECTV / DIRECTV STREAM | No | Yes, listed under both names |
+| DISH | No | Yes, listed as "DISH" |
+| Midco | No | Yes, listed as "Midco" |
+| Verizon Fios, Optimum, Mediacom, WOW! | No | Yes, each listed by name |
+| Sling TV, Hulu Live, YouTube TV | No | Yes, each listed by name |
+
+"Listed" means you can choose that provider when you sign in. Which channels work still depends on your package and location; check the availability page before you subscribe.
+
+### Troubleshooting
+
+- **The playlist won't load:** make sure the Fire TV and the server are on the same home network, and that the address and port are right. Open the M3U link in a web browser on a computer at home; it should download a file.
+- **A channel shows "not available" or won't play:** the network may not offer TV Everywhere for your provider or package, or the channel uses copy protection.
+- **No guide listings:** check the TV guide link, then use **Download the guide now** in Settings › TV guide. For a single channel, press Menu on it and choose **Match guide…**.
+
 ## Release notes
 
 Every public release since 1.0.35, newest first. From 1.1.0, versions are numbered major.minor.patch: new features raise the middle number, fixes the last one (the GitHub tag adds a build number, for example `v1.1.0.186`). Releases are published on GitHub (`mavenmarty/avid-viewer`) as `AvidViewer.apk`. The app offers each new version itself, or you can check in Settings › Updates & about › **Check now**.
 
 <!-- new-releases: entries for new builds are added automatically below this line -->
 
-### 1.10.0 — November 15, 2026, 11:46 AM CT (current)
+### 1.10.1 — November 15, 2026, 2:32 PM CT (current)
+
+**Release notes**
+
+- **Security checks.** The app now watches for signs that it's being tampered with: a rooted TV, hooking tools, a modified or re-signed copy, a debugger, an emulator or an app cloner. Nothing changes for viewers; if something is found it is noted on the TV and reported to bugs@avidviewer.app (each kind once, at most one email a day). Developer options, ADB and installing outside an app store are normal on a Fire TV that sideloads the app and are never reported.
+- **A copy re-signed by someone else won't run.** It shows a notice instead of the app. Updates from Avid Viewer itself are unaffected.
+- **Smaller, harder to reverse-engineer app.** Release builds are now shrunk and obfuscated.
+
+**Change log**
+
+- freeRASP (Talsec) runtime checks on signed releases, findings kept on the TV, alerts sent through the crash relay
+- Release signature check (Integrity) with a block screen for re-signed copies
+- R8 code shrinking and obfuscation; the mapping file kept as a private build artifact
+- Tests: security findings (alerts once per kind, Fire TV's normal state never sent), certificate hash conversion
+
+### 1.10.0 — November 15, 2026, 11:46 AM CT
 
 **Release notes**
 

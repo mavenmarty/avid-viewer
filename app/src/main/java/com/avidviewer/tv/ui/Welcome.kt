@@ -55,24 +55,57 @@ fun WelcomeScreen(vm: AppViewModel) {
                 "It doesn't include any channels. To start, add your provider's playlist: an Xtream Codes login (server, username, password) or an M3U link.",
                 size = 16.sp, color = C.Soft, lines = Int.MAX_VALUE,
             )
+            Label(
+                "Easiest: enter it on your phone or computer at avidviewer.app/setup, then type the setup code it gives you here. No typing logins with the remote.",
+                size = 16.sp, color = C.Soft, lines = Int.MAX_VALUE,
+            )
             Spacer(Modifier.height(6.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                TvButton("＋  Add a playlist", primary = true, modifier = Modifier.focusRequester(add).testTag("welcome-add")) { vm.welcomeAddPlaylist() }
+                TvButton("Enter a setup code", primary = true, modifier = Modifier.focusRequester(add).testTag("welcome-code")) { vm.openSetupCode() }
+                TvButton("＋  Add a playlist", modifier = Modifier.testTag("welcome-add")) { vm.welcomeAddPlaylist() }
                 TvButton("Restore a backup", modifier = Modifier.testTag("welcome-restore")) { vm.welcomeRestore() }
             }
-            Label("Moving from another TV? Restore a backup made in Settings › Updates & about.", size = 13.sp, color = C.Muted, lines = 2)
+            Label("Moving from another TV? Upload its backup file on avidviewer.app/setup for a code, or restore a backup made in Settings › Updates & about.", size = 13.sp, color = C.Muted, lines = 2)
         }
         Column(
             Modifier.width(300.dp).clip(RoundedCornerShape(16.dp)).background(C.Surface).padding(22.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            QrCode(com.avidviewer.tv.data.Links.USER_GUIDE, Modifier.size(200.dp).testTag("welcome-guide-qr"))
-            Label("User guide", size = 18.sp, color = C.Text, weight = FontWeight.Bold)
+            QrCode(com.avidviewer.tv.data.SetupCode.PAGE, Modifier.size(200.dp).testTag("welcome-setup-qr"))
+            Label("avidviewer.app/setup", size = 18.sp, color = C.Text, weight = FontWeight.Bold)
             Label(
-                "Scan with your phone's camera for step-by-step setup, every screen explained, and optional extras such as curated playlists and Discover.",
+                "Scan with your phone's camera to enter your playlist there and get a setup code. The page also links to the user guide.",
                 size = 13.sp, color = C.Soft, lines = Int.MAX_VALUE,
             )
         }
     }
+}
+
+/**
+ * Enter a setup code from avidviewer.app/setup (1.11.0). The keyboard opens at once; Done fetches the code's
+ * playlists (or backup). Shown over the welcome screen, or from Settings › Playlists.
+ */
+@Composable
+fun SetupCodeDialog(vm: AppViewModel) {
+    var text by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableStateOf("") }
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = { vm.closeSetupCode() },
+        containerColor = C.Surface,
+        title = { androidx.compose.material3.Text("Enter your setup code", color = C.Text) },
+        text = {
+            Row(horizontalArrangement = Arrangement.spacedBy(20.dp), verticalAlignment = Alignment.Top) {
+                QrCode(com.avidviewer.tv.data.SetupCode.PAGE, Modifier.size(130.dp))
+                Column(Modifier.width(380.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Label("On your phone or computer, open avidviewer.app/setup (or scan the code), enter your playlist or upload a backup, and type the code it shows here.",
+                        size = 14.sp, color = C.Soft, lines = Int.MAX_VALUE)
+                    TvField("Setup code (e.g. K7M2-QX9P)", text, modifier = Modifier.testTag("setup-code-field"), autoOpen = true,
+                        next = { vm.redeemSetupCode(text) }) { text = it.uppercase().take(12) }
+                    vm.setupStatus?.let { Label(it, size = 13.sp, color = C.Text, lines = Int.MAX_VALUE, modifier = Modifier.testTag("setup-status")) }
+                }
+            }
+        },
+        confirmButton = { TvButton(if (vm.setupBusy) "Setting up…" else "Set up", primary = true, busy = vm.setupBusy, modifier = Modifier.testTag("setup-go")) { vm.redeemSetupCode(text) } },
+        dismissButton = { TvButton("Cancel") { vm.closeSetupCode() } },
+    )
 }
