@@ -692,6 +692,8 @@ private fun Modifier.staysInSection(sectionFr: FocusRequester? = null, firstFr: 
     .focusGroup()
 
 private val SECTIONS = listOf(
+    // 1.12.0: Account first (linking and backups); Settings still opens on Playlists.
+    SettingsSection("account", "Account", NavIcons.Profiles),
     SettingsSection("playlists", "Playlists", NavIcons.Playlists),
     SettingsSection("profiles", "Profiles", NavIcons.Profiles),
     SettingsSection("channels", "List Editor", NavIcons.Manage),
@@ -704,7 +706,6 @@ private val SECTIONS = listOf(
     SettingsSection("privacy", "Privacy & analytics", NavIcons.Privacy),
     SettingsSection("storage", "Storage", NavIcons.Storage),
     SettingsSection("about", "Updates & about", NavIcons.Settings),
-    SettingsSection("account", "Account", NavIcons.Profiles),
 )
 
 /**
@@ -768,7 +769,7 @@ fun SettingsScreen(vm: AppViewModel) {
                 val on = sec.id == section
                 Focusable(
                     modifier = Modifier.fillMaxWidth().height(42.dp).focusRequester(sectionFrs.getValue(sec.id)).activePath(on)
-                        .then(if (sec == SECTIONS.first()) Modifier.entryFocus(vm, Screen.SETTINGS) else Modifier),
+                        .then(if (sec.id == "playlists") Modifier.entryFocus(vm, Screen.SETTINGS) else Modifier),
                     color = if (on) C.Surface2 else androidx.compose.ui.graphics.Color.Transparent,
                     // Highlighting a section only shows its summary; OK opens it and moves into it (NAV-08).
                     onClick = { vm.settingsSection = sec.id; openTick++ },
