@@ -612,47 +612,6 @@ The **Avid Viewer** Control4 driver (`um_avid_viewer.c4z`) adds Avid Viewer to t
 
 Optional services that work alongside Avid Viewer. None of them is required; each adds something the app can't do on its own.
 
-### EPGenius: curated playlists
-
-[EPGenius](https://epgenius.org) turns your provider's login into a cleaned-up playlist you add to Avid Viewer as an **M3U link**. Community members curate each list: they trim it to the useful channels, sort them into categories, add logos and fix the TV guide. EPGenius saves the playlist to your Google Drive and keeps it updated, so you set it up once.
-
-**What you need**
-
-- Your provider's login: an Xtream login (server, username, password) or an M3U link. EPGenius doesn't supply one.
-- A Google account, where the playlist file is saved.
-- A Discord account, used to register the playlist for automatic updates. A brand-new account has to wait about 24 hours (see below).
-
-**Create the playlist**
-
-1. On a computer or phone, go to [epgenius.org](https://epgenius.org) (not .com) and click **I AGREE** on the Terms & Disclaimer.
-2. Under **Choose a Playlist**, pick a list made for your provider, for example "jams | Strong 8k". **Preview List + EPG** shows the channels first.
-3. Choose **Automatic**, then enter your login. If you have both an Xtream login and an M3U link, use Xtream.
-4. Tick **Upload to Google Drive**, click **Generate**, then **Upload to Google Drive**, and sign in to Google. Allow pop-ups for epgenius.org, because Google sign-in opens in one.
-5. Copy the two links it shows: the **Drive URL** (the playlist) and the **EPG URL** (the guide).
-
-**Add it to Avid Viewer**
-
-1. Open **Settings › Playlists** and choose **Add playlist**.
-2. Pick **M3U link**, not Xtream Codes, even if you gave EPGenius an Xtream login.
-3. Enter a name, paste the **Drive URL** as the **M3U playlist link**, and paste the **EPG URL** as the **TV guide (XMLTV) link**. The EPG link is a compressed `.xml.gz` file; Avid Viewer reads it directly.
-4. Choose what to load and press **Add playlist**.
-
-The Drive URL never changes, so Avid Viewer picks up updates on its normal refresh. You can rename the file in Google Drive without breaking the link.
-
-**Register for automatic updates (Discord)**
-
-1. Create a Discord account at [discord.com/register](https://discord.com/register) and verify your email.
-2. Join the EPGenius server: [discord.gg/pZwcncweFc](https://discord.gg/pZwcncweFc).
-3. **New accounts are timed out for about 24 hours** on joining and can't type during that time. When the timeout ends, rejoin with the same link if you were removed.
-4. In **✅〢verify**, click **Verify** on the Wick bot's message and pass the image check. If the image doesn't appear, turn on **User Settings → Chat → Embeds and link previews**.
-5. In the help channel, run `/register` and paste your Drive URL. Run `/info` any time to get your links back or to unregister a playlist.
-
-**Good to know**
-
-- Free lists update once a day by 04:00 UTC, and the guide refreshes every 4 hours. Supporters (after a donation of any amount) get updates instantly.
-- You can register up to 5 playlists.
-- Pick a list for the provider you actually have. Some sellers advertise one service but give you another.
-
 ### TMDB: Discover
 
 [Discover](#6-discover) uses a free key from **TMDB** (The Movie Database) to show what's new, trending and in theaters, and where to watch it. Without a key, Discover only shows how to add one.
