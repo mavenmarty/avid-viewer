@@ -650,7 +650,15 @@ private fun PlaylistForm(vm: AppViewModel, existing: com.avidviewer.tv.data.Play
             }
         }
         if (existing == null) vm.status?.let { st -> item { Label(st, size = 12.sp, color = C.Soft, lines = Int.MAX_VALUE) } }
+        // 1.11.0: enter the playlist on a phone at avidviewer.app/setup instead, and type the code it gives.
+        if (existing == null) item {
+            Column(Modifier.padding(top = 10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Label("Easier with a phone: enter the playlist at avidviewer.app/setup and type the code it gives you.", size = 12.sp, color = C.Soft, lines = 2)
+                TvButton("Use a setup code", modifier = Modifier.testTag("playlist-setup-code")) { vm.openSetupCode() }
+            }
+        }
     }
+    if (existing == null && vm.setupCodeOpen && !vm.showWelcome) SetupCodeDialog(vm)
 }
 
 // ---------------------------------------------------------------- Settings
@@ -1018,7 +1026,7 @@ private fun BugReportBlock(vm: AppViewModel) {
 private fun GuideAndDriverBlock() {
     SettingBlock("User guide and Control4 driver", "Scan with your phone's camera to open them.", focusable = true) {
         Row(horizontalArrangement = Arrangement.spacedBy(28.dp)) {
-            LinkQr("User guide (PDF)", "The latest version, with setup, every screen and release notes.", com.avidviewer.tv.data.Links.USER_GUIDE, "guide-qr")
+            LinkQr("User guide", "Setup, every screen and what's new, at avidviewer.app.", com.avidviewer.tv.data.Links.USER_GUIDE, "guide-qr")
             LinkQr("Control4 mini driver", "Puts Avid Viewer in the Control4 Watch menu (um_avid_viewer.c4z). Setup is in the user guide, section 12.", com.avidviewer.tv.data.Links.CONTROL4_DRIVER, "control4-qr")
         }
     }

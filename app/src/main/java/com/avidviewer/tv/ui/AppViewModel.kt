@@ -558,6 +558,75 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         screen = Screen.SETTINGS; settingsSection = "about"; navMode = NavMode.COLLAPSED
     }
 
+    // ---------------- setup codes (avidviewer.app/setup, 1.11.0) ----------------
+    var setupCodeOpen by mutableStateOf(false)
+    var setupStatus by mutableStateOf<String?>(null); private set
+    var setupBusy by mutableStateOf(false); private set
+    /** Where setup codes are fetched from; tests point it at a fake server. */
+    internal var setupApi = com.avidviewer.tv.data.SetupCode.API
+
+    fun openSetupCode() { setupStatus = null; setupCodeOpen = true }
+    fun closeSetupCode() { if (!setupBusy) setupCodeOpen = false }
+
+    /**
+     * Fetches a setup code's playlists (or backup) and applies them: each playlist is checked like one added by hand
+     * and added if it works; a backup goes to the usual restore dialog (it asks for the backup's PIN).
+     */
+    fun redeemSetupCode(input: String) {
+        val code = com.avidviewer.tv.data.SetupCode.normalize(input)
+        if (code == null) { setupStatus = "A setup code has 8 letters and numbers, like K7M2-QX9P."; return }
+        if (setupBusy) return
+        setupBusy = true
+        setupStatus = "Getting your setup from avidviewer.app…"
+        viewModelScope.launch {
+            val setup = try {
+                withContext(Dispatchers.IO) { com.avidviewer.tv.data.SetupCode.fetch(code, setupApi) }
+            } catch (e: Exception) {
+                setupStatus = e.message ?: "That didn't work. Try again."; setupBusy = false; return@launch
+            }
+            trail("setup code: ${setup.playlists.size} playlist(s)${if (setup.backup != null) ", backup" else ""}")
+            if (setup.backup != null) {
+                setupBusy = false; setupCodeOpen = false
+                welcomeRestore()
+                offerRestore(setup.backup)
+                return@launch
+            }
+            val added = mutableListOf<Playlist>(); val problems = mutableListOf<String>()
+            for (it in setup.playlists) {
+                val p = Playlist(
+                    id = UUID.randomUUID().toString().take(8),
+                    name = it.name.ifBlank { if (it.type == "xtream") "My provider" else "M3U playlist" },
+                    type = it.type, server = it.server, username = it.username, password = it.password, m3uUrl = it.m3u,
+                    epgSources = if (it.epg.isBlank()) emptyList() else listOf(EpgSource("src-" + System.currentTimeMillis().toString(36) + added.size, "Guide address", it.epg)),
+                )
+                setupStatus = "Checking ${p.name}…"
+                val problem = withContext(Dispatchers.IO) {
+                    if (p.isXtream) Xtream.checkLogin(p) else if (p.m3uUrl.isBlank()) "No playlist link." else null
+                }
+                if (problem == null) added += p else problems += "${p.name}: $problem"
+            }
+            if (added.isNotEmpty()) {
+                playlists = playlists + added
+                store.savePlaylists(playlists)
+                updatePrefs { it.copy(activePlaylist = added.first().id) }
+            }
+            setupBusy = false
+            if (problems.isEmpty()) {
+                setupCodeOpen = false
+                status = "Added " + added.joinToString(", ") { it.name } + "."
+                showWelcome = false
+                playlistSaved++
+                loadActive(refresh = true)
+                if (added.size > 1) syncAllPlaylists(force = false)
+            } else {
+                if (added.isNotEmpty()) { showWelcome = false; playlistSaved++; loadActive(refresh = true) }
+                setupStatus = (if (added.isNotEmpty()) "Added " + added.joinToString(", ") { it.name } + ". " else "") +
+                    "Couldn't add " + problems.joinToString("; ") +
+                    " Fix it on avidviewer.app/setup and make a new code, or add it in Settings › Playlists."
+            }
+        }
+    }
+
     private var osdJob: Job? = null
     private var watchStart = 0L
     private var watchKey: String? = null
