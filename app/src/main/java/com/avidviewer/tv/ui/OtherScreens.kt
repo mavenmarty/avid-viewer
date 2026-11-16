@@ -976,34 +976,38 @@ private fun androidx.compose.foundation.lazy.LazyListScope.displaySettings(vm: A
  * Settings › Account (1.11.0): link this TV to an avidviewer.app account with a code shown here (and a QR code for
  * avidviewer.app/link), or sign it out. Linking sends only the TV's name, model and app version.
  */
+/** The code and QR code for linking this TV at avidviewer.app/link (Settings › Account and the welcome screen). */
+@Composable
+internal fun LinkCodePanel(vm: AppViewModel, code: AppViewModel.LinkCode) {
+    Row(horizontalArrangement = Arrangement.spacedBy(24.dp), verticalAlignment = Alignment.CenterVertically) {
+        QrCode(code.qrUrl, Modifier.size(170.dp).testTag("account-qr"))
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Label("On your phone or computer, go to", size = 14.sp, color = C.Soft)
+            Label("avidviewer.app/link", size = 22.sp, color = C.Text, weight = FontWeight.Bold)
+            Label("and enter this code (or scan the QR code):", size = 14.sp, color = C.Soft)
+            Label(com.avidviewer.tv.data.SetupCode.pretty(code.code), size = 40.sp, color = C.Accent, weight = FontWeight.Bold, modifier = Modifier.testTag("account-code"))
+            val mins = ((code.expiresAt - vm.now) / 60_000L + 1).coerceAtLeast(1)
+            Label("The code works for $mins more minute${if (mins == 1L) "" else "s"}. This screen updates by itself once you've approved it.", size = 13.sp, color = C.Muted, lines = 2)
+            TvButton("Cancel") { vm.cancelLinking() }
+        }
+    }
+}
+
 private fun androidx.compose.foundation.lazy.LazyListScope.accountSettings(vm: AppViewModel, ask: (Confirm) -> Unit) {
     val email = vm.accountEmail
     val code = vm.linkCode
     when {
         email != null -> item {
-            SettingBlock("Linked to $email", "This TV is \"${vm.accountTvName}\" on your account. Rename or remove it at avidviewer.app/account. Accounts add features such as picking up where you left off on every TV; your playlists stay on this TV.") {
-                TvButton("Sign out of this TV", modifier = Modifier.testTag("account-signout")) {
-                    ask(Confirm("Sign out of this TV?", "It will no longer be linked to $email. Playlists, favorites and settings on this TV stay as they are.", "Sign out") { vm.signOutOfAccount() })
+            SettingBlock("Linked to $email", "This device is \"${vm.accountTvName}\" on your account. Rename or remove it at avidviewer.app/account. Backups of this device go to your account (Settings › Updates & about › Backup & restore).") {
+                TvButton("Sign out of this device", modifier = Modifier.testTag("account-signout")) {
+                    ask(Confirm("Sign out of this device?", "It will no longer be linked to $email. Playlists, favorites and settings on this device stay as they are.", "Sign out") { vm.signOutOfAccount() })
                 }
             }
         }
-        code != null -> item {
-            Row(horizontalArrangement = Arrangement.spacedBy(24.dp), verticalAlignment = Alignment.CenterVertically) {
-                QrCode(code.qrUrl, Modifier.size(170.dp).testTag("account-qr"))
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Label("On your phone or computer, go to", size = 14.sp, color = C.Soft)
-                    Label("avidviewer.app/link", size = 22.sp, color = C.Text, weight = FontWeight.Bold)
-                    Label("and enter this code (or scan the QR code):", size = 14.sp, color = C.Soft)
-                    Label(com.avidviewer.tv.data.SetupCode.pretty(code.code), size = 40.sp, color = C.Accent, weight = FontWeight.Bold, modifier = Modifier.testTag("account-code"))
-                    val mins = ((code.expiresAt - vm.now) / 60_000L + 1).coerceAtLeast(1)
-                    Label("The code works for $mins more minute${if (mins == 1L) "" else "s"}. This screen updates by itself once you've approved it.", size = 13.sp, color = C.Muted, lines = 2)
-                    TvButton("Cancel") { vm.cancelLinking() }
-                }
-            }
-        }
+        code != null -> item { LinkCodePanel(vm, code) }
         else -> item {
-            SettingBlock("Link this TV to your account", "Sign in at avidviewer.app to see and manage your TVs in one place; accounts will add features such as picking up where you left off on every TV. Linking shares only this TV's name, model and app version, never your playlists or what you watch.") {
-                TvButton("Link this TV", primary = true, modifier = Modifier.testTag("account-link")) { vm.startLinking() }
+            SettingBlock("Link this device to your account", "Sign in at avidviewer.app to see and manage your devices in one place; accounts will add features such as picking up where you left off on every device. Linking lets this device back up to your account and restore another device's backup. Linking itself shares only this device's name, model and app version; your playlists are sent only in a backup, locked with a PIN you choose.") {
+                TvButton("Link this device", primary = true, modifier = Modifier.testTag("account-link")) { vm.startLinking() }
             }
         }
     }
@@ -1454,96 +1458,83 @@ private fun EditorRow(title: String, sub: String?, hidden: Boolean, selected: Bo
     }
 }
 
-/** Settings › Updates & about › Backup & restore. */
+/** Settings › Updates & about › Backup & restore: backups live in the avidviewer.app account (1.12.0). */
 @Composable
 private fun BackupBlock(vm: AppViewModel) {
-    var making by remember { mutableStateOf(false) }
+    var choosingPin by remember { mutableStateOf(false) }
+    if (vm.accountEmail == null) {
+        SettingBlock(
+            "Backup & restore",
+            "Backups are kept in your avidviewer.app account, so a reinstalled app or a new device can get everything back. Link this device to your account to back up or restore.",
+        ) {
+            TvButton("Link this device", primary = true, modifier = Modifier.testTag("backup-link")) { vm.settingsSection = "account"; vm.startLinking() }
+        }
+        if (vm.pendingRestore != null) RestorePinDialog(vm)
+        return
+    }
+    val fmt = remember { java.text.SimpleDateFormat("MMM d, yyyy h:mm a", java.util.Locale.getDefault()) }
     SettingBlock(
         "Backup & restore",
-        "Save your playlists (with their logins), favorites, lists, names, order, hidden items, Sports categories, location and settings to a file in this device's Download folder. " +
-            "It stays there if Avid Viewer is deleted, so after reinstalling you can restore everything here. Channels, guides and movies download again on their own.",
+        "Backs up your playlists (with their logins), favorites, lists, names, order, hidden items, profiles, Sports categories, location and settings to your account, ${vm.accountEmail}. " +
+            "Each device keeps one backup there, its most recent, locked with a backup PIN. Restore it on this device, or copy it to a new one. Channels, guides and movies download again on their own.",
     ) {
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            TvButton(if (vm.backupBusy) "Working…" else "Back up now", primary = true, busy = vm.backupBusy, modifier = Modifier.testTag("backup-now")) { if (!vm.backupBusy) making = true }
-            TvButton("Restore from a backup", modifier = Modifier.testTag("backup-restore")) { if (!vm.backupBusy) vm.startRestore() }
-        }
-        vm.backupStatus?.let { Label(it, size = 12.sp, color = C.Soft, lines = Int.MAX_VALUE) }
-        if (vm.foundBackups.isNotEmpty()) {
-            Label("Backups found in the Download folder — choose one:", size = 12.sp, lines = Int.MAX_VALUE)
-            vm.foundBackups.take(6).forEach { f ->
-                val date = java.text.SimpleDateFormat("MMM d, yyyy h:mm a", java.util.Locale.getDefault()).format(f.modified)
-                TvButton("${f.name}  ·  $date") { vm.chooseFoundBackup(f) }
+        Label(
+            if (vm.lastBackupAt > 0) "Last backup: " + fmt.format(vm.lastBackupAt) else "This device hasn't backed up yet.",
+            size = 13.sp, color = C.Text, modifier = Modifier.testTag("backup-last"),
+        )
+        androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            TvButton(if (vm.backupBusy) "Working…" else "Back up now", primary = true, busy = vm.backupBusy, modifier = Modifier.testTag("backup-now")) {
+                if (!vm.backupBusy) { if (vm.backupPinSet) vm.backUp() else choosingPin = true }
             }
+            TvButton("Restore from your account", modifier = Modifier.testTag("backup-restore")) { if (!vm.backupBusy) vm.loadCloudBackups() }
+            if (vm.backupPinSet) TvButton("Change PIN", modifier = Modifier.testTag("backup-pin")) { choosingPin = true }
+        }
+        if (vm.backupPinSet) SettingSwitch(
+            "Back up every day", "Once a day, only when something changed. Turn off to back up only when you choose Back up now.",
+            vm.autoBackup, compact = true,
+        ) { vm.setAutoBackup(!vm.autoBackup) }
+        vm.backupStatus?.let { Label(it, size = 12.sp, color = C.Soft, lines = Int.MAX_VALUE, modifier = Modifier.testTag("backup-status")) }
+        vm.cloudBackups?.takeIf { it.isNotEmpty() }?.let { list ->
+            Label("Backups in your account — choose one to restore on this device:", size = 12.sp, lines = Int.MAX_VALUE)
+            list.take(10).forEach { b ->
+                val who = when { b.thisTv -> "This device"; b.removed -> "${b.name} (removed)"; else -> b.name }
+                val pls = b.playlists?.let { n -> "  ·  $n playlist" + if (n == 1) "" else "s" } ?: ""
+                TvButton("$who  ·  ${fmt.format(b.createdAt)}$pls", modifier = Modifier.testTag("cloud-backup")) { vm.chooseCloudBackup(b) }
+            }
+            TvButton("Close") { vm.closeCloudBackups() }
         }
     }
-    ShareBlock(vm)
-    if (making) BackupPinDialog(vm) { making = false }
+    if (choosingPin) BackupPinDialog(vm) { choosingPin = false }
     if (vm.pendingRestore != null) RestorePinDialog(vm)
 }
 
-/** Backups on a SAMBA / Windows network share (a folder on a PC or NAS). */
+/** Choose (or change) the backup PIN, entered twice; then backs up. */
 @Composable
-private fun ShareBlock(vm: AppViewModel) {
-    var address by remember { mutableStateOf(vm.prefs.smbAddress) }
-    var user by remember { mutableStateOf(vm.prefs.smbUser) }
-    var password by remember { mutableStateOf("") }
-    var making by remember { mutableStateOf(false) }
-    Spacer(Modifier.height(8.dp))
-    SettingBlock(
-        "Network share (SAMBA)",
-        "Keep backups in a shared folder on your PC or NAS, so a reinstalled app or a new TV can restore without a file manager or USB drive. " +
-            "Enter the share like \\\\192.168.1.20\\Backups\\AvidViewer (the folder is made if it's missing). Leave the user name empty for a guest share.",
-    ) {
-        TvField("Share address, e.g. \\\\NAS\\Backups\\AvidViewer", address, modifier = Modifier.fillMaxWidth()) { address = it }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            TvField("User name (or DOMAIN\\user)", user, modifier = Modifier.weight(1f)) { user = it }
-            TvField(if (vm.prefs.smbPassEnc.isNotBlank()) "Password (leave empty to keep)" else "Password", password, password = true, modifier = Modifier.weight(1f)) { password = it }
-        }
-        androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            TvButton("Save and test", modifier = Modifier.testTag("smb-save")) { vm.saveShare(address, user, password.ifEmpty { null }); password = "" }
-            if (vm.smbReady) {
-                TvButton("Back up to the share", primary = true, modifier = Modifier.testTag("smb-backup")) { if (!vm.backupBusy) making = true }
-                TvButton("Restore from the share", modifier = Modifier.testTag("smb-restore")) { vm.listShareBackups() }
-            }
-        }
-        vm.smbStatus?.let { Label(it, size = 12.sp, color = C.Soft, lines = Int.MAX_VALUE) }
-        if (vm.shareBackups.isNotEmpty()) {
-            Label("Backups on the share — choose one:", size = 12.sp, lines = Int.MAX_VALUE)
-            vm.shareBackups.take(8).forEach { (name, modified) ->
-                val date = java.text.SimpleDateFormat("MMM d, yyyy h:mm a", java.util.Locale.getDefault()).format(modified)
-                TvButton("$name  ·  $date") { vm.chooseShareBackup(name) }
-            }
-        }
-    }
-    if (making) BackupPinDialog(vm, toShare = true) { making = false }
-}
-
-/** Choose a PIN for a new backup (entered twice). */
-@Composable
-private fun BackupPinDialog(vm: AppViewModel, toShare: Boolean = false, close: () -> Unit) {
+private fun BackupPinDialog(vm: AppViewModel, close: () -> Unit) {
     var pin by remember { mutableStateOf("") }
     var again by remember { mutableStateOf("") }
     var problem by remember { mutableStateOf<String?>(null) }
     androidx.compose.material3.AlertDialog(
         onDismissRequest = close,
         containerColor = C.Surface,
-        title = { Text("Choose a PIN for this backup", color = C.Text, fontWeight = FontWeight.Bold) },
+        title = { Text(if (vm.backupPinSet) "Choose a new backup PIN" else "Choose a backup PIN", color = C.Text, fontWeight = FontWeight.Bold) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Label("The backup holds your provider logins, so it's locked with a PIN. You'll need the same PIN to restore it, and it can't be recovered if forgotten.", size = 13.sp, color = C.Soft, lines = Int.MAX_VALUE)
+                Label("The backup holds your provider logins, so it's locked with this PIN. You'll enter it to restore. " +
+                    "This device remembers it for the daily backups, and if you forget it, sign in at avidviewer.app/account and choose Show PIN.", size = 13.sp, color = C.Soft, lines = Int.MAX_VALUE)
                 TvField("PIN (4 or more digits)", pin, password = true, modifier = Modifier.fillMaxWidth()) { pin = it.filter { c -> c.isDigit() }.take(12) }
                 TvField("Enter the PIN again", again, password = true, modifier = Modifier.fillMaxWidth()) { again = it.filter { c -> c.isDigit() }.take(12) }
                 problem?.let { Label(it, size = 12.sp, color = C.AccentFocus, lines = Int.MAX_VALUE) }
             }
         },
         confirmButton = {
-            TvButton("Save backup", primary = true) {
+            TvButton("Back up", primary = true, modifier = Modifier.testTag("backup-pin-save")) {
                 problem = when {
                     pin.length < 4 -> "Use at least 4 digits."
                     pin != again -> "The two PINs don't match."
                     else -> null
                 }
-                if (problem == null) { vm.backUp(pin, toShare); close() }
+                if (problem == null) { vm.backUp(newPin = pin); close() }
             }
         },
         dismissButton = { TvButton("Cancel") { close() } },
@@ -1552,7 +1543,7 @@ private fun BackupPinDialog(vm: AppViewModel, toShare: Boolean = false, close: (
 
 /** Enter the backup's PIN and confirm replacing what's on this device. */
 @Composable
-private fun RestorePinDialog(vm: AppViewModel) {
+internal fun RestorePinDialog(vm: AppViewModel) {
     var pin by remember { mutableStateOf("") }
     var wrong by remember { mutableStateOf<String?>(null) }
     val cancel = remember { FocusRequester() }
@@ -1564,7 +1555,8 @@ private fun RestorePinDialog(vm: AppViewModel) {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Label(vm.pendingRestoreInfo, size = 13.sp, color = C.Text, lines = Int.MAX_VALUE)
                 Label("Restoring replaces the playlists and settings on this device with the ones in the backup. This can't be undone.", size = 13.sp, color = C.Soft, lines = Int.MAX_VALUE)
-                TvField("Backup PIN", pin, password = true, modifier = Modifier.fillMaxWidth()) { pin = it.filter { c -> c.isDigit() }.take(12) }
+                TvField("Backup PIN", pin, password = true, modifier = Modifier.fillMaxWidth().testTag("restore-pin")) { pin = it.filter { c -> c.isDigit() }.take(12) }
+                Label("Forgot it? Sign in at avidviewer.app/account and choose Show PIN next to the backup.", size = 12.sp, color = C.Muted, lines = Int.MAX_VALUE)
                 wrong?.let { Label(it, size = 12.sp, color = C.AccentFocus, lines = Int.MAX_VALUE) }
             }
         },

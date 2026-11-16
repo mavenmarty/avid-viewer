@@ -540,15 +540,95 @@ class UsabilityTest {
         assertEquals(listOf(TestData.P1, TestData.P2), vm.playlists.map { it.id })
     }
 
+    /** 1.12.0: backups live in the account, so an unlinked TV is offered Link this TV instead. */
     @Test
-    fun backupSectionOpensWithoutCrashing() {
+    fun backupNeedsALinkedTv() {
         go(Screen.SETTINGS)
         rule.runOnIdle { vm.settingsSection = "about" }
         settle()
         assertTrue(rule.onAllNodesWithText("Backup & restore").fetchSemanticsNodes().isNotEmpty())
-        rule.onNodeWithTag("backup-now").performClick()
+        assertTrue(rule.onAllNodesWithTag("backup-now").fetchSemanticsNodes().isEmpty())
+        rule.onNodeWithTag("backup-link").performClick()
         settle()
-        assertTrue(rule.onAllNodesWithText("Choose a PIN for this backup").fetchSemanticsNodes().isNotEmpty())
+        assertEquals("account", vm.settingsSection)
+    }
+
+    private fun linkForTest(site: FakeAvidSite, token: String = "TVTOKEN_abcdefghijklmnopqrstuvwxyz") {
+        rule.runOnIdle {
+            vm.accountApi = site.base
+            vm.account.save(com.avidviewer.tv.data.AccountApi.Linked(token, "viewer@example.com", "Living room", "d1"))
+            vm.checkAccount()
+        }
+        waitFor("linked") { vm.accountEmail == "viewer@example.com" }
+    }
+
+    /** 1.12.0: Back up now asks for a PIN once, sends it with the backup; the daily one skips an unchanged TV; restore from the account. */
+    @Test
+    fun backUpToTheAccountAndRestore() {
+        FakeAvidSite().use { site ->
+            linkForTest(site)
+            go(Screen.SETTINGS)
+            rule.runOnIdle { vm.settingsSection = "about" }
+            waitFor("Back up now") { rule.onAllNodesWithTag("backup-now").fetchSemanticsNodes().isNotEmpty() }
+            rule.onNodeWithTag("backup-now").performClick()
+            waitFor("PIN asked") { rule.onAllNodesWithText("Choose a backup PIN").fetchSemanticsNodes().isNotEmpty() }
+            rule.runOnIdle { vm.backUp(newPin = "2468") }
+            waitFor("sent (${vm.backupStatus})") { site.backups["d1"] != null && !vm.backupBusy }
+            assertEquals("2468", site.backups["d1"]!!.third)
+            assertTrue("locked: no playlist address in the clear", !site.backups["d1"]!!.second.contains("p1.m3u"))
+            assertTrue(vm.lastBackupAt > 0)
+            // The daily backup doesn't send an unchanged TV again, but does once something changes.
+            val sends = { site.calls.count { it.startsWith("POST /api/tv/backup ") } }
+            rule.runOnIdle { vm.backUp(auto = true) }
+            settle(800); assertEquals(1, sends())
+            val before = vm.prefs
+            rule.runOnIdle { vm.updatePrefs { it.copy(favorites = emptyList(), lists = emptyList()) } }
+            rule.runOnIdle { vm.backUp(auto = true) }
+            waitFor("changed TV sent again") { sends() == 2 }
+            // Restore the first one from a copy (another TV's backup in the account).
+            site.backups["d9"] = Triple("Bedroom", com.avidviewer.tv.data.Backup.write(
+                com.avidviewer.tv.data.Backup.Contents(vm.playlists, before, "", vm.history, emptyMap(), System.currentTimeMillis(), "test"), "1357"), "1357")
+            rule.onNodeWithTag("backup-restore").performClick()
+            waitFor("backups listed") { vm.cloudBackups?.size == 2 }
+            waitFor("Bedroom shown") { rule.onAllNodesWithText("Bedroom", substring = true).fetchSemanticsNodes().isNotEmpty() }
+            rule.onNodeWithText("Bedroom", substring = true).performClick()
+            waitFor("PIN asked to restore") { vm.pendingRestore != null }
+            assertTrue(vm.pendingRestoreInfo.startsWith("Bedroom"))
+            var ok: Boolean? = null
+            rule.runOnIdle { vm.restore("0000") { ok = it } }
+            waitFor("wrong PIN refused") { ok == false }
+            rule.runOnIdle { vm.restore("1357") { ok = it } }
+            waitFor("restored") { ok == true }
+            assertEquals(before.favorites, vm.prefs.favorites)
+            // Signing out forgets the backup PIN too.
+            rule.runOnIdle { vm.signOutOfAccount() }
+            assertFalse(vm.backupPinSet)
+        }
+    }
+
+    /** 1.12.0: the welcome screen's Sign in to your account links the TV, then restores a backup from the account. */
+    @Test
+    fun welcomeSignInRestoresAnotherTvsBackup() {
+        FakeAvidSite().use { site ->
+            val wanted = vm.playlists.map { it.id }
+            site.backups["d9"] = Triple("Bedroom", com.avidviewer.tv.data.Backup.write(
+                com.avidviewer.tv.data.Backup.Contents(vm.playlists, vm.prefs, "", vm.history, emptyMap(), System.currentTimeMillis(), "test"), "1357"), "1357")
+            rule.runOnIdle { vm.accountApi = site.base; vm.showWelcome = true }
+            waitFor("welcome") { rule.onAllNodesWithTag("welcome-signin").fetchSemanticsNodes().isNotEmpty() }
+            rule.onNodeWithTag("welcome-signin").performClick()
+            waitFor("code shown") { rule.onAllNodesWithText("K7M2-QX9P").fetchSemanticsNodes().isNotEmpty() }
+            site.approved = true
+            waitFor("linked and listed") { vm.accountEmail != null && vm.cloudBackups?.isNotEmpty() == true }
+            waitFor("Bedroom shown") { rule.onAllNodesWithText("Bedroom", substring = true).fetchSemanticsNodes().isNotEmpty() }
+            rule.onNodeWithText("Bedroom", substring = true).performClick()
+            waitFor("PIN asked") { vm.pendingRestore != null }
+            var ok: Boolean? = null
+            rule.runOnIdle { vm.restore("1357") { ok = it } }
+            waitFor("restored") { ok == true }
+            assertFalse(vm.showWelcome); assertFalse(vm.welcomeAccountOpen)
+            assertEquals(wanted, vm.playlists.map { it.id })
+            assertTrue("same PIN kept for this TV's backups", vm.backupPinSet)
+        }
     }
 
     @Test
@@ -1701,7 +1781,7 @@ class UsabilityTest {
             rule.onNodeWithTag("account-link").performClick()
             waitFor("linked again") { vm.accountEmail != null }
             rule.onNodeWithTag("account-signout").performClick()
-            waitFor("confirm") { rule.onAllNodesWithText("Sign out").fetchSemanticsNodes().size >= 1 && rule.onAllNodesWithText("Sign out of this TV?").fetchSemanticsNodes().isNotEmpty() }
+            waitFor("confirm") { rule.onAllNodesWithText("Sign out").fetchSemanticsNodes().size >= 1 && rule.onAllNodesWithText("Sign out of this device?").fetchSemanticsNodes().isNotEmpty() }
             rule.onNodeWithText("Sign out").performClick()
             waitFor("signed out") { vm.accountEmail == null && !vm.account.linked }
             waitFor("server told") { site.calls.any { it.startsWith("POST /api/tv/signout") } }

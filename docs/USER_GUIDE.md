@@ -30,7 +30,7 @@ The first time you open Avid Viewer, and every time it starts while there are no
 
 - **Enter a setup code** (highlighted, from 1.11.0): the easiest way to start. See [Set up with your phone](#set-up-with-your-phone) below.
 - **＋ Add a playlist**: opens **Settings › Playlists** on the add form, to type it with the remote. See below.
-- **Restore a backup**: opens **Settings › Updates & about**, for moving from another TV. See [Backup & restore](#backup--restore).
+- **Sign in to your account** (from 1.12.0): links this device to your avidviewer.app account, then offers the backups in your account, for moving from another device. See [Backup & restore](#backup--restore).
 - **avidviewer.app/setup**: scan the QR code with your phone's camera to open the setup page.
 
 Once a playlist has been added, the app opens on the TV Guide instead.
@@ -40,11 +40,11 @@ Once a playlist has been added, the app opens on the TV Guide instead.
 From 1.11.0 you can enter your playlist on a phone or computer instead of typing it with the remote.
 
 1. On your phone or computer, open **avidviewer.app/setup** (or scan the QR code on the welcome screen).
-2. Choose **Add playlists** and enter each one: an **Xtream Codes login** (server, username, password) or an **M3U link**, with an optional guide (XMLTV) link. Or choose **Restore a backup** and pick a `.avbak` file.
+2. Choose **Add playlists** and enter each one: an **Xtream Codes login** (server, username, password) or an **M3U link**, with an optional guide (XMLTV) link.
 3. Choose **Get a setup code**. The page shows a code like **K7M2-QX9P**. It works for 30 minutes.
 4. On the TV, choose **Enter a setup code** on the welcome screen (or **Settings › Playlists › Add playlist › Use a setup code**), type the code and press **Done**.
 
-The TV checks each playlist like one added by hand and adds it. A backup opens the usual restore screen and asks for its PIN. If you're signed in on the website, **Also link the TV to my account** (on by default) links the TV to your account at the same time; see [Account](#account).
+The TV checks each playlist like one added by hand and adds it. If you're signed in on the website, **Also link the TV to my account** (on by default) links the TV to your account at the same time; see [Account](#account).
 
 **Private by design:** the page encrypts your logins in your browser with the code before anything is sent. The website keeps only the scrambled copy, for 30 minutes, and can't read it.
 
@@ -482,45 +482,40 @@ Everything here stays on the device; nothing is uploaded or backed up to the clo
 
 ### Account
 
-From 1.11.0 a TV can be linked to an Avid Viewer account at avidviewer.app. Accounts add features (more are coming, such as picking up where you left off on every TV); your playlists always stay on the TV.
+From 1.11.0 a device can be linked to an Avid Viewer account at avidviewer.app. From 1.12.0 that's also where its backups are kept (see below).
 
-- **Making an account:** at **avidviewer.app/signin**, enter your email for a one-time sign-in link, or use a passkey you've added. There are no passwords. Your account page (**avidviewer.app/account**) lists your TVs, passkeys and signed-in browsers, your watch-history choice, and **Delete account**.
-- **Link this TV** (Settings › Account): the TV shows an 8-character code and a QR code. On your phone or computer, open **avidviewer.app/link** (or scan the QR code), sign in if asked, check the TV it found, give it a name, and choose **Link this TV**. The TV notices within a few seconds and shows **Linked to** your email. The code works for 10 minutes; **Cancel** stops waiting.
-- **Linked:** Settings › Account shows the account and this TV's name. **Sign out of this TV** (asks first) unlinks it; playlists and settings on the TV stay.
-- **Your TVs** on avidviewer.app/account shows each linked TV's name, model, app version and when it last checked in, with **Rename** and **Remove**. A removed TV unlinks itself the next time it checks in (a minute after the app starts, then every 6 hours).
-- **What's shared:** only the TV's name, model and Avid Viewer version. Never your playlists, channels or what you watch.
+- **Making an account:** at **avidviewer.app/signin**, enter your email for a one-time sign-in link, or use a passkey you've added. There are no passwords. Your account page (**avidviewer.app/account**) lists your devices, their backups, passkeys and signed-in browsers, your watch-history choice, and **Delete account**.
+- **Link this device** (Settings › Account, or **Sign in to your account** on the welcome screen): the device shows an 8-character code and a QR code. On your phone or computer, open **avidviewer.app/link** (or scan the QR code, or choose **Add a device** on your Account page), sign in if asked, check the device it found, give it a name, and choose **Link this device**. The device notices within a few seconds and shows **Linked to** your email. The code works for 10 minutes; **Cancel** stops waiting.
+- **Linked:** Settings › Account shows the account and this device's name. **Sign out of this device** (asks first) unlinks it and forgets its backup PIN; playlists and settings on the device stay.
+- **Your devices** on avidviewer.app/account shows each linked device's name, model, app version and when it last checked in, with **Rename** and **Remove**. A removed device unlinks itself the next time it checks in (a minute after the app starts, then every 6 hours); its backup stays in your account for 30 days.
+- **What's shared:** linking sends only the device's name, model and Avid Viewer version. Your playlists and settings go to your account only in a backup, locked with your backup PIN. What you watch is never sent.
 
 #### Backup & restore
 
-A backup saves your playlists (with their logins), ★ Favorites and your lists, renamed and re-ordered channels and categories, hidden items, Sports leagues and options, location, the TMDB key, network-share settings, all other settings, watch history and resume points, and every profile with its own favorites, lists, hidden items and history (PINs are stored only as one-way hashes). After a restore the app opens on the owner's profile. Channels, guides and movie catalogs aren't included; they download again after a restore.
+From 1.12.0, backups are kept in your **avidviewer.app account**, so only a device linked to your account can back up or restore. On a device that isn't linked, this section shows **Link this device** (see [Account](#account)). Backup files on the device and network-share (SAMBA) backups were removed in 1.12.0.
 
-Because it holds your provider logins, every backup is locked with a **PIN** you choose (4 or more digits). The PIN can't be recovered if you forget it.
+A backup holds your playlists (with their logins), ★ Favorites and your lists, renamed and re-ordered channels and categories, hidden items, Sports leagues and options, location, the TMDB key, all other settings, watch history and resume points, and every profile with its own favorites, lists, hidden items and history (profile PINs are stored only as one-way hashes). After a restore the app opens on the owner's profile. Channels, guides and movie catalogs aren't included; they download again after a restore.
 
-**Back up to this device**
+**One backup per device.** Each linked device keeps one backup in your account, its most recent; every new backup replaces the last one.
 
-1. Choose **Back up now**, enter a PIN twice, then **Save backup**.
-2. The file is saved to **Download › AvidViewer**, with a name like `AvidViewer-backup-2026-11-09_2015.avbak`. It stays there even if you delete the app.
-3. On Android 9 and older, the app first asks for permission to save to the Download folder.
+**Back up**
 
-**Restore**
+1. Choose **Back up now**. The first time, choose a **backup PIN** (4 or more digits, entered twice), then **Back up**. Because the backup holds your provider logins, it's locked with this PIN before it leaves the device.
+2. The device remembers the PIN, so later backups don't ask again. **Change PIN** sets a new one (and backs up with it).
+3. **Back up every day** (on by default) backs up once a day, only when something changed. Turn it off to back up only when you choose Back up now.
+4. **Last backup** shows when this device last backed up.
 
-1. Choose **Restore from a backup**. This opens the device's file picker, or a file manager app if one is installed. If neither exists, the app lists the backups it finds in the Download folder.
-2. Check the confirmation, which shows when the backup was made and which playlists it holds. Restoring replaces the playlists and settings on this device and can't be undone.
-3. Enter the backup's PIN. A wrong PIN is refused and nothing changes. After a restore, channels and guides start downloading again.
+**Restore, or copy another device's setup**
 
-**Network share (SAMBA)**
+1. Choose **Restore from your account**. It lists every backup in your account, newest first: **This device**, your other devices, and removed devices.
+2. Choose one. The confirmation shows which device it's from, when it was made and which playlists it holds. Restoring replaces the playlists and settings on this device and can't be undone.
+3. Enter that backup's PIN. A wrong PIN is refused and nothing changes. After a restore, channels and guides start downloading again, and this device backs up with the same PIN from then on (if it didn't have one).
 
-Keep backups in a shared folder on a PC or NAS, so a reinstalled app or a new TV can restore without a file manager or USB drive.
+**Setting up a new device:** on its welcome screen choose **Sign in to your account**, approve the code at **avidviewer.app/link** (or **Add a device** on your Account page), then pick the backup to copy.
 
-1. Enter the **share address**, for example `\\192.168.1.20\Backups\AvidViewer` (`\\NAS\Backups` and `smb://server/share/folder` also work). The folder is created if it's missing.
-2. Enter a **user name** (`DOMAIN\user` works) and **password**. Leave both empty for a guest share.
-3. Choose **Save and test**. The app connects and tells you how many backups are already there.
-4. **Back up to the share** asks for a PIN, then saves the file there.
-5. **Restore from the share** lists the backups, newest first. Pick one, enter its PIN and confirm.
+**Forgot the PIN?** Sign in at **avidviewer.app/account**, find the backup under **Backups** and choose **Show PIN**. For your security it's shown only after a sign-in in the last hour, or a passkey sign-in.
 
-The share password is stored encrypted on the TV and is included in your PIN-locked backups.
-
-**Moving to another TV:** copy the `.avbak` file across (network share, USB drive or file manager), then restore it on the new TV.
+**On the website:** **Backups** on your Account page lists each device's backup with its date, size and number of playlists; **Delete** removes one. A device removed from your account keeps its backup for **30 days** (so a replacement can restore it), then it's deleted. Deleting your account deletes all backups.
 
 ## 10. Privacy
 
@@ -528,7 +523,7 @@ The share password is stored encrypted on the TV and is included in your PIN-loc
 
 - All your data stays on the device. Android cloud backup and device-to-device transfer are turned off.
 - Provider passwords and the TMDB key are encrypted with the Android Keystore.
-- Backup files are encrypted and locked with your PIN, because they contain provider logins.
+- Backups are encrypted on the device with your backup PIN before they're sent to your account, because they contain provider logins. The website keeps the PIN separately, encrypted, so you can look it up on your Account page.
 - Profile PINs are stored only as salted one-way hashes, never as the digits.
 - The **playback log** (freezes and errors) never records what you watch: each channel or title is a short code made from a random number kept on your TV, which can't be turned back into a name. It is sent to bugs@avidviewer.app at most once a day when there were problems, or when you choose Send playback log. Turn off **Send it automatically** in Settings › Updates & about to send it only by hand. Addresses, logins and IP addresses are removed first.
 - Crash details leave the TV only when you choose **Report issue**. They go to bugs@avidviewer.app through a small mail relay, with web addresses, server and host names, IP addresses, user names, passwords and tokens removed first.
@@ -585,16 +580,11 @@ The next time it starts, the app says **Avid Viewer closed unexpectedly**:
 
 ### Backup questions
 
-**After reinstalling on a newer Fire TV, the app can't see my backup.** On Fire OS 8 (Android 11), a reinstalled app may not be allowed to see a backup the old install saved, and some Fire TVs have no file picker. The app suggests installing a free file manager such as **X-plore**, which lets you pick the file. Backing up to a network share avoids the problem altogether.
+**Backup & restore only says Link this device.** Backups live in your avidviewer.app account from 1.12.0. Link the device in Settings › Account, then back up.
 
-**The network share won't connect.**
+**I forgot my backup PIN.** Sign in at avidviewer.app/account and choose **Show PIN** next to the backup. If it asks you to sign in again, that's because the PIN is shown only after a recent sign-in.
 
-- Use the PC's or NAS's **IP address** if the TV can't find it by name. The app says "try the IP address" when this is the problem.
-- Make sure the user has permission to **change** files in the shared folder, not just read them.
-- Avid Viewer supports SMB 2 and 3 (Windows 10/11 and most NAS boxes). Devices that only offer SMB 1 won't connect.
-- Other errors are explained in plain words: wrong password, no share by that name, no permission to write, or server not reachable.
-
-**I forgot my backup PIN.** It can't be recovered. Make a new backup with a new PIN.
+**A backup from an older version (an `.avbak` file or a network share).** These can't be restored from 1.12.0. Once the device is linked to your account, it makes a new backup in your account the next day (or choose Back up now).
 
 ### Reliability
 

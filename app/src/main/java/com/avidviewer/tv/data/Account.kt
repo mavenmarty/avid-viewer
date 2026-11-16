@@ -25,6 +25,11 @@ object AccountApi {
     data class Start(val userCode: String, val deviceCode: String, val interval: Int, val expiresIn: Int, val qrUrl: String)
     data class Linked(val token: String, val email: String, val name: String, val deviceId: String)
     data class Me(val email: String, val name: String)
+    /** One TV's backup in the account (each TV keeps only its most recent). */
+    data class CloudBackup(
+        val deviceId: String, val name: String, val model: String, val appVersion: String, val createdAt: Long,
+        val size: Int, val playlists: Int?, val removed: Boolean, val thisTv: Boolean,
+    )
 
     /** This TV's name (the one in Fire TV / Android settings when there is one), model and app version. */
     fun info(context: Context, appVersion: String): Info {
@@ -63,7 +68,7 @@ object AccountApi {
         return when (o.optString("status")) {
             "approved" -> linked(o)
             "pending" -> null
-            else -> throw Problem(if (code == 200) "The code expired before it was used. Choose Link this TV for a new one." else "avidviewer.app answered $code.")
+            else -> throw Problem(if (code == 200) "The code expired before it was used. Choose Link this device for a new one." else "avidviewer.app answered $code.")
         }
     }
 
@@ -81,6 +86,38 @@ object AccountApi {
             401 -> null
             else -> throw Problem("avidviewer.app answered $code.")
         }
+    }
+
+    private fun failed(code: Int, o: JSONObject): Nothing = throw Problem(when (code) {
+        401 -> "This device is no longer linked to your account. Link it again in Settings › Account."
+        403 -> "Your Avid Viewer account is suspended. Email support@avidviewer.app for help."
+        else -> o.optString("error").ifBlank { "avidviewer.app answered $code. Try again in a moment." }
+    })
+
+    /** Sends this TV's backup, replacing the one it sent before, with its PIN (kept so the Account page can show it). */
+    fun uploadBackup(token: String, data: String, pin: String, base: String = BASE) {
+        val (code, o) = call(base, "/api/tv/backup", JSONObject().put("data", data).put("pin", pin), token)
+        if (code != 200) failed(code, o)
+    }
+
+    /** The account's backups, newest first. */
+    fun listBackups(token: String, base: String = BASE): List<CloudBackup> {
+        val (code, o) = call(base, "/api/tv/backups", null, token)
+        if (code != 200) failed(code, o)
+        val a = o.optJSONArray("backups") ?: return emptyList()
+        return List(a.length()) {
+            val b = a.getJSONObject(it)
+            CloudBackup(b.optString("deviceId"), b.optString("name", "Device"), b.optString("model"), b.optString("appVersion"),
+                b.optLong("createdAt"), b.optInt("size"), if (b.isNull("playlists")) null else b.optInt("playlists"),
+                b.optBoolean("removed"), b.optBoolean("thisTv"))
+        }
+    }
+
+    /** One backup's file text (still locked with its PIN). */
+    fun downloadBackup(token: String, deviceId: String, base: String = BASE): String {
+        val (code, o) = call(base, "/api/tv/backup?device=" + java.net.URLEncoder.encode(deviceId, "UTF-8"), null, token)
+        if (code != 200) failed(code, o)
+        return o.optString("data").ifBlank { throw Problem("That backup came back empty.") }
     }
 
     fun signOut(token: String, base: String = BASE) { runCatching { call(base, "/api/tv/signout", JSONObject(), token) } }
@@ -103,6 +140,31 @@ class AccountStore(context: Context) {
         prefs.edit().putString("token", enc).putString("email", l.email).putString("name", l.name)
             .putString("deviceId", l.deviceId).apply()
     }
+
+    val deviceId: String get() = prefs.getString("deviceId", "").orEmpty()
+
+    /** The backup PIN for cloud backups, set once on this TV (encrypted like the token). */
+    var backupPin: String?
+        get() = prefs.getString("backupPin", null)?.let { stored ->
+            if (TESTS && stored.startsWith("test:")) stored.removePrefix("test:") else runCatching { Crypto.decrypt(stored) }.getOrNull()
+        }?.takeIf { it.isNotBlank() }
+        set(v) {
+            if (v == null) { prefs.edit().remove("backupPin").remove("backupPrint").apply(); return }
+            val enc = runCatching { Crypto.encrypt(v) }.getOrElse { if (TESTS) "test:$v" else throw it }
+            // A new PIN means the next backup must be sent again, locked with it.
+            prefs.edit().putString("backupPin", enc).remove("backupPrint").apply()
+        }
+    /** Fingerprint of what was last sent, so an unchanged TV isn't backed up again. */
+    var backupPrint: String
+        get() = prefs.getString("backupPrint", "").orEmpty()
+        set(v) { prefs.edit().putString("backupPrint", v).apply() }
+    var lastBackupAt: Long
+        get() = prefs.getLong("lastBackupAt", 0L)
+        set(v) { prefs.edit().putLong("lastBackupAt", v).apply() }
+    /** The automatic daily backup (on once a PIN is set; can be turned off). */
+    var autoBackup: Boolean
+        get() = prefs.getBoolean("autoBackup", true)
+        set(v) { prefs.edit().putBoolean("autoBackup", v).apply() }
 
     fun update(me: AccountApi.Me) { prefs.edit().putString("email", me.email).putString("name", me.name).apply() }
 

@@ -8,6 +8,7 @@ import kotlin.concurrent.thread
  * A stand-in for avidviewer.app's TV API (accounts step 2) and setup codes: /api/tv/link/start|poll|claim,
  * /api/tv/me, /api/tv/signout, /api/setup/<id>. [approved] makes the next poll succeed; [removed] makes /api/tv/me
  * answer 401 (the TV was removed on the account page). Every request is recorded in [calls] as "METHOD path body".
+ * 1.12.0 backups: POST /api/tv/backup, GET /api/tv/backups, GET /api/tv/backup?device=; [backups] holds one per TV.
  */
 class FakeAvidSite : AutoCloseable {
     private val server = ServerSocket(0, 50, InetAddress.getByName("127.0.0.1"))
@@ -17,6 +18,9 @@ class FakeAvidSite : AutoCloseable {
     @Volatile var removed = false
     /** Setup codes it serves: fingerprint → data. */
     val setups = java.util.concurrent.ConcurrentHashMap<String, String>()
+    /** One backup per TV: device id → (TV name, file text, PIN). */
+    val backups = java.util.concurrent.ConcurrentHashMap<String, Triple<String, String, String>>()
+    private fun deviceOf(auth: String) = if (auth.startsWith("Bearer TVTOKEN_claimed")) "d2" else "d1"
 
     init {
         thread(isDaemon = true) {
@@ -50,6 +54,22 @@ class FakeAvidSite : AutoCloseable {
             path == "/api/tv/link/claim" -> 200 to """{"status":"approved","token":"TVTOKEN_claimedabcdefghijklmnopqrst","email":"viewer@example.com","name":"Den TV","deviceId":"d2"}"""
             path == "/api/tv/me" -> if (removed || !auth.startsWith("Bearer TVTOKEN_")) 401 to """{"error":"This TV is not linked."}""" else 200 to """{"email":"viewer@example.com","name":"Living room"}"""
             path == "/api/tv/signout" -> 200 to """{"ok":true}"""
+            path == "/api/tv/backup" && method == "POST" -> {
+                val o = org.json.JSONObject(body)
+                val d = deviceOf(auth)
+                backups[d] = Triple(if (d == "d1") "Living room" else "Den TV", o.getString("data"), o.optString("pin"))
+                200 to """{"ok":true}"""
+            }
+            path == "/api/tv/backups" -> 200 to org.json.JSONObject().put("backups", org.json.JSONArray().apply {
+                backups.forEach { (id, b) ->
+                    val head = org.json.JSONObject(b.second)
+                    put(org.json.JSONObject().put("deviceId", id).put("name", b.first).put("model", "Test").put("appVersion", head.optString("appVersion"))
+                        .put("createdAt", head.optLong("created")).put("size", b.second.length).put("playlists", head.optJSONArray("playlistNames")?.length() ?: 0)
+                        .put("removed", false).put("thisTv", id == deviceOf(auth)))
+                }
+            }).toString()
+            path.startsWith("/api/tv/backup?device=") -> backups[path.substringAfter("device=")]?.let { 200 to org.json.JSONObject().put("data", it.second).toString() }
+                ?: (404 to """{"error":"That backup is no longer in your account."}""")
             path.startsWith("/api/setup/") -> setups[path.removePrefix("/api/setup/")]?.let { 200 to """{"data":"$it"}""" } ?: (404 to """{"error":"Not found."}""")
             else -> 404 to """{"error":"Not found."}"""
         }

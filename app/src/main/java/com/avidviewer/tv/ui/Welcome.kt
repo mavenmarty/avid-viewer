@@ -32,7 +32,8 @@ import com.avidviewer.tv.R
 
 /**
  * The first screen of a new install (1.6.0): shown at start while there are no playlists. Avid Viewer comes with
- * no channels, so it says so, offers Add a playlist (highlighted) and Restore a backup, and shows the user guide
+ * no channels, so it says so, offers a setup code (highlighted), Add a playlist and Sign in to your account (link the
+ * TV and restore a backup from the account, 1.12.0), and shows the user guide
  * as a QR code for a phone.
  */
 @Composable
@@ -65,9 +66,9 @@ fun WelcomeScreen(vm: AppViewModel) {
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 TvButton("Enter a setup code", primary = true, modifier = Modifier.focusRequester(add).testTag("welcome-code")) { vm.openSetupCode() }
                 TvButton("＋  Add a playlist", modifier = Modifier.testTag("welcome-add")) { vm.welcomeAddPlaylist() }
-                TvButton("Restore a backup", modifier = Modifier.testTag("welcome-restore")) { vm.welcomeRestore() }
+                TvButton("Sign in to your account", modifier = Modifier.testTag("welcome-signin")) { vm.welcomeSignIn() }
             }
-            Label("Moving from another TV? Upload its backup file on avidviewer.app/setup for a code, or restore a backup made in Settings › Updates & about.", size = 13.sp, color = C.Muted, lines = 2)
+            Label("Moving from another device? Sign in to your account to link this device and restore the other device's backup.", size = 13.sp, color = C.Muted, lines = 2)
         }
         Column(
             Modifier.width(300.dp).clip(RoundedCornerShape(16.dp)).background(C.Surface).padding(22.dp),
@@ -110,4 +111,41 @@ fun SetupCodeDialog(vm: AppViewModel) {
         confirmButton = { TvButton(if (vm.setupBusy) "Setting up…" else "Set up", primary = true, busy = vm.setupBusy, modifier = Modifier.testTag("setup-go")) { vm.redeemSetupCode(text) } },
         dismissButton = { TvButton("Cancel") { vm.closeSetupCode() } },
     )
+}
+
+/** Welcome › Sign in to your account: the link code, then the account's backups to restore (1.12.0). */
+@Composable
+fun WelcomeAccountDialog(vm: AppViewModel) {
+    val fmt = remember { java.text.SimpleDateFormat("MMM d, yyyy h:mm a", java.util.Locale.getDefault()) }
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = { vm.closeWelcomeAccount() },
+        containerColor = C.Surface,
+        modifier = Modifier.testTag("welcome-account"),
+        title = { androidx.compose.material3.Text(if (vm.accountEmail == null) "Sign in to your account" else "Linked to ${vm.accountEmail}", color = C.Text, fontWeight = FontWeight.Bold) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                val code = vm.linkCode
+                when {
+                    vm.accountEmail == null && code != null -> LinkCodePanel(vm, code)
+                    vm.accountEmail == null -> Label(vm.accountStatus ?: "Getting a code…", size = 14.sp, color = C.Soft, lines = Int.MAX_VALUE)
+                    else -> {
+                        val list = vm.cloudBackups
+                        if (!list.isNullOrEmpty()) {
+                            Label("Choose a backup to restore on this device:", size = 14.sp, color = C.Soft)
+                            list.take(8).forEach { b ->
+                                val who = when { b.thisTv -> "This device"; b.removed -> "${b.name} (removed)"; else -> b.name }
+                                val pls = b.playlists?.let { n -> "  ·  $n playlist" + if (n == 1) "" else "s" } ?: ""
+                                TvButton("$who  ·  ${fmt.format(b.createdAt)}$pls", modifier = Modifier.testTag("cloud-backup")) { vm.chooseCloudBackup(b) }
+                            }
+                        }
+                        vm.backupStatus?.let { Label(it, size = 13.sp, color = C.Soft, lines = Int.MAX_VALUE) }
+                        if (list != null && list.isEmpty()) Label("Add a playlist or enter a setup code to get started; this device will back up to your account once you choose a backup PIN.", size = 13.sp, color = C.Muted, lines = Int.MAX_VALUE)
+                    }
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = { TvButton(if (vm.accountEmail != null) "Close" else "Cancel", modifier = Modifier.testTag("welcome-account-close")) { vm.closeWelcomeAccount() } },
+    )
+    if (vm.pendingRestore != null) RestorePinDialog(vm)
 }

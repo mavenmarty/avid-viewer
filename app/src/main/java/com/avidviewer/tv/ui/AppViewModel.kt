@@ -182,7 +182,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         if (profiles.needsPin(p)) {
             pinAsk = PinAsk(
                 if (p.hasPin) "Enter ${p.name}'s PIN" else "Parent PIN to open ${p.name}",
-                if (profiles.hasKids) "A Kids profile is on this TV, so ${p.name} needs a PIN" else "",
+                if (profiles.hasKids) "A Kids profile is on this device, so ${p.name} needs a PIN" else "",
                 p, { profiles.unlocks(p, it) }, { openProfile(p.id) },
             )
         } else openProfile(p.id)
@@ -466,6 +466,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         accountEmail = l.email; accountTvName = l.name; linkCode = null
         accountStatus = "Linked to ${l.email} as \"${l.name}\"."
         trail("account linked")
+        if (welcomeAccountOpen) loadCloudBackups()
     }
 
     /** Settings › Account › Link this TV: shows a code + QR code and waits (polling) for approval on the phone. */
@@ -496,8 +497,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** Settings › Account › Sign out of this TV: forgets the link here and tells the account (best effort). */
     fun signOutOfAccount() {
         val token = account.token
-        account.clear(); accountEmail = null; accountTvName = ""; linkCode = null
-        accountStatus = "This TV is no longer linked to an account. Its playlists and settings stay."
+        account.clear(); backupPinSet = false; lastBackupAt = 0L; cloudBackups = null; accountEmail = null; accountTvName = ""; linkCode = null
+        accountStatus = "This device is no longer linked to an account. Its playlists and settings stay."
         if (token != null) viewModelScope.launch(Dispatchers.IO) { com.avidviewer.tv.data.AccountApi.signOut(token, accountApi) }
     }
 
@@ -509,8 +510,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             val me = runCatching { withContext(Dispatchers.IO) { com.avidviewer.tv.data.AccountApi.me(token, accountInfo().appVersion, accountApi) } }
             me.onSuccess { m ->
                 if (m == null) {
-                    account.clear(); accountEmail = null; accountTvName = ""
-                    accountStatus = "This TV was removed from your account on avidviewer.app. Link it again any time."
+                    account.clear(); backupPinSet = false; lastBackupAt = 0L; cloudBackups = null; accountEmail = null; accountTvName = ""
+                    accountStatus = "This device was removed from your account on avidviewer.app. Link it again any time."
                 } else { account.update(m); accountEmail = m.email; accountTvName = m.name }
             }
         }
@@ -632,17 +633,23 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         screen = Screen.SETTINGS; settingsSection = "playlists"; navMode = NavMode.COLLAPSED
     }
 
-    fun welcomeRestore() {
-        showWelcome = false
-        screen = Screen.SETTINGS; settingsSection = "about"; navMode = NavMode.COLLAPSED
-    }
-
     // ---------------- setup codes (avidviewer.app/setup, 1.11.0) ----------------
     var setupCodeOpen by mutableStateOf(false)
     var setupStatus by mutableStateOf<String?>(null); private set
     var setupBusy by mutableStateOf(false); private set
     /** Where setup codes are fetched from; tests point it at a fake server. */
     internal var setupApi = com.avidviewer.tv.data.SetupCode.API
+
+    /** Welcome screen › Sign in to your account: link this TV, then offer the account's backups (1.12.0). */
+    var welcomeAccountOpen by mutableStateOf(false); private set
+    fun welcomeSignIn() {
+        backupStatus = null; cloudBackups = null; welcomeAccountOpen = true
+        if (account.linked) loadCloudBackups() else startLinking()
+    }
+    fun closeWelcomeAccount() {
+        if (linkCode != null) cancelLinking()
+        welcomeAccountOpen = false; cloudBackups = null; pendingRestore = null
+    }
 
     fun openSetupCode() { setupStatus = null; setupCodeOpen = true }
     fun closeSetupCode() { if (!setupBusy) setupCodeOpen = false }
@@ -663,14 +670,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             } catch (e: Exception) {
                 setupStatus = e.message ?: "That didn't work. Try again."; setupBusy = false; return@launch
             }
-            trail("setup code: ${setup.playlists.size} playlist(s)${if (setup.backup != null) ", backup" else ""}")
+            trail("setup code: ${setup.playlists.size} playlist(s)")
             setup.link?.let { claimSetupLink(it) }
-            if (setup.backup != null) {
-                setupBusy = false; setupCodeOpen = false
-                welcomeRestore()
-                offerRestore(setup.backup)
-                return@launch
-            }
             val added = mutableListOf<Playlist>(); val problems = mutableListOf<String>()
             for (it in setup.playlists) {
                 val p = Playlist(
@@ -711,142 +712,109 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     private var watchStart = 0L
     private var watchKey: String? = null
 
-    // ---------------- backup & restore ----------------
-    /** What only the screen can do (ask for storage permission, open the file picker); set by MainActivity. */
-    interface BackupHost {
-        fun requestStorage(write: Boolean, then: (Boolean) -> Unit)
-        fun canPick(): Boolean
-        /** Opens the file picker; gives the chosen file's text, or null (cancelled or no picker). */
-        fun pickFile(then: (String?) -> Unit)
-    }
-    var backupHost: BackupHost? = null
+    // ---------------- backup & restore: in the avidviewer.app account (1.12.0) ----------------
+    // Only a linked TV backs up or restores. Each TV keeps one backup in the account, its most recent; the PIN is
+    // chosen at the first backup, remembered here (encrypted) for the daily ones, and shown on the Account page.
     var backupStatus by mutableStateOf<String?>(null); private set
     var backupBusy by mutableStateOf(false); private set
-    var foundBackups by mutableStateOf<List<com.avidviewer.tv.data.BackupFiles.Found>>(emptyList()); private set
-    /** A backup file chosen for restoring, waiting for its PIN. */
+    var backupPinSet by mutableStateOf(account.backupPin != null); private set
+    var lastBackupAt by mutableStateOf(account.lastBackupAt); private set
+    var autoBackup by mutableStateOf(account.autoBackup); private set
+    /** The account's backups, after Restore from your account. */
+    var cloudBackups by mutableStateOf<List<com.avidviewer.tv.data.AccountApi.CloudBackup>?>(null); private set
+    /** A backup chosen for restoring, waiting for its PIN. */
     var pendingRestore by mutableStateOf<String?>(null); private set
     var pendingRestoreInfo by mutableStateOf(""); private set
+    private var lastBackupCheck = 0L
 
-    fun backUp(pin: String, toShare: Boolean = false) {
-        if (pin.length < 4) { backupStatus = "Choose a PIN of at least 4 digits."; return }
+    private fun backupContents() = com.avidviewer.tv.data.Backup.Contents(
+        playlists,
+        // The owner's settings and history, whichever profile is in use; the others go in profileFiles.
+        if (profile.isOwner) prefs else store.loadPrefs(Profile.OWNER),
+        tmdbKey(),
+        if (profile.isOwner) history else store.loadHistory(Profile.OWNER),
+        if (profile.isOwner) resume else store.loadResume(Profile.OWNER),
+        System.currentTimeMillis(), installed.second, "", backupRefs(),
+        profiles = profiles.copy(active = Profile.OWNER).toJson(),
+        profileFiles = store.exportProfileFiles(),
+    )
+
+    /**
+     * Back up now (or the daily automatic backup, [auto]). [newPin] sets or changes the PIN first; without a PIN
+     * the screen asks for one. The automatic backup skips sending when nothing changed since the last one.
+     */
+    fun backUp(newPin: String? = null, auto: Boolean = false) {
+        val token = account.token ?: run { if (!auto) backupStatus = "Link this device to your account first (Settings › Account)."; return }
+        if (newPin != null) {
+            if (newPin.length < 4 || newPin.any { !it.isDigit() }) { backupStatus = "Choose a PIN of at least 4 digits."; return }
+            account.backupPin = newPin; backupPinSet = true
+        }
+        val pin = account.backupPin ?: return
+        if (backupBusy) return
+        viewModelScope.launch {
+            if (!auto) { backupBusy = true; backupStatus = "Backing up to your account…" }
+            val result = runCatching {
+                withContext(Dispatchers.Default) {
+                    val c = backupContents()
+                    val print = com.avidviewer.tv.data.Backup.fingerprint(c)
+                    if (auto && print == account.backupPrint) null
+                    else Pair(com.avidviewer.tv.data.Backup.write(c, pin), print)
+                }?.also { (text, _) -> withContext(Dispatchers.IO) { com.avidviewer.tv.data.AccountApi.uploadBackup(token, text, pin, accountApi) } }
+            }
+            backupBusy = false
+            result.onSuccess { sent ->
+                if (sent != null) {
+                    account.backupPrint = sent.second
+                    val now = System.currentTimeMillis()
+                    account.lastBackupAt = now; lastBackupAt = now
+                    trail(if (auto) "auto backup sent" else "backup sent")
+                }
+                if (!auto) backupStatus = "Backed up to your account. If you forget the PIN, it's on avidviewer.app/account."
+            }.onFailure { if (!auto) backupStatus = "Couldn't back up: ${it.message}" else trail("auto backup failed") }
+        }
+    }
+
+    fun setAutoBackup(on: Boolean) { account.autoBackup = on; autoBackup = on }
+
+    /** From the ticker: once a day, and two minutes after start, back up if something changed. */
+    internal fun autoBackupIfDue(now: Long) {
+        if (!account.linked || !autoBackup || account.backupPin == null || backupBusy) return
+        if (now - startedAt < 2 * 60_000L) return
+        if (lastBackupCheck != 0L && now - lastBackupCheck < 24 * 60 * 60 * 1000L) return
+        if (lastBackupCheck == 0L && now - account.lastBackupAt < 24 * 60 * 60 * 1000L) { lastBackupCheck = account.lastBackupAt; return }
+        lastBackupCheck = now
+        backUp(auto = true)
+    }
+
+    /** Restore from your account: lists every TV's backup, so a new TV can copy another's setup. */
+    fun loadCloudBackups() {
+        val token = account.token ?: run { backupStatus = "Link this device to your account first (Settings › Account)."; return }
+        viewModelScope.launch {
+            backupBusy = true; backupStatus = "Looking for backups in your account…"
+            runCatching { withContext(Dispatchers.IO) { com.avidviewer.tv.data.AccountApi.listBackups(token, accountApi) } }
+                .onSuccess { cloudBackups = it; backupStatus = if (it.isEmpty()) "There are no backups in your account yet. Choose Back up now on a linked device to make one." else null }
+                .onFailure { backupStatus = it.message }
+            backupBusy = false
+        }
+    }
+
+    fun closeCloudBackups() { cloudBackups = null }
+
+    fun chooseCloudBackup(b: com.avidviewer.tv.data.AccountApi.CloudBackup) {
+        val token = account.token ?: return
         viewModelScope.launch {
             backupBusy = true
-            backupStatus = "Making the backup…"
-            val app = getApplication<Application>()
-            val stamp = SimpleDateFormat("yyyy-MM-dd_HHmm", Locale.US).format(System.currentTimeMillis())
-            val name = "AvidViewer-backup-$stamp.${com.avidviewer.tv.data.Backup.EXTENSION}"
-            val text = runCatching {
-                withContext(Dispatchers.Default) {
-                    com.avidviewer.tv.data.Backup.write(
-                        com.avidviewer.tv.data.Backup.Contents(
-                            playlists,
-                            // The owner's settings and history, whichever profile is in use; the others go in profileFiles.
-                            if (profile.isOwner) prefs else store.loadPrefs(Profile.OWNER),
-                            tmdbKey(),
-                            if (profile.isOwner) history else store.loadHistory(Profile.OWNER),
-                            if (profile.isOwner) resume else store.loadResume(Profile.OWNER),
-                            System.currentTimeMillis(), installed.second, smbPassword(), backupRefs(),
-                            profiles = profiles.copy(active = Profile.OWNER).toJson(),
-                            profileFiles = store.exportProfileFiles(),
-                        ), pin,
-                    )
-                }
-            }.getOrElse { backupBusy = false; backupStatus = "Couldn't make the backup: ${it.message}"; return@launch }
-            if (toShare) {
-                backupStatus = "Saving to ${prefs.smbAddress}…"
-                backupStatus = runCatching { withContext(Dispatchers.IO) { com.avidviewer.tv.data.Smb.write(smbTarget(), name, text) } }
-                    .fold({ "Saved $name to ${smbTarget().display}. Keep your PIN somewhere safe: the backup can't be opened without it." },
-                        { com.avidviewer.tv.data.Smb.explain(it) })
-                backupBusy = false
-                return@launch
-            }
-            suspend fun save() {
-                backupStatus = runCatching { withContext(Dispatchers.IO) { com.avidviewer.tv.data.BackupFiles.save(app, name, text) } }
-                    .fold({ "Saved to $it. It stays there if the app is deleted. Keep your PIN somewhere safe: the backup can't be opened without it." },
-                        { "Couldn't save the backup: ${it.message}" })
-                backupBusy = false
-            }
-            val host = backupHost
-            if (com.avidviewer.tv.data.BackupFiles.needsWritePermission() && host != null) {
-                host.requestStorage(true) { ok ->
-                    viewModelScope.launch { if (ok) save() else { backupBusy = false; backupStatus = "Avid Viewer needs permission to save to the Download folder. Choose Back up again and allow it." } }
-                }
-            } else save()
+            runCatching { withContext(Dispatchers.IO) { com.avidviewer.tv.data.AccountApi.downloadBackup(token, b.deviceId, accountApi) } }
+                .onSuccess { offerRestore(it, from = if (b.thisTv) "This device" else b.name) }
+                .onFailure { backupStatus = it.message }
+            backupBusy = false
         }
     }
 
-    // ---- SAMBA share ----
-    var smbStatus by mutableStateOf<String?>(null); private set
-    var shareBackups by mutableStateOf<List<Pair<String, Long>>>(emptyList()); private set
-
-    fun smbPassword(): String = if (prefs.smbPassEnc.isBlank()) "" else Crypto.decrypt(prefs.smbPassEnc)
-
-    fun smbTarget() = com.avidviewer.tv.data.Smb.target(prefs.smbAddress, prefs.smbUser, smbPassword())
-
-    val smbReady get() = prefs.smbAddress.isNotBlank()
-
-    /** Saves the share details and checks them (connects, makes the folder if needed, counts backups). */
-    fun saveShare(address: String, user: String, password: String?) {
-        updatePrefs {
-            it.copy(smbAddress = address.trim(), smbUser = user.trim(),
-                smbPassEnc = when { password == null -> it.smbPassEnc; password.isEmpty() -> ""; else -> Crypto.encrypt(password) })
-        }
-        if (address.isBlank()) { smbStatus = "Share removed."; shareBackups = emptyList(); return }
-        viewModelScope.launch {
-            smbStatus = "Connecting to ${address.trim()}…"
-            smbStatus = runCatching { withContext(Dispatchers.IO) { com.avidviewer.tv.data.Smb.test(smbTarget()) } }
-                .fold({ n -> "Connected to ${smbTarget().display}. " + if (n == 0) "No backups there yet." else "$n backup(s) there." },
-                    { com.avidviewer.tv.data.Smb.explain(it) })
-        }
-    }
-
-    fun listShareBackups() {
-        viewModelScope.launch {
-            smbStatus = "Looking for backups on ${prefs.smbAddress}…"
-            runCatching { withContext(Dispatchers.IO) { com.avidviewer.tv.data.Smb.list(smbTarget()) } }
-                .onSuccess { shareBackups = it; smbStatus = if (it.isEmpty()) "No backups on the share yet." else null }
-                .onFailure { shareBackups = emptyList(); smbStatus = com.avidviewer.tv.data.Smb.explain(it) }
-        }
-    }
-
-    fun chooseShareBackup(name: String) {
-        viewModelScope.launch {
-            runCatching { withContext(Dispatchers.IO) { com.avidviewer.tv.data.Smb.read(smbTarget(), name) } }
-                .onSuccess { offerRestore(it) }.onFailure { smbStatus = com.avidviewer.tv.data.Smb.explain(it) }
-        }
-    }
-
-    /** Restore: the file picker if the device has one, otherwise backups found in the Download folder. */
-    fun startRestore() {
-        backupStatus = null
-        val host = backupHost
-        if (host != null && host.canPick()) host.pickFile { text -> if (text != null) offerRestore(text) else scanForBackups() }
-        else scanForBackups()
-    }
-
-    fun scanForBackups() {
-        val app = getApplication<Application>()
-        val run = {
-            viewModelScope.launch {
-                foundBackups = withContext(Dispatchers.IO) { com.avidviewer.tv.data.BackupFiles.findInDownloads(app) }
-                if (foundBackups.isEmpty()) backupStatus =
-                    "No backup found in the Download folder. If the file is on this device, a file manager app (for example X-plore) lets you pick it: install one, then choose Restore again."
-            }
-        }
-        val host = backupHost
-        if (android.os.Build.VERSION.SDK_INT <= 32 && host != null) host.requestStorage(false) { run() } else run()
-    }
-
-    fun chooseFoundBackup(f: com.avidviewer.tv.data.BackupFiles.Found) {
-        viewModelScope.launch {
-            runCatching { withContext(Dispatchers.IO) { f.read() } }.onSuccess { offerRestore(it) }.onFailure { backupStatus = "Couldn't open ${f.name}: ${it.message}" }
-        }
-    }
-
-    internal fun offerRestore(text: String) {
+    internal fun offerRestore(text: String, from: String? = null) {
         runCatching { com.avidviewer.tv.data.Backup.peek(text) }.onSuccess { (created, ver, names) ->
             pendingRestore = text
-            pendingRestoreInfo = "Made " + SimpleDateFormat("MMM d, yyyy h:mm a", Locale.getDefault()).format(created) +
+            pendingRestoreInfo = (if (from != null) "$from · made " else "Made ") + SimpleDateFormat("MMM d, yyyy h:mm a", Locale.getDefault()).format(created) +
                 (if (ver.isNotBlank()) " with version $ver" else "") +
                 " · " + (if (names.isEmpty()) "no playlists" else names.joinToString(", "))
         }.onFailure { backupStatus = it.message ?: "That file isn't an Avid Viewer backup." }
@@ -886,7 +854,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             updatePrefs {
                 c.prefs.copy(
                     tmdbKeyEnc = if (c.tmdbKey.isBlank()) "" else Crypto.encrypt(c.tmdbKey),
-                    smbPassEnc = if (c.smbPassword.isBlank()) "" else Crypto.encrypt(c.smbPassword),
+                    smbPassEnc = "", // network-share backups ended in 1.12.0
                 )
             }
             otherLive.clear(); otherVod.clear(); playlistGroups = emptyMap()
@@ -896,9 +864,12 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             // Point favorites, lists etc. at the right channels even if the provider's list has changed since the backup.
             placeRestoredRefs(c.refs)
             applyProfileVodLimits()
-            pendingRestore = null
+            pendingRestore = null; cloudBackups = null
+            // A TV restored this way backs up with the same PIN from now on (if it didn't have one).
+            if (account.linked && account.backupPin == null) { account.backupPin = pin; backupPinSet = true }
             backupBusy = false
             backupStatus = "Restored ${c.playlists.size} playlist(s) and your settings. Channels and guides are downloading again now."
+            if (welcomeAccountOpen) { welcomeAccountOpen = false; showWelcome = false }
             done(true)
             reloadAfterActiveChange()
             if (prefs.postalCode.isNotBlank()) refreshWeather()
@@ -1050,6 +1021,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 if (update != null) onUpdateFound(now)
                 if (prefs.autoUpdateCheck && lastUpdateCheck > 0 && now - lastUpdateCheck > 6 * 60 * 60 * 1000L) checkForUpdate(quiet = true)
                 // Linked to an account: check in a minute after start, then every 6 hours (removed TVs unlink).
+                autoBackupIfDue(now)
                 if (account.linked && now - lastAccountCheck > (if (lastAccountCheck == 0L) 60_000L else 6 * 60 * 60 * 1000L) && now - startedAt > 60_000L) checkAccount()
                 delay(15_000)
             }
