@@ -1752,6 +1752,9 @@ class UsabilityTest {
         }
         try {
             rule.runOnIdle { vm.setupApi = "http://127.0.0.1:${server.localPort}/api/setup/"; vm.showWelcome = true }
+            // 1.12.1: Add a playlist is highlighted first; Enter a setup code is to its right.
+            waitFor("Add a playlist highlighted (focus: ${focused()})") { focused().contains("Add a playlist") }
+            press(listOf(Key.DirectionRight))
             waitFor("Enter a setup code highlighted (focus: ${focused()})") { focused().contains("Enter a setup code") }
             press(listOf(Key.DirectionCenter))
             waitFor("setup dialog") { rule.onAllNodesWithTag("setup-code-field").fetchSemanticsNodes().isNotEmpty() }
