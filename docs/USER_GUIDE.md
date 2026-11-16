@@ -719,14 +719,21 @@ Every public release since 1.0.35, newest first. From 1.1.0, versions are number
 
 ### 1.12.0 — November 16, 2026, 8:32 AM CT (current)
 
+**Release notes**
+
+- **Backups in your account.** Backups now go to your avidviewer.app account instead of a file or a network share, so only a device linked to your account can back up or restore. Each device keeps one backup there, its most recent. See [Backup & restore](#backup--restore).
+- **Back up every day, or now.** Choose a backup PIN at the first **Back up now**; the device remembers it and backs up once a day when something changed. Forgot the PIN? **Show PIN** on your Account page.
+- **Copy another device's setup.** **Restore from your account** lists every device's backup. On a new device, **Sign in to your account** on the welcome screen links it and offers those backups.
+- **Account is first in Settings.** It sits just above Playlists; Settings still opens on Playlists.
+- **Removed:** backup files in the Download folder, network-share (SAMBA) backups, and the Homestead section of this guide. Older backup files can't be restored; a linked device makes a new backup in your account.
+
 **Change log**
 
-- Backups in your avidviewer.app account (one per device, daily + Back up now, PIN shown on the website); welcome Sign in to your account; file and SAMBA backups removed
-- Name clash for the daily backup switch
-- Guide: remove the Homestead section; steadier backup test
-- Import performScrollTo
-- Account first in Settings; backup test closes the PIN dialog
-- Choose the account backup through the view model
+- Backups: `AccountApi.uploadBackup` / `listBackups` / `downloadBackup` (`/api/tv/backup`, `/api/tv/backups`); backup PIN, last-sent fingerprint and the daily switch in `AccountStore`; `Backup.fingerprint` so an unchanged device isn't sent again; daily check from the app's ticker
+- Settings › Updates & about › Backup & restore rewritten (Link this device when not linked); welcome screen **Sign in to your account** with the link code and the account's backups
+- Removed `BackupFiles`, `Smb` (smbj), storage permissions, the file picker and the CI Samba service; setup codes no longer carry backup files
+- "Device" instead of "TV" in account and backup wording; Account first in the Settings list
+- Website (same morning): one backup per device in D1, PIN kept encrypted for Show PIN (sign-in in the last hour or a passkey), Backups and Add a device on the Account page, a removed device's backup kept 30 days
 
 ### 1.11.0 — November 15, 2026, 9:20 PM CT
 
