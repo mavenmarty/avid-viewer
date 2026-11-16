@@ -620,8 +620,7 @@ class UsabilityTest {
             site.backups["d9"] = Triple("Bedroom", com.avidviewer.tv.data.Backup.write(
                 com.avidviewer.tv.data.Backup.Contents(vm.playlists, vm.prefs, "", vm.history, emptyMap(), System.currentTimeMillis(), "test"), "1357"), "1357")
             rule.runOnIdle { vm.accountApi = site.base; vm.showWelcome = true }
-            waitFor("welcome") { rule.onAllNodesWithTag("welcome-signin").fetchSemanticsNodes().isNotEmpty() }
-            rule.onNodeWithTag("welcome-signin").performClick()
+            // 1.12.1: the welcome screen shows this device's code by itself; approving it opens the account's backups.
             waitFor("code shown") { rule.onAllNodesWithText("K7M2-QX9P").fetchSemanticsNodes().isNotEmpty() }
             site.approved = true
             waitFor("linked and listed") { vm.accountEmail != null && vm.cloudBackups?.isNotEmpty() == true }
@@ -1706,15 +1705,23 @@ class UsabilityTest {
     /** 1.6.0: a new install (no playlists) opens on the welcome screen; Add a playlist goes to the add form. */
     @Test
     fun welcomeScreenOnANewInstall() {
-        rule.runOnIdle { vm.showWelcome = true }
-        waitFor("welcome shown") { rule.onAllNodesWithTag("welcome").fetchSemanticsNodes().isNotEmpty() }
-        assertTrue(rule.onAllNodesWithTag("welcome-setup-qr").fetchSemanticsNodes().isNotEmpty())
-        // 1.11.0: Enter a setup code is highlighted first; Add a playlist is next to it.
-        waitFor("Enter a setup code highlighted (focus: ${focused()})") { focused().contains("Enter a setup code") }
-        press(listOf(Key.DirectionRight))
-        waitFor("Add a playlist highlighted (focus: ${focused()})") { focused().contains("Add a playlist") }
-        press(listOf(Key.DirectionCenter))
-        waitFor("Settings › Playlists") { !vm.showWelcome && vm.screen == Screen.SETTINGS && vm.settingsSection == "playlists" }
+        FakeAvidSite().use { site ->
+            rule.runOnIdle { vm.accountApi = site.base; vm.showWelcome = true }
+            waitFor("welcome shown") { rule.onAllNodesWithTag("welcome").fetchSemanticsNodes().isNotEmpty() }
+            // 1.12.1: the device shows its own link code and a QR code for avidviewer.app/link with the code in it.
+            waitFor("link code shown") { rule.onAllNodesWithTag("welcome-link-code").fetchSemanticsNodes().isNotEmpty() }
+            assertTrue(rule.onAllNodesWithText("K7M2-QX9P").fetchSemanticsNodes().isNotEmpty())
+            assertTrue(vm.linkCode!!.qrUrl.endsWith("/link/?c=K7M2QX9P"))
+            assertTrue(rule.onAllNodesWithTag("welcome-link-qr").fetchSemanticsNodes().isNotEmpty())
+            // Add a playlist is highlighted first; Enter a setup code is next to it.
+            waitFor("Add a playlist highlighted (focus: ${focused()})") { focused().contains("Add a playlist") }
+            press(listOf(Key.DirectionRight))
+            waitFor("Enter a setup code highlighted (focus: ${focused()})") { focused().contains("Enter a setup code") }
+            press(listOf(Key.DirectionLeft))
+            press(listOf(Key.DirectionCenter))
+            waitFor("Settings › Playlists") { !vm.showWelcome && vm.screen == Screen.SETTINGS && vm.settingsSection == "playlists" }
+            waitFor("linking stopped when the welcome screen closed") { vm.linkCode == null }
+        }
         // A TV with no playlists at all starts on it; one with playlists doesn't.
         val app = ApplicationProvider.getApplicationContext<Application>()
         assertFalse(AppViewModel(app).showWelcome)

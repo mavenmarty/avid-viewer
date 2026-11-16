@@ -55,32 +55,54 @@ fun WelcomeScreen(vm: AppViewModel) {
                 size = 16.sp, color = C.Soft, lines = Int.MAX_VALUE,
             )
             Label(
-                "It doesn't include any channels. To start, add your provider's playlist: an Xtream Codes login (server, username, password) or an M3U link.",
+                "It doesn't include any channels: add your provider's playlist, an Xtream Codes login (server, username, password) or an M3U link.",
                 size = 16.sp, color = C.Soft, lines = Int.MAX_VALUE,
             )
             Label(
-                "Easiest: enter it on your phone or computer at avidviewer.app/setup, then type the setup code it gives you here. No typing logins with the remote.",
+                "Already use Avid Viewer on another device? Link this one to your account with the code on the right, then restore that device's backup. No typing logins with the remote.",
                 size = 16.sp, color = C.Soft, lines = Int.MAX_VALUE,
             )
             Spacer(Modifier.height(6.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                TvButton("Enter a setup code", primary = true, modifier = Modifier.focusRequester(add).testTag("welcome-code")) { vm.openSetupCode() }
-                TvButton("＋  Add a playlist", modifier = Modifier.testTag("welcome-add")) { vm.welcomeAddPlaylist() }
-                TvButton("Sign in to your account", modifier = Modifier.testTag("welcome-signin")) { vm.welcomeSignIn() }
+                TvButton("＋  Add a playlist", primary = true, modifier = Modifier.focusRequester(add).testTag("welcome-add")) { vm.welcomeAddPlaylist() }
+                TvButton("Enter a setup code", modifier = Modifier.testTag("welcome-code")) { vm.openSetupCode() }
             }
-            Label("Moving from another device? Sign in to your account to link this device and restore the other device's backup.", size = 13.sp, color = C.Muted, lines = 2)
         }
-        Column(
-            Modifier.width(300.dp).clip(RoundedCornerShape(16.dp)).background(C.Surface).padding(22.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            QrCode(com.avidviewer.tv.data.SetupCode.PAGE, Modifier.size(200.dp).testTag("welcome-setup-qr"))
-            Label("avidviewer.app/setup", size = 18.sp, color = C.Text, weight = FontWeight.Bold)
-            Label(
-                "Scan with your phone's camera to enter your playlist there and get a setup code. The page also links to the user guide.",
-                size = 13.sp, color = C.Soft, lines = Int.MAX_VALUE,
-            )
+        WelcomeLinkPanel(vm)
+    }
+}
+
+/**
+ * The welcome screen's right side (1.12.1): this device's own link code, made by avidviewer.app for this device,
+ * with a QR code that opens avidviewer.app/link with the code filled in (like signing in to a TV app). A new code
+ * replaces an expired one; once it's approved, the account's backups are offered.
+ */
+@Composable
+private fun WelcomeLinkPanel(vm: AppViewModel) {
+    LaunchedEffect(vm.accountEmail) { if (vm.accountEmail == null && vm.linkCode == null) vm.startLinking() }
+    androidx.compose.runtime.DisposableEffect(Unit) { onDispose { if (vm.accountEmail == null) vm.cancelLinking() } }
+    Column(
+        Modifier.width(340.dp).clip(RoundedCornerShape(16.dp)).background(C.Surface).padding(22.dp).testTag("welcome-link"),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        val code = vm.linkCode
+        when {
+            vm.accountEmail != null -> {
+                Label("Linked to", size = 14.sp, color = C.Soft)
+                Label(vm.accountEmail.orEmpty(), size = 18.sp, color = C.Text, weight = FontWeight.Bold, lines = 2)
+                TvButton("Restore a backup", modifier = Modifier.testTag("welcome-signin")) { vm.welcomeSignIn() }
+            }
+            code != null -> {
+                Label("Link to your account", size = 18.sp, color = C.Text, weight = FontWeight.Bold)
+                QrCode(code.qrUrl, Modifier.size(190.dp).testTag("welcome-link-qr"))
+                Label("Scan with your phone, or go to", size = 13.sp, color = C.Soft)
+                Label("avidviewer.app/link", size = 18.sp, color = C.Text, weight = FontWeight.Bold)
+                Label("and enter", size = 13.sp, color = C.Soft)
+                Label(com.avidviewer.tv.data.SetupCode.pretty(code.code), size = 34.sp, color = C.Accent, weight = FontWeight.Bold, modifier = Modifier.testTag("welcome-link-code"))
+                Label("No account yet? You can make one there.", size = 12.sp, color = C.Muted, lines = 2)
+            }
+            else -> Label(vm.accountStatus ?: "Getting a code…", size = 14.sp, color = C.Soft, lines = Int.MAX_VALUE)
         }
     }
 }
@@ -102,7 +124,7 @@ fun SetupCodeDialog(vm: AppViewModel) {
                 Column(Modifier.width(380.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Label("On your phone or computer, open avidviewer.app/setup (or scan the code), enter your playlist or upload a backup, and type the code it shows here.",
                         size = 14.sp, color = C.Soft, lines = Int.MAX_VALUE)
-                    TvField("Setup code (e.g. K7M2-QX9P)", text, modifier = Modifier.testTag("setup-code-field"), autoOpen = true,
+                    TvField("Setup code (8 letters and numbers)", text, modifier = Modifier.testTag("setup-code-field"), autoOpen = true,
                         next = { vm.redeemSetupCode(text) }) { text = it.uppercase().take(12) }
                     vm.setupStatus?.let { Label(it, size = 13.sp, color = C.Text, lines = Int.MAX_VALUE, modifier = Modifier.testTag("setup-status")) }
                 }
