@@ -1492,7 +1492,7 @@ private fun BackupBlock(vm: AppViewModel) {
         if (vm.backupPinSet) SettingSwitch(
             "Back up every day", "Once a day, only when something changed. Turn off to back up only when you choose Back up now.",
             vm.autoBackup, compact = true,
-        ) { vm.setAutoBackup(!vm.autoBackup) }
+        ) { vm.changeAutoBackup(!vm.autoBackup) }
         vm.backupStatus?.let { Label(it, size = 12.sp, color = C.Soft, lines = Int.MAX_VALUE, modifier = Modifier.testTag("backup-status")) }
         vm.cloudBackups?.takeIf { it.isNotEmpty() }?.let { list ->
             Label("Backups in your account — choose one to restore on this device:", size = 12.sp, lines = Int.MAX_VALUE)

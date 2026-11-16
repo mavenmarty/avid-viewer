@@ -774,7 +774,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    fun setAutoBackup(on: Boolean) { account.autoBackup = on; autoBackup = on }
+    fun changeAutoBackup(on: Boolean) { account.autoBackup = on; autoBackup = on }
 
     /** From the ticker: once a day, and two minutes after start, back up if something changed. */
     internal fun autoBackupIfDue(now: Long) {
