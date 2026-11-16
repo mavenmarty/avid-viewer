@@ -21,6 +21,8 @@ import androidx.compose.ui.test.printToString
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performSemanticsAction
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performKeyInput
@@ -625,11 +627,11 @@ class UsabilityTest {
         rule.onAllNodes(androidx.compose.ui.test.hasScrollToNodeAction()).onFirst()
             .performScrollToNode(androidx.compose.ui.test.hasTestTag("control4-qr"))
         settle()
-        assertTrue(rule.onAllNodesWithText("User guide (PDF)").fetchSemanticsNodes().isNotEmpty())
+        assertTrue(rule.onAllNodesWithText("User guide").fetchSemanticsNodes().isNotEmpty())
         assertTrue(rule.onAllNodesWithText("Control4 mini driver").fetchSemanticsNodes().isNotEmpty())
         assertTrue(rule.onAllNodesWithTag("guide-qr").fetchSemanticsNodes().isNotEmpty())
         assertTrue(rule.onAllNodesWithTag("control4-qr").fetchSemanticsNodes().isNotEmpty())
-        assertTrue(com.avidviewer.tv.data.Links.USER_GUIDE.endsWith("/releases/download/user-guide/AvidViewer-User-Guide.pdf"))
+        assertEquals("https://avidviewer.app/guide/", com.avidviewer.tv.data.Links.USER_GUIDE)
     }
 
     @Test
@@ -1613,7 +1615,10 @@ class UsabilityTest {
     fun welcomeScreenOnANewInstall() {
         rule.runOnIdle { vm.showWelcome = true }
         waitFor("welcome shown") { rule.onAllNodesWithTag("welcome").fetchSemanticsNodes().isNotEmpty() }
-        assertTrue(rule.onAllNodesWithTag("welcome-guide-qr").fetchSemanticsNodes().isNotEmpty())
+        assertTrue(rule.onAllNodesWithTag("welcome-setup-qr").fetchSemanticsNodes().isNotEmpty())
+        // 1.11.0: Enter a setup code is highlighted first; Add a playlist is next to it.
+        waitFor("Enter a setup code highlighted (focus: ${focused()})") { focused().contains("Enter a setup code") }
+        press(listOf(Key.DirectionRight))
         waitFor("Add a playlist highlighted (focus: ${focused()})") { focused().contains("Add a playlist") }
         press(listOf(Key.DirectionCenter))
         waitFor("Settings › Playlists") { !vm.showWelcome && vm.screen == Screen.SETTINGS && vm.settingsSection == "playlists" }
@@ -1622,5 +1627,38 @@ class UsabilityTest {
         assertFalse(AppViewModel(app).showWelcome)
         app.filesDir.listFiles()?.forEach { it.deleteRecursively() }
         assertTrue(AppViewModel(app).showWelcome)
+    }
+
+    /** 1.11.0: a setup code from avidviewer.app/setup adds its playlist (fixture made by the website's own script). */
+    @Test
+    fun setupCodeFromTheWebsiteAddsItsPlaylist() {
+        val asked = java.util.Collections.synchronizedList(ArrayList<String>())
+        val server = com.sun.net.httpserver.HttpServer.create(java.net.InetSocketAddress("127.0.0.1", 0), 0)
+        server.createContext("/api/setup/") { ex ->
+            asked += ex.requestURI.path
+            val known = ex.requestURI.path.endsWith(SetupCodeTest.ID)
+            val body = (if (known) "{\"data\":\"${SetupCodeTest.DATA}\"}" else "{\"error\":\"Not found.\"}").toByteArray()
+            ex.sendResponseHeaders(if (known) 200 else 404, body.size.toLong()); ex.responseBody.use { it.write(body) }
+        }
+        server.start()
+        try {
+            rule.runOnIdle { vm.setupApi = "http://127.0.0.1:${server.address.port}/api/setup/"; vm.showWelcome = true }
+            waitFor("Enter a setup code highlighted (focus: ${focused()})") { focused().contains("Enter a setup code") }
+            press(listOf(Key.DirectionCenter))
+            waitFor("setup dialog") { rule.onAllNodesWithTag("setup-code-field").fetchSemanticsNodes().isNotEmpty() }
+            // A mistyped code: found nowhere, and the dialog says so.
+            rule.onNodeWithTag("setup-code-field").performSemanticsAction(SemanticsActions.SetText) { it(androidx.compose.ui.text.AnnotatedString("k7m2-qx9q")) }
+            rule.onNodeWithTag("setup-go").performClick()
+            waitFor("not found message") { vm.setupStatus?.contains("wasn't found") == true }
+            // The right code, typed the way the website shows it.
+            rule.onNodeWithTag("setup-code-field").performSemanticsAction(SemanticsActions.SetText) { it(androidx.compose.ui.text.AnnotatedString("k7m2-qx9p")) }
+            rule.onNodeWithTag("setup-go").performClick()
+            waitFor("playlist added (status: ${vm.setupStatus})") { vm.playlists.any { it.name == "Living room" } }
+            val p = vm.playlists.first { it.name == "Living room" }
+            assertEquals("http://127.0.0.1:9/tv.m3u", p.m3uUrl)
+            assertEquals("http://127.0.0.1:9/guide.xml", p.epgSources.single().url)
+            waitFor("dialog closed, welcome gone") { !vm.setupCodeOpen && !vm.showWelcome }
+            assertTrue("the server only ever saw fingerprints: $asked", asked.none { it.contains("K7M2", ignoreCase = true) })
+        } finally { server.stop(0) }
     }
 }
