@@ -1633,16 +1633,25 @@ class UsabilityTest {
     @Test
     fun setupCodeFromTheWebsiteAddsItsPlaylist() {
         val asked = java.util.Collections.synchronizedList(ArrayList<String>())
-        val server = com.sun.net.httpserver.HttpServer.create(java.net.InetSocketAddress("127.0.0.1", 0), 0)
-        server.createContext("/api/setup/") { ex ->
-            asked += ex.requestURI.path
-            val known = ex.requestURI.path.endsWith(SetupCodeTest.ID)
-            val body = (if (known) "{\"data\":\"${SetupCodeTest.DATA}\"}" else "{\"error\":\"Not found.\"}").toByteArray()
-            ex.sendResponseHeaders(if (known) 200 else 404, body.size.toLong()); ex.responseBody.use { it.write(body) }
+        // A stand-in for avidviewer.app's GET /api/setup/<id>.
+        val server = java.net.ServerSocket(0, 50, java.net.InetAddress.getByName("127.0.0.1"))
+        kotlin.concurrent.thread(isDaemon = true) {
+            while (!server.isClosed) {
+                val c = runCatching { server.accept() }.getOrNull() ?: break
+                c.use { conn ->
+                    val reader = conn.getInputStream().bufferedReader()
+                    val path = reader.readLine()?.split(" ")?.getOrNull(1).orEmpty()
+                    while (reader.readLine()?.isNotEmpty() == true) { /* headers */ }
+                    asked += path
+                    val known = path.endsWith(SetupCodeTest.ID)
+                    val body = (if (known) "{\"data\":\"${SetupCodeTest.DATA}\"}" else "{\"error\":\"Not found.\"}").toByteArray()
+                    val head = "HTTP/1.1 ${if (known) "200 OK" else "404 Not Found"}\r\nContent-Type: application/json\r\nContent-Length: ${body.size}\r\nConnection: close\r\n\r\n"
+                    conn.getOutputStream().apply { write(head.toByteArray()); write(body); flush() }
+                }
+            }
         }
-        server.start()
         try {
-            rule.runOnIdle { vm.setupApi = "http://127.0.0.1:${server.address.port}/api/setup/"; vm.showWelcome = true }
+            rule.runOnIdle { vm.setupApi = "http://127.0.0.1:${server.localPort}/api/setup/"; vm.showWelcome = true }
             waitFor("Enter a setup code highlighted (focus: ${focused()})") { focused().contains("Enter a setup code") }
             press(listOf(Key.DirectionCenter))
             waitFor("setup dialog") { rule.onAllNodesWithTag("setup-code-field").fetchSemanticsNodes().isNotEmpty() }
@@ -1659,6 +1668,6 @@ class UsabilityTest {
             assertEquals("http://127.0.0.1:9/guide.xml", p.epgSources.single().url)
             waitFor("dialog closed, welcome gone") { !vm.setupCodeOpen && !vm.showWelcome }
             assertTrue("the server only ever saw fingerprints: $asked", asked.none { it.contains("K7M2", ignoreCase = true) })
-        } finally { server.stop(0) }
+        } finally { server.close() }
     }
 }
