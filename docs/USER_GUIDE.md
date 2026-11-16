@@ -655,36 +655,6 @@ Optional services that work alongside Avid Viewer. None of them is required; eac
 - **How much it's used:** Avid Viewer contacts TMDB only while Discover is open: roughly 100–150 requests when you go through all four tabs, and a tab refreshes after 6 hours. TMDB limits requests per home connection (about 50 a second), not per key, with no daily cap.
 - **My streaming services** (Settings › Discover) tells Discover which services you subscribe to, so "New" and "where to watch" favour them.
 
-### Homestead: a cleaner Fire TV home screen
-
-[Homestead](https://github.com/Sarg338/Homestead) is a free, open-source replacement home screen for Fire TV, made by a separate project. It removes the ad rows and switches off Amazon's bloat and telemetry apps, all from the remote, with no computer needed. These steps are for version 2.2.0 (Nov 9, 2026).
-
-**Before you start**
-
-- **The VPN prompt only covers the TV itself.** Homestead routes just one private range (10.113.77.x) so it can talk to the TV's own debugging service. Your normal internet traffic isn't touched, and the tunnel turns off when setup ends.
-- **Nothing is deleted.** Debloat switches packages off, and you can switch any of them back on from the same screen.
-- **Its only outside connection is GitHub.** It checks GitHub once a day for updates and installs one only when you press Install.
-- **One permission is broad:** reading the system log, which makes the Home button work reliably. You can take it away later (see below).
-
-**Set it up** (about 10 minutes, remote only)
-
-1. **Developer options and Downloader:** if you installed Avid Viewer with Downloader, these are already done. Otherwise follow [Installing the Downloader app](#installing-the-downloader-app): Developer options on, **ADB debugging** on, Downloader installed and allowed to install apps.
-2. **Download Homestead.** In Downloader, enter `github.com/Sarg338/Homestead/releases/latest/download/homestead.apk` and install the app.
-3. **Start setup.** Open Homestead and choose **Set it up**. Accept Android's VPN prompt: press **Down** to reach **OK**.
-4. **Approve the ADB key.** When the TV asks, check that the fingerprint matches the one Homestead shows. Tick **Always allow from this computer**, then select **OK**.
-5. **Let setup finish.** Homestead turns on its Home button by itself. If not, go to its **Settings › Setup › Finish setup automatically**.
-6. **Debloat.** Open Homestead's **Settings › Debloat** and use the one-press option. Skip the option marked risky, which switches off Amazon's launcher.
-7. **Test it.** Press **Home**. Homestead should open instead of Amazon's home screen. Avid Viewer is in its app list like any other app.
-
-**After setup**
-
-- **ADB debugging trade-off.** Leaving it on keeps a door open on your network. Homestead needs it to switch Amazon packages off again after each reboot. If you turn it off, some packages may come back after a restart or firmware update.
-- **Update warning (optional).** Homestead's **Settings › Warn if the system undoes Debloat** shows a tile for 10 seconds offering to switch packages off again after an update.
-- **Home button stops working after an update:** run **Settings › Setup › Finish setup automatically** again.
-- **Take back the log permission (optional).** From a computer, run `adb shell pm revoke com.homestead.launcher android.permission.READ_LOGS`. After that, Home briefly flashes Amazon's screen first.
-- **Undo anything.** Any debloated package can be switched back on from the Debloat page. Uninstalling Homestead brings back Amazon's home screen.
-- **Problems with Homestead** itself go to its GitHub page; bugs@avidviewer.app is for Avid Viewer.
-
 ## 14. Using your cable or satellite subscription
 
 Cable and satellite companies such as Xfinity (Comcast), Spectrum, Cox, DIRECTV, DISH and Midco **don't give subscribers M3U links or Xtream logins**. Their live streams are locked inside their own apps and boxes. Services that sell an "Xfinity" or "Spectrum" M3U are not your TV provider; avoid them.

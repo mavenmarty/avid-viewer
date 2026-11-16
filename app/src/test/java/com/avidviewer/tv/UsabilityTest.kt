@@ -569,8 +569,10 @@ class UsabilityTest {
             linkForTest(site)
             go(Screen.SETTINGS)
             rule.runOnIdle { vm.settingsSection = "about" }
-            waitFor("Back up now") { rule.onAllNodesWithTag("backup-now").fetchSemanticsNodes().isNotEmpty() }
-            rule.onNodeWithTag("backup-now").performClick()
+            settle()
+            waitFor("Back up now") { vm.settingsSection == "about" && rule.onAllNodesWithTag("backup-now").fetchSemanticsNodes().isNotEmpty() }
+            rule.onNodeWithTag("backup-now").performScrollTo().performClick()
+            settle()
             waitFor("PIN asked") { rule.onAllNodesWithText("Choose a backup PIN").fetchSemanticsNodes().isNotEmpty() }
             rule.runOnIdle { vm.backUp(newPin = "2468") }
             waitFor("sent (${vm.backupStatus})") { site.backups["d1"] != null && !vm.backupBusy }
