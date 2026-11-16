@@ -90,17 +90,23 @@ object AccountApi {
 class AccountStore(context: Context) {
     private val prefs = context.getSharedPreferences("account", Context.MODE_PRIVATE)
 
-    val token: String? get() = prefs.getString("token", null)?.let { runCatching { Crypto.decrypt(it) }.getOrNull() }?.takeIf { it.isNotBlank() }
+    val token: String? get() = prefs.getString("token", null)?.let { stored ->
+        if (TESTS && stored.startsWith("test:")) stored.removePrefix("test:") else runCatching { Crypto.decrypt(stored) }.getOrNull()
+    }?.takeIf { it.isNotBlank() }
     val email: String get() = prefs.getString("email", "").orEmpty()
     val name: String get() = prefs.getString("name", "").orEmpty()
     val linked: Boolean get() = token != null
 
     fun save(l: AccountApi.Linked) {
-        prefs.edit().putString("token", Crypto.encrypt(l.token)).putString("email", l.email).putString("name", l.name)
+        // Robolectric has no Android Keystore: only the tests keep the token unencrypted.
+        val enc = runCatching { Crypto.encrypt(l.token) }.getOrElse { if (TESTS) "test:${l.token}" else throw it }
+        prefs.edit().putString("token", enc).putString("email", l.email).putString("name", l.name)
             .putString("deviceId", l.deviceId).apply()
     }
 
     fun update(me: AccountApi.Me) { prefs.edit().putString("email", me.email).putString("name", me.name).apply() }
 
     fun clear() { prefs.edit().clear().apply() }
+
+    private companion object { val TESTS = Build.FINGERPRINT == "robolectric" }
 }

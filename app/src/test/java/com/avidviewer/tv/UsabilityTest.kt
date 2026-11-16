@@ -779,14 +779,15 @@ class UsabilityTest {
         go(Screen.SETTINGS)
         waitFor("Settings' first section highlighted (focus: ${focused()})") { focused().contains("Playlists") && vm.settingsSection == "playlists" }
         var tries = 0
-        while (!focused().contains("Updates & about") && tries < 15) { press(listOf(Key.DirectionDown)); tries++ }
-        assertTrue("Down reaches Updates & about, on screen and highlighted (focus: ${focused()})", focused().contains("Updates & about"))
+        // 1.11.0: Account is the last section (after Updates & about).
+        while (!focused().startsWith("Account") && tries < 16) { press(listOf(Key.DirectionDown)); tries++ }
+        assertTrue("Down reaches Account, on screen and highlighted (focus: ${focused()})", focused().startsWith("Account"))
         assertEquals("moving the highlight doesn't open sections", "playlists", vm.settingsSection)
         // The section list doesn't wrap: Down at the end stays on the last section.
         press(listOf(Key.DirectionDown))
-        assertTrue("no wrap in the section list (focus: ${focused()})", focused().contains("Updates & about"))
+        assertTrue("no wrap in the section list (focus: ${focused()})", focused().startsWith("Account"))
         press(listOf(Key.DirectionCenter))
-        waitFor("OK opens it (section=${vm.settingsSection})") { vm.settingsSection == "about" && vm.settingsInContent }
+        waitFor("OK opens it (section=${vm.settingsSection})") { vm.settingsSection == "account" && vm.settingsInContent }
     }
 
     @Test
