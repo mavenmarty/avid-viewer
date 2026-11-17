@@ -30,6 +30,8 @@ data class Playlist(
 ) {
     val isXtream get() = type == "xtream"
     fun visibleTo(profileId: String) = profiles == null || profileId in profiles
+    /** 1.15.0: account playlists name account profiles; the device's own id still counts (sent before the merge). */
+    fun visibleTo(p: Profile) = profiles == null || p.accountKey in profiles || p.id in profiles
 
 
     fun xtreamBase(): String {

@@ -133,7 +133,10 @@ private fun VodBar(vm: AppViewModel, modifier: Modifier) {
     }
     fun t(ms: Long): String { val s = ms / 1000; return if (s >= 3600) "%d:%02d:%02d".format(s / 3600, (s / 60) % 60, s % 60) else "%d:%02d".format(s / 60, s % 60) }
     Column(modifier.fillMaxWidth().background(C.Rail.copy(alpha = 0.96f)).padding(horizontal = 28.dp, vertical = 16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Label(item.name, size = 20.sp, color = C.Text, weight = FontWeight.Bold)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Label(item.name, size = 20.sp, color = C.Text, weight = FontWeight.Bold, modifier = Modifier.weight(1f))
+            ProfileChip(vm)
+        }
         Row(verticalAlignment = Alignment.CenterVertically) {
             Label(t(pos), size = 12.sp)
             Spacer(Modifier.width(10.dp))
@@ -181,8 +184,9 @@ private fun InfoBar(vm: AppViewModel, modifier: Modifier) {
             }
         }
         val wx = vm.weatherLine()
-        if (vm.prefs.showClock || wx != null) {
-            Column(horizontalAlignment = Alignment.End, modifier = Modifier.width(150.dp)) {
+        if (vm.prefs.showClock || wx != null || vm.profiles.multiple) {
+            Column(horizontalAlignment = Alignment.End, modifier = Modifier.width(170.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                ProfileChip(vm)
                 if (vm.prefs.showClock) {
                     Text(vm.fmtTime(vm.now), color = C.Text, fontSize = 26.sp, fontWeight = FontWeight.Bold)
                     Label(vm.fmtDate(vm.now), size = 12.sp)

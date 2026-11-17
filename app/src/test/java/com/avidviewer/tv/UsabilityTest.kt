@@ -743,6 +743,124 @@ class UsabilityTest {
         }
     }
 
+    /** A new app start on the same device, after changing what's stored ([change]); the screen keeps the old one. */
+    private fun restartWith(change: (com.avidviewer.tv.data.Store) -> Unit) {
+        val app = ApplicationProvider.getApplicationContext<Application>()
+        change(com.avidviewer.tv.data.Store(app))
+        vm = AppViewModel(app)
+        waitFor("channels to load again") { vm.channels.isNotEmpty() }
+    }
+
+    private fun pinHash(pin: String): String {
+        val salt = "a1b2c3d4"
+        return salt + ":" + java.security.MessageDigest.getInstance("SHA-256").digest("$salt:$pin".toByteArray()).joinToString("") { "%02x".format(it) }
+    }
+
+    /**
+     * 1.15.0: the first report merges the device's profiles into the account; the account's profiles then replace the
+     * device's own (the first profile keeps its data as Dad), with their PINs, Kids' categories and what each one hides,
+     * and follow later changes. The playlist's categories and channel names go to the account for the website.
+     */
+    @Test
+    fun accountProfilesReplaceTheDevicesOwnAndFollowTheWebsite() {
+        FakeAvidSite().use { site ->
+            // My provider was sent from the account (1.14.0).
+            restartWith { st -> st.savePlaylists(st.loadPlaylists().map { if (it.id == TestData.P1) it.copy(remoteId = "acctP1") else it }) }
+            linkForTest(site)
+            site.profileMap = mapOf("main" to "acctDad")
+            fun vis(hidden: List<String> = emptyList(), allowed: List<String> = emptyList(), channels: List<String> = emptyList()) =
+                org.json.JSONObject().put("acctP1", org.json.JSONObject()
+                    .put("hidden", org.json.JSONObject().put("live", org.json.JSONArray(hidden)).put("movie", org.json.JSONArray()).put("series", org.json.JSONArray()))
+                    .put("allowed", org.json.JSONObject().put("live", org.json.JSONArray(allowed)).put("movie", org.json.JSONArray()).put("series", org.json.JSONArray()))
+                    .put("channels", org.json.JSONArray(channels)))
+            val newsKey = vm.channelsIn("NEWS").firstOrNull()?.key ?: vm.channels.first { it.group == "NEWS" }.key
+            site.profiles = org.json.JSONArray()
+                .put(org.json.JSONObject().put("id", "acctDad").put("name", "Dad").put("parent", true).put("color", 0).put("pin", pinHash("1234"))
+                    .put("playlists", org.json.JSONArray().put("acctP1")).put("visibility", vis(hidden = listOf("SPORTS | NFL"), channels = listOf(newsKey.substringAfter(':')))))
+                .put(org.json.JSONObject().put("id", "acctKids").put("name", "Kids").put("kids", true).put("color", 2).put("pin", "")
+                    .put("playlists", org.json.JSONArray().put("acctP1")).put("visibility", vis(allowed = listOf("KIDS"))))
+            rule.runOnIdle { vm.syncAccountPlaylists() }
+            waitFor("account profiles applied (${vm.profiles.list.map { it.name }})") { vm.profiles.list.size == 2 && vm.profiles.managed }
+            // The report: 1.15.0 form, the device's own profile, its PIN only as a hash.
+            assertEquals(2, site.report!!.getInt("v"))
+            assertEquals("Me", site.report!!.getJSONArray("profiles").getJSONObject(0).getString("name"))
+            val dad = vm.profiles.list[0]; val kids = vm.profiles.list[1]
+            assertEquals("the first profile became Dad, keeping its data", com.avidviewer.tv.data.Profile.OWNER, dad.id)
+            assertEquals("Dad", dad.name); assertEquals("acctDad", dad.remoteId)
+            assertTrue(dad.pinMatches("1234")); assertTrue(dad.isParent)
+            assertEquals("acctKids", kids.id); assertTrue(kids.kids)
+            assertEquals(setOf(vm.liveCategoryId(TestData.P1, "KIDS")), kids.allowedGroups)
+            // What the account hides for Dad (the profile in use) is hidden here, on top of what Dad hid himself.
+            assertTrue(vm.isGroupHidden(TestData.P1, "SPORTS | NFL"))
+            assertTrue(newsKey in vm.prefs.hiddenChannels)
+            // A Kids profile is on the device: the next start opens Kids, with the splash.
+            assertEquals(com.avidviewer.tv.data.ProfileSet.Launch("acctKids", splash = true), vm.profiles.launch())
+            // The website shows SPORTS again and takes Kids off this device: one profile, so no profiles at all.
+            site.profiles = org.json.JSONArray()
+                .put(org.json.JSONObject().put("id", "acctDad").put("name", "Dad").put("parent", true).put("color", 0).put("pin", pinHash("1234"))
+                    .put("playlists", org.json.JSONArray().put("acctP1")).put("visibility", org.json.JSONObject()))
+            rule.runOnIdle { vm.syncAccountPlaylists() }
+            waitFor("Kids taken off") { vm.profiles.list.size == 1 }
+            assertFalse(vm.profiles.multiple)
+            assertFalse(vm.isGroupHidden(TestData.P1, "SPORTS | NFL"))
+            assertFalse(newsKey in vm.prefs.hiddenChannels)
+            // The playlist's categories and channel names went to the account (names and counts only).
+            waitFor("catalog sent") { site.catalogs.any { it.getString("playlistId") == "acctP1" } }
+            val cat = site.catalogs.last { it.getString("playlistId") == "acctP1" }
+            val news = (0 until cat.getJSONArray("live").length()).map { cat.getJSONArray("live").getJSONObject(it) }.first { it.getString("n") == "NEWS" }
+            assertTrue(news.getInt("c") > 0)
+            assertEquals(newsKey.substringAfter(':'), news.getJSONArray("ch").getJSONArray(0).getString(0))
+        }
+    }
+
+    /**
+     * 1.15.0 Watching now: while something plays, the device tells the account which playlist (never the channel or
+     * title); Stop stream on the website stops it and says so, and Watch again starts it again.
+     */
+    @Test
+    fun watchingNowReportsThePlaylistAndStopsFromTheAccount() {
+        FakeAvidSite().use { site ->
+            linkForTest(site)
+            go(Screen.GUIDE)
+            rule.runOnIdle { vm.chooseGroup(TestData.P1, "NEWS") }
+            waitFor("channels") { vm.channelsIn("NEWS").isNotEmpty() }
+            val ch = vm.channelsIn("NEWS").first()
+            rule.runOnIdle { vm.preview(ch.key) }
+            settle()
+            kotlinx.coroutines.runBlocking { vm.reportPlaying() }
+            waitFor("reported") { site.playing.isNotEmpty() }
+            val r = site.playing.last()
+            assertTrue(r.getBoolean("playing"))
+            assertEquals("My provider", r.getString("playlistName"))
+            assertFalse("never the channel", r.toString().contains(ch.name))
+            assertFalse("one profile: no profile sent", r.has("profileName"))
+            site.stopNext = true
+            kotlinx.coroutines.runBlocking { vm.reportPlaying() }
+            waitFor("stopped") { vm.streamStopped }
+            settle()
+            assertTrue(rule.onAllNodesWithText("This stream was stopped from your account").fetchSemanticsNodes().isNotEmpty())
+            rule.runOnIdle { vm.watchAgain() }
+            settle()
+            assertFalse(vm.streamStopped)
+            assertEquals(ch.key, vm.currentKey)
+        }
+    }
+
+    /** 1.15.0: with 2+ profiles, the info bar over video shows the profile in use; with one, it doesn't. */
+    @Test
+    fun theInfoBarShowsTheProfileInUse() {
+        rule.runOnIdle { vm.chooseGroup(TestData.P1, "NEWS") }
+        waitFor("channels") { vm.channelsIn("NEWS").isNotEmpty() }
+        val key = vm.channelsIn("NEWS").first().key
+        rule.runOnIdle { vm.openFullScreen(key, PlayContext.GROUP) }
+        settle()
+        assertTrue("the bar is up", rule.onAllNodesWithText("Up next", substring = true).fetchSemanticsNodes().isNotEmpty() || vm.screen == Screen.PLAYER)
+        assertTrue("one profile: no chip", rule.onAllNodesWithTag("osd-profile").fetchSemanticsNodes().isEmpty())
+        rule.runOnIdle { vm.addProfile("Sam", kids = false, color = 1) }
+        settle(100)
+        assertTrue("two profiles: the chip", rule.onAllNodesWithTag("osd-profile", useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty())
+    }
+
     @Test
     fun reportABugShowsTheAddressDetailsAndQrCode() {
         go(Screen.SETTINGS)

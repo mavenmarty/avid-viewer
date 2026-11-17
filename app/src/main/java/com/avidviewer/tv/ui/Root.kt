@@ -91,6 +91,8 @@ fun AppRoot(vm: AppViewModel) {
         }
         if (vm.choosingProfile) {
             WhoIsWatching(vm)
+        } else if (vm.splashProfile != null && !vm.showWelcome) {
+            KidsSplash(vm)
         } else if (vm.showWelcome) {
             WelcomeScreen(vm)
             if (vm.welcomeAccountOpen) WelcomeAccountDialog(vm)
@@ -135,6 +137,7 @@ fun AppRoot(vm: AppViewModel) {
         }
         ProfileSwitcherDialog(vm)
         PinDialog(vm)
+        StreamStoppedDialog(vm)
         ChannelOptionsDialog(vm)
         GroupOptionsDialog(vm)
         ListPickerDialog(vm)

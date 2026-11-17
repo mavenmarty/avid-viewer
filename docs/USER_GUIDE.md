@@ -2,7 +2,7 @@
 
 <!-- The version below and the Release notes section are updated automatically after each published build
      (.github/workflows/user-guide.yml). Feature descriptions are written by hand. -->
-This guide covers **Avid Viewer 1.13.0**, the current public release. Avid Viewer is an IPTV player for Android TV and Fire TV. You bring your own provider (an Xtream Codes login or an M3U link); the app doesn't include any channels.
+This guide covers **Avid Viewer 1.14.0**, the current public release. Avid Viewer is an IPTV player for Android TV and Fire TV. You bring your own provider (an Xtream Codes login or an M3U link); the app doesn't include any channels.
 
 **Contents:** [Getting started](#1-getting-started) · [Main menu](#2-main-menu) · [TV Guide](#3-tv-guide) · [Full-screen playback](#4-full-screen-playback) · [Search](#5-search) · [Discover](#6-discover) · [Sports](#7-sports) · [Movies and Series](#8-movies-and-series) · [Settings](#9-settings) ([Profiles](#profiles)) · [Privacy](#10-privacy) · [Troubleshooting](#11-troubleshooting) · [Control4](#12-control4) · [Supplemental services](#13-supplemental-services) · [Cable & satellite](#14-using-your-cable-or-satellite-subscription) · [Release notes](#release-notes)
 
@@ -29,23 +29,25 @@ This guide covers **Avid Viewer 1.13.0**, the current public release. Avid Viewe
 The first time you open Avid Viewer, and every time it starts while there are no playlists, it shows a welcome screen:
 
 - **＋ Add a playlist** (highlighted): opens **Settings › Playlists** on the add form, to type it with the remote. See below.
-- **Enter a setup code**: playlists entered on your phone at avidviewer.app/setup. See [Set up with your phone](#set-up-with-your-phone) below.
 - **Link to your account** (right side, from 1.13.0): the device shows its own 8-character code and a QR code. Scan the QR code with your phone (it opens **avidviewer.app/link** with the code filled in), or go to avidviewer.app/link and type the code. Sign in or make an account, then choose **Add this device**. A new code replaces one that runs out (10 minutes). Once it's added, the device offers the backups in your account, for moving from another device; see [Backup & restore](#backup--restore). After linking, the panel says **Linked to** your email with **Restore a backup**.
 
 Once a playlist has been added, the app opens on the TV Guide instead.
 
 ### Set up with your phone
 
-From 1.11.0 you can enter your playlist on a phone or computer instead of typing it with the remote.
+From 1.14.0 you can enter your playlists on a phone or computer and send them to your devices, instead of typing them with the remote. (Setup codes, from 1.11.0, were retired in 1.14.0.)
 
-1. On your phone or computer, open **avidviewer.app/setup** (or scan the QR code on the welcome screen).
-2. Choose **Add playlists** and enter each one: an **Xtream Codes login** (server, username, password) or an **M3U link**, with an optional guide (XMLTV) link.
-3. Choose **Get a setup code**. The page shows a code like **K7M2-QX9P**. It works for 30 minutes.
-4. On the TV, choose **Enter a setup code** on the welcome screen (or **Settings › Playlists › Add playlist › Use a setup code**), type the code and press **Done**.
+1. **Link the device to your account:** its welcome screen shows a code and a QR code (or Settings › Account › **Link this device**). Scan the QR code with your phone, or type the code at **avidviewer.app/link**, and choose **Add this device**. See [Account](#account).
+2. On your phone or computer, open **avidviewer.app/playlists** (your Account page › **Manage playlists**) and choose **＋ Add a playlist**.
+3. Enter a **name** and either an **Xtream Codes login** (server, username, password) or an **M3U link**, with an optional guide (XMLTV) link.
+4. Under **Send to**, tick each device that should get it. For each device, keep **Every profile**, or untick it and choose the profiles that may see it (Kids profiles are marked).
+5. Choose **Send to devices**. While Avid Viewer is open on a device, it picks the playlist up within a minute, checks it like one added by hand, and adds it. The page shows each device's status: **Waiting for the device**, **Added**, or why it couldn't be added.
 
-The TV checks each playlist like one added by hand and adds it. If you're signed in on the website, **Also link the TV to my account** (on by default) links the TV to your account at the same time; see [Account](#account).
+**Changing a playlist on the website:** **Edit** renames it, changes which devices and profiles get it (a device that's no longer ticked removes it), or changes the login. The login isn't stored on the website, so it isn't shown: leave it empty to keep it, or enter it again to change it or to send the playlist to another device. **Remove** takes it off every device it was sent to.
 
-**Private by design:** the page encrypts your logins in your browser with the code before anything is sent. The website keeps only the scrambled copy, for 30 minutes, and can't read it.
+**On the device:** a playlist from the website works like any other (Settings › Playlists can turn it off or refresh it). A playlist limited to some profiles is hidden everywhere (guide, search, movies, Sports) in the other profiles.
+
+**Private by design:** the login is locked in your browser separately for each device, with a key that only that device has (it makes the key when it's linked, and the key never leaves it). The website keeps the playlist's name and type, which devices and profiles you chose, and each device's locked copy only until the device has picked it up; it can't read your logins.
 
 ### Add your first playlist
 
@@ -178,6 +180,7 @@ While you're moving it, the item has a blue outline. A category shows its positi
 - **OK, Left, Right or Info**: show the info bar (channel number and name, ★ if it's a favorite, playlist, what's on now with times, and **Up next**). It hides after 5 seconds.
 - **Menu**: open **Picture & sound** (below), which also has **＋ Add to List…** for the channel you're watching.
 - **Back**: return to the screen you came from.
+- **Full screen by itself** (from 1.14.0): when a channel is playing in a preview (TV Guide, Favorites, Sports…) and no button is pressed for 5 minutes, the app goes to full screen on that channel, so still menus don't burn into the screen. **Back** returns to where you were. Nothing playing: the menus stay.
 
 ### Movies and episodes
 
@@ -322,7 +325,7 @@ Settings has sections on the left and the open section's options on the right. *
   - **▤ Guide sources**: where this playlist's TV guide comes from (see below).
   - Switches: **Playlist on** (off hides it everywhere without deleting anything), **Live TV & guide**, and **Movies & series**.
 - **Details** shows the type, server, username, playlist link, TV guide source and status.
-- **Use a setup code** (under the add form, from 1.11.0): add playlists entered on your phone at avidviewer.app/setup. See [Set up with your phone](#set-up-with-your-phone).
+- **From your phone** (under the add form, from 1.14.0): link this device to your account, then add playlists at avidviewer.app/playlists. See [Set up with your phone](#set-up-with-your-phone).
 
 **Guide sources** (Settings › Playlists › choose a playlist › ▤ Guide sources)
 
@@ -487,7 +490,7 @@ From 1.11.0 a device can be linked to an Avid Viewer account at avidviewer.app. 
 - **Link this device** (Settings › Account, or the code on the welcome screen): the device shows an 8-character code and a QR code. Scan the QR code with your phone (the code is filled in for you), or open **avidviewer.app/link** (**Add a device** on your Account page) and type the code. Sign in if asked, check the device it found, give it a name, and choose **Add this device**. The device notices within a few seconds and shows **Linked to** your email. The code works for 10 minutes; **Cancel** stops waiting.
 - **Linked:** Settings › Account shows the account and this device's name. **Sign out of this device** (asks first) unlinks it and forgets its backup PIN; playlists and settings on the device stay.
 - **Your devices** on avidviewer.app/account shows each linked device's name, model, app version and when it last checked in, with **Rename** and **Remove**. A removed device unlinks itself the next time it checks in (a minute after the app starts, then every 6 hours); its backup stays in your account for 30 days.
-- **What's shared:** linking sends only the device's name, model and Avid Viewer version. Your playlists and settings go to your account only in a backup, locked with your backup PIN. What you watch is never sent.
+- **What's shared:** linking sends the device's name, model and Avid Viewer version; from 1.14.0 also its profile names (which is a Kids profile) and a public key, so the website can send it playlists only it can open. Your playlists and settings go to your account only in a backup, locked with your backup PIN. What you watch is never sent.
 
 #### Backup & restore
 
@@ -527,7 +530,7 @@ A backup holds your playlists (with their logins), ★ Favorites and your lists,
 - The **playback log** (freezes and errors) never records what you watch: each channel or title is a short code made from a random number kept on your TV, which can't be turned back into a name. It is sent to bugs@avidviewer.app at most once a day when there were problems, or when you choose Send playback log. Turn off **Send it automatically** in Settings › Updates & about to send it only by hand. Addresses, logins and IP addresses are removed first.
 - Crash details leave the TV only when you choose **Report issue**. They go to bugs@avidviewer.app through a small mail relay, with web addresses, server and host names, IP addresses, user names, passwords and tokens removed first.
 - **Security checks (1.10.1)** use freeRASP by Talsec. It checks the TV and the app for tampering (root, hooking tools, a modified copy, debuggers, emulators) and sends Talsec anonymous findings about the device and app for its security reports; nothing about what you watch, your playlists or logins. Alerts the app finds are also sent to bugs@avidviewer.app through the crash relay, each kind once and at most once a day.
-- **Accounts (1.11.0):** linking a TV to an avidviewer.app account sends only the TV's name, model and app version; the TV keeps its own key, encrypted with the Android Keystore. Setup codes are encrypted in your browser before they're sent and deleted after 30 minutes. What an account stores is on the website's [privacy page](https://avidviewer.app/privacy/).
+- **Accounts (1.11.0):** linking a TV to an avidviewer.app account sends only the TV's name, model and app version; the TV keeps its own key, encrypted with the Android Keystore. Playlists sent from avidviewer.app/playlists (1.14.0) are locked in your browser for each device with that device's own key; the website can't read the logins, and keeps each locked copy only until the device has it. What an account stores is on the website's [privacy page](https://avidviewer.app/privacy/).
 - Outside services get only what they need: your postal code (Open-Meteo, for weather), title lookups (TMDB/JustWatch, if you add a key), scoreboards (ESPN), update checks (GitHub) and, when you choose Report issue, the crash report (the Avid Viewer crash relay, a Google Apps Script web app).
 
 ## 11. Troubleshooting
@@ -716,7 +719,26 @@ Every public release since 1.0.35, newest first. From 1.1.0, versions are number
 
 <!-- new-releases: entries for new builds are added automatically below this line -->
 
-### 1.13.0 — November 16, 2026, 5:51 PM CT (current)
+### 1.14.0 — November 16, 2026, 7:40 PM CT (current)
+
+**Release notes**
+
+- **Playlists from your phone.** On avidviewer.app/playlists, enter a playlist and choose which of your linked devices get it and, on each, which profiles can see it. Devices pick it up within a minute while Avid Viewer is open. Edit or remove it there too. See [Set up with your phone](#set-up-with-your-phone).
+- **Playlists per profile.** A playlist sent from the website can be limited to some profiles; the others don't see it anywhere.
+- **Setup codes retired.** The website's setup page and **Enter a setup code** are gone: link the device with the code on its screen, then send playlists from the website.
+- **No more crash message at every start.** 1.12.0 and 1.13.0 reported "closed while in use" each time the app opened; nothing had actually gone wrong.
+- **Full screen after 5 minutes.** With a channel playing in a preview and no button pressed for 5 minutes, the app goes full screen to avoid screen burn-in.
+
+**Change log**
+
+- Device key (P-256, kept encrypted with the Android Keystore) and profiles reported to the account; inbox checked once a minute while on screen; logins opened on the device (ECDH + HKDF-SHA256 + AES-GCM) and checked like hand-added ones; acknowledgements back to the account
+- Playlists carry where they came from and the profiles that see them (kept in backups); the profile in use sees only its playlists
+- Setup codes removed from the app and the website (/setup/ goes to /playlists/)
+- The unclean-exit check runs when the app starts, before any screen marks itself on screen
+- Idle full screen from previews (5 minutes; Back returns)
+- Website: Playlists page, devices' keys and profiles, admin dashboard shows playlists and whether backups are on; deploys keep values added in the Cloudflare dashboard
+
+### 1.13.0 — November 16, 2026, 5:51 PM CT
 
 **Release notes**
 

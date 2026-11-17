@@ -1003,9 +1003,21 @@ private fun androidx.compose.foundation.lazy.LazyListScope.accountSettings(vm: A
         }
         code != null -> item { LinkCodePanel(vm, code) }
         else -> item {
-            SettingBlock("Link this device to your account", "Sign in at avidviewer.app to see and manage your devices in one place; accounts will add features such as picking up where you left off on every device. Linking lets this device back up to your account and restore another device's backup. Linking itself shares only this device's name, model and app version; your playlists are sent only in a backup, locked with a PIN you choose.") {
+            SettingBlock("Link this device to your account", "Sign in at avidviewer.app to manage your playlists, profiles and devices in one place. Linking lets this device get playlists and profiles from your account, back up to it and restore another device's backup. Linking itself shares only this device's name, model and app version.") {
                 TvButton("Link this device", primary = true, modifier = Modifier.testTag("account-link")) { vm.startLinking() }
             }
+        }
+    }
+    // 1.15.0: the account's profiles on this device, and what each one has.
+    if (email != null && vm.profiles.managed) item {
+        val lines = vm.profiles.list.filter { it.remoteId.isNotEmpty() }.map { p ->
+            val pls = vm.playlists.filter { pl -> pl.remoteId.isNotEmpty() && pl.visibleTo(p) && pl.profiles != null }.map { it.name }
+            p.name + (if (p.kids) " (Kids)" else "") + " · " + (pls.joinToString(", ").ifEmpty { "no playlists from the account yet" })
+        }
+        SettingBlock("Profiles on this device",
+            (if (lines.isEmpty()) "None yet. Choose this device's profiles at avidviewer.app/devices." else lines.joinToString("\n")) +
+                "\n\nProfiles, their playlists and what they can see are managed at avidviewer.app. Changes arrive within a minute.") {
+            TvButton("Check for changes now", modifier = Modifier.testTag("account-sync")) { vm.syncAccountPlaylists() }
         }
     }
     vm.accountStatus?.let { st -> item { Label(st, size = 13.sp, color = C.Accent, lines = Int.MAX_VALUE, modifier = Modifier.testTag("account-status")) } }
