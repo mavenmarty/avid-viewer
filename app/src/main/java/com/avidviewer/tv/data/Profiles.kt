@@ -173,6 +173,8 @@ val PROFILE_COLORS = listOf(
 val PERSONAL_KEYS = listOf(
     "favorites", "lists", "hiddenGroups", "hiddenChannels", "vodHiddenCats", "vodHiddenTitles",
     "myList", "lastChannel", "dismissedSuggestions", "historyPaused",
+    // 1.17.0: Discover settings belong to the profile (decision 17).
+    "myServices", "discoverStart", "discoverGrownUps",
 )
 
 /** [p]'s personal fields, as JSON. */

@@ -192,6 +192,13 @@ object AccountApi {
         return o
     }
 
+    /** 1.17.0: locked places, Discover settings and the TMDB key (see [History]). */
+    fun history(token: String, data: JSONObject, base: String = BASE): History.Answer {
+        val (code, o) = call(base, "/api/tv/history", data, token)
+        if (code != 200) failed(code, o)
+        return History.Answer(o.optBoolean("enabled"), o.optJSONObject("key"), o.optJSONObject("tmdb"), o.optJSONArray("profiles") ?: JSONArray())
+    }
+
     /** A playlist's categories and channels (names and counts only), for choosing what each profile sees on the website. */
     fun catalog(token: String, data: JSONObject, base: String = BASE) {
         val (code, o) = call(base, "/api/tv/catalog", data, token)
@@ -305,6 +312,21 @@ class AccountStore(context: Context) {
     var listsChanged: String
         get() = prefs.getString("listsChanged", "{}").orEmpty()
         set(v) { prefs.edit().putString("listsChanged", v).apply() }
+    /** 1.17.0: the account's history key (opened from what the website locked for this device), kept encrypted. */
+    var historyKey: ByteArray?
+        get() = prefs.getString("historyKey", null)?.let { stored ->
+            if (TESTS && stored.startsWith("test:")) stored.removePrefix("test:") else runCatching { Crypto.decrypt(stored) }.getOrNull()
+        }?.let { runCatching { android.util.Base64.decode(it, android.util.Base64.NO_WRAP) }.getOrNull() }
+        set(v) {
+            if (v == null) { prefs.edit().remove("historyKey").apply(); return }
+            val b = android.util.Base64.encodeToString(v, android.util.Base64.NO_WRAP)
+            val enc = runCatching { Crypto.encrypt(b) }.getOrElse { if (TESTS) "test:$b" else throw it }
+            prefs.edit().putString("historyKey", enc).apply()
+        }
+    /** The TMDB key last received from the account (to tell a new one from the same one). */
+    var tmdbFromAccount: String
+        get() = prefs.getString("tmdbFromAccount", "").orEmpty()
+        set(v) { prefs.edit().putString("tmdbFromAccount", v).apply() }
     var orderChangedAt: Long
         get() = prefs.getLong("orderChangedAt", 0L)
         set(v) { prefs.edit().putLong("orderChangedAt", v).apply() }

@@ -32,6 +32,16 @@ class FakeAvidSite : AutoCloseable {
     /** 1.16.0: what devices sent to /api/tv/sync, and the next answer (then empty). */
     val syncs = java.util.Collections.synchronizedList(mutableListOf<org.json.JSONObject>())
     @Volatile var syncReply: org.json.JSONObject? = null
+    /** 1.17.0: the history key locked for this device, what devices sent, and the account's locked entries. */
+    @Volatile var historySealed: org.json.JSONObject? = null
+    @Volatile var historyEnabled = true
+    @Volatile var tmdbBlob: String? = null
+    val historyPosts = java.util.Collections.synchronizedList(mutableListOf<org.json.JSONObject>())
+    val historyItems = java.util.concurrent.ConcurrentHashMap<String, org.json.JSONObject>() // "profile|item"
+    val discoverDocs = java.util.concurrent.ConcurrentHashMap<String, org.json.JSONObject>()
+    fun putHistory(profile: String, item: String, blob: String?, at: Long) {
+        historyItems["$profile|$item"] = org.json.JSONObject().put("item", item).put("blob", blob ?: org.json.JSONObject.NULL).put("at", at).put("seq", System.currentTimeMillis())
+    }
     /** 1.15.1: the account's public key sent to devices, and the playlists devices reported. */
     @Volatile var accountKey: String? = null
     @Volatile var devicePlaylists: org.json.JSONArray? = null
@@ -101,6 +111,27 @@ class FakeAvidSite : AutoCloseable {
                 }
             }.toString()
             path == "/api/tv/playlists" -> { devicePlaylists = org.json.JSONObject(body).getJSONArray("playlists"); 200 to """{"ok":true}""" }
+            path == "/api/tv/history" -> {
+                val b = org.json.JSONObject(body); historyPosts += b
+                val now = System.currentTimeMillis()
+                val out = org.json.JSONArray()
+                val ps = b.optJSONArray("profiles") ?: org.json.JSONArray()
+                for (i in 0 until ps.length()) {
+                    val p = ps.getJSONObject(i); val id = p.getString("id")
+                    p.optJSONArray("put")?.let { a -> for (j in 0 until a.length()) a.getJSONObject(j).let { x ->
+                        val cur = historyItems["$id|${x.getString("item")}"]
+                        if (historyEnabled && (cur == null || x.getLong("at") >= cur.getLong("at"))) putHistory(id, x.getString("item"), if (x.isNull("blob")) null else x.getString("blob"), x.getLong("at"))
+                    } }
+                    p.optJSONObject("discover")?.let { d -> if ((discoverDocs[id]?.optLong("at") ?: 0) <= d.getLong("at")) discoverDocs[id] = d }
+                    val since = p.optLong("since")
+                    val items = org.json.JSONArray()
+                    if (historyEnabled) historyItems.filter { it.key.startsWith("$id|") && it.value.getLong("seq") >= since }.values.sortedBy { it.getLong("seq") }
+                        .forEach { items.put(org.json.JSONObject().put("item", it.getString("item")).put("blob", it.get("blob")).put("at", it.getLong("at"))) }
+                    out.put(org.json.JSONObject().put("id", id).put("enabled", historyEnabled).put("seq", now).put("items", items).put("discover", discoverDocs[id] ?: org.json.JSONObject.NULL))
+                }
+                200 to org.json.JSONObject().put("enabled", historyEnabled).put("key", historySealed ?: org.json.JSONObject.NULL)
+                    .put("tmdb", tmdbBlob?.let { org.json.JSONObject().put("blob", it).put("at", now) } ?: org.json.JSONObject.NULL).put("profiles", out).toString()
+            }
             path == "/api/tv/sync" -> {
                 syncs += org.json.JSONObject(body)
                 val r = syncReply ?: org.json.JSONObject().put("profiles", org.json.JSONArray()).put("playlists", org.json.JSONArray())

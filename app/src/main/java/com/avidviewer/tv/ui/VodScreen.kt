@@ -213,10 +213,12 @@ fun VodScreen(vm: AppViewModel, kind: String) {
                             .then(if ((layout == "showcase" && i == 0) || (layout != "showcase" && i % cols == 0)) Modifier.onPreviewKeyEvent { e ->
                                 if (e.type == androidx.compose.ui.input.key.KeyEventType.KeyDown && e.key == androidx.compose.ui.input.key.Key.DirectionLeft) { vm.vodCatFocus++; true } else false
                             } else Modifier),
+                            note = if (current == "Continue watching") vm.continueFrom(v) else null,
                             onMenu = {
-                                vm.toggleMyList(v)
+                                // 1.17.0: in Continue watching, Menu takes the title off it (on every TV); elsewhere My List.
+                                if (current == "Continue watching") vm.removeFromContinue(v) else vm.toggleMyList(v)
                                 // In My List the poster goes: the one that takes its place gets the highlight (BUG-039).
-                                if (current == "My List") {
+                                if (current == "My List" || current == "Continue watching") {
                                     val next = items.getOrNull(i + 1) ?: items.getOrNull(i - 1)
                                     if (next != null) { vm.nav.focused(path, next.key, if (items.getOrNull(i + 1) != null) i else i - 1); vm.vodFocusBack++ }
                                     else vm.vodCatFocus++
@@ -295,7 +297,7 @@ private fun VodHero(vm: AppViewModel, v: VodItem?, full: Boolean, modifier: Modi
  * artwork (most posters already carry their title). The highlighted poster grows a little and gets a warm-grey ring.
  */
 @Composable
-private fun Poster(vm: AppViewModel, v: VodItem, modifier: Modifier = Modifier, onMenu: () -> Unit = { vm.toggleMyList(v) }, onFocus: () -> Unit = {}) {
+private fun Poster(vm: AppViewModel, v: VodItem, modifier: Modifier = Modifier, onMenu: () -> Unit = { vm.toggleMyList(v) }, note: String? = null, onFocus: () -> Unit = {}) {
     var focused by remember { mutableStateOf(false) }
     val meta = listOf(v.year, v.rating.takeIf { it.isNotBlank() && it != "0" }?.let { "★ $it" } ?: "").filter { it.isNotBlank() }.joinToString(" · ")
     Focusable(
@@ -324,6 +326,9 @@ private fun Poster(vm: AppViewModel, v: VodItem, modifier: Modifier = Modifier, 
                     if (meta.isNotBlank()) Text(meta, color = Color.White.copy(alpha = 0.78f), fontSize = 11.sp, maxLines = 1, modifier = Modifier.padding(top = 2.dp))
                 }
             }
+            // 1.17.0: Continue watching says when the place came from another TV.
+            if (note != null) Text(note, color = Color(0xFFF5C77E), fontSize = 11.sp, maxLines = 1,
+                modifier = Modifier.align(Alignment.TopStart).padding(6.dp).clip(RoundedCornerShape(4.dp)).background(Color.Black.copy(alpha = 0.7f)).padding(horizontal = 5.dp).testTag("poster-from"))
             if (vm.inMyList(v.key)) {
                 Text("✓", color = C.OnAccent, fontSize = 12.sp, fontWeight = FontWeight.Bold,
                     modifier = Modifier.align(Alignment.TopEnd).padding(6.dp).clip(RoundedCornerShape(4.dp)).background(C.Accent).padding(horizontal = 5.dp))
@@ -389,6 +394,8 @@ private fun VodDetail(vm: AppViewModel, v: VodItem) {
                 vm.playlists.firstOrNull { it.id == v.playlistId }?.name.orEmpty(),
             ).filter { it.isNotBlank() }.joinToString("  ·  ")
             if (meta.isNotBlank()) Label(meta, size = 14.sp, color = C.Soft, lines = 1)
+            // 1.17.0: where this profile stopped on another TV.
+            (if (isSeries) vm.seriesPlaceLine(v) else vm.placeLine(v.key))?.let { Label(it, size = 15.sp, color = C.Accent, lines = 2, modifier = Modifier.testTag("place-line")) }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 if (!isSeries) {
                     val r = vm.resumeOf(v.key)

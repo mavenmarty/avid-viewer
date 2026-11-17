@@ -990,6 +990,72 @@ class UsabilityTest {
         }
     }
 
+    /**
+     * 1.17.0: pick up where you left off. Places and finished episodes go to the account locked with the history key
+     * (never readable there); places from other TVs come back by playlist or by title, with the TV's name; My List and
+     * Discover settings follow the profile; the account's TMDB key arrives; Remove on the TV removes it everywhere.
+     */
+    @Test
+    fun placesMyListAndDiscoverFollowTheProfileBetweenTvs() {
+        FakeAvidSite().use { site ->
+            val now = System.currentTimeMillis()
+            restartWith { st ->
+                st.savePlaylists(st.loadPlaylists().map { if (it.id == TestData.P1) it.copy(remoteId = "acctP1") else it })
+                st.saveResume(mapOf("${TestData.P1}:mDrama1" to 300_000L))
+                st.savePlaceInfo(mapOf("${TestData.P1}:mDrama1" to com.avidviewer.tv.data.Store.PlaceInfo(3_600_000L, now - 60_000L)))
+                st.saveWatched(listOf("${TestData.P1}:sCrime1:1:1"))
+            }
+            go(Screen.MOVIES)
+            waitFor("movies") { vm.vodOf("movie").isNotEmpty() }
+            linkForTest(site)
+            site.profileMap = mapOf("main" to "acctDad")
+            site.profiles = org.json.JSONArray().put(org.json.JSONObject().put("id", "acctDad").put("name", "Dad").put("parent", true).put("color", 0).put("pin", "")
+                .put("playlists", org.json.JSONArray().put("acctP1")).put("visibility", org.json.JSONObject()))
+            rule.runOnIdle { vm.syncAccountPlaylists() }
+            waitFor("managed") { vm.profiles.managed && site.report?.has("pubkey") == true }
+            // The owner unlocked on the website: the history key, locked for this device.
+            val h = ByteArray(32).also { java.util.Random(7).nextBytes(it) }
+            site.historySealed = sealFor(site.report!!.getString("pubkey"), org.json.JSONObject().put("historyKey", android.util.Base64.encodeToString(h, android.util.Base64.NO_WRAP)))
+            rule.runOnIdle { vm.syncAccountPlaylists() }
+            waitFor("places sent (${site.historyPosts.size})") { site.historyItems.size >= 2 }
+            val sent = site.historyItems.values.map { com.avidviewer.tv.data.History.open(h, it.getString("blob")) }
+            val movie = sent.first { it.optString("t") == "m" }
+            assertEquals("Drama Movie 1", movie.getString("title")); assertEquals("1991", movie.getString("year"))
+            assertEquals(300_000L, movie.getLong("pos")); assertEquals("acctP1", movie.getString("pl")); assertEquals("mDrama1", movie.getString("id"))
+            assertEquals("Living room", movie.getString("tv"))
+            val ep = sent.first { it.optString("t") == "e" }
+            assertTrue(ep.getBoolean("done")); assertEquals("Crime Show 1", ep.getString("series")); assertEquals(1, ep.getInt("s"))
+            assertFalse("never a stream address", site.historyPosts.toString().contains("mp4"))
+            // Another TV stopped in a copy of Action Movie 2 on another provider: matched by title and year.
+            site.putHistory("acctDad", com.avidviewer.tv.data.History.itemId(h, com.avidviewer.tv.data.History.movieMatch("Action Movie 2", "1992")),
+                com.avidviewer.tv.data.History.lock(h, org.json.JSONObject().put("t", "m").put("title", "Action Movie 2").put("year", "1992").put("pos", 600_000).put("dur", 5_400_000)
+                    .put("done", false).put("tv", "Bedroom").put("pl", "acctOther").put("id", "m999")), now)
+            // My List and Discover settings from the website, and the account's TMDB key.
+            site.discoverDocs["acctDad"] = org.json.JSONObject().put("at", now).put("blob", com.avidviewer.tv.data.History.lock(h, org.json.JSONObject()
+                .put("myList", org.json.JSONArray().put(org.json.JSONObject().put("t", "movie").put("name", "Drama Movie 3").put("year", "1993")))
+                .put("services", org.json.JSONArray().put(org.json.JSONObject().put("id", 8).put("name", "Netflix")))
+                .put("start", "provider").put("grownUps", false)))
+            site.tmdbBlob = com.avidviewer.tv.data.History.lock(h, org.json.JSONObject().put("tmdb", "abcdef0123456789abcdef0123456789"))
+            rule.runOnIdle { vm.syncAccountPlaylists() }
+            waitFor("place from Bedroom") { vm.resumeOf("${TestData.P1}:mAction2") == 600_000L }
+            assertTrue(vm.placeLine("${TestData.P1}:mAction2")!!.contains("on Bedroom"))
+            val action2 = vm.vodOf("movie").first { it.key == "${TestData.P1}:mAction2" }
+            assertEquals("from Bedroom", vm.continueFrom(action2))
+            waitFor("My List from the account") { vm.prefs.myList.any { it.key == "${TestData.P1}:mDrama3" } }
+            assertEquals("provider", vm.prefs.discoverStart); assertFalse(vm.prefs.discoverGrownUps)
+            assertTrue(vm.onlyOnProvider)
+            assertEquals(listOf(8), vm.prefs.myServices.map { it.id })
+            assertEquals("abcdef0123456789abcdef0123456789", vm.tmdbKey())
+            // Removed from Continue watching here: removed in the account.
+            val drama1 = vm.vodOf("movie").first { it.key == "${TestData.P1}:mDrama1" }
+            rule.runOnIdle { vm.removeFromContinue(drama1) }
+            assertEquals(0L, vm.resumeOf(drama1.key))
+            val id1 = com.avidviewer.tv.data.History.itemId(h, com.avidviewer.tv.data.History.movieMatch("Drama Movie 1", "1991"))
+            rule.runOnIdle { vm.syncAccountPlaylists() }
+            waitFor("removal sent") { site.historyItems["acctDad|$id1"]?.isNull("blob") == true }
+        }
+    }
+
     /** 1.15.0: with 2+ profiles, the info bar over video shows the profile in use; with one, it doesn't. */
     @Test
     fun theInfoBarShowsTheProfileInUse() {

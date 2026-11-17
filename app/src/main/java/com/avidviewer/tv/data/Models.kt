@@ -161,6 +161,9 @@ data class Prefs(
     val smbUser: String = "",
     val smbPassEnc: String = "",
     val myServices: List<WatchProvider> = emptyList(),
+    /** 1.17.0, per profile: how Discover opens ("all", "provider", "services") and whether it shows titles for grown-ups. */
+    val discoverStart: String = "all",
+    val discoverGrownUps: Boolean = true,
     /** Suggest local channels from the postal code at the top of Favorites. */
     val showSuggestions: Boolean = true,
     /** Channels the user dismissed from the suggestions. */
@@ -215,6 +218,7 @@ data class Prefs(
         o.put("tmdbKeyEnc", tmdbKeyEnc)
         o.put("smbAddress", smbAddress).put("smbUser", smbUser).put("smbPassEnc", smbPassEnc)
         o.put("myServices", JSONArray().apply { myServices.forEach { put(JSONObject().put("id", it.id).put("name", it.name).put("logo", it.logo ?: "")) } })
+        o.put("discoverStart", discoverStart).put("discoverGrownUps", discoverGrownUps)
         vodPlaylist?.let { o.put("vodPlaylist", it) }
         o.put("vodHiddenCats", JSONArray(vodHiddenCats.toList()))
         o.put("vodHiddenTitles", JSONArray(vodHiddenTitles.toList()))
@@ -281,6 +285,8 @@ data class Prefs(
                 showSuggestions = o.optBoolean("showSuggestions", true),
                 dismissedSuggestions = strList(o.optJSONArray("dismissedSuggestions")).toSet(),
                 myServices = o.optJSONArray("myServices")?.let { a -> List(a.length()) { a.getJSONObject(it).let { s -> WatchProvider(s.getInt("id"), s.optString("name"), s.optString("logo").ifBlank { null }) } } } ?: emptyList(),
+                discoverStart = o.optString("discoverStart", "all").ifBlank { "all" },
+                discoverGrownUps = o.optBoolean("discoverGrownUps", true),
                 avDefault = AvChoice.fromJson(o.optJSONObject("avDefault")),
                 avChannels = o.optJSONObject("avChannels")?.let { m -> m.keys().asSequence().associateWith { AvChoice.fromJson(m.optJSONObject(it)) }.filterValues { !it.isEmpty } } ?: emptyMap(),
                 captionStyle = CaptionStyle.fromJson(o.optJSONObject("captionStyle")),

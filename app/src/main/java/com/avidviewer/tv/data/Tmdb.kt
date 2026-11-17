@@ -78,12 +78,27 @@ object Tmdb {
 
     fun trending(key: String): List<Title> = titles(get(key, "/trending/all/week").optJSONArray("results"))
 
+    /** 1.17.0: titles for grown-ups off: movies rated PG-13 or lower (US ratings). */
+    private const val FAMILY = "&certification_country=US&certification.lte=PG-13"
+
+    /** Trending without movies rated R and up: popular movies rated PG-13 or lower, mixed with trending series. */
+    fun trendingFamily(key: String): List<Title> {
+        val m = titles(get(key, "/discover/movie", "&sort_by=popularity.desc$FAMILY").optJSONArray("results"), "movie")
+        val s = titles(get(key, "/trending/tv/week").optJSONArray("results"), "tv")
+        return m.zip(s).flatMap { listOf(it.first, it.second) } + m.drop(s.size) + s.drop(m.size)
+    }
+
+    fun inTheatersFamily(key: String, region: String): List<Title> = titles(
+        get(key, "/discover/movie", "&region=$region&with_release_type=2|3&primary_release_date.gte=${day(-45)}&primary_release_date.lte=${day(0)}&sort_by=popularity.desc$FAMILY")
+            .optJSONArray("results"), "movie",
+    )
+
     fun inTheaters(key: String, region: String): List<Title> =
         titles(get(key, "/movie/now_playing", "&region=$region").optJSONArray("results"), "movie")
 
     /** New to streaming: recent releases available on subscription services in [region] (optionally only [providers]). */
-    fun newMovies(key: String, region: String, providers: List<Int>): List<Title> {
-        val prov = if (providers.isEmpty()) "" else "&with_watch_providers=" + providers.joinToString("|")
+    fun newMovies(key: String, region: String, providers: List<Int>, family: Boolean = false): List<Title> {
+        val prov = (if (providers.isEmpty()) "" else "&with_watch_providers=" + providers.joinToString("|")) + if (family) FAMILY else ""
         return titles(
             get(key, "/discover/movie", "&watch_region=$region&with_watch_monetization_types=flatrate|free|ads$prov" +
                 "&sort_by=primary_release_date.desc&primary_release_date.lte=${day(0)}&primary_release_date.gte=${day(-120)}&vote_count.gte=10")
