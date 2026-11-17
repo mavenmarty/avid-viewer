@@ -59,13 +59,12 @@ fun WelcomeScreen(vm: AppViewModel) {
                 size = 16.sp, color = C.Soft, lines = Int.MAX_VALUE,
             )
             Label(
-                "Already use Avid Viewer on another device? Link this one to your account with the code on the right, then restore that device's backup. No typing logins with the remote.",
+                "Easier with a phone: link this device to your account with the code on the right, then add playlists at avidviewer.app/playlists, or restore another device's backup. No typing logins with the remote.",
                 size = 16.sp, color = C.Soft, lines = Int.MAX_VALUE,
             )
             Spacer(Modifier.height(6.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 TvButton("＋  Add a playlist", primary = true, modifier = Modifier.focusRequester(add).testTag("welcome-add")) { vm.welcomeAddPlaylist() }
-                TvButton("Enter a setup code", modifier = Modifier.testTag("welcome-code")) { vm.openSetupCode() }
             }
         }
         WelcomeLinkPanel(vm)
@@ -99,7 +98,7 @@ private fun WelcomeLinkPanel(vm: AppViewModel) {
                 Label("Scan with your phone, or go to", size = 13.sp, color = C.Soft)
                 Label("avidviewer.app/link", size = 18.sp, color = C.Text, weight = FontWeight.Bold)
                 Label("and enter", size = 13.sp, color = C.Soft)
-                Label(com.avidviewer.tv.data.SetupCode.pretty(code.code), size = 34.sp, color = C.Accent, weight = FontWeight.Bold, modifier = Modifier.testTag("welcome-link-code"))
+                Label(com.avidviewer.tv.data.AccountApi.pretty(code.code), size = 34.sp, color = C.Accent, weight = FontWeight.Bold, modifier = Modifier.testTag("welcome-link-code"))
                 Label("No account yet? You can make one there.", size = 12.sp, color = C.Muted, lines = 2)
             }
             else -> Label(vm.accountStatus ?: "Getting a code…", size = 14.sp, color = C.Soft, lines = Int.MAX_VALUE)
@@ -107,33 +106,6 @@ private fun WelcomeLinkPanel(vm: AppViewModel) {
     }
 }
 
-/**
- * Enter a setup code from avidviewer.app/setup (1.11.0). The keyboard opens at once; Done fetches the code's
- * playlists (or backup). Shown over the welcome screen, or from Settings › Playlists.
- */
-@Composable
-fun SetupCodeDialog(vm: AppViewModel) {
-    var text by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableStateOf("") }
-    androidx.compose.material3.AlertDialog(
-        onDismissRequest = { vm.closeSetupCode() },
-        containerColor = C.Surface,
-        title = { androidx.compose.material3.Text("Enter your setup code", color = C.Text) },
-        text = {
-            Row(horizontalArrangement = Arrangement.spacedBy(20.dp), verticalAlignment = Alignment.Top) {
-                QrCode(com.avidviewer.tv.data.SetupCode.PAGE, Modifier.size(130.dp))
-                Column(Modifier.width(380.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Label("On your phone or computer, open avidviewer.app/setup (or scan the code), enter your playlist or upload a backup, and type the code it shows here.",
-                        size = 14.sp, color = C.Soft, lines = Int.MAX_VALUE)
-                    TvField("Setup code (8 letters and numbers)", text, modifier = Modifier.testTag("setup-code-field"), autoOpen = true,
-                        next = { vm.redeemSetupCode(text) }) { text = it.uppercase().take(12) }
-                    vm.setupStatus?.let { Label(it, size = 13.sp, color = C.Text, lines = Int.MAX_VALUE, modifier = Modifier.testTag("setup-status")) }
-                }
-            }
-        },
-        confirmButton = { TvButton(if (vm.setupBusy) "Setting up…" else "Set up", primary = true, busy = vm.setupBusy, modifier = Modifier.testTag("setup-go")) { vm.redeemSetupCode(text) } },
-        dismissButton = { TvButton("Cancel") { vm.closeSetupCode() } },
-    )
-}
 
 /** Welcome › Sign in to your account: the link code, then the account's backups to restore (1.12.0). */
 @Composable

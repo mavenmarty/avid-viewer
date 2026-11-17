@@ -64,4 +64,21 @@ class CrashReportTest {
         assertFalse(log.adoptUncleanExit(app))
         log.leftNormally(app); log.clear(app)
     }
+
+    /**
+     * 1.13.1: the screen is marked "on screen" (onStart) before the view model may exist. Creating the view model then
+     * must not report the run that's on screen right now as a crash (it did in 1.12.0–1.13.0, at every start).
+     */
+    @Test
+    fun theRunOnScreenNowIsNeverReportedAsACrash() {
+        val app = androidx.test.core.app.ApplicationProvider.getApplicationContext<android.app.Application>()
+        val log = com.avidviewer.tv.data.CrashLog
+        log.clear(app)
+        log.inUse(app); log.note(app, "App on screen")
+        Thread.sleep(300)
+        val vm = com.avidviewer.tv.ui.AppViewModel(app)
+        assertEquals(null, vm.lastCrash)
+        assertEquals(null, log.read(app))
+        log.leftNormally(app); log.clear(app)
+    }
 }

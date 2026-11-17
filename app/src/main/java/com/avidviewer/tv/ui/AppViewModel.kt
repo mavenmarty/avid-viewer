@@ -200,6 +200,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             history = store.loadHistory(); resume = store.loadResume(); watched = LinkedHashSet(store.loadWatched())
             otherLive.clear(); playlistGroups = emptyMap(); favDataTick++
             applyProfileVodLimits()
+            // Playlists limited to some profiles: what this profile sees may differ (1.14.0).
+            if (playlists.any { it.profiles != null }) { resetVod(); reloadAfterActiveChange() }
         }
         choosingProfile = false
         // Start like at launch, on this profile's last channel.
@@ -449,6 +451,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     // ---------------- avidviewer.app account (1.11.0; data/Account.kt) ----------------
     val account = com.avidviewer.tv.data.AccountStore(app)
     /** Where the account API lives; tests point it at a fake server. */
+    private companion object { const val ACCOUNT_GUIDE = "acct-guide" }
+
     // Tests never reach the real site: under Robolectric the default address goes nowhere (each test sets a fake).
     internal var accountApi = if (android.os.Build.FINGERPRINT == "robolectric") "http://127.0.0.1:9" else com.avidviewer.tv.data.AccountApi.BASE
     var accountEmail by mutableStateOf(account.email.takeIf { account.linked }); private set
@@ -467,6 +471,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         accountEmail = l.email; accountTvName = l.name; linkCode = null
         accountStatus = "Linked to ${l.email} as \"${l.name}\"."
         trail("account linked")
+        syncAccountPlaylists()
         if (welcomeAccountOpen) loadCloudBackups()
         // Linked from the welcome screen's code: offer the account's backups straight away.
         else if (showWelcome) { welcomeAccountOpen = true; backupStatus = null; loadCloudBackups() }
@@ -525,13 +530,6 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    /** A setup code made while signed in also links this TV (when it isn't linked yet). */
-    private suspend fun claimSetupLink(token: String) {
-        if (account.linked) return
-        runCatching { withContext(Dispatchers.IO) { com.avidviewer.tv.data.AccountApi.claim(token, accountInfo(), accountApi) } }
-            .onSuccess { linkedNow(it) }
-            .onFailure { accountStatus = it.message }
-    }
     val installed: Pair<Long, String> = runCatching { Updater.installedVersion(app) }.getOrDefault(0L to "")
     /** The game highlighted on the Sports screen. */
     var selectedGame by mutableStateOf<String?>(null)
@@ -641,13 +639,6 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         screen = Screen.SETTINGS; settingsSection = "playlists"; navMode = NavMode.COLLAPSED
     }
 
-    // ---------------- setup codes (avidviewer.app/setup, 1.11.0) ----------------
-    var setupCodeOpen by mutableStateOf(false)
-    var setupStatus by mutableStateOf<String?>(null); private set
-    var setupBusy by mutableStateOf(false); private set
-    /** Where setup codes are fetched from; tests point it at a fake server. */
-    internal var setupApi = com.avidviewer.tv.data.SetupCode.API
-
     /** Welcome screen › Sign in to your account: link this TV, then offer the account's backups (1.12.0). */
     var welcomeAccountOpen by mutableStateOf(false); private set
     fun welcomeSignIn() {
@@ -657,63 +648,6 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun closeWelcomeAccount() {
         if (linkCode != null) cancelLinking()
         welcomeAccountOpen = false; cloudBackups = null; pendingRestore = null
-    }
-
-    fun openSetupCode() { setupStatus = null; setupCodeOpen = true }
-    fun closeSetupCode() { if (!setupBusy) setupCodeOpen = false }
-
-    /**
-     * Fetches a setup code's playlists (or backup) and applies them: each playlist is checked like one added by hand
-     * and added if it works; a backup goes to the usual restore dialog (it asks for the backup's PIN).
-     */
-    fun redeemSetupCode(input: String) {
-        val code = com.avidviewer.tv.data.SetupCode.normalize(input)
-        if (code == null) { setupStatus = "A setup code has 8 letters and numbers."; return }
-        if (setupBusy) return
-        setupBusy = true
-        setupStatus = "Getting your setup from avidviewer.app…"
-        viewModelScope.launch {
-            val setup = try {
-                withContext(Dispatchers.IO) { com.avidviewer.tv.data.SetupCode.fetch(code, setupApi) }
-            } catch (e: Exception) {
-                setupStatus = e.message ?: "That didn't work. Try again."; setupBusy = false; return@launch
-            }
-            trail("setup code: ${setup.playlists.size} playlist(s)")
-            setup.link?.let { claimSetupLink(it) }
-            val added = mutableListOf<Playlist>(); val problems = mutableListOf<String>()
-            for (it in setup.playlists) {
-                val p = Playlist(
-                    id = UUID.randomUUID().toString().take(8),
-                    name = it.name.ifBlank { if (it.type == "xtream") "My provider" else "M3U playlist" },
-                    type = it.type, server = it.server, username = it.username, password = it.password, m3uUrl = it.m3u,
-                    epgSources = if (it.epg.isBlank()) emptyList() else listOf(EpgSource("src-" + System.currentTimeMillis().toString(36) + added.size, "Guide address", it.epg)),
-                )
-                setupStatus = "Checking ${p.name}…"
-                val problem = withContext(Dispatchers.IO) {
-                    if (p.isXtream) Xtream.checkLogin(p) else if (p.m3uUrl.isBlank()) "No playlist link." else null
-                }
-                if (problem == null) added += p else problems += "${p.name}: $problem"
-            }
-            if (added.isNotEmpty()) {
-                playlists = playlists + added
-                store.savePlaylists(playlists)
-                updatePrefs { it.copy(activePlaylist = added.first().id) }
-            }
-            setupBusy = false
-            if (problems.isEmpty()) {
-                setupCodeOpen = false
-                status = "Added " + added.joinToString(", ") { it.name } + "."
-                showWelcome = false
-                playlistSaved++
-                loadActive(refresh = true)
-                if (added.size > 1) syncAllPlaylists(force = false)
-            } else {
-                if (added.isNotEmpty()) { showWelcome = false; playlistSaved++; loadActive(refresh = true) }
-                setupStatus = (if (added.isNotEmpty()) "Added " + added.joinToString(", ") { it.name } + ". " else "") +
-                    "Couldn't add " + problems.joinToString("; ") +
-                    " Fix it on avidviewer.app/setup and make a new code, or add it in Settings › Playlists."
-            }
-        }
     }
 
     private var osdJob: Job? = null
@@ -887,7 +821,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Details of the last crash, if the app closed unexpectedly (shown once at start and in Settings › About). */
     // Closed while on screen last time with nothing caught (the TV freed memory, a native crash): that counts too.
-    var lastCrash by mutableStateOf(com.avidviewer.tv.data.CrashLog.run { adoptUncleanExit(app); read(app) }); private set
+    var lastCrash by mutableStateOf(com.avidviewer.tv.data.CrashLog.read(app)); private set // adopted in AvidViewerApp.onCreate
     var crashNoticeSeen by mutableStateOf(false)
 
     fun clearCrash() { com.avidviewer.tv.data.CrashLog.clear(getApplication()); lastCrash = null }
@@ -975,6 +909,14 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         // Memory in use, every 30 s while on screen, so a hard close shows what it was just before (CrashLog).
         if (android.os.Build.FINGERPRINT != "robolectric") viewModelScope.launch {
             while (true) { delay(30_000); com.avidviewer.tv.data.CrashLog.tick(getApplication()) }
+        }
+        viewModelScope.launch {
+            // Playlists sent from avidviewer.app/playlists: once a minute while the app is on screen (1.14.0).
+            delay(5_000)
+            while (true) { if (onScreen && account.linked) syncAccountPlaylists(); delay(60_000) }
+        }
+        viewModelScope.launch {
+            while (true) { delay(10_000); runCatching { idleToFullScreen() } }
         }
         // The catalog's hidden marks belong to one profile: put this profile's in place if another's are there,
         // or (a Kids profile) its categories may have changed.
@@ -1162,8 +1104,12 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun zoneLabel(): String = timeZone.getDisplayName(timeZone.inDaylightTime(java.util.Date(now)), TimeZone.SHORT)
 
     // ---------------- playlists ----------------
-    /** Playlists that are switched on; disabled ones are kept but hidden everywhere. */
-    val shownPlaylists: List<Playlist> get() = playlists.filter { it.enabled }
+    /**
+     * Playlists that are switched on and that the profile in use may see (1.14.0: a playlist sent from avidviewer.app can
+     * be limited to some profiles); the others are kept but hidden everywhere.
+     */
+    val shownPlaylists: List<Playlist> get() = playlists.filter { isOn(it) }
+    fun isOn(p: Playlist) = p.enabled && p.visibleTo(profile.id)
 
     /** Playlist that feeds the TV Guide and Sports: switched on, with live TV on (any switched-on one as a last resort). */
     fun activePlaylist(): Playlist? =
@@ -2557,6 +2503,108 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         flashOsd(contextLabel())
     }
 
+    // ---------------- playlists from avidviewer.app/playlists (1.14.0) ----------------
+    private var reported = ""
+    private var accountSyncBusy = false
+
+    /**
+     * Reports this device's key and profiles (when they changed), then adds, changes or removes the playlists the account
+     * sent, and tells the account how each went. Offline or unlinked: nothing happens until the next minute.
+     */
+    fun syncAccountPlaylists() {
+        val token = account.token ?: return
+        if (accountSyncBusy) return
+        accountSyncBusy = true
+        viewModelScope.launch {
+            try {
+                val key = withContext(Dispatchers.IO) { account.deviceKey() } ?: return@launch
+                val prof = profiles.list.map { Triple(it.id, it.name, it.kids) }
+                val sig = key.publicB64 + prof
+                if (sig != reported) {
+                    withContext(Dispatchers.IO) { com.avidviewer.tv.data.AccountApi.report(token, key.publicB64, prof, accountApi) }
+                    reported = sig
+                }
+                val items = withContext(Dispatchers.IO) { com.avidviewer.tv.data.AccountApi.inbox(token, accountApi) }
+                for (item in items) {
+                    val problem = runCatching { applyAccountPlaylist(item, key) }.getOrElse { it.message ?: "Something went wrong on the device." }
+                    trail("account playlist ${item.action}: " + (problem?.let { "failed" } ?: "done"))
+                    runCatching { withContext(Dispatchers.IO) { com.avidviewer.tv.data.AccountApi.ack(token, item, problem, accountApi) } }
+                }
+            } catch (_: Exception) {
+                // Offline, or the site is busy: try again at the next check.
+            } finally { accountSyncBusy = false }
+        }
+    }
+
+    /** One instruction from the account; returns why it couldn't be done, or null. */
+    private suspend fun applyAccountPlaylist(item: com.avidviewer.tv.data.AccountApi.InboxItem, key: com.avidviewer.tv.data.DeviceKey.Pair): String? {
+        val existing = playlists.firstOrNull { it.remoteId == item.playlistId }
+        if (item.action == "remove") {
+            existing?.let { removePlaylist(it.id) }
+            return null
+        }
+        val login = item.payload?.let { env ->
+            runCatching { withContext(Dispatchers.Default) { com.avidviewer.tv.data.DeviceKey.open(key, env) } }
+                .getOrElse { return "This device couldn't open the login. Enter it again on the website." }
+        }
+        if (login == null && existing == null) return "The login is missing. Enter it again on the website."
+        var p = (existing ?: Playlist(id = UUID.randomUUID().toString().take(8), name = item.name, type = item.type))
+            .copy(name = item.name.ifBlank { existing?.name ?: "My provider" }, profiles = item.profiles, remoteId = item.playlistId)
+        if (login != null) {
+            val epg = login.optString("epgUrl").trim()
+            val others = p.epgSources.filterNot { it.id == ACCOUNT_GUIDE }
+            p = p.copy(
+                type = login.optString("type", item.type), server = login.optString("server").trim(), username = login.optString("username").trim(),
+                password = login.optString("password"), m3uUrl = login.optString("m3uUrl").trim(),
+                epgSources = if (epg.isBlank()) others else listOf(EpgSource(ACCOUNT_GUIDE, "Guide address", epg)) + others,
+            )
+            val problem = withContext(Dispatchers.IO) {
+                if (p.isXtream) Xtream.checkLogin(p) else if (p.m3uUrl.isBlank()) "No playlist link." else null
+            }
+            if (problem != null) return problem
+        }
+        val first = playlists.isEmpty()
+        playlists = if (existing == null) playlists + p else playlists.map { if (it.id == p.id) p else it }
+        store.savePlaylists(playlists)
+        playlistSaved++
+        when {
+            existing == null && first -> {
+                updatePrefs { it.copy(activePlaylist = p.id) }
+                showWelcome = false
+                status = "Added ${p.name} from your account."
+                loadActive(refresh = true)
+            }
+            existing == null -> { status = "Added ${p.name} from your account."; syncAllPlaylists(force = false) }
+            login != null -> refreshPlaylist(p.id)
+            else -> if (!p.visibleTo(profile.id) || existing.profiles != p.profiles) { resetVod(); reloadAfterActiveChange() }
+        }
+        return null
+    }
+
+    // ---------------- burn-in guard (1.14.0) ----------------
+    /** How long the menus may stay on screen over a playing preview with no button pressed. */
+    internal var idleFullScreenMs = 5 * 60_000L
+    private var idleFrom = android.os.SystemClock.uptimeMillis()
+    /** Counts from now (the app came back on screen), not from a button pressed before it left. */
+    fun resetIdle() { idleFrom = android.os.SystemClock.uptimeMillis(); onScreen = true }
+    /** The app is on screen (between onStart and onStop). */
+    var onScreen = true; private set
+
+    /**
+     * Owner request (Nov 16): with a channel playing in a preview and the menus on screen, 5 minutes without a button
+     * press goes to full screen, so still menus don't burn into the screen. Back returns to where the viewer was.
+     */
+    internal fun idleToFullScreen(nowUptime: Long = android.os.SystemClock.uptimeMillis()) {
+        if (screen == Screen.PLAYER || showWelcome || vodPlaying != null) return
+        val key = currentKey ?: return
+        if (player.mediaItemCount == 0 || !player.playWhenReady || playerError != null) return
+        if (player.playbackState == Player.STATE_IDLE || player.playbackState == Player.STATE_ENDED) return
+        if (welcomeAccountOpen || pendingRestore != null) return
+        if (nowUptime - maxOf(lastKeyAt, idleFrom) < idleFullScreenMs) return
+        trail("menus idle: full screen")
+        openFullScreen(key, if (screen == Screen.SPORTS) PlayContext.SPORTS else PlayContext.GROUP)
+    }
+
     fun closeFullScreen() {
         osd = null
         avPanel = false
@@ -3020,7 +3068,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** Live channels + guide of a playlist; nothing at all when its live TV is off. Never touches movies & series. */
     /** A playlist's whole channel list and guide, read from its saved files and not kept (the active one is in memory). */
     private suspend fun liveFor(p: Playlist): Pair<List<Channel>, Map<String, List<Program>>> {
-        if (!p.liveOn || !p.enabled) return emptyList<Channel>() to emptyMap()
+        if (!p.liveOn || !isOn(p)) return emptyList<Channel>() to emptyMap()
         if (p.id == activePlaylist()?.id) return channels to guide
         return withContext(Dispatchers.IO) { liveReady(); live.channels(p.id) to guideWindow(p.id, null) }
     }
@@ -3033,7 +3081,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Another playlist's favorite/list channels and their guide, kept in memory (small). */
     private suspend fun liveFavorites(p: Playlist): Pair<List<Channel>, Map<String, List<Program>>> {
-        if (!p.liveOn || !p.enabled) return emptyList<Channel>() to emptyMap()
+        if (!p.liveOn || !isOn(p)) return emptyList<Channel>() to emptyMap()
         if (p.id == activePlaylist()?.id) return channels to guide
         otherLive[p.id]?.let { return it }
         val keys = listedKeys()
@@ -3087,11 +3135,11 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 ensureActive()
                 val isActive = p.id == activePlaylist()?.id
                 // The playlist being watched is in memory; the others are searched in the database.
-                val (chsAll, g) = if (isActive || !p.liveOn || !p.enabled) liveFor(p) else withContext(Dispatchers.IO) { liveHits(p, q, 50, 60, nowMs) }
+                val (chsAll, g) = if (isActive || !p.liveOn || !isOn(p)) liveFor(p) else withContext(Dispatchers.IO) { liveHits(p, q, 50, 60, nowMs) }
                 val chs = chsAll.filter { channelAllowed(it) } // a Kids profile: only its categories
                 // Titles: searched in the catalog database, not loaded. Every word first, then near matches.
-                if (p.vodOn && p.enabled) importOldTitles(p)
-                val vodHitList = if (!p.vodOn || !p.enabled) emptyList() else withContext(Dispatchers.IO) {
+                if (p.vodOn && isOn(p)) importOldTitles(p)
+                val vodHitList = if (!p.vodOn || !isOn(p)) emptyList() else withContext(Dispatchers.IO) {
                     fun find(query: Catalog.Query) = (catalog.page(query, 0, 50) + catalog.near(query, 50)).distinctBy { it.key }
                     find(Catalog.Query("movie", listOf(p.id), nameContains = q, kind = "movie")) +
                         find(Catalog.Query("series", listOf(p.id), nameContains = q)) +
@@ -3190,7 +3238,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         val p = playlists.firstOrNull { it.id == pid } ?: return
         if (p.id == activePlaylist()?.id) { playlistGroups = playlistGroups + (p.id to groups()); return }
         viewModelScope.launch {
-            val counts = if (!p.liveOn || !p.enabled) emptyMap() else withContext(Dispatchers.IO) { liveReady(); live.groupCounts(p.id) }.toMap(LinkedHashMap())
+            val counts = if (!p.liveOn || !isOn(p)) emptyMap() else withContext(Dispatchers.IO) { liveReady(); live.groupCounts(p.id) }.toMap(LinkedHashMap())
             val list = counts.filterKeys { !isGroupHidden(p.id, it) }.map { (raw, n) -> GroupInfo(raw, groupName(raw), n, false) }
             playlistGroups = playlistGroups + (p.id to list)
         }
@@ -3829,6 +3877,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun onAppExit() {
+        onScreen = false
         recordWatch()
         if (prefs.clearCacheOnExit) store.clearCache()
     }

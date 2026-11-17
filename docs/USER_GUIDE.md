@@ -2,7 +2,7 @@
 
 <!-- The version below and the Release notes section are updated automatically after each published build
      (.github/workflows/user-guide.yml). Feature descriptions are written by hand. -->
-This guide covers **Avid Viewer 1.12.0**, the current public release. Avid Viewer is an IPTV player for Android TV and Fire TV. You bring your own provider (an Xtream Codes login or an M3U link); the app doesn't include any channels.
+This guide covers **Avid Viewer 1.13.0**, the current public release. Avid Viewer is an IPTV player for Android TV and Fire TV. You bring your own provider (an Xtream Codes login or an M3U link); the app doesn't include any channels.
 
 **Contents:** [Getting started](#1-getting-started) · [Main menu](#2-main-menu) · [TV Guide](#3-tv-guide) · [Full-screen playback](#4-full-screen-playback) · [Search](#5-search) · [Discover](#6-discover) · [Sports](#7-sports) · [Movies and Series](#8-movies-and-series) · [Settings](#9-settings) ([Profiles](#profiles)) · [Privacy](#10-privacy) · [Troubleshooting](#11-troubleshooting) · [Control4](#12-control4) · [Supplemental services](#13-supplemental-services) · [Cable & satellite](#14-using-your-cable-or-satellite-subscription) · [Release notes](#release-notes)
 
@@ -28,10 +28,9 @@ This guide covers **Avid Viewer 1.12.0**, the current public release. Avid Viewe
 
 The first time you open Avid Viewer, and every time it starts while there are no playlists, it shows a welcome screen:
 
-- **Enter a setup code** (highlighted, from 1.11.0): the easiest way to start. See [Set up with your phone](#set-up-with-your-phone) below.
-- **＋ Add a playlist**: opens **Settings › Playlists** on the add form, to type it with the remote. See below.
-- **Sign in to your account** (from 1.12.0): links this device to your avidviewer.app account, then offers the backups in your account, for moving from another device. See [Backup & restore](#backup--restore).
-- **avidviewer.app/setup**: scan the QR code with your phone's camera to open the setup page.
+- **＋ Add a playlist** (highlighted): opens **Settings › Playlists** on the add form, to type it with the remote. See below.
+- **Enter a setup code**: playlists entered on your phone at avidviewer.app/setup. See [Set up with your phone](#set-up-with-your-phone) below.
+- **Link to your account** (right side, from 1.13.0): the device shows its own 8-character code and a QR code. Scan the QR code with your phone (it opens **avidviewer.app/link** with the code filled in), or go to avidviewer.app/link and type the code. Sign in or make an account, then choose **Add this device**. A new code replaces one that runs out (10 minutes). Once it's added, the device offers the backups in your account, for moving from another device; see [Backup & restore](#backup--restore). After linking, the panel says **Linked to** your email with **Restore a backup**.
 
 Once a playlist has been added, the app opens on the TV Guide instead.
 
@@ -485,7 +484,7 @@ Everything here stays on the device; nothing is uploaded or backed up to the clo
 From 1.11.0 a device can be linked to an Avid Viewer account at avidviewer.app. From 1.12.0 that's also where its backups are kept (see below).
 
 - **Making an account:** at **avidviewer.app/signin**, enter your email for a one-time sign-in link, or use a passkey you've added. There are no passwords. Your account page (**avidviewer.app/account**) lists your devices, their backups, passkeys and signed-in browsers, your watch-history choice, and **Delete account**.
-- **Link this device** (Settings › Account, or **Sign in to your account** on the welcome screen): the device shows an 8-character code and a QR code. On your phone or computer, open **avidviewer.app/link** (or scan the QR code, or choose **Add a device** on your Account page), sign in if asked, check the device it found, give it a name, and choose **Link this device**. The device notices within a few seconds and shows **Linked to** your email. The code works for 10 minutes; **Cancel** stops waiting.
+- **Link this device** (Settings › Account, or the code on the welcome screen): the device shows an 8-character code and a QR code. Scan the QR code with your phone (the code is filled in for you), or open **avidviewer.app/link** (**Add a device** on your Account page) and type the code. Sign in if asked, check the device it found, give it a name, and choose **Add this device**. The device notices within a few seconds and shows **Linked to** your email. The code works for 10 minutes; **Cancel** stops waiting.
 - **Linked:** Settings › Account shows the account and this device's name. **Sign out of this device** (asks first) unlinks it and forgets its backup PIN; playlists and settings on the device stay.
 - **Your devices** on avidviewer.app/account shows each linked device's name, model, app version and when it last checked in, with **Rename** and **Remove**. A removed device unlinks itself the next time it checks in (a minute after the app starts, then every 6 hours); its backup stays in your account for 30 days.
 - **What's shared:** linking sends only the device's name, model and Avid Viewer version. Your playlists and settings go to your account only in a backup, locked with your backup PIN. What you watch is never sent.
@@ -511,7 +510,7 @@ A backup holds your playlists (with their logins), ★ Favorites and your lists,
 2. Choose one. The confirmation shows which device it's from, when it was made and which playlists it holds. Restoring replaces the playlists and settings on this device and can't be undone.
 3. Enter that backup's PIN. A wrong PIN is refused and nothing changes. After a restore, channels and guides start downloading again, and this device backs up with the same PIN from then on (if it didn't have one).
 
-**Setting up a new device:** on its welcome screen choose **Sign in to your account**, approve the code at **avidviewer.app/link** (or **Add a device** on your Account page), then pick the backup to copy.
+**Setting up a new device:** its welcome screen shows a code and a QR code. Scan it (or type the code at **avidviewer.app/link**, **Add a device** on your Account page), choose **Add this device**, then pick the backup to copy on the device.
 
 **Forgot the PIN?** Sign in at **avidviewer.app/account**, find the backup under **Backups** and choose **Show PIN**. For your security it's shown only after a sign-in in the last hour, or a passkey sign-in.
 
@@ -717,7 +716,22 @@ Every public release since 1.0.35, newest first. From 1.1.0, versions are number
 
 <!-- new-releases: entries for new builds are added automatically below this line -->
 
-### 1.12.0 — November 16, 2026, 8:32 AM CT (current)
+### 1.13.0 — November 16, 2026, 5:51 PM CT (current)
+
+**Release notes**
+
+- **Link with the code on the device.** The welcome screen now shows this device's own code and a QR code. Scan it with your phone and avidviewer.app/link opens with the code filled in, or type the code there (**Add a device** on your Account page). Choose **Add this device**, and the device offers your account's backups.
+- **No example codes.** The website's code box and the setup-code dialog no longer show a sample code that looked like a real one.
+- **New icon.** The app icon and the Fire TV / Android TV banner match avidviewer.app: a dark eye on amber.
+
+**Change log**
+
+- Welcome screen: link code and QR code on the right (a new code replaces an expired one; linking stops when you leave the screen); Add a playlist highlighted first, Enter a setup code beside it
+- Website: Add a device page (code formatted as you type, QR code fills it in and finds the device, one press to add); backups of removed devices cleaned up when backups are sent or listed (no scheduled job)
+- App icon, round icon, in-app logo and TV banner redrawn from the website's logo
+- Tests never contact avidviewer.app (a fake site everywhere)
+
+### 1.12.0 — November 16, 2026, 8:32 AM CT
 
 **Release notes**
 

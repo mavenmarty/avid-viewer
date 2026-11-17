@@ -64,6 +64,7 @@ class MainActivity : ComponentActivity() {
         super.onStart()
         // On screen: if the app is closed before onStop, the next launch reports it (CrashLog.adoptUncleanExit).
         com.avidviewer.tv.data.CrashLog.inUse(this)
+        vm.resetIdle()
         if (vm.player.mediaItemCount > 0) {
             vm.player.prepare()
             vm.player.play()

@@ -5,6 +5,7 @@ import android.os.Build
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+import org.json.JSONArray
 import org.json.JSONObject
 
 /**
@@ -120,6 +121,38 @@ object AccountApi {
         return o.optString("data").ifBlank { throw Problem("That backup came back empty.") }
     }
 
+    // ---- playlists from avidviewer.app/playlists (1.14.0) ----
+    /** A playlist the account wants added, changed or removed here. [payload] is sealed for this device (or null). */
+    data class InboxItem(val playlistId: String, val action: String, val version: Int, val name: String, val type: String,
+                         val profiles: List<String>?, val payload: JSONObject?)
+
+    /** Tells the account this device's key (for sealing logins to it) and its profiles (to choose on the website). */
+    fun report(token: String, publicKey: String, profiles: List<Triple<String, String, Boolean>>, base: String = BASE) {
+        val a = JSONArray().apply { profiles.forEach { (id, name, kids) -> put(JSONObject().put("id", id).put("name", name).put("kids", kids)) } }
+        val (code, o) = call(base, "/api/tv/report", JSONObject().put("pubkey", publicKey).put("profiles", a), token)
+        if (code != 200) failed(code, o)
+    }
+
+    fun inbox(token: String, base: String = BASE): List<InboxItem> {
+        val (code, o) = call(base, "/api/tv/inbox", null, token)
+        if (code != 200) failed(code, o)
+        val a = o.optJSONArray("items") ?: return emptyList()
+        return List(a.length()) {
+            val x = a.getJSONObject(it)
+            InboxItem(x.getString("playlistId"), x.optString("action"), x.optInt("version"), x.optString("name"), x.optString("type"),
+                x.optJSONArray("profiles")?.let { p -> List(p.length()) { i -> p.getString(i) } }, x.optJSONObject("payload"))
+        }
+    }
+
+    fun ack(token: String, item: InboxItem, error: String?, base: String = BASE) {
+        val (code, o) = call(base, "/api/tv/inbox/ack", JSONObject().put("playlistId", item.playlistId).put("version", item.version)
+            .put("ok", error == null).put("error", error ?: JSONObject.NULL), token)
+        if (code != 200) failed(code, o)
+    }
+
+    /** "K7M2QX9P" → "K7M2-QX9P", as the link code is shown. */
+    fun pretty(code: String) = if (code.length == 8) code.substring(0, 4) + "-" + code.substring(4) else code
+
     fun signOut(token: String, base: String = BASE) { runCatching { call(base, "/api/tv/signout", JSONObject(), token) } }
 }
 
@@ -165,6 +198,21 @@ class AccountStore(context: Context) {
     var autoBackup: Boolean
         get() = prefs.getBoolean("autoBackup", true)
         set(v) { prefs.edit().putBoolean("autoBackup", v).apply() }
+
+    /** This device's key for playlists from avidviewer.app (made once; the private half encrypted like the token). */
+    fun deviceKey(): DeviceKey.Pair? = runCatching {
+        var pub = prefs.getString("devPub", null)
+        var priv = prefs.getString("devKey", null)?.let { s ->
+            if (TESTS && s.startsWith("test:")) s.removePrefix("test:") else Crypto.decrypt(s)
+        }
+        if (pub == null || priv.isNullOrBlank()) {
+            val (p, k) = DeviceKey.generate()
+            val enc = runCatching { Crypto.encrypt(k) }.getOrElse { if (TESTS) "test:$k" else throw it }
+            prefs.edit().putString("devPub", p).putString("devKey", enc).apply()
+            pub = p; priv = k
+        }
+        DeviceKey.load(pub!!, priv!!)
+    }.getOrNull()
 
     fun update(me: AccountApi.Me) { prefs.edit().putString("email", me.email).putString("name", me.name).apply() }
 

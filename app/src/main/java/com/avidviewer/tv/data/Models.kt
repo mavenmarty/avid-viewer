@@ -23,8 +23,14 @@ data class Playlist(
     val providerGuide: Boolean = true,
     /** Guide (XMLTV) sources the user added for this playlist, in order: the first one with a channel wins. */
     val epgSources: List<EpgSource> = emptyList(),
+    /** Sent from avidviewer.app/playlists (1.14.0): the account playlist's id, so later changes and removals find it. */
+    val remoteId: String = "",
+    /** Profiles that see this playlist (profile ids); null = every profile. Set from avidviewer.app (1.14.0). */
+    val profiles: List<String>? = null,
 ) {
     val isXtream get() = type == "xtream"
+    fun visibleTo(profileId: String) = profiles == null || profileId in profiles
+
 
     fun xtreamBase(): String {
         var s = server.trim().trimEnd('/')
@@ -52,6 +58,14 @@ data class Playlist(
         .put("epgSources", JSONArray().apply { epgSources.forEach { put(it.toJson()) } })
 
     companion object {
+        fun extraJson(p: Playlist, o: JSONObject): JSONObject = o.apply {
+            if (p.remoteId.isNotBlank()) put("remoteId", p.remoteId)
+            p.profiles?.let { put("profiles", org.json.JSONArray(it)) }
+        }
+        fun extraFrom(o: JSONObject, p: Playlist): Playlist = p.copy(
+            remoteId = o.optString("remoteId"),
+            profiles = o.optJSONArray("profiles")?.let { a -> List(a.length()) { a.getString(it) } },
+        )
         fun guideFrom(o: JSONObject, p: Playlist): Playlist = p.copy(
             providerGuide = o.optBoolean("providerGuide", true),
             epgSources = o.optJSONArray("epgSources")?.let { a -> List(a.length()) { EpgSource.fromJson(a.getJSONObject(it)) } } ?: emptyList(),
