@@ -162,7 +162,10 @@ fun GuideScreen(vm: AppViewModel) {
         // Only now is the request used up (if the screen was rebuilt during the pause, the new one uses it).
         vm.guideFocusMode = GuideFocus.CURRENT
         // The first favorite was just added from the suggestions row: the highlight stays there (#18).
-        if (mode != GuideFocus.KEEP && vm.selectedGroup == FAV_GROUP && vm.suggestionsFocused && vm.suggestions().isNotEmpty()) return@LaunchedEffect
+        // BUG-033: also while a suggestion is getting the highlight back after Add to List or ✕ (the picker had it,
+        // so the row didn't count as focused when Favorites went from empty to one channel).
+        val suggestionBusy = vm.suggestionsFocused || vm.suggestionReturn != null || android.os.SystemClock.uptimeMillis() - vm.suggestionLandedAt < 3000
+        if (mode != GuideFocus.KEEP && vm.selectedGroup == FAV_GROUP && suggestionBusy && vm.suggestions().isNotEmpty()) return@LaunchedEffect
         when (mode) {
             // Newly chosen category: start at the top.
             GuideFocus.TOP -> { scope.launch { listState.scrollToItem(0) }; pendingFocus = 0 }
@@ -605,6 +608,7 @@ private fun LocalSuggestions(vm: AppViewModel) {
     LaunchedEffect(vm.listPickerKey, vm.suggestionReturn) {
         val (opened, next) = vm.suggestionReturn ?: return@LaunchedEffect
         if (vm.listPickerKey != null) return@LaunchedEffect // the picker is still open
+        vm.suggestionLandedAt = android.os.SystemClock.uptimeMillis()
         vm.suggestionReturn = null
         val keys = vm.suggestions().map { it.key }
         val target = when {
