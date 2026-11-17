@@ -1447,6 +1447,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         if (!prefs.showSuggestions) emptyList()
         else allSuggestions.filter { !inAnyList(it.key) && it.key !in prefs.dismissedSuggestions && channel(it.key) != null }.take(12)
 
+    /** For tests: suggestions without a postal code lookup. */
+    internal fun setSuggestionsForTests(l: List<com.avidviewer.tv.data.Suggestion>) { allSuggestions = l }
+
     fun suggestionPlace(): String = LocalSuggest.parsePlace(prefs.placeName).let { (city, _, abbr) -> if (abbr != null) "$city, $abbr" else city }
 
     fun refreshSuggestions() {
