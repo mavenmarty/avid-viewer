@@ -485,6 +485,7 @@ fun PlaylistsScreen(vm: AppViewModel) {
         // 3. Add or edit form (far right)
         Column(Modifier.weight(1f).fillMaxHeight().clip(RoundedCornerShape(12.dp)).background(C.Surface).onFocusChanged { formFocused = it.hasFocus }) {
             when {
+                adding && vm.accountEmail == null -> LinkToAddPane(vm)
                 adding -> PlaylistForm(vm, null, onCancel = null) { f ->
                     vm.addPlaylist(f.name, f.type, f.server, f.user, f.pass, f.m3u, f.epg, f.liveOn, f.vodOn)
                 }
@@ -1576,4 +1577,21 @@ internal fun RestorePinDialog(vm: AppViewModel) {
         },
         dismissButton = { TvButton("Cancel", modifier = Modifier.focusRequester(cancel)) { vm.cancelRestore() } },
     )
+}
+
+/**
+ * Settings › Playlists › Add playlist on a device that isn't linked (1.16.1): devices are tied to an account, so it
+ * shows this device's link code instead of the form. Once linked, the form comes back.
+ */
+@Composable
+private fun LinkToAddPane(vm: AppViewModel) {
+    LaunchedEffect(Unit) { if (vm.linkCode == null) vm.startLinking() }
+    androidx.compose.runtime.DisposableEffect(Unit) { onDispose { if (vm.accountEmail == null && !vm.linkReminder) vm.cancelLinking() } }
+    Column(Modifier.fillMaxSize().padding(20.dp).testTag("link-to-add"), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Text("Link this device to add playlists", color = C.Text, fontSize = 17.sp, fontWeight = FontWeight.Bold)
+        Label("Avid Viewer devices are tied to an account. Link this one, then add playlists here or at avidviewer.app/playlists (no typing logins with the remote).", size = 14.sp, color = C.Soft, lines = Int.MAX_VALUE)
+        val code = vm.linkCode
+        if (code != null) LinkCodePanel(vm, code)
+        else Label(vm.accountStatus ?: "Getting a code…", size = 14.sp, color = C.Soft, lines = Int.MAX_VALUE)
+    }
 }

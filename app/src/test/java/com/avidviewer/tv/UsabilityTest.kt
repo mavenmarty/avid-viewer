@@ -2071,6 +2071,32 @@ class UsabilityTest {
         settle()
     }
 
+    /**
+     * 1.16.1: devices are tied to an account. An unlinked device with playlists keeps working and is asked to link
+     * (Not now waits 7 days); Settings › Playlists › Add playlist shows the link code instead of the form.
+     */
+    @Test
+    fun anUnlinkedDeviceIsAskedToLinkAndCantAddPlaylistsUntilItIs() {
+        FakeAvidSite().use { site ->
+            rule.runOnIdle { vm.accountApi = site.base; vm.remindToLink = true; vm.maybeRemindToLink(0) }
+            waitFor("reminder shown") { rule.onAllNodesWithTag("link-reminder").fetchSemanticsNodes().isNotEmpty() }
+            waitFor("its code") { rule.onAllNodesWithText("K7M2-QX9P").fetchSemanticsNodes().isNotEmpty() }
+            rule.onNodeWithTag("link-reminder-later").performClick(); settle()
+            assertFalse(vm.linkReminder)
+            assertTrue(vm.account.linkReminderAt > 0)
+            rule.runOnIdle { vm.maybeRemindToLink(0) }; settle(300)
+            assertFalse("not again within 7 days", vm.linkReminder)
+            go(Screen.SETTINGS)
+            rule.runOnIdle { vm.settingsSection = "playlists" }; settle()
+            rule.onAllNodesWithText("Add playlist").onFirst().performClick(); settle()
+            waitFor("link pane instead of the form") { rule.onAllNodesWithTag("link-to-add").fetchSemanticsNodes().isNotEmpty() }
+            assertTrue(rule.onAllNodesWithText("Link this device to add playlists").fetchSemanticsNodes().isNotEmpty())
+            // Linked: the form is back.
+            linkForTest(site)
+            waitFor("the form once linked") { rule.onAllNodesWithTag("link-to-add").fetchSemanticsNodes().isEmpty() }
+        }
+    }
+
     /** 1.6.0: a new install (no playlists) opens on the welcome screen; from 1.16.1 it only offers linking to an account. */
     @Test
     fun welcomeScreenOnANewInstall() {
