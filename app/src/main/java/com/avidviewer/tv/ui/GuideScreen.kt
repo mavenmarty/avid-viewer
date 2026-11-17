@@ -36,6 +36,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -648,11 +649,11 @@ private fun LocalSuggestions(vm: AppViewModel) {
                         Label(listOf(s.reason, vm.playlistName(c)).filter { it.isNotBlank() }.joinToString(" · "), size = 12.sp)
                     }
                     // #17: Up from a suggestion reaches Hide suggestions (it isn't straight above most cards).
-                    TvButton("＋ Add to List", modifier = Modifier.focusRequester(addFor(s.key)).focusProperties { up = hideFr }) {
+                    TvButton("＋ Add to List", modifier = Modifier.focusRequester(addFor(s.key)).focusProperties { up = hideFr }.testTag("sugg-add-${s.key}")) {
                         vm.suggestionReturn = s.key to neighbour(i)
                         vm.listPickerKey = s.key
                     }
-                    TvButton("✕", modifier = Modifier.focusProperties { up = hideFr }) {
+                    TvButton("✕", modifier = Modifier.focusProperties { up = hideFr }.testTag("sugg-x-${s.key}")) {
                         vm.suggestionReturn = s.key to neighbour(i)
                         vm.dismissSuggestion(s.key)
                     }

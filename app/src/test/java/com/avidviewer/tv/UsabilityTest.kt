@@ -2206,6 +2206,38 @@ class UsabilityTest {
         }
     }
 
+    /** BUG-033 (#18): adding a suggested channel to a list, or ✕, moves the highlight to the next suggestion. */
+    @Test
+    fun addingOrDismissingASuggestionHighlightsTheNextOne() {
+        val keys = vm.channels.filter { it.playlistId == TestData.P1 }.take(4).map { it.key }
+        rule.runOnIdle {
+            vm.updatePrefs { it.copy(showSuggestions = true, favorites = emptyList()) }
+            vm.setSuggestionsForTests(keys.map { com.avidviewer.tv.data.Suggestion(it, TestData.P1, "near you", 1) })
+            vm.chooseGroup(TestData.P1, com.avidviewer.tv.ui.FAV_GROUP)
+        }
+        waitFor("the suggestions row") { rule.onAllNodesWithTag("sugg-add-${keys[0]}").fetchSemanticsNodes().isNotEmpty() }
+        rule.onNodeWithTag("sugg-add-${keys[0]}").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.RequestFocus); settle()
+        // ＋ Add to List › the first list in the picker.
+        press(listOf(Key.DirectionCenter))
+        waitFor("the list picker") { vm.listPickerKey == keys[0] }
+        press(listOf(Key.DirectionCenter))
+        waitFor("added and closed") { vm.listPickerKey == null && vm.inAnyList(keys[0]) }
+        waitFor("the next suggestion has the highlight (focus: ${focused()})") { isFocusedTag("sugg-add-${keys[1]}") }
+        settle(600)
+        assertTrue("…and keeps it (focus: ${focused()})", isFocusedTag("sugg-add-${keys[1]}"))
+        // ✕ on that one: the one after it.
+        press(listOf(Key.DirectionRight))
+        waitFor("on ✕ (focus: ${focused()})") { isFocusedTag("sugg-x-${keys[1]}") }
+        press(listOf(Key.DirectionCenter))
+        waitFor("the next suggestion after ✕ (focus: ${focused()})") { isFocusedTag("sugg-add-${keys[2]}") }
+        settle(600)
+        assertTrue("…and keeps it (focus: ${focused()})", isFocusedTag("sugg-add-${keys[2]}"))
+    }
+
+    private fun isFocusedTag(tag: String) = runCatching {
+        rule.onAllNodes(androidx.compose.ui.test.hasTestTag(tag) and androidx.compose.ui.test.isFocused()).fetchSemanticsNodes().isNotEmpty()
+    }.getOrDefault(false)
+
     /** 1.6.0: a new install (no playlists) opens on the welcome screen; from 1.16.1 it only offers linking to an account. */
     @Test
     fun welcomeScreenOnANewInstall() {
