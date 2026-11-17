@@ -17,7 +17,10 @@ class FakeAvidSite : AutoCloseable {
     @Volatile var approved = false
     @Volatile var removed = false
     /** Setup codes it serves: fingerprint → data. */
-    val setups = java.util.concurrent.ConcurrentHashMap<String, String>()
+    /** 1.14.0 playlists from the account: what the device last reported, what it should do, and its answers. */
+    @Volatile var report: org.json.JSONObject? = null
+    val inbox = mutableListOf<org.json.JSONObject>()
+    val acks = java.util.Collections.synchronizedList(mutableListOf<org.json.JSONObject>())
     /** One backup per TV: device id → (TV name, file text, PIN). */
     val backups = java.util.concurrent.ConcurrentHashMap<String, Triple<String, String, String>>()
     private fun deviceOf(auth: String) = if (auth.startsWith("Bearer TVTOKEN_claimed")) "d2" else "d1"
@@ -70,7 +73,13 @@ class FakeAvidSite : AutoCloseable {
             }).toString()
             path.startsWith("/api/tv/backup?device=") -> backups[path.substringAfter("device=")]?.let { 200 to org.json.JSONObject().put("data", it.second).toString() }
                 ?: (404 to """{"error":"That backup is no longer in your account."}""")
-            path.startsWith("/api/setup/") -> setups[path.removePrefix("/api/setup/")]?.let { 200 to """{"data":"$it"}""" } ?: (404 to """{"error":"Not found."}""")
+            path == "/api/tv/report" -> { report = org.json.JSONObject(body); 200 to """{"ok":true}""" }
+            path == "/api/tv/inbox" -> 200 to org.json.JSONObject().put("items", org.json.JSONArray(synchronized(inbox) { inbox.toList() })).toString()
+            path == "/api/tv/inbox/ack" -> {
+                val a = org.json.JSONObject(body); acks += a
+                synchronized(inbox) { inbox.removeAll { it.getString("playlistId") == a.getString("playlistId") && it.getInt("version") == a.getInt("version") } }
+                200 to """{"ok":true}"""
+            }
             else -> 404 to """{"error":"Not found."}"""
         }
         val bytes = json.toByteArray()

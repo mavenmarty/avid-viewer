@@ -650,15 +650,11 @@ private fun PlaylistForm(vm: AppViewModel, existing: com.avidviewer.tv.data.Play
             }
         }
         if (existing == null) vm.status?.let { st -> item { Label(st, size = 12.sp, color = C.Soft, lines = Int.MAX_VALUE) } }
-        // 1.11.0: enter the playlist on a phone at avidviewer.app/setup instead, and type the code it gives.
+        // 1.14.0: or enter it on a phone at avidviewer.app/playlists and send it to this device.
         if (existing == null) item {
-            Column(Modifier.padding(top = 10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Label("Easier with a phone: enter the playlist at avidviewer.app/setup and type the code it gives you.", size = 12.sp, color = C.Soft, lines = 2)
-                TvButton("Use a setup code", modifier = Modifier.testTag("playlist-setup-code")) { vm.openSetupCode() }
-            }
+            Label("Easier with a phone: link this device to your account (Settings › Account), then add playlists at avidviewer.app/playlists.", size = 12.sp, color = C.Soft, lines = 2)
         }
     }
-    if (existing == null && vm.setupCodeOpen && !vm.showWelcome) SetupCodeDialog(vm)
 }
 
 // ---------------------------------------------------------------- Settings
@@ -986,7 +982,7 @@ internal fun LinkCodePanel(vm: AppViewModel, code: AppViewModel.LinkCode) {
             Label("On your phone or computer, go to", size = 14.sp, color = C.Soft)
             Label("avidviewer.app/link", size = 22.sp, color = C.Text, weight = FontWeight.Bold)
             Label("and enter this code (or scan the QR code):", size = 14.sp, color = C.Soft)
-            Label(com.avidviewer.tv.data.SetupCode.pretty(code.code), size = 40.sp, color = C.Accent, weight = FontWeight.Bold, modifier = Modifier.testTag("account-code"))
+            Label(com.avidviewer.tv.data.AccountApi.pretty(code.code), size = 40.sp, color = C.Accent, weight = FontWeight.Bold, modifier = Modifier.testTag("account-code"))
             val mins = ((code.expiresAt - vm.now) / 60_000L + 1).coerceAtLeast(1)
             Label("The code works for $mins more minute${if (mins == 1L) "" else "s"}. This screen updates by itself once you've approved it.", size = 13.sp, color = C.Muted, lines = 2)
             TvButton("Cancel") { vm.cancelLinking() }

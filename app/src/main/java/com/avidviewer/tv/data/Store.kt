@@ -74,7 +74,7 @@ class Store(private val context: Context) {
             val a = JSONArray(f.readText())
             List(a.length()) {
                 val o = a.getJSONObject(it)
-                Playlist.guideFrom(o, Playlist(
+                Playlist.extraFrom(o, Playlist.guideFrom(o, Playlist(
                     id = o.getString("id"),
                     name = o.getString("name"),
                     type = o.getString("type"),
@@ -86,7 +86,7 @@ class Store(private val context: Context) {
                     enabled = o.optBoolean("enabled", true),
                     liveOn = o.optBoolean("liveOn", true),
                     vodOn = o.optBoolean("vodOn", true),
-                ))
+                )))
             }
         } catch (e: Exception) {
             emptyList()
@@ -97,7 +97,7 @@ class Store(private val context: Context) {
         val a = JSONArray()
         list.forEach {
             a.put(
-                it.guideJson(JSONObject()).put("id", it.id).put("name", it.name).put("type", it.type)
+                Playlist.extraJson(it, it.guideJson(JSONObject())).put("id", it.id).put("name", it.name).put("type", it.type)
                     .put("server", it.server).put("username", it.username)
                     .put("password", Crypto.encrypt(it.password))
                     .put("m3uUrl", it.m3uUrl).put("epgUrl", it.epgUrl)

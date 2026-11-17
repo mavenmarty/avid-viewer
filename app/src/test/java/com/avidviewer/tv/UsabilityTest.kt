@@ -663,6 +663,86 @@ class UsabilityTest {
         assertEquals(Screen.GUIDE, vm.screen)
     }
 
+    /** Seals a login for the device's reported key the way avidviewer.app/playlists does (DeviceKeyTest checks the real page's output). */
+    private fun sealFor(pubB64: String, login: org.json.JSONObject): org.json.JSONObject {
+        val b64 = { b: ByteArray -> android.util.Base64.encodeToString(b, android.util.Base64.NO_WRAP) }
+        val raw = android.util.Base64.decode(pubB64, android.util.Base64.NO_WRAP)
+        val g = java.security.KeyPairGenerator.getInstance("EC").apply { initialize(java.security.spec.ECGenParameterSpec("secp256r1")) }
+        val eph = g.generateKeyPair()
+        val params = (eph.public as java.security.interfaces.ECPublicKey).params
+        val dev = java.security.KeyFactory.getInstance("EC").generatePublic(java.security.spec.ECPublicKeySpec(
+            java.security.spec.ECPoint(java.math.BigInteger(1, raw.copyOfRange(1, 33)), java.math.BigInteger(1, raw.copyOfRange(33, 65))), params))
+        val z = javax.crypto.KeyAgreement.getInstance("ECDH").run { init(eph.private); doPhase(dev, true); generateSecret() }
+        val w = (eph.public as java.security.interfaces.ECPublicKey).w
+        fun fixed(n: java.math.BigInteger) = n.toByteArray().let { if (it.size > 32) it.copyOfRange(it.size - 32, it.size) else ByteArray(32 - it.size) + it }
+        val epk = byteArrayOf(4) + fixed(w.affineX) + fixed(w.affineY)
+        val mac = { k: ByteArray, d: ByteArray -> javax.crypto.Mac.getInstance("HmacSHA256").run { init(javax.crypto.spec.SecretKeySpec(k, "HmacSHA256")); doFinal(d) } }
+        val prk = mac(epk, z)
+        val aes = mac(prk, "avidviewer-playlist:v1".toByteArray() + byteArrayOf(1)).copyOf(32)
+        val iv = ByteArray(12).also { java.security.SecureRandom().nextBytes(it) }
+        val ct = javax.crypto.Cipher.getInstance("AES/GCM/NoPadding").run {
+            init(javax.crypto.Cipher.ENCRYPT_MODE, javax.crypto.spec.SecretKeySpec(aes, "AES"), javax.crypto.spec.GCMParameterSpec(128, iv))
+            doFinal(login.toString().toByteArray())
+        }
+        return org.json.JSONObject().put("v", 1).put("epk", b64(epk)).put("iv", b64(iv)).put("ct", b64(ct))
+    }
+
+    /**
+     * 1.14.0: a playlist sent from avidviewer.app/playlists arrives on a linked device, is limited to the profiles chosen
+     * there (another profile doesn't see it), follows a change of profiles without a new login, and goes when removed.
+     */
+    @Test
+    fun aPlaylistFromTheAccountArrivesForTheChosenProfiles() {
+        FakeAvidSite().use { site ->
+            linkForTest(site)
+            val before = vm.playlists.size
+            rule.runOnIdle { vm.syncAccountPlaylists() }
+            waitFor("key and profiles reported") { site.report != null }
+            val pub = site.report!!.getString("pubkey")
+            assertEquals("Me", site.report!!.getJSONArray("profiles").getJSONObject(0).getString("name"))
+            val login = org.json.JSONObject().put("name", "From the web").put("type", "m3u").put("m3uUrl", "http://127.0.0.1:9/web.m3u")
+                .put("epgUrl", "http://127.0.0.1:9/web.xml")
+            synchronized(site.inbox) {
+                site.inbox += org.json.JSONObject().put("playlistId", "pl1").put("action", "add").put("version", 1).put("name", "From the web")
+                    .put("type", "m3u").put("profiles", org.json.JSONArray().put("someone-else")).put("payload", sealFor(pub, login))
+            }
+            rule.runOnIdle { vm.syncAccountPlaylists() }
+            waitFor("added and acknowledged (acks: ${site.acks})") { vm.playlists.any { it.remoteId == "pl1" } && site.acks.isNotEmpty() }
+            assertTrue(site.acks.first().getBoolean("ok"))
+            val p = vm.playlists.first { it.remoteId == "pl1" }
+            assertEquals("http://127.0.0.1:9/web.m3u", p.m3uUrl)
+            assertEquals("http://127.0.0.1:9/web.xml", p.epgSources.single().url)
+            assertEquals(before + 1, vm.playlists.size)
+            // Meant for another profile: the owner's profile doesn't see it anywhere.
+            assertFalse(vm.shownPlaylists.any { it.remoteId == "pl1" })
+            // The website changes the profiles (no new login): now the owner sees it.
+            synchronized(site.inbox) {
+                site.inbox += org.json.JSONObject().put("playlistId", "pl1").put("action", "update").put("version", 2).put("name", "Renamed on the web")
+                    .put("type", "m3u").put("profiles", org.json.JSONObject.NULL).put("payload", org.json.JSONObject.NULL)
+            }
+            rule.runOnIdle { vm.syncAccountPlaylists() }
+            waitFor("updated") { vm.playlists.any { it.remoteId == "pl1" && it.name == "Renamed on the web" && it.profiles == null } }
+            assertTrue(vm.shownPlaylists.any { it.remoteId == "pl1" })
+            assertEquals("the login was kept", "http://127.0.0.1:9/web.m3u", vm.playlists.first { it.remoteId == "pl1" }.m3uUrl)
+            // Removed on the website: gone from the device.
+            synchronized(site.inbox) {
+                site.inbox += org.json.JSONObject().put("playlistId", "pl1").put("action", "remove").put("version", 3).put("name", "Renamed on the web").put("type", "m3u")
+            }
+            rule.runOnIdle { vm.syncAccountPlaylists() }
+            waitFor("removed") { vm.playlists.none { it.remoteId == "pl1" } && site.acks.size == 3 }
+            // A login sealed for another device can't be opened: the device says so instead of adding it.
+            val (otherPub, _) = com.avidviewer.tv.data.DeviceKey.generate()
+            synchronized(site.inbox) {
+                site.inbox += org.json.JSONObject().put("playlistId", "pl2").put("action", "add").put("version", 1).put("name", "Wrong key")
+                    .put("type", "m3u").put("payload", sealFor(otherPub, login))
+            }
+            rule.runOnIdle { vm.syncAccountPlaylists() }
+            waitFor("refused") { site.acks.size == 4 }
+            assertFalse(site.acks.last().getBoolean("ok"))
+            assertTrue(vm.playlists.none { it.remoteId == "pl2" })
+        }
+    }
+
     @Test
     fun reportABugShowsTheAddressDetailsAndQrCode() {
         go(Screen.SETTINGS)
@@ -1740,11 +1820,9 @@ class UsabilityTest {
             assertTrue(rule.onAllNodesWithText("K7M2-QX9P").fetchSemanticsNodes().isNotEmpty())
             assertTrue(vm.linkCode!!.qrUrl.endsWith("/link/?c=K7M2QX9P"))
             assertTrue(rule.onAllNodesWithTag("welcome-link-qr").fetchSemanticsNodes().isNotEmpty())
-            // Add a playlist is highlighted first; Enter a setup code is next to it.
+            // Add a playlist is highlighted (setup codes were retired in 1.14.0).
             waitFor("Add a playlist highlighted (focus: ${focused()})") { focused().contains("Add a playlist") }
-            press(listOf(Key.DirectionRight))
-            waitFor("Enter a setup code highlighted (focus: ${focused()})") { focused().contains("Enter a setup code") }
-            press(listOf(Key.DirectionLeft))
+            assertTrue(rule.onAllNodesWithText("Enter a setup code").fetchSemanticsNodes().isEmpty())
             press(listOf(Key.DirectionCenter))
             waitFor("Settings › Playlists") { !vm.showWelcome && vm.screen == Screen.SETTINGS && vm.settingsSection == "playlists" }
             waitFor("linking stopped when the welcome screen closed") { vm.linkCode == null }
@@ -1754,51 +1832,6 @@ class UsabilityTest {
         assertFalse(AppViewModel(app).showWelcome)
         app.filesDir.listFiles()?.forEach { it.deleteRecursively() }
         assertTrue(AppViewModel(app).showWelcome)
-    }
-
-    /** 1.11.0: a setup code from avidviewer.app/setup adds its playlist (fixture made by the website's own script). */
-    @Test
-    fun setupCodeFromTheWebsiteAddsItsPlaylist() {
-        val asked = java.util.Collections.synchronizedList(ArrayList<String>())
-        // A stand-in for avidviewer.app's GET /api/setup/<id>.
-        val server = java.net.ServerSocket(0, 50, java.net.InetAddress.getByName("127.0.0.1"))
-        kotlin.concurrent.thread(isDaemon = true) {
-            while (!server.isClosed) {
-                val c = runCatching { server.accept() }.getOrNull() ?: break
-                c.use { conn ->
-                    val reader = conn.getInputStream().bufferedReader()
-                    val path = reader.readLine()?.split(" ")?.getOrNull(1).orEmpty()
-                    while (reader.readLine()?.isNotEmpty() == true) { /* headers */ }
-                    asked += path
-                    val known = path.endsWith(SetupCodeTest.ID)
-                    val body = (if (known) "{\"data\":\"${SetupCodeTest.DATA}\"}" else "{\"error\":\"Not found.\"}").toByteArray()
-                    val head = "HTTP/1.1 ${if (known) "200 OK" else "404 Not Found"}\r\nContent-Type: application/json\r\nContent-Length: ${body.size}\r\nConnection: close\r\n\r\n"
-                    conn.getOutputStream().apply { write(head.toByteArray()); write(body); flush() }
-                }
-            }
-        }
-        try {
-            rule.runOnIdle { vm.setupApi = "http://127.0.0.1:${server.localPort}/api/setup/"; vm.showWelcome = true }
-            // 1.12.1: Add a playlist is highlighted first; Enter a setup code is to its right.
-            waitFor("Add a playlist highlighted (focus: ${focused()})") { focused().contains("Add a playlist") }
-            press(listOf(Key.DirectionRight))
-            waitFor("Enter a setup code highlighted (focus: ${focused()})") { focused().contains("Enter a setup code") }
-            press(listOf(Key.DirectionCenter))
-            waitFor("setup dialog") { rule.onAllNodesWithTag("setup-code-field").fetchSemanticsNodes().isNotEmpty() }
-            // A mistyped code: found nowhere, and the dialog says so.
-            rule.onNodeWithTag("setup-code-field").performSemanticsAction(SemanticsActions.SetText) { it(androidx.compose.ui.text.AnnotatedString("k7m2-qx9q")) }
-            rule.onNodeWithTag("setup-go").performClick()
-            waitFor("not found message") { vm.setupStatus?.contains("wasn't found") == true }
-            // The right code, typed the way the website shows it.
-            rule.onNodeWithTag("setup-code-field").performSemanticsAction(SemanticsActions.SetText) { it(androidx.compose.ui.text.AnnotatedString("k7m2-qx9p")) }
-            rule.onNodeWithTag("setup-go").performClick()
-            waitFor("playlist added (status: ${vm.setupStatus})") { vm.playlists.any { it.name == "Living room" } }
-            val p = vm.playlists.first { it.name == "Living room" }
-            assertEquals("http://127.0.0.1:9/tv.m3u", p.m3uUrl)
-            assertEquals("http://127.0.0.1:9/guide.xml", p.epgSources.single().url)
-            waitFor("dialog closed, welcome gone") { !vm.setupCodeOpen && !vm.showWelcome }
-            assertTrue("the server only ever saw fingerprints: $asked", asked.none { it.contains("K7M2", ignoreCase = true) })
-        } finally { server.close() }
     }
 
     /** 1.11.0: Settings › Account › Link this TV shows a code + QR code, links once approved, and signs out. */
@@ -1837,19 +1870,4 @@ class UsabilityTest {
         }
     }
 
-    /** 1.11.0: a setup code made while signed in on the website adds its playlist and links the TV too. */
-    @Test
-    fun setupCodeMadeWhileSignedInAlsoLinksTheTv() {
-        FakeAvidSite().use { site ->
-            // Sealed by the website's own public/setup.js (code HQ4T8NWZ, IV 12..1).
-            site.setups["a8b9d0def47bd06b1bfa8d8efdeb28879a62a4db9d2ee99bb77aa759528a8a22"] =
-                "DAsKCQgHBgUEAwIB1rgcCLjeVN2vtsrxbfmOwMUPYs+znTLGIIxjJApL4o5/HWlKrTxXbOrUCSzsyp8sacx5uw9MoUwaJsKKKBm911msT+kMWwfIcbOCZhrqfwkJpU61znlYaIcA4sMGaoUqYLWWu/3LZgPZWuSUkpl1+hHnAQMtUCOohCdJ//UplzwiUQhFQeiTekHnDbWE7sUN/fw2ulZ+z7AMchJnLCpaQxw="
-            rule.runOnIdle { vm.accountApi = site.base; vm.setupApi = site.base + "/api/setup/"; vm.redeemSetupCode("hq4t-8nwz") }
-            waitFor("playlist added (status: ${vm.setupStatus})") { vm.playlists.any { it.name == "Den" } }
-            waitFor("linked by the setup code (status: ${vm.accountStatus})") { vm.accountEmail == "viewer@example.com" }
-            assertEquals("Den TV", vm.accountTvName)
-            assertTrue(site.calls.any { it.startsWith("POST /api/tv/link/claim") && it.contains("LINKTOKEN_abcdefghijklmnopqrstuvwxyz012345") })
-            rule.runOnIdle { vm.signOutOfAccount() }
-        }
-    }
 }
