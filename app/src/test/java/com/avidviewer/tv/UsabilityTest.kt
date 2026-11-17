@@ -1015,6 +1015,12 @@ class UsabilityTest {
             waitFor("managed") { vm.profiles.managed && site.report?.has("pubkey") == true }
             // The owner unlocked on the website: the history key, locked for this device.
             val h = ByteArray(32).also { java.util.Random(7).nextBytes(it) }
+            // Already in the account: My List and Discover settings from the website, and the TMDB key.
+            site.discoverDocs["acctDad"] = org.json.JSONObject().put("at", now).put("blob", com.avidviewer.tv.data.History.lock(h, org.json.JSONObject()
+                .put("myList", org.json.JSONArray().put(org.json.JSONObject().put("t", "movie").put("name", "Drama Movie 3").put("year", "1993")))
+                .put("services", org.json.JSONArray().put(org.json.JSONObject().put("id", 8).put("name", "Netflix")))
+                .put("start", "provider").put("grownUps", false)))
+            site.tmdbBlob = com.avidviewer.tv.data.History.lock(h, org.json.JSONObject().put("tmdb", "abcdef0123456789abcdef0123456789"))
             site.historySealed = sealFor(site.report!!.getString("pubkey"), org.json.JSONObject().put("historyKey", android.util.Base64.encodeToString(h, android.util.Base64.NO_WRAP)))
             rule.runOnIdle { vm.syncAccountPlaylists() }
             waitFor("places sent (${site.historyPosts.size})") { site.historyItems.size >= 2 }
@@ -1030,12 +1036,6 @@ class UsabilityTest {
             site.putHistory("acctDad", com.avidviewer.tv.data.History.itemId(h, com.avidviewer.tv.data.History.movieMatch("Action Movie 2", "1992")),
                 com.avidviewer.tv.data.History.lock(h, org.json.JSONObject().put("t", "m").put("title", "Action Movie 2").put("year", "1992").put("pos", 600_000).put("dur", 5_400_000)
                     .put("done", false).put("tv", "Bedroom").put("pl", "acctOther").put("id", "m999")), now)
-            // My List and Discover settings from the website, and the account's TMDB key.
-            site.discoverDocs["acctDad"] = org.json.JSONObject().put("at", now).put("blob", com.avidviewer.tv.data.History.lock(h, org.json.JSONObject()
-                .put("myList", org.json.JSONArray().put(org.json.JSONObject().put("t", "movie").put("name", "Drama Movie 3").put("year", "1993")))
-                .put("services", org.json.JSONArray().put(org.json.JSONObject().put("id", 8).put("name", "Netflix")))
-                .put("start", "provider").put("grownUps", false)))
-            site.tmdbBlob = com.avidviewer.tv.data.History.lock(h, org.json.JSONObject().put("tmdb", "abcdef0123456789abcdef0123456789"))
             rule.runOnIdle { vm.syncAccountPlaylists() }
             waitFor("place from Bedroom") { vm.resumeOf("${TestData.P1}:mAction2") == 600_000L }
             assertTrue(vm.placeLine("${TestData.P1}:mAction2")!!.contains("on Bedroom"))

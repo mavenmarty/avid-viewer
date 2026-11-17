@@ -2931,7 +2931,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
      * (the most recent change wins). Runs with the account check while the TV is managed.
      */
     private suspend fun syncHistory(token: String) {
-        val acc = profiles.list.filter { it.remoteId.isNotEmpty() }
+        // Kids profiles keep their places on each TV and have no Discover: nothing of theirs is sent (privacy).
+        val acc = profiles.list.filter { it.remoteId.isNotEmpty() && !it.kids }
         if (acc.isEmpty()) return
         val H = account.historyKey
         val discSent = HashSet<String>()
