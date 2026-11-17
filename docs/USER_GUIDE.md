@@ -41,6 +41,7 @@ From 1.15.0 your playlists and profiles live in your account at avidviewer.app, 
 2. **Playlists** (avidviewer.app/playlists): **＋ Add a playlist**, enter a **name** and either an **Xtream Codes login** (server, username, password) or an **M3U link**, with an optional guide (XMLTV) link, and tick the **profiles** that get it.
 3. **Profiles** (avidviewer.app/profiles): **＋ Add a profile** for each person (or the kids). **Manage** a profile to choose its playlists, its devices, and **what it can see** in each playlist: categories and channels, for live TV, movies and series.
 4. **Devices** (avidviewer.app/devices): tick the profiles that appear on each device.
+5. **Favorites and lists** (1.16.0): Profiles › **Manage** › **Favorites & lists**. **Order and names** of categories and channels: Playlists › **Edit** › **Order & names**. See [Organizing on the website](#organizing-on-the-website).
 
 While Avid Viewer is open, a device picks up changes within a minute: a playlist arrives when any profile on the device has it, is checked like one added by hand, and leaves when no profile there has it any more. Each page shows where things stand (for example **waiting for the device to open**).
 
@@ -59,6 +60,15 @@ While Avid Viewer is open, a device picks up changes within a minute: a playlist
 **Private by design:** each device's copy is locked with a key only that device has (made when it's linked; it never leaves the device), and the copy kept in your account is locked with your passkey. The website can't read your logins. To help you choose what each profile sees, devices send each account playlist's category and channel names and counts; what you watch is never sent.
 
 **Watching now:** the Playlists and Devices pages show which playlists are playing, on which device and profile, and for how long, never the channel or title. **Stop stream** ends playback on that device within a few seconds (useful when your provider allows only one or two streams); the device says **This stream was stopped from your account** and offers **Watch again**.
+
+### Organizing on the website
+
+From 1.16.0, **favorites and lists belong to a profile** and follow it to every TV, and **the order and names of a playlist's live categories and channels** belong to the playlist, for every profile and device. Change them on the website or on a TV (Add to List, Re-order, Rename): the change reaches the account and the other TVs within a minute while Avid Viewer is open, and **the most recent change wins**, wherever it was made. The first time a TV syncs a profile, its favorites and lists are combined with the account's (lists with the same name become one).
+
+- **Favorites & lists** (a profile's page): pick ★ Favorites or a list on the left. **＋ Add channels** searches all of the profile's playlists or lets you browse a playlist's categories; tick channels and choose **Add**. Each channel has **⤒** (top), **▲ ▼** (one step), **⤓** (bottom) and **✕** (remove from the list). **＋ New list**, and for a list: **Rename**, **Hide on the TV**, **Delete list**. Drag lists to change their order on the TV; ★ Favorites is always first. Channels the profile can't see aren't offered.
+- **Order & names** (a playlist's page): categories on the left, the chosen category's channels on the right. **Rename** in place (the provider's name shows underneath; empty = the provider's name; Enter saves, Esc cancels). **Arrange:** A–Z or the provider's order. **Undo last change**, and **Reset all to the provider's order and names**.
+- **Drag and drop:** drag a row by **⋮⋮** with a mouse or finger; the page scrolls at the top and bottom edges. With a keyboard: Tab to ⋮⋮, **Space** to pick it up, **↑ ↓** to move, **Space** to drop, **Esc** to cancel.
+- Live TV only for now: movie and series category order is still set on each TV.
 
 **Devices on 1.14.0** keep the playlists sent to them, but need 1.15.0 to use profiles from the account.
 
@@ -175,11 +185,13 @@ When you choose Re-order, a small help panel appears at the top right, over the 
 - **◀** moves it to the top; **▶** moves it to the bottom.
 - **OK or Back** finishes, and the new order is saved.
 
+With a linked account (1.16.0), a playlist's live category and channel order and names go to every TV, and can also be set on the website.
+
 While you're moving it, the item has a blue outline. A category shows its position (for example "4/27") and a channel shows ⇅ in place of its number. Channels move within whatever the guide is showing (a category, ★ Favorites or one of your lists), and channel numbers follow the new order.
 
 ### Favorites and your lists
 
-- **★ Favorites** gathers channels from every playlist in one place and is always shown. Favorites, lists, renames, hidden channels and guide matches stay on the right channels when your provider adds, removes or reorders channels, and after restoring a backup.
+- **★ Favorites** gathers channels from every playlist in one place and is always shown. From 1.16.0, with a linked account, favorites and lists follow the profile to every TV and can be managed on the website ([Organizing on the website](#organizing-on-the-website)). Favorites, lists, renames, hidden channels and guide matches stay on the right channels when your provider adds, removes or reorders channels, and after restoring a backup.
 - **Your lists** (for example "Kids" or "News") can also hold channels from any playlist. Make one with **＋ New list** or from Add to List.
 - Press **Menu on a list** to **Rename**, **Move up / Move down** or **Delete** it. Deleting asks you to confirm; the channels stay in your playlists.
 - **Suggested near [your town]**: at the top of Favorites, the app suggests channels from your playlists that look local to your postal code. Press **＋ Add to List** to keep one; the highlight moves on to the next suggestion. **Hide suggestions** is at the right of the heading: press **▲** from a suggestion to reach it. Dismissed channels aren't suggested again unless you restore them in Settings.
@@ -736,6 +748,13 @@ Every public release since 1.0.35, newest first. From 1.1.0, versions are number
 <!-- new-releases: entries for new builds are added automatically below this line -->
 
 ### 1.16.0 — November 17, 2026, 9:04 AM CT (current)
+
+**Release notes**
+
+- **Favorites and lists follow the profile** to every TV, and can be managed at avidviewer.app › Profiles › **Favorites & lists**: drag and drop, move to top or bottom, Add channels, new list, rename, hide on the TV, delete, re-order lists, Undo.
+- **Category and channel order and names belong to the playlist**, for every profile and device: Playlists › Edit › **Order & names**, with drag and drop, move to top or bottom, rename (the provider's name shown underneath), A–Z or the provider's order, Undo and Reset.
+- **Changes on a TV go back to the account**; the most recent change wins. The first time a TV syncs a profile, its favorites and lists are combined with the account's.
+- If syncing fails, the TV says so, with the reason.
 
 **Change log**
 
