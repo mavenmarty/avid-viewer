@@ -138,6 +138,7 @@ fun AppRoot(vm: AppViewModel) {
         ProfileSwitcherDialog(vm)
         PinDialog(vm)
         StreamStoppedDialog(vm)
+        if (vm.linkReminder && !vm.showWelcome && !vm.choosingProfile && vm.screen != Screen.PLAYER) LinkReminderDialog(vm)
         ChannelOptionsDialog(vm)
         GroupOptionsDialog(vm)
         ListPickerDialog(vm)

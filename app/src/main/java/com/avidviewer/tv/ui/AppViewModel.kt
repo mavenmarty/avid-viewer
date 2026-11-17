@@ -454,7 +454,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     // ---------------- avidviewer.app account (1.11.0; data/Account.kt) ----------------
     val account = com.avidviewer.tv.data.AccountStore(app)
     /** Where the account API lives; tests point it at a fake server. */
-    private companion object { const val ACCOUNT_GUIDE = "acct-guide" }
+    private companion object { const val ACCOUNT_GUIDE = "acct-guide"; const val LINK_REMINDER_EVERY = 7L * 24 * 60 * 60_000 }
 
     // Tests never reach the real site: under Robolectric the default address goes nowhere (each test sets a fake).
     internal var accountApi = if (android.os.Build.FINGERPRINT == "robolectric") "http://127.0.0.1:9" else com.avidviewer.tv.data.AccountApi.BASE
@@ -473,6 +473,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         account.save(l)
         accountEmail = l.email; accountTvName = l.name; linkCode = null
         accountStatus = "Linked to ${l.email} as \"${l.name}\"."
+        if (linkReminder) { linkReminder = false; status = "This device is linked to ${l.email}. Manage its playlists at avidviewer.app." }
         trail("account linked")
         syncAccountPlaylists()
         if (welcomeAccountOpen) loadCloudBackups()
@@ -1022,6 +1023,29 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         // First time (1.6.0): with no playlists at all, a welcome screen comes first.
         if (playlists.isEmpty()) showWelcome = true
         activePlaylist()?.let { loadActive(refresh = false) }
+        maybeRemindToLink()
+    }
+
+    // ---------------- linking for licensing (1.16.1) ----------------
+    /**
+     * Devices are tied to an account. One that has playlists but was never linked keeps working; a few seconds after
+     * start it shows "Link this device to your account" with its code, which Not now puts off for 7 days.
+     */
+    var linkReminder by mutableStateOf(false); private set
+    /** Off in tests, which turn it on where they check it. */
+    var remindToLink = android.os.Build.FINGERPRINT != "robolectric"
+    internal fun maybeRemindToLink(wait: Long = 4000) {
+        if (!remindToLink || account.linked || playlists.isEmpty()) return
+        if (System.currentTimeMillis() - account.linkReminderAt < LINK_REMINDER_EVERY) return
+        viewModelScope.launch {
+            delay(wait)
+            if (!account.linked && !showWelcome) { linkReminder = true; if (linkCode == null) startLinking() }
+        }
+    }
+    fun remindLinkLater() {
+        account.linkReminderAt = System.currentTimeMillis()
+        linkReminder = false
+        if (linkCode != null && screen != Screen.SETTINGS) cancelLinking()
     }
 
     // ---------------- time ----------------

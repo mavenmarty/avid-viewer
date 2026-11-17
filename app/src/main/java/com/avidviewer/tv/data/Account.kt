@@ -258,6 +258,10 @@ class AccountStore(context: Context) {
     var lastBackupAt: Long
         get() = prefs.getLong("lastBackupAt", 0L)
         set(v) { prefs.edit().putLong("lastBackupAt", v).apply() }
+    /** 1.16.1: when "Link this device" was last put off with Not now (devices with playlists that aren't linked). */
+    var linkReminderAt: Long
+        get() = prefs.getLong("linkReminderAt", 0L)
+        set(v) { prefs.edit().putLong("linkReminderAt", v).apply() }
     /** The automatic daily backup (on once a PIN is set; can be turned off). */
     var autoBackup: Boolean
         get() = prefs.getBoolean("autoBackup", true)

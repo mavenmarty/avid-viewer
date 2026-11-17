@@ -146,3 +146,27 @@ fun WelcomeAccountDialog(vm: AppViewModel) {
     )
     if (vm.pendingRestore != null) RestorePinDialog(vm)
 }
+
+/**
+ * 1.16.1: a device with playlists that isn't linked to an account. Its playlists keep working; this asks to link it
+ * (licensing), with its code and QR code. Not now puts it off for 7 days.
+ */
+@Composable
+fun LinkReminderDialog(vm: AppViewModel) {
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = { vm.remindLinkLater() },
+        containerColor = C.Surface,
+        modifier = Modifier.testTag("link-reminder"),
+        title = { androidx.compose.material3.Text("Link this device to your account", color = C.Text, fontWeight = FontWeight.Bold) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Label("Avid Viewer devices are tied to an account. Your playlists keep working; once linked, you manage them, profiles and backups at avidviewer.app.", size = 14.sp, color = C.Soft, lines = Int.MAX_VALUE)
+                val code = vm.linkCode
+                if (code != null) LinkCodePanel(vm, code)
+                else Label(vm.accountStatus ?: "Getting a code…", size = 14.sp, color = C.Soft, lines = Int.MAX_VALUE)
+            }
+        },
+        confirmButton = {},
+        dismissButton = { TvButton("Not now", modifier = Modifier.testTag("link-reminder-later")) { vm.remindLinkLater() } },
+    )
+}
