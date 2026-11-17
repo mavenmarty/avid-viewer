@@ -126,7 +126,9 @@ object AccountApi {
     // ---- playlists from avidviewer.app/playlists (1.14.0) ----
     /** A playlist the account wants added, changed or removed here. [payload] is sealed for this device (or null). */
     data class InboxItem(val playlistId: String, val action: String, val version: Int, val name: String, val type: String,
-                         val profiles: List<String>?, val payload: JSONObject?)
+                         val profiles: List<String>?, val payload: JSONObject?,
+                         /** 1.15.1: a playlist added on this device that the account now manages ("Add to account"). */
+                         val localId: String? = null)
 
     /** Tells the account this device's key (for sealing logins to it) and its profiles (to choose on the website). */
     fun report(token: String, publicKey: String, profiles: List<Triple<String, String, Boolean>>, base: String = BASE) {
@@ -139,7 +141,9 @@ object AccountApi {
 
     // ---- account profiles (1.15.0) ----
     /** What the account wants on this device: playlist changes, and its profiles when they changed since [profilesHash]. */
-    data class Inbox(val items: List<InboxItem>, val managed: Boolean, val profilesHash: String, val profiles: JSONArray?)
+    data class Inbox(val items: List<InboxItem>, val managed: Boolean, val profilesHash: String, val profiles: JSONArray?,
+                     /** 1.15.1: the account's public key (raw P-256, base64), to lock this device's logins for the owner's browser. */
+                     val accountKey: String? = null)
 
     fun inbox2(token: String, profilesHash: String?, base: String = BASE): Inbox {
         val q = profilesHash?.let { "?ph=" + java.net.URLEncoder.encode(it, "UTF-8") } ?: ""
@@ -149,9 +153,11 @@ object AccountApi {
         val items = List(a.length()) {
             val x = a.getJSONObject(it)
             InboxItem(x.getString("playlistId"), x.optString("action"), x.optInt("version"), x.optString("name"), x.optString("type"),
-                x.optJSONArray("profiles")?.let { p -> List(p.length()) { i -> p.getString(i) } }, x.optJSONObject("payload"))
+                x.optJSONArray("profiles")?.let { p -> List(p.length()) { i -> p.getString(i) } }, x.optJSONObject("payload"),
+                x.optString("localId").ifEmpty { null })
         }
-        return Inbox(items, o.optBoolean("managed"), o.optString("profilesHash"), o.optJSONArray("profiles"))
+        return Inbox(items, o.optBoolean("managed"), o.optString("profilesHash"), o.optJSONArray("profiles"),
+            o.optString("accountKey").ifEmpty { null })
     }
 
     /**
@@ -165,6 +171,15 @@ object AccountApi {
         if (code != 200) failed(code, o)
         val m = o.optJSONObject("profileMap") ?: JSONObject()
         return m.keys().asSequence().associateWith { m.getString(it) }
+    }
+
+    /**
+     * Every playlist on this device (1.15.1): name, type, what's switched on, and which account playlist it is, so the
+     * website can list playlists added on the TV. A login goes only locked for the account's key ([DeviceKey.seal]).
+     */
+    fun devicePlaylists(token: String, list: JSONArray, base: String = BASE) {
+        val (code, o) = call(base, "/api/tv/playlists", JSONObject().put("playlists", list), token)
+        if (code != 200) failed(code, o)
     }
 
     /** A playlist's categories and channels (names and counts only), for choosing what each profile sees on the website. */
@@ -260,6 +275,10 @@ class AccountStore(context: Context) {
     var profilesJson: String
         get() = prefs.getString("profilesJson", "").orEmpty()
         set(v) { prefs.edit().putString("profilesJson", v).apply() }
+    /** What this device last told the account about its playlists (a signature), so unchanged lists aren't sent again. */
+    var playlistsSent: String
+        get() = prefs.getString("playlistsSent", "").orEmpty()
+        set(v) { prefs.edit().putString("playlistsSent", v).apply() }
     /** Each account playlist's catalog as last sent: playlist id → "signature@time". */
     var catalogSent: String
         get() = prefs.getString("catalogSent", "{}").orEmpty()

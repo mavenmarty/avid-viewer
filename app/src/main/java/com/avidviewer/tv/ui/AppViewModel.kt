@@ -2556,6 +2556,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 if (changed && box.profiles == null && account.profilesJson.isNotEmpty()) {
                     runCatching { applyAccountProfiles(org.json.JSONArray(account.profilesJson)) }
                 }
+                if (box.managed) runCatching { sendDevicePlaylists(token, box.accountKey) }
                 if (box.managed) runCatching { sendCatalogs(token) }
             } catch (_: Exception) {
                 // Offline, or the site is busy: try again at the next check.
@@ -2703,6 +2704,35 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /**
+     * Tells the account every playlist on this device (1.15.1), when something changed: names, types and switches, and,
+     * once the account has its own key, each login locked so only the owner's browser can open it (to add a TV's
+     * playlist to the account, or keep a login the account doesn't have yet, without typing it).
+     */
+    private suspend fun sendDevicePlaylists(token: String, accountKey: String?) {
+        val logins = playlists.joinToString("|") { listOf(it.id, it.server, it.username, it.password, it.m3uUrl, it.epgUrl).joinToString("\u0001") }
+        val sig = (playlists.joinToString("|") { listOf(it.id, it.name, it.type, it.enabled, it.liveOn, it.vodOn, it.remoteId).joinToString(",") } +
+            "#" + (accountKey ?: "") + "#" + logins.hashCode()).hashCode().toString(16)
+        if (sig == account.playlistsSent) return
+        val list = withContext(Dispatchers.Default) {
+            org.json.JSONArray().apply {
+                playlists.forEach { p ->
+                    val o = org.json.JSONObject().put("id", p.id).put("name", p.name).put("type", p.type).put("enabled", p.enabled)
+                        .put("live", p.liveOn).put("vod", p.vodOn).put("remoteId", p.remoteId)
+                    if (accountKey != null) runCatching {
+                        val epg = p.epgSources.firstOrNull { it.id == ACCOUNT_GUIDE }?.url ?: p.epgSources.firstOrNull()?.url ?: p.epgUrl
+                        val login = org.json.JSONObject().put("name", p.name).put("type", p.type).put("server", p.server)
+                            .put("username", p.username).put("password", p.password).put("m3uUrl", p.m3uUrl).put("epgUrl", epg)
+                        o.put("sealed", com.avidviewer.tv.data.DeviceKey.seal(accountKey, login))
+                    }
+                    put(o)
+                }
+            }
+        }
+        withContext(Dispatchers.IO) { com.avidviewer.tv.data.AccountApi.devicePlaylists(token, list, accountApi) }
+        account.playlistsSent = sig
+    }
+
     /** One playlist's categories, with each live category's channels (id after the playlist's prefix, and name). */
     private fun catalogOf(pl: Playlist): org.json.JSONObject? {
         val groups = LinkedHashMap<String, org.json.JSONArray>()
@@ -2780,6 +2810,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** One instruction from the account; returns why it couldn't be done, or null. */
     private suspend fun applyAccountPlaylist(item: com.avidviewer.tv.data.AccountApi.InboxItem, key: com.avidviewer.tv.data.DeviceKey.Pair): String? {
         val existing = playlists.firstOrNull { it.remoteId == item.playlistId }
+            // 1.15.1 "Add to account": a playlist added here becomes that account playlist, keeping everything.
+            ?: item.localId?.let { lid -> playlists.firstOrNull { it.id == lid && it.remoteId.isEmpty() } }
         if (item.action == "remove") {
             existing?.let { removePlaylist(it.id) }
             return null

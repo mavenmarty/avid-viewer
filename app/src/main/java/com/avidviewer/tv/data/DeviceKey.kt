@@ -58,7 +58,7 @@ object DeviceKey {
     }
 
     /** Opens an envelope {v:1, epk, iv, ct} sealed for [key]; throws if it wasn't made for this device or was changed. */
-    fun open(key: Pair, envelope: JSONObject): JSONObject {
+    fun open(key: Pair, envelope: JSONObject, info: String = INFO): JSONObject {
         require(envelope.optInt("v") == 1) { "Unknown envelope" }
         val epk = Base64.decode(envelope.getString("epk"), Base64.NO_WRAP)
         require(epk.size == 65 && epk[0] == 4.toByte()) { "Bad key" }
@@ -66,10 +66,36 @@ object DeviceKey {
         val point = ECPoint(BigInteger(1, epk.copyOfRange(1, 33)), BigInteger(1, epk.copyOfRange(33, 65)))
         val eph = KeyFactory.getInstance("EC").generatePublic(ECPublicKeySpec(point, params))
         val z = KeyAgreement.getInstance("ECDH").run { init(key.private); doPhase(eph, true); generateSecret() }
-        val aes = hkdf(salt = epk, ikm = z, info = INFO.toByteArray(Charsets.UTF_8), length = 32)
+        val aes = hkdf(salt = epk, ikm = z, info = info.toByteArray(Charsets.UTF_8), length = 32)
         val c = Cipher.getInstance("AES/GCM/NoPadding")
         c.init(Cipher.DECRYPT_MODE, SecretKeySpec(aes, "AES"), GCMParameterSpec(128, Base64.decode(envelope.getString("iv"), Base64.NO_WRAP)))
         return JSONObject(String(c.doFinal(Base64.decode(envelope.getString("ct"), Base64.NO_WRAP)), Charsets.UTF_8))
+    }
+
+    /** What a device locks for the account's own key (1.15.1): its playlists' logins, which only the owner's browser opens. */
+    const val ACCOUNT_INFO = "avidviewer-account:v1"
+
+    /**
+     * Seals [data] for the holder of the P-256 public key [publicB64] (raw 65-byte point, base64): the same envelope the
+     * website makes for devices ({v:1, epk, iv, ct}; ECDH with a new key, HKDF-SHA256 salted with that key, AES-256-GCM).
+     */
+    fun seal(publicB64: String, data: JSONObject, info: String = ACCOUNT_INFO): JSONObject {
+        val to = Base64.decode(publicB64, Base64.NO_WRAP)
+        require(to.size == 65 && to[0] == 4.toByte()) { "Bad key" }
+        val g = KeyPairGenerator.getInstance("EC").apply { initialize(ECGenParameterSpec("secp256r1")) }
+        val eph = g.generateKeyPair()
+        val params = (eph.public as ECPublicKey).params
+        val point = ECPoint(BigInteger(1, to.copyOfRange(1, 33)), BigInteger(1, to.copyOfRange(33, 65)))
+        val pub = KeyFactory.getInstance("EC").generatePublic(ECPublicKeySpec(point, params))
+        val z = KeyAgreement.getInstance("ECDH").run { init(eph.private); doPhase(pub, true); generateSecret() }
+        val epk = raw(eph.public as ECPublicKey)
+        val aes = hkdf(salt = epk, ikm = z, info = info.toByteArray(Charsets.UTF_8), length = 32)
+        val iv = ByteArray(12).also { java.security.SecureRandom().nextBytes(it) }
+        val c = Cipher.getInstance("AES/GCM/NoPadding")
+        c.init(Cipher.ENCRYPT_MODE, SecretKeySpec(aes, "AES"), GCMParameterSpec(128, iv))
+        val ct = c.doFinal(data.toString().toByteArray(Charsets.UTF_8))
+        return JSONObject().put("v", 1).put("epk", Base64.encodeToString(epk, Base64.NO_WRAP))
+            .put("iv", Base64.encodeToString(iv, Base64.NO_WRAP)).put("ct", Base64.encodeToString(ct, Base64.NO_WRAP))
     }
 
     /** RFC 5869 HKDF with HMAC-SHA256 (what WebCrypto's HKDF does). */

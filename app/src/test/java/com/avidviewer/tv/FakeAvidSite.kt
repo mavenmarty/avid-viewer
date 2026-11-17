@@ -29,6 +29,9 @@ class FakeAvidSite : AutoCloseable {
     val playing = java.util.Collections.synchronizedList(mutableListOf<org.json.JSONObject>())
     /** The next Watching now report is told to stop (Stop stream on the website). */
     @Volatile var stopNext = false
+    /** 1.15.1: the account's public key sent to devices, and the playlists devices reported. */
+    @Volatile var accountKey: String? = null
+    @Volatile var devicePlaylists: org.json.JSONArray? = null
     private fun profilesHash() = profiles?.toString()?.hashCode()?.toString(16) ?: ""
     /** One backup per TV: device id → (TV name, file text, PIN). */
     val backups = java.util.concurrent.ConcurrentHashMap<String, Triple<String, String, String>>()
@@ -90,9 +93,11 @@ class FakeAvidSite : AutoCloseable {
             path.startsWith("/api/tv/inbox") && method == "GET" -> 200 to org.json.JSONObject().put("items", org.json.JSONArray(synchronized(inbox) { inbox.toList() })).apply {
                 if (managed) {
                     put("managed", true).put("profilesHash", profilesHash())
+                    accountKey?.let { put("accountKey", it) }
                     if (path.substringAfter("ph=", "") != profilesHash()) put("profiles", profiles ?: org.json.JSONArray())
                 }
             }.toString()
+            path == "/api/tv/playlists" -> { devicePlaylists = org.json.JSONObject(body).getJSONArray("playlists"); 200 to """{"ok":true}""" }
             path == "/api/tv/catalog" -> { catalogs += org.json.JSONObject(body); 200 to """{"ok":true}""" }
             path == "/api/tv/playing" -> {
                 playing += org.json.JSONObject(body)
