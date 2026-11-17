@@ -1332,9 +1332,17 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         val gone = playlists.firstOrNull { it.id == id }?.name ?: "Playlist"
         playlists = playlists.filterNot { it.id == id }
         store.savePlaylists(playlists)
-        store.deletePlaylistData(id)
-        catalog.delete(id); live.delete(id); vodVersion++
         otherLive.remove(id); otherVod.remove(id)
+        // Its channels, guide and movies can be hundreds of thousands of rows, and a download may still be writing them:
+        // delete them in the background (1.15.2: doing it here froze the app until Fire OS closed it). Once more a minute
+        // later, for anything a download that was still running wrote meanwhile.
+        viewModelScope.launch(Dispatchers.IO) {
+            repeat(2) { round ->
+                if (round == 1) delay(60_000)
+                if (playlists.none { it.id == id }) runCatching { store.deletePlaylistData(id); catalog.delete(id); live.delete(id) }
+            }
+            withContext(Dispatchers.Main) { vodVersion++ }
+        }
         playlistGroups = playlistGroups - id
         if (wasActive || prefs.activePlaylist == id) reloadAfterActiveChange()
         if (vodLoadedFor?.split(',')?.contains(id) == true) resetVod()
@@ -2558,6 +2566,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 if (changed && box.profiles == null && account.profilesJson.isNotEmpty()) {
                     runCatching { applyAccountProfiles(org.json.JSONArray(account.profilesJson)) }
                 }
+                runCatching { mergeDuplicateAccountPlaylists() }
                 if (box.managed) runCatching { sendDevicePlaylists(token, box.accountKey) }
                 if (box.managed) runCatching { sendCatalogs(token) }
             } catch (_: Exception) {
@@ -2809,9 +2818,40 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         start(c)
     }
 
+    /** The same provider login: same type, and the same server and username, or the same M3U link. */
+    private fun sameLogin(p: Playlist, login: org.json.JSONObject): Boolean {
+        val type = login.optString("type", p.type)
+        if (type != p.type) return false
+        fun host(u: String) = u.trim().lowercase().removeSuffix("/").let { if ("://" in it) it else "http://$it" }
+        return if (type == "m3u") login.optString("m3uUrl").trim().isNotEmpty() && login.optString("m3uUrl").trim() == p.m3uUrl.trim()
+        else host(login.optString("server")) == host(p.server) && login.optString("username").trim() == p.username.trim() && p.username.isNotBlank()
+    }
+    private fun loginOf(p: Playlist) = org.json.JSONObject().put("type", p.type).put("server", p.server).put("username", p.username).put("m3uUrl", p.m3uUrl)
+
+    /**
+     * 1.15.2: a playlist from the account that was also typed on this device (two copies of one provider) becomes one:
+     * the device's own copy, with its favorites and history, takes the account's place, and the account's copy goes.
+     */
+    private fun mergeDuplicateAccountPlaylists() {
+        val pairs = playlists.filter { it.remoteId.isNotEmpty() }.mapNotNull { acct ->
+            playlists.firstOrNull { it.remoteId.isEmpty() && it.id != acct.id && sameLogin(it, loginOf(acct)) }?.let { acct to it }
+        }
+        if (pairs.isEmpty()) return
+        for ((acct, mine) in pairs) {
+            trail("merged a duplicate account playlist")
+            playlists = playlists.map { if (it.id == mine.id) it.copy(remoteId = acct.remoteId, profiles = acct.profiles) else it }
+            store.savePlaylists(playlists)
+            if (prefs.activePlaylist == acct.id) updatePrefs { it.copy(activePlaylist = mine.id) }
+            removePlaylist(acct.id)
+            status = "${mine.name} was on this device twice; kept one copy."
+        }
+        account.playlistsSent = ""
+        playlistSaved++
+    }
+
     /** One instruction from the account; returns why it couldn't be done, or null. */
     private suspend fun applyAccountPlaylist(item: com.avidviewer.tv.data.AccountApi.InboxItem, key: com.avidviewer.tv.data.DeviceKey.Pair): String? {
-        val existing = playlists.firstOrNull { it.remoteId == item.playlistId }
+        var existing = playlists.firstOrNull { it.remoteId == item.playlistId }
             // 1.15.1 "Add to account": a playlist added here becomes that account playlist, keeping everything.
             ?: item.localId?.let { lid -> playlists.firstOrNull { it.id == lid && it.remoteId.isEmpty() } }
         if (item.action == "remove") {
@@ -2823,6 +2863,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 .getOrElse { return "This device couldn't open the login. Enter it again on the website." }
         }
         if (login == null && existing == null) return "The login is missing. Enter it again on the website."
+        // 1.15.2: the same playlist typed on this device before becomes the account's one, instead of a second copy.
+        if (existing == null && login != null) existing = playlists.firstOrNull { it.remoteId.isEmpty() && sameLogin(it, login) }
         var p = (existing ?: Playlist(id = UUID.randomUUID().toString().take(8), name = item.name, type = item.type))
             .copy(name = item.name.ifBlank { existing?.name ?: "My provider" }, profiles = item.profiles, remoteId = item.playlistId)
         if (login != null) {
