@@ -162,7 +162,7 @@ fun GuideScreen(vm: AppViewModel) {
         // Only now is the request used up (if the screen was rebuilt during the pause, the new one uses it).
         vm.guideFocusMode = GuideFocus.CURRENT
         // The first favorite was just added from the suggestions row: the highlight stays there (#18).
-        if (mode != GuideFocus.KEEP && vm.suggestionsFocused && vm.suggestions().isNotEmpty()) return@LaunchedEffect
+        if (mode != GuideFocus.KEEP && vm.selectedGroup == FAV_GROUP && vm.suggestionsFocused && vm.suggestions().isNotEmpty()) return@LaunchedEffect
         when (mode) {
             // Newly chosen category: start at the top.
             GuideFocus.TOP -> { scope.launch { listState.scrollToItem(0) }; pendingFocus = 0 }

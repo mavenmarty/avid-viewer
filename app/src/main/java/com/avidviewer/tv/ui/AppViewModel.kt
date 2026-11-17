@@ -4140,6 +4140,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun chooseGroup(pid: String, raw: String) {
+        // BUG-045: OK on a category comes from the category list, not the suggestions row. A flag left set when
+        // that row went away made the guide keep the highlight off the channels, so OK seemed to do nothing.
+        suggestionsFocused = false
         viewModelScope.launch {
             val same = raw == selectedGroup && pid == activePlaylist()?.id
             switchPlaylist(pid)
