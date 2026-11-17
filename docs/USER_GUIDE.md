@@ -35,19 +35,22 @@ Once a playlist has been added, the app opens on the TV Guide instead.
 
 ### Set up with your phone
 
-From 1.14.0 you can enter your playlists on a phone or computer and send them to your devices, instead of typing them with the remote. (Setup codes, from 1.11.0, were retired in 1.14.0.)
+From 1.15.0 your playlists and profiles live in your account at avidviewer.app, and you manage them from a phone or computer instead of the remote: **playlists** go to **profiles**, each profile chooses what it can see, and profiles go to **devices**.
 
 1. **Link the device to your account:** its welcome screen shows a code and a QR code (or Settings › Account › **Link this device**). Scan the QR code with your phone, or type the code at **avidviewer.app/link**, and choose **Add this device**. See [Account](#account).
-2. On your phone or computer, open **avidviewer.app/playlists** (your Account page › **Manage playlists**) and choose **＋ Add a playlist**.
-3. Enter a **name** and either an **Xtream Codes login** (server, username, password) or an **M3U link**, with an optional guide (XMLTV) link.
-4. Under **Send to**, tick each device that should get it. For each device, keep **Every profile**, or untick it and choose the profiles that may see it (Kids profiles are marked).
-5. Choose **Send to devices**. While Avid Viewer is open on a device, it picks the playlist up within a minute, checks it like one added by hand, and adds it. The page shows each device's status: **Waiting for the device**, **Added**, or why it couldn't be added.
+2. **Playlists** (avidviewer.app/playlists): **＋ Add a playlist**, enter a **name** and either an **Xtream Codes login** (server, username, password) or an **M3U link**, with an optional guide (XMLTV) link, and tick the **profiles** that get it.
+3. **Profiles** (avidviewer.app/profiles): **＋ Add a profile** for each person (or the kids). **Manage** a profile to choose its playlists, its devices, and **what it can see** in each playlist: categories and channels, for live TV, movies and series.
+4. **Devices** (avidviewer.app/devices): tick the profiles that appear on each device.
 
-**Changing a playlist on the website:** **Edit** renames it, changes which devices and profiles get it (a device that's no longer ticked removes it), or changes the login. The login isn't stored on the website, so it isn't shown: leave it empty to keep it, or enter it again to change it or to send the playlist to another device. **Remove** takes it off every device it was sent to.
+While Avid Viewer is open, a device picks up changes within a minute: a playlist arrives when any profile on the device has it, is checked like one added by hand, and leaves when no profile there has it any more. Each page shows where things stand (for example **waiting for the device to open**).
 
-**On the device:** a playlist from the website works like any other (Settings › Playlists can turn it off or refresh it). A playlist limited to some profiles is hidden everywhere (guide, search, movies, Sports) in the other profiles.
+**You type a login only when you add or edit a playlist.** The website keeps it locked with a key that only your **passkey** can unlock, so when a profile goes to a new device, the page asks for your passkey (not the login) and locks a copy for that device. Without a passkey (or with a password manager that can't do this yet), the login goes to the devices that have the playlist when you save it, and you type it again for new ones. Logins are never shown after they're saved.
 
-**Private by design:** the login is locked in your browser separately for each device, with a key that only that device has (it makes the key when it's linked, and the key never leaves it). The website keeps the playlist's name and type, which devices and profiles you chose, and each device's locked copy only until the device has picked it up; it can't read your logins.
+**Private by design:** each device's copy is locked with a key only that device has (made when it's linked; it never leaves the device), and the copy kept in your account is locked with your passkey. The website can't read your logins. To help you choose what each profile sees, devices send each account playlist's category and channel names and counts; what you watch is never sent.
+
+**Watching now:** the Playlists and Devices pages show which playlists are playing, on which device and profile, and for how long, never the channel or title. **Stop stream** ends playback on that device within a few seconds (useful when your provider allows only one or two streams); the device says **This stream was stopped from your account** and offers **Watch again**.
+
+**Devices on 1.14.0** keep the playlists sent to them, but need 1.15.0 to use profiles from the account.
 
 ### Add your first playlist
 
@@ -346,35 +349,37 @@ Settings has sections on the left and the open section's options on the right. *
 
 Each person in the household can have their own profile. A profile has its own ★ Favorites and lists, hidden channels and categories, hidden movie and series categories and titles, My List, last channel, dismissed local suggestions, watch history (and whether it's paused), resume points and watched episodes. Playlists and logins, guide sources and matches, renamed and re-ordered items, Picture & sound and every other setting are shared.
 
-When you update from an earlier version, everything you had becomes the owner's profile, **Me**. Nothing changes until you add a second profile.
-
 Each profile also has its own **theme** (colours) and its own Movies and Series **layout**. See [Display & time](#display--time).
 
-**Settings › Profiles** (third in the list of sections)
+**Profiles from your account (1.15.0).** On a linked device, profiles are managed at **avidviewer.app/profiles**, with their PINs, playlists and what each one can see, and each device shows the profiles ticked for it at avidviewer.app/devices. Settings › Profiles then says **Managed at avidviewer.app** and lists them (each can still pick its colour theme). The first time a device on 1.15.0 checks in, its own profiles are added to your account (a profile with the same name as one already there becomes that one), with their PINs, what they hid in the account's playlists and, for Kids, their categories; their favorites and history stay on the device. A profile taken off a device disappears from it, but its favorites and history stay there in case it comes back.
 
-- **＋ Add profile**: a name and a colour.
-- **＋ Add Kids profile**: the same, for a child. If no grown-up has a PIN yet, the app asks you to set the owner's PIN first.
-- For each profile:
-  - **Edit**: name, colour and **Theme**; for a Kids profile, also the categories it can watch.
-  - **Set PIN / Change PIN**: a 4-digit PIN, entered twice. **Remove PIN** appears only while there's no Kids profile.
-  - **Parent** (grown-up profiles other than the owner): a parent can manage profiles, and their PIN opens any profile. The owner is always a parent.
-  - **Delete…**: asks first, then deletes that profile's favorites, lists, hidden items and history. It can't be undone. The owner's profile and the profile in use can't be deleted.
-- **When the app starts**: **Ask who's watching** (the default) or **Last profile used**. With Last profile used, if that profile needs a PIN the app opens on the Kids profile instead.
-- In a profile that isn't a parent, changing profiles asks for a parent's PIN.
+**On the website:**
 
-**Kids profile**
+- **New profile:** a name and colour; **Parent** (its PIN unlocks any profile on the TV); a 4-digit **PIN** (optional unless your account has a Kids profile).
+- **Kids profile:** sees only the categories you allow (everything starts hidden; adult categories can never be shown). Before a Kids profile is created, every grown-up profile needs a PIN, so a child can't switch to it; the page asks for any that are missing. A grown-up's PIN can't be removed while a Kids profile exists. PINs are saved only as a salted one-way hash and reach devices the same way.
+- **What a profile can see:** pick a playlist, then **Live TV**, **Movies** or **Series**: each category is **Shown** or **Hidden**; open a live category to hide single channels. Hidden items disappear from the guide, search, Favorites and Sports for that profile on every device it's on. The names come from the playlist as a device last downloaded it.
 
-- **Categories**: a switch for each live TV category and each movie and series category. A new Kids profile starts with the categories whose names look made for children. Adult categories are greyed out and are never shown.
-- The TV Guide, Movies, Series and Search show only those categories. Channels outside them can't be opened from favorites, lists, search or the last channel.
+**On a device that isn't linked,** Settings › Profiles works as before: **＋ Add profile**, **＋ Add Kids profile** (if no grown-up has a PIN yet, the app asks you to set the first profile's PIN), and for each profile **Edit** (name, colour, theme; a Kids profile's categories), **Set PIN / Change PIN**, **Parent**, **Delete…**. In a profile that isn't a parent, changing profiles asks for a parent's PIN.
+
+**Which profile opens when the app starts (1.15.0)**
+
+- **One profile (or none):** there are no profiles anywhere: no Who's watching?, no switcher, no profile on the info bar.
+- **A Kids profile on the device:** the app opens on Kids (the last Kids profile used on this device, otherwise the first one in your account's order) and shows a 5-second **Watching as Kids** splash with **Change profile**. Back, or waiting, continues.
+- **No Kids profile:** the app opens straight on the last profile used, with no splash (if that profile has its own PIN, Who's watching? asks for it).
+
+**Kids profile on the TV**
+
+- The TV Guide, Movies, Series and Search show only its categories. Channels outside them can't be opened from favorites, lists, search or the last channel.
 - Discover, Sports and Settings aren't in a Kids profile's menu.
-- A Kids profile never needs a PIN. While a Kids profile exists, every other profile needs one, so a child can't switch out.
+- A Kids profile never needs a PIN. While a Kids profile exists, every other profile needs one (its own or a parent's).
 
 **Who's watching? and switching**
 
-- **Who's watching?**: **Left/Right** pick a profile, **OK** opens it. Profiles that need a PIN show "PIN"; Kids profiles show "Kids". Nothing plays until a profile is chosen.
-- **Switch profile**: **OK** on the profile at the top of the main menu. Choose another profile, or **Manage profiles…** to open Settings › Profiles.
-- **PIN**: type the 4 digits with the remote's number keys or the on-screen pad (**Delete** removes the last digit, **Cancel** goes back). A profile's own PIN or any parent's PIN opens it. After 5 wrong PINs in a row the app says "Too many tries. Wait a minute."
-- **Forgot a PIN?** Open a parent's profile and use **Change PIN** on that profile; the old PIN isn't needed.
+- **Who's watching?** (from the splash's **Change profile**, or **Switch profile**): **Left/Right** pick a profile, **OK** opens it. Profiles that need a PIN show "PIN"; Kids profiles show "Kids".
+- **Switch profile**: **OK** on the profile at the top of the main menu.
+- **The profile in use** shows on the info bar over video (above the clock, and on movies and episodes), on devices with two or more profiles.
+- **PIN**: type the 4 digits with the remote's number keys or the on-screen pad. A profile's own PIN or any parent's PIN opens it. After 5 wrong PINs in a row the app says "Too many tries. Wait a minute."
+- **Forgot a PIN?** Change it at avidviewer.app/profiles (or, on a device that isn't linked, from a parent's profile); the old PIN isn't needed.
 
 Profiles are included in backups (see [Backup & restore](#backup--restore)).
 
@@ -490,7 +495,8 @@ From 1.11.0 a device can be linked to an Avid Viewer account at avidviewer.app. 
 - **Link this device** (Settings › Account, or the code on the welcome screen): the device shows an 8-character code and a QR code. Scan the QR code with your phone (the code is filled in for you), or open **avidviewer.app/link** (**Add a device** on your Account page) and type the code. Sign in if asked, check the device it found, give it a name, and choose **Add this device**. The device notices within a few seconds and shows **Linked to** your email. The code works for 10 minutes; **Cancel** stops waiting.
 - **Linked:** Settings › Account shows the account and this device's name. **Sign out of this device** (asks first) unlinks it and forgets its backup PIN; playlists and settings on the device stay.
 - **Your devices** on avidviewer.app/account shows each linked device's name, model, app version and when it last checked in, with **Rename** and **Remove**. A removed device unlinks itself the next time it checks in (a minute after the app starts, then every 6 hours); its backup stays in your account for 30 days.
-- **What's shared:** linking sends the device's name, model and Avid Viewer version; from 1.14.0 also its profile names (which is a Kids profile) and a public key, so the website can send it playlists only it can open. Your playlists and settings go to your account only in a backup, locked with your backup PIN. What you watch is never sent.
+- **Profiles on this device** (1.15.0, Settings › Account): the account's profiles on this device and their playlists, with **Check for changes now**.
+- **What's shared:** linking sends the device's name, model and Avid Viewer version; from 1.14.0 also a public key, so the website can send it playlists only it can open; from 1.15.0 its profiles (names, Kids, Parent, PINs as salted hashes) the first time, the category and channel names of your account's playlists, and while something plays, which playlist and profile (for Watching now). Your settings go to your account only in a backup, locked with your backup PIN. What you watch is never sent.
 
 #### Backup & restore
 
