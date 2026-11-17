@@ -114,7 +114,6 @@ class PlaybackLogTest {
         val log = PlaybackLog(File(dir, "recover.txt"))
         log.add(PlaybackLog.RECOVER, "Live channel 4F2A", "Reconnected: the picture stood still for 5 s.")
         log.add(PlaybackLog.RECOVER, "Live channel 4F2A", "Playing again 2 s after reconnecting (the picture stood still for 5 s).")
-        log.add(PlaybackLog.BUFFER, "Live channel 4F2A", "Buffer while playing (12 min): typical 4 s, lowest 1 s, under 6 s for 70% of the time.")
         assertTrue(log.summary(), log.summary().contains("1 reconnect"))
         assertTrue(log.unsent().any { it.kind == PlaybackLog.RECOVER })
     }

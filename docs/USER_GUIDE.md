@@ -2,7 +2,7 @@
 
 <!-- The version below and the Release notes section are updated automatically after each published build
      (.github/workflows/user-guide.yml). Feature descriptions are written by hand. -->
-This guide covers **Avid Viewer 1.16.0**, the current public release. Avid Viewer is an IPTV player for Android TV and Fire TV. You bring your own provider (an Xtream Codes login or an M3U link); the app doesn't include any channels.
+This guide covers **Avid Viewer 1.17.0**, the current public release. Avid Viewer is an IPTV player for Android TV and Fire TV. You bring your own provider (an Xtream Codes login or an M3U link); the app doesn't include any channels.
 
 **Contents:** [Getting started](#1-getting-started) · [Main menu](#2-main-menu) · [TV Guide](#3-tv-guide) · [Full-screen playback](#4-full-screen-playback) · [Search](#5-search) · [Discover](#6-discover) · [Sports](#7-sports) · [Movies and Series](#8-movies-and-series) · [Settings](#9-settings) ([Profiles](#profiles)) · [Privacy](#10-privacy) · [Troubleshooting](#11-troubleshooting) · [Control4](#12-control4) · [Supplemental services](#13-supplemental-services) · [Cable & satellite](#14-using-your-cable-or-satellite-subscription) · [Release notes](#release-notes)
 
@@ -28,7 +28,7 @@ This guide covers **Avid Viewer 1.16.0**, the current public release. Avid Viewe
 
 The first time you open Avid Viewer, and every time it starts while there are no playlists, it shows a welcome screen:
 
-- **＋ Add a playlist** (highlighted): opens **Settings › Playlists** on the add form, to type it with the remote. See below.
+- **From 1.17.0 a device is linked to an account before it gets playlists** (licensing): the welcome screen shows the steps to link it, and there is no Add a playlist there.
 - **Link to your account** (right side, from 1.13.0): the device shows its own 8-character code and a QR code. Scan the QR code with your phone (it opens **avidviewer.app/link** with the code filled in), or go to avidviewer.app/link and type the code. Sign in or make an account, then choose **Add this device**. A new code replaces one that runs out (10 minutes). Once it's added, the device offers the backups in your account, for moving from another device; see [Backup & restore](#backup--restore). After linking, the panel says **Linked to** your email with **Restore a backup**.
 
 Once a playlist has been added, the app opens on the TV Guide instead.
@@ -61,6 +61,17 @@ While Avid Viewer is open, a device picks up changes within a minute: a playlist
 
 **Watching now:** the Playlists and Devices pages show which playlists are playing, on which device and profile, and for how long, never the channel or title. **Stop stream** ends playback on that device within a few seconds (useful when your provider allows only one or two streams); the device says **This stream was stopped from your account** and offers **Watch again**.
 
+### Pick up where you left off
+
+From 1.17.0, where a profile stopped in each movie and episode, and the episodes it finished, follow it to its other TVs:
+
+- A title's page says where it stopped on another TV (for example **Stopped at 34:12 on Living room, today 8:40 PM**) with **▶ Resume** and **Start over**. A series opens on the next episode as usual, including episodes finished on another TV.
+- **Continue watching** (Movies and Series) lists the newest first, series included; a place from another TV says **from Bedroom**. **Menu** on a poster there removes it, on every TV.
+- The same title on another playlist (another provider, a 4K copy) picks up there too, matched by title and year, or series, season and episode.
+- **Private:** everything is locked on the TV with a key only your TVs and your passkey have; avidviewer.app and its admins can't read titles, times or TV names. The first time, unlock once with your passkey on the website (Needs your attention says when a TV is waiting for the key). Live TV is never sent.
+- **On by default.** Turn it off for the whole account (Account tab, **Keep my watch history**) or for one profile (the profile's **Watching** tab, which also lists its places with **Mark watched** and **Remove**, and has **Clear history**). Off deletes what your account holds; each TV keeps its own place. **Pause history** on a TV stops that TV sending.
+- **Kids profiles** never share where they stopped and have no Discover, for their privacy.
+
 ### Organizing on the website
 
 From 1.16.0, **favorites and lists belong to a profile** and follow it to every TV, and **the order and names of a playlist's live categories and channels** belong to the playlist, for every profile and device. Change them on the website or on a TV (Add to List, Re-order, Rename): the change reaches the account and the other TVs within a minute while Avid Viewer is open, and **the most recent change wins**, wherever it was made. The first time a TV syncs a profile, its favorites and lists are combined with the account's (lists with the same name become one).
@@ -75,6 +86,8 @@ From 1.16.0, **favorites and lists belong to a profile** and follow it to every 
 ### Add your first playlist
 
 ![Settings › Playlists](images/settings-playlists.jpg)
+
+Easiest: add playlists at avidviewer.app/playlists (see [Set up with your phone](#set-up-with-your-phone)). To type one with the remote, the device must be linked to your account first (1.17.0): on a device that isn't, Add playlist shows its link code instead of the form. Devices that already had playlists before 1.17.0 keep them, and ask to be linked (Not now waits 7 days).
 
 1. Open **Settings › Playlists** and choose **Add playlist**.
 2. Pick the type:
@@ -267,6 +280,8 @@ After you play a channel, program, movie or episode from Search, **Back** return
 Discover shows what's new and popular, and where to watch it, using TMDB and JustWatch data.
 
 - **Tabs**: New, Trending, For you, In theaters.
+- **Per profile (1.17.0)**, on the website (Profiles › a profile › **Discover**): My streaming services, how Discover opens (**Everything**, **On your provider** or **My services**) and **titles for grown-ups** (off: movies rated R or NC-17 are left out; TMDB's lists have no series ratings). My List follows the profile to every TV. Kids profiles have no Discover.
+- **TMDB key for the whole account (1.17.0)**: enter it once on a profile's Discover tab on the website; every TV gets it, locked.
 - **On your provider**: only show titles your own playlists have (the ones tagged **▶ ON YOUR PROVIDER**).
 - **My services**: only show titles on the streaming services you've picked.
 - **Menu on a title**: add it to **My List**, or press again to take it off. A ✓ on the poster shows it's in My List. Only titles on your provider can go in My List.
@@ -467,8 +482,8 @@ Rename, re-order and Add to List are done with Menu on the item itself in the TV
 
 ![Settings › Discover](images/settings-discover.jpg)
 
-- **TMDB API key**: Save it (or press Done on the keyboard), or Remove it (asks first).
-- **My streaming services**: pick the services you subscribe to.
+- **TMDB API key**: Save it (or press Done on the keyboard), or Remove it (asks first). With a linked account it can be set once for every TV on the website (1.17.0).
+- **My streaming services**: pick the services you subscribe to. From 1.17.0 these belong to the profile and follow it to every TV.
 
 ### Playback
 
@@ -747,7 +762,27 @@ Every public release since 1.0.35, newest first. From 1.1.0, versions are number
 
 <!-- new-releases: entries for new builds are added automatically below this line -->
 
-### 1.16.0 — November 17, 2026, 9:04 AM CT (current)
+### 1.17.0 — November 17, 2026, 10:38 AM CT (current)
+
+**Release notes**
+
+- **Pick up where you left off on every TV:** where a profile stopped in each movie and episode, and the episodes it finished, follow it to its other TVs, with "Stopped at … on Living room" on the title and "from Bedroom" in Continue watching (now with series too). Menu in Continue watching removes a title on every TV.
+- **Private:** locked so only your TVs and your passkey can read it; avidviewer.app and its admins can't. On by default; turn it off for the account or a profile, which deletes what the account holds.
+- **Discover per profile:** My streaming services, how Discover opens and titles for grown-ups, set on the website; My List follows the profile; the TMDB key is entered once for every TV.
+- **Kids profiles:** no Discover and no shared places, for their privacy.
+- **A device must be linked to an account to get playlists:** the welcome screen and Add playlist show the link code; devices that already have playlists keep working and are asked to link.
+- **No more crash report after updating** (the update to 1.17.0 itself may still show one).
+
+**Change log**
+
+- The welcome screen asks to link the device instead of adding a playlist
+- Unlinked devices are asked to link, and adding a playlist needs a linked device
+- Updating the app while it's on screen is no longer reported as a crash
+- Pick up where you left off on every TV
+- The account's TMDB key can't stop the rest of the sync; tests keep Keystore values readable
+- Kids profiles keep their places on each TV (privacy); history test sets the account's settings first
+
+### 1.16.0 — November 17, 2026, 9:04 AM CT
 
 **Release notes**
 
