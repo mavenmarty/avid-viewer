@@ -28,8 +28,12 @@ object Crypto {
         return gen.generateKey()
     }
 
+    /** Robolectric has no Android Keystore: tests keep values readable, marked as such. */
+    private val TESTS = android.os.Build.FINGERPRINT == "robolectric"
+
     fun encrypt(plain: String): String {
         if (plain.isEmpty()) return ""
+        if (TESTS) return "test:$plain"
         val c = Cipher.getInstance(TRANSFORM)
         c.init(Cipher.ENCRYPT_MODE, key())
         val iv = Base64.encodeToString(c.iv, Base64.NO_WRAP)
@@ -38,7 +42,7 @@ object Crypto {
     }
 
     fun decrypt(stored: String): String = try {
-        if (stored.isEmpty()) "" else {
+        if (stored.isEmpty()) "" else if (TESTS && stored.startsWith("test:")) stored.removePrefix("test:") else {
             val parts = stored.split(":")
             val c = Cipher.getInstance(TRANSFORM)
             c.init(Cipher.DECRYPT_MODE, key(), GCMParameterSpec(128, Base64.decode(parts[0], Base64.NO_WRAP)))

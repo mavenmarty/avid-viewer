@@ -2984,9 +2984,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         // The account's TMDB key.
         res.tmdb?.optString("blob")?.takeIf { it.isNotEmpty() }?.let { b ->
             val k = runCatching { com.avidviewer.tv.data.History.open(HK, b).optString("tmdb") }.getOrNull()
-            if (!k.isNullOrBlank() && k != account.tmdbFromAccount) {
+            if (!k.isNullOrBlank() && k != account.tmdbFromAccount) runCatching {
+                val enc = Crypto.encrypt(k)
+                applyingAccount = true; try { updatePrefs { it.copy(tmdbKeyEnc = enc) } } finally { applyingAccount = false }
                 account.tmdbFromAccount = k
-                applyingAccount = true; try { updatePrefs { it.copy(tmdbKeyEnc = Crypto.encrypt(k)) } } finally { applyingAccount = false }
                 discoverLists = emptyMap(); discoverLoadedAt.clear()
             }
         }
