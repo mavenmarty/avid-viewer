@@ -269,6 +269,10 @@ class AccountStore(context: Context) {
     var linkReminderAt: Long
         get() = prefs.getLong("linkReminderAt", 0L)
         set(v) { prefs.edit().putLong("linkReminderAt", v).apply() }
+    /** 1.17.2: each profile's hidden items in account playlists were set once to exactly the account's (repair). */
+    var hidesRepaired: Boolean
+        get() = prefs.getBoolean("hidesRepaired", false)
+        set(v) { prefs.edit().putBoolean("hidesRepaired", v).apply() }
     /** The automatic daily backup (on once a PIN is set; can be turned off). */
     var autoBackup: Boolean
         get() = prefs.getBoolean("autoBackup", true)
