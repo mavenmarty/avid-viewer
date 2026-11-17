@@ -2424,6 +2424,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
      * picker closes, the highlight goes back to it if it's still suggested, else to that neighbour.
      */
     var suggestionReturn by mutableStateOf<Pair<String, String?>?>(null)
+    /** When the suggestions row last took the highlight back after the picker or ✕ (BUG-033). */
+    var suggestionLandedAt = 0L
     /** Whether the highlight is in the Favorites suggestions row (the guide doesn't take it away on its own). */
     var suggestionsFocused = false
 
