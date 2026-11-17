@@ -2,7 +2,7 @@
 
 <!-- The version below and the Release notes section are updated automatically after each published build
      (.github/workflows/user-guide.yml). Feature descriptions are written by hand. -->
-This guide covers **Avid Viewer 1.14.0**, the current public release. Avid Viewer is an IPTV player for Android TV and Fire TV. You bring your own provider (an Xtream Codes login or an M3U link); the app doesn't include any channels.
+This guide covers **Avid Viewer 1.15.0**, the current public release. Avid Viewer is an IPTV player for Android TV and Fire TV. You bring your own provider (an Xtream Codes login or an M3U link); the app doesn't include any channels.
 
 **Contents:** [Getting started](#1-getting-started) · [Main menu](#2-main-menu) · [TV Guide](#3-tv-guide) · [Full-screen playback](#4-full-screen-playback) · [Search](#5-search) · [Discover](#6-discover) · [Sports](#7-sports) · [Movies and Series](#8-movies-and-series) · [Settings](#9-settings) ([Profiles](#profiles)) · [Privacy](#10-privacy) · [Troubleshooting](#11-troubleshooting) · [Control4](#12-control4) · [Supplemental services](#13-supplemental-services) · [Cable & satellite](#14-using-your-cable-or-satellite-subscription) · [Release notes](#release-notes)
 
@@ -725,7 +725,28 @@ Every public release since 1.0.35, newest first. From 1.1.0, versions are number
 
 <!-- new-releases: entries for new builds are added automatically below this line -->
 
-### 1.14.0 — November 16, 2026, 7:40 PM CT (current)
+### 1.15.0 — November 16, 2026, 9:34 PM CT (current)
+
+**Release notes**
+
+- **Profiles from your account.** At avidviewer.app/profiles, add and manage profiles (name, colour, Parent, PIN, Kids), give them playlists, put them on devices, and choose what each one can see in each playlist: categories and channels, for live TV, movies and series. Linked devices show exactly those profiles. See [Set up with your phone](#set-up-with-your-phone) and [Profiles](#profiles).
+- **Playlists go to profiles, profiles go to devices.** A device gets a playlist when any of its profiles has it. The new Devices page (avidviewer.app/devices) chooses each device's profiles.
+- **Type a login once.** Logins are kept in your account, locked with your passkey, so a new device gets them after a passkey prompt instead of retyping.
+- **PINs for grown-ups with a Kids profile.** Creating a Kids profile on the website first sets a PIN on every grown-up profile; devices get them within a minute.
+- **Watching now and Stop stream.** The website shows which playlists are playing, on which device and profile, and for how long (never the channel or title). Stop stream ends playback on that device within seconds.
+- **Which profile opens.** One profile: no profiles at all. A Kids profile on the device: the app opens on Kids with a 5-second splash and Change profile. Otherwise: the last profile used, with no splash.
+- **The profile on the info bar.** With two or more profiles, the info bar over video shows the profile in use.
+
+**Change log**
+
+- Device profiles merged into the account by name on the first 1.15.0 check-in (PIN hashes, Parent, Kids categories and hides in account playlists; what 1.14.0 sent becomes those profiles' playlists); account profiles then replace the device's own, data kept
+- Account hides go into each profile's own hidden lists and come out again when the website shows them; Kids categories for account playlists follow the website
+- Category and channel names of account playlists sent to the account (names and counts only) for choosing what profiles see
+- Watching now every 15 s while playing (playlist and profile only); Stop from the website stops playback and offers Watch again
+- Launch rules, Kids splash, profile chip on the info bar; Settings › Profiles managed at avidviewer.app on linked devices; Settings › Account lists the device's profiles with Check for changes now
+- Website: Playlists, Profiles and Devices pages; logins kept with a passkey (WebAuthn PRF) vault key; database migration 0009
+
+### 1.14.0 — November 16, 2026, 7:40 PM CT
 
 **Release notes**
 

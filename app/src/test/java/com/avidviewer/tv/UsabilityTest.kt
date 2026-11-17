@@ -814,6 +814,39 @@ class UsabilityTest {
     }
 
     /**
+     * 1.15.1: a device with account profiles tells the account every playlist it has, with each login locked for the
+     * account's own key (only the owner's browser opens it); "Add to account" then makes a playlist typed on the TV that
+     * account playlist, keeping it.
+     */
+    @Test
+    fun theDeviceListsItsPlaylistsForTheAccountAndAddToAccountKeepsThem() {
+        FakeAvidSite().use { site ->
+            val (pub, priv) = com.avidviewer.tv.data.DeviceKey.generate()
+            val browser = com.avidviewer.tv.data.DeviceKey.load(pub, priv)
+            linkForTest(site)
+            site.accountKey = pub
+            rule.runOnIdle { vm.syncAccountPlaylists() }
+            waitFor("playlists reported") { site.devicePlaylists != null }
+            val list = site.devicePlaylists!!
+            assertEquals(vm.playlists.size, list.length())
+            val mine = (0 until list.length()).map { list.getJSONObject(it) }.first { it.getString("id") == TestData.P1 }
+            assertEquals("My provider", mine.getString("name"))
+            assertFalse("the login is never sent readable", mine.has("server") || mine.has("password") || mine.has("m3uUrl"))
+            val login = com.avidviewer.tv.data.DeviceKey.open(browser, mine.getJSONObject("sealed"), com.avidviewer.tv.data.DeviceKey.ACCOUNT_INFO)
+            val p1 = vm.playlists.first { it.id == TestData.P1 }
+            assertEquals(p1.type, login.getString("type"))
+            assertEquals(p1.server, login.getString("server")); assertEquals(p1.m3uUrl, login.getString("m3uUrl"))
+            // Add to account: the account names the device's own playlist; nothing is downloaded again.
+            site.inbox += org.json.JSONObject().put("playlistId", "acctMine").put("action", "update").put("version", 1)
+                .put("name", "My provider").put("type", p1.type).put("profiles", org.json.JSONArray().put("main")).put("localId", TestData.P1)
+            rule.runOnIdle { vm.syncAccountPlaylists() }
+            waitFor("adopted") { vm.playlists.first { it.id == TestData.P1 }.remoteId == "acctMine" }
+            assertEquals(1, vm.playlists.count { it.name == "My provider" })
+            assertTrue(site.acks.any { it.getString("playlistId") == "acctMine" && it.getBoolean("ok") })
+        }
+    }
+
+    /**
      * 1.15.0 Watching now: while something plays, the device tells the account which playlist (never the channel or
      * title); Stop stream on the website stops it and says so, and Watch again starts it again.
      */
