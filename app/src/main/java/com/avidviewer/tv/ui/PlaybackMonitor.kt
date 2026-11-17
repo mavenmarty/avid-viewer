@@ -71,17 +71,10 @@ class PlaybackMonitor(
     private var reconnectAt = 0L
     private var reconnectWhy = ""
 
-    // ---- Buffer while playing (Nov 15): one sample a second ----
-    private val bufferSeconds = IntArray(61) // 0..59 s, 60 = a minute or more
-    private var bufferSamples = 0
-    private var bufferMinMs = Long.MAX_VALUE
-    private var bufferUnder6 = 0
-
     /** A channel or title is starting ([key]: its key, never shown; the log gets a code instead of the name). */
     fun started(key: String, live: Boolean) {
         endStall(left = true)
         endPicture()
-        logBuffer()
         this.live = live
         startedAt = clock(); reconnects.clear(); reconnectAt = 0
         DataFlow.lastBytesAt = startedAt
@@ -108,12 +101,6 @@ class PlaybackMonitor(
             } else endPicture()
         } else if (!player.isPlaying) endPicture()
         lastRendered = rendered; lastPosition = pos
-        if (player.isPlaying) {
-            bufferSamples++
-            bufferSeconds[(buffered / 1000).toInt().coerceIn(0, 60)]++
-            if (buffered < bufferMinMs) bufferMinMs = buffered
-            if (buffered < 6_000) bufferUnder6++
-        }
         checkReconnect(now, buffered)
         if (droppedWindowAt > 0 && now - droppedWindowAt > 10_000) {
             if (droppedWindow >= 30) log.add(PlaybackLog.DROPPED, name, "$droppedWindow frames dropped in 10 s (the TV struggled to decode${videoText().let { if (it.isBlank()) "" else ": $it" }})")
@@ -158,21 +145,8 @@ class PlaybackMonitor(
         onReconnect?.invoke(live)
     }
 
-    /** The previous channel's buffer, once it has played for at least 30 seconds. */
-    private fun logBuffer() {
-        if (name.isNotEmpty() && bufferSamples >= 30) {
-            var acc = 0; var median = 0
-            for (i in bufferSeconds.indices) { acc += bufferSeconds[i]; if (acc * 2 >= bufferSamples) { median = i; break } }
-            val mins = bufferSamples / 60
-            log.add(PlaybackLog.BUFFER, name,
-                "Buffer while playing (${if (mins > 0) "$mins min" else "$bufferSamples s"}): typical ${if (median >= 60) "60+" else median} s, lowest ${bufferMinMs / 1000} s, under 6 s for ${bufferUnder6 * 100 / bufferSamples}% of the time.")
-        }
-        bufferSeconds.fill(0); bufferSamples = 0; bufferMinMs = Long.MAX_VALUE; bufferUnder6 = 0
-    }
-
-    /** Playback stopped (leaving full screen or the app): logs the buffer seen. */
+    /** Playback stopped (leaving full screen or the app). (The temporary buffer log of 1.10.0 was removed in 1.17.1.) */
     fun finished() {
-        logBuffer()
         name = ""
     }
 

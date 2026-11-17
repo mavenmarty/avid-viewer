@@ -136,8 +136,6 @@ class PlaybackLog(private val file: File, private val max: Int = 400, private va
         const val DROPPED = "DROPPED"
         /** The app reconnected to the stream itself (a stuck picture, or data that stopped arriving). */
         const val RECOVER = "RECOVER"
-        /** How much was buffered while a channel or title played (typical, lowest, time under 6 s). */
-        const val BUFFER = "BUFFER"
         val PROBLEMS = setOf(STALL, PICTURE, ERROR, RECOVER)
         val LABEL = Regex("^(Live channel|Title) [0-9A-F]{4}$|^Earlier stream$")
     }
