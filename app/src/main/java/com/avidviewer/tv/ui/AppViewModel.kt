@@ -1026,6 +1026,11 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         activePlaylist()?.let { loadActive(refresh = false) }
         maybeRemindToLink()
         applyDiscoverStart()
+        // 1.17.1: series being watched are checked for new episodes (twice a day), so they come back to Continue watching.
+        if (android.os.Build.FINGERPRINT != "robolectric") viewModelScope.launch {
+            delay(45_000)
+            while (true) { checkSeriesForNewEpisodes(); delay(6 * 3600_000L) }
+        }
     }
 
     // ---------------- linking for licensing (1.16.1) ----------------
@@ -2824,16 +2829,84 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         val d = now - cal.get(java.util.Calendar.DAY_OF_YEAR)
         return when { d == 0 -> "today $time"; d == 1 -> "yesterday $time"; else -> java.text.SimpleDateFormat("EEE MMM d", java.util.Locale.US).format(java.util.Date(t)) }
     }
-    /** Continue watching: newest first; a series stands for its episodes. */
-    private fun continueKeys(): List<String> = resume.keys.sortedByDescending { placeInfo[it]?.at ?: 0L }
-        .map { k -> EPISODE_KEY.find(k)?.let { k.substring(0, it.range.first) } ?: k }.distinct()
+    private var seriesLatest: Map<String, com.avidviewer.tv.data.Store.SeriesLatest> = store.loadSeriesLatest()
+    private fun seriesOf(k: String): String? = EPISODE_KEY.find(k)?.let { k.substring(0, it.range.first) }
+
+    /**
+     * Continue watching, newest first (1.17.1). Movies while they're part-way. A series stays until its latest
+     * episode has been watched; a new episode or season puts it back (the time it was found counts as activity).
+     * Menu › remove hides a title until something new happens to it.
+     */
+    private fun continueKeys(): List<String> {
+        val act = HashMap<String, Long>()
+        fun bump(k: String, t: Long) { act[k] = maxOf(act[k] ?: 0L, t) }
+        for (k in resume.keys) bump(seriesOf(k) ?: k, placeInfo[k]?.at ?: 1L)
+        watched.mapNotNull { k -> seriesOf(k)?.let { it to k } }.groupBy({ it.first }, { it.second }).forEach { (series, eps) ->
+            val latest = seriesLatest[series]
+            val finished = latest != null && "$series:${latest.season}:${latest.episode}" in watched &&
+                resume.keys.none { it.startsWith("$series:") }
+            if (!finished) bump(series, maxOf(eps.maxOf { placeInfo[it]?.at ?: 1L }, latest?.newAt ?: 0L))
+        }
+        // A new episode found for a series in progress counts as activity too.
+        act.keys.toList().forEach { k -> seriesLatest[k]?.newAt?.let { bump(k, it) } }
+        return act.entries.filter { (k, t) -> (placeInfo["hide|$k"]?.at ?: 0L) < t }.sortedByDescending { it.value }.map { it.key }
+    }
+
+    /** For tests: Continue watching's titles, newest first. */
+    internal fun continueKeysForTests() = continueKeys()
+
+    /** A series page loaded its episodes: remember the latest one, and move places saved under the provider's ids. */
+    private fun noteSeriesEpisodes(series: VodItem, eps: List<Episode>) {
+        val last = eps.maxWithOrNull(compareBy<Episode>({ seasonNum(it.season) }, { it.number })) ?: return
+        val now = System.currentTimeMillis()
+        val old = seriesLatest[series.key]
+        val s = seasonNum(last.season); val e = last.number
+        val newer = old != null && (s > old.season || (s == old.season && e > old.episode))
+        seriesLatest = seriesLatest + (series.key to com.avidviewer.tv.data.Store.SeriesLatest(s, e, now, if (newer) now else old?.newAt ?: 0L))
+        store.saveSeriesLatest(seriesLatest)
+        val rm = resume.toMutableMap(); val inf = placeInfo.toMutableMap(); var moved = false
+        for (x in eps) {
+            if (x.key.isBlank()) continue
+            val nk = episodeKey(series, x)
+            rm.remove(x.key)?.let { if (nk !in rm) rm[nk] = it; moved = true }
+            if (watched.remove(x.key)) { watched.add(nk); moved = true }
+            inf.remove(x.key)?.let { if (nk !in inf) inf[nk] = it; moved = true }
+        }
+        if (moved) { resume = rm; placeInfo = inf; store.saveResume(rm); store.saveWatched(watched); store.savePlaceInfo(inf) }
+        if (moved || newer) vodVersion++
+    }
+
+    /**
+     * Series in Continue watching (or with finished episodes) whose latest episode hasn't been checked for 12 hours:
+     * reads their episodes in the background, so a new episode or season puts them back. A few at a time.
+     */
+    private var checkingSeries = false
+    fun checkSeriesForNewEpisodes(limit: Int = 8) {
+        if (checkingSeries) return
+        val now = System.currentTimeMillis()
+        val keys = (watched.mapNotNull { seriesOf(it) } + resume.keys.mapNotNull { seriesOf(it) }).distinct()
+            .filter { now - (seriesLatest[it]?.checked ?: 0L) > 12 * 3600_000L }.take(limit)
+        if (keys.isEmpty()) return
+        checkingSeries = true
+        viewModelScope.launch {
+            try {
+                val items = withContext(Dispatchers.IO) { runCatching { catalog.byKeys(keys) }.getOrDefault(emptyList()) }
+                for (item in items) {
+                    val p = playlists.firstOrNull { it.id == item.playlistId && it.isXtream } ?: continue
+                    val eps = withContext(Dispatchers.IO) { runCatching { XtreamVod.episodes(p, item.seriesId ?: "") }.getOrNull() } ?: continue
+                    noteSeriesEpisodes(item, eps)
+                }
+            } finally { checkingSeries = false }
+        }
+    }
 
     /** Menu on a poster in Continue watching: off the list here and, through the account, on every TV. */
     fun removeFromContinue(item: VodItem) {
         val gone = resume.keys.filter { it == item.key || it.startsWith(item.key + ":") }.toSet()
-        if (gone.isEmpty()) return
         resume = resume - gone; store.saveResume(resume)
-        placeInfo = placeInfo - gone; store.savePlaceInfo(placeInfo)
+        // A series also stays off until something new happens to it (a new place, or a new episode found).
+        placeInfo = placeInfo - gone + if (item.kind == "series") mapOf("hide|${item.key}" to com.avidviewer.tv.data.Store.PlaceInfo(0, System.currentTimeMillis())) else emptyMap()
+        store.savePlaceInfo(placeInfo)
         vodVersion++
         status = "Removed ${item.name} from Continue watching" + if (account.token != null) " on every TV." else "."
     }
@@ -2847,11 +2920,17 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     private class LocalEntry(val key: String, val match: String, val v: org.json.JSONObject, val at: Long)
 
     private fun localEntries(resumeMap: Map<String, Long>, watchedSet: Set<String>, info: Map<String, com.avidviewer.tv.data.Store.PlaceInfo>): List<LocalEntry> {
-        val keys = (resumeMap.keys + watchedSet).distinct()
-        val seriesKeys = keys.mapNotNull { k -> EPISODE_KEY.find(k)?.let { k.substring(0, it.range.first) } }.distinct()
+        val hides = info.keys.filter { it.startsWith("hide|") }
+        val keys = (resumeMap.keys + watchedSet).distinct().filter { EPISODE_KEY.find(it) != null || !Regex(":e\\d+$").containsMatchIn(it) } + hides
+        val seriesKeys = (keys.mapNotNull { k -> EPISODE_KEY.find(k)?.let { k.substring(0, it.range.first) } } + hides.map { it.removePrefix("hide|") }).distinct()
         val known = runCatching { catalog.byKeys(keys.filter { EPISODE_KEY.find(it) == null } + seriesKeys) }.getOrDefault(emptyList()).associateBy { it.key }
         val remote = playlists.associate { it.id to it.remoteId }
         return keys.mapNotNull { k ->
+            if (k.startsWith("hide|")) {
+                val series = known[k.removePrefix("hide|")] ?: return@mapNotNull null
+                val v = org.json.JSONObject().put("t", "h").put("series", series.name).put("tv", accountTvName.ifBlank { "A TV" })
+                return@mapNotNull LocalEntry(k, "h|" + com.avidviewer.tv.data.Tmdb.normalize(series.name), v, info[k]?.at ?: 1L)
+            }
             val m = EPISODE_KEY.find(k)
             val title = known[if (m != null) k.substring(0, m.range.first) else k] ?: return@mapNotNull null
             val pid = k.substringBefore(':'); val rest = k.substringAfter(':')
@@ -2863,6 +2942,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             remote[pid]?.takeIf { it.isNotEmpty() }?.let { v.put("pl", it) }
             val match = if (m != null) {
                 v.put("t", "e").put("series", title.name).put("s", m.groupValues[1].toInt()).put("e", m.groupValues[2].toInt())
+                // The latest episode this TV knows of: lets the website tell a finished series from one with more to watch.
+                seriesLatest[title.key]?.let { l -> v.put("lastS", l.season).put("lastE", l.episode) }
                 com.avidviewer.tv.data.History.episodeMatch(title.name, m.groupValues[1], m.groupValues[2])
             } else {
                 v.put("t", "m").put("title", title.name).put("year", title.year)
@@ -2874,6 +2955,11 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Where an entry from the account is on this TV: the same account playlist, else by title. Null: not here. */
     private fun resolveEntry(v: org.json.JSONObject): String? {
+        if (v.optString("t") == "h") {
+            val pids = playlists.filter { it.vodOn }.map { it.id }
+            val s = runCatching { catalog.findByName(vodKindKey("series"), com.avidviewer.tv.data.Tmdb.normalize(v.optString("series")), pids) }.getOrNull() ?: return null
+            return "hide|${s.key}"
+        }
         val local = playlists.firstOrNull { it.remoteId.isNotEmpty() && it.remoteId == v.optString("pl") }?.id
         if (local != null) {
             val k = "$local:" + v.optString("id")
@@ -2957,12 +3043,12 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                     val seen = HashSet<String>()
                     for (e in local) {
                         val id = com.avidviewer.tv.data.History.itemId(hk, e.match); seen.add(id)
-                        val sig = (e.v.optLong("pos") / 10_000).toString() + e.v.optBoolean("done")
+                        val sig = (e.v.optLong("pos") / 10_000).toString() + e.v.optBoolean("done") + e.v.optInt("lastS") + ":" + e.v.optInt("lastE") + (if (e.key.startsWith("hide|")) e.at.toString() else "")
                         sigs[id] = e.key + "\u0001" + sig
                         if (items.optJSONObject(id)?.optString("s") != sig) put.put(org.json.JSONObject().put("item", id).put("blob", com.avidviewer.tv.data.History.lock(hk, e.v)).put("at", e.at))
                     }
                     // Removed here (Continue watching › Menu): removed everywhere.
-                    items.keys().forEach { id -> val k = items.optJSONObject(id)?.optString("k").orEmpty(); if (id !in seen && k.isNotEmpty() && k !in rm && k !in ws) put.put(org.json.JSONObject().put("item", id).put("blob", org.json.JSONObject.NULL).put("at", System.currentTimeMillis())) }
+                    items.keys().forEach { id -> val k = items.optJSONObject(id)?.optString("k").orEmpty(); if (id !in seen && k.isNotEmpty() && !k.startsWith("hide|") && k !in rm && k !in ws) put.put(org.json.JSONObject().put("item", id).put("blob", org.json.JSONObject.NULL).put("at", System.currentTimeMillis())) }
                 }
                 if (put.length() > 0) o.put("put", put)
                 sent[p.id] = sigs
@@ -3019,9 +3105,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                     val k = resolveEntry(v) ?: continue
                     if ((inf[k]?.at ?: 0) > at) continue // changed here since: this TV's is newer
                     val tvName = v.optString("tv").takeIf { n -> n.isNotBlank() && n != accountTvName }
-                    if (v.optBoolean("done")) { rm.remove(k); ws.remove(k); ws.add(k) } else { rm[k] = v.optLong("pos"); }
+                    if (k.startsWith("hide|")) Unit
+                    else if (v.optBoolean("done")) { rm.remove(k); ws.remove(k); ws.add(k) } else { rm[k] = v.optLong("pos"); }
                     inf[k] = com.avidviewer.tv.data.Store.PlaceInfo(v.optLong("dur"), at, tvName)
-                    items.put(id, org.json.JSONObject().put("k", k).put("s", (v.optLong("pos") / 10_000).toString() + v.optBoolean("done")))
+                    items.put(id, org.json.JSONObject().put("k", k).put("s", (v.optLong("pos") / 10_000).toString() + v.optBoolean("done") + v.optInt("lastS") + ":" + v.optInt("lastE") + (if (k.startsWith("hide|")) at.toString() else "")))
                     changed = true
                 }
                 st.put("since", o.optLong("seq"))
@@ -4135,7 +4222,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         val p = playlists.firstOrNull { it.id == item.playlistId } ?: return
         viewModelScope.launch {
             episodes = try {
-                withContext(Dispatchers.IO) { XtreamVod.episodes(p, item.seriesId ?: "") }
+                withContext(Dispatchers.IO) { XtreamVod.episodes(p, item.seriesId ?: "") }.also { noteSeriesEpisodes(item, it) }
             } catch (e: Exception) {
                 emptyList()
             }
@@ -4146,7 +4233,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     fun playEpisode(e: Episode) {
         val s = seriesOpen ?: return
-        playVod(VodItem("${s.key}:${e.season}:${e.number}", s.playlistId, "episode", "${s.name} · S${e.season} E${e.number} · ${e.title}", s.logo, e.url))
+        playVod(VodItem(episodeKey(s, e), s.playlistId, "episode", "${s.name} · S${e.season} E${e.number} · ${e.title}", s.logo, e.url))
     }
 
     fun playVod(item: VodItem, fromStart: Boolean = false) {
@@ -4179,7 +4266,13 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** The key an episode of [series] is played (and remembered) under. */
-    fun episodeKey(series: VodItem, e: Episode) = e.key.ifBlank { "${series.key}:${e.season}:${e.number}" }
+    /**
+     * An episode's key for its place and "watched": series, season, episode. (Up to 1.17.0 the series page used the
+     * provider's episode id, which says nothing about the series: such episodes never reached Continue watching or
+     * the account. Old keys move over when the series page loads, see [noteSeriesEpisodes].)
+     */
+    fun episodeKey(series: VodItem, e: Episode) = "${series.key}:${seasonNum(e.season)}:${e.number}"
+    private fun seasonNum(s: String) = s.trim().toIntOrNull() ?: Regex("\\d+").find(s)?.value?.toIntOrNull() ?: 0
 
     fun isWatched(key: String) = key in watched
 
@@ -4342,7 +4435,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             "All" -> vodOf(kind)
             "Recently added" -> titles(com.avidviewer.tv.data.Catalog.Query(g, vodPids(), newestFirst = true, limit = 200, grouped = true))
             "My List" -> prefs.myList.filter { if (kind == "series") it.kind == "series" else it.kind != "series" }
-            "Continue watching" -> catalog.byKeys(continueKeys()).filter { Catalog.group(it.kind) == g && !isVodHidden(it) }
+            "Continue watching" -> continueKeys().let { ks -> val at = ks.withIndex().associate { it.value to it.index }
+                catalog.byKeys(ks).filter { Catalog.group(it.kind) == g && !isVodHidden(it) }.sortedBy { at[it.key] ?: Int.MAX_VALUE } }
             else -> vodPrefetched.remove(prefetchKey(kind, c)) ?: titles(com.avidviewer.tv.data.Catalog.Query(g, vodPids(), category = c, grouped = true))
         }
     }
@@ -4380,6 +4474,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             try {
                 if (item.kind == "series") {
                     val (info, eps) = withContext(Dispatchers.IO) { XtreamVod.seriesInfo(p, item.seriesId ?: "") }
+                    noteSeriesEpisodes(item, eps)
                     vodInfo = info; detailEpisodes = eps
                     // Coming back from an episode keeps its season; opening the page goes to the next one up.
                     val back = lastEpisode?.takeIf { l -> eps.any { it.key == l.key && it.season == l.season && it.number == l.number } }

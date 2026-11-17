@@ -339,6 +339,21 @@ class Store(private val context: Context) {
         m.entries.sortedByDescending { it.value.at }.take(6000).forEach { (k, v) -> put(k, JSONObject().put("d", v.dur).put("t", v.at).apply { v.tv?.let { put("tv", it) } }) }
     }.toString())
 
+    /**
+     * 1.17.1: the latest episode known for each series (season, episode), when it was checked, and when a newer one
+     * than before was first seen (a new episode or season puts the series back in Continue watching). Shared.
+     */
+    data class SeriesLatest(val season: Int, val episode: Int, val checked: Long, val newAt: Long)
+
+    fun loadSeriesLatest(): Map<String, SeriesLatest> = runCatching {
+        val o = JSONObject(File(dir, "series-latest.json").readText())
+        o.keys().asSequence().associateWith { k -> o.getJSONObject(k).let { SeriesLatest(it.optInt("s"), it.optInt("e"), it.optLong("c"), it.optLong("n")) } }
+    }.getOrDefault(emptyMap())
+
+    fun saveSeriesLatest(m: Map<String, SeriesLatest>) = writeAtomic(File(dir, "series-latest.json"), JSONObject().apply {
+        m.entries.sortedByDescending { it.value.checked }.take(3000).forEach { (k, v) -> put(k, JSONObject().put("s", v.season).put("e", v.episode).put("c", v.checked).put("n", v.newAt)) }
+    }.toString())
+
     /** 1.17.0: what this TV last sent or received for each profile's history (see AppViewModel.syncHistory). */
     fun loadHistorySync(id: String): JSONObject = runCatching { JSONObject(personalFile("historysync.json", id).readText()) }.getOrDefault(JSONObject())
     fun saveHistorySync(o: JSONObject, id: String) = writeAtomic(personalFile("historysync.json", id), o.toString())
