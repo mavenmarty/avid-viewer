@@ -637,11 +637,6 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
      */
     var showWelcome by mutableStateOf(false)
 
-    fun welcomeAddPlaylist() {
-        showWelcome = false
-        screen = Screen.SETTINGS; settingsSection = "playlists"; navMode = NavMode.COLLAPSED
-    }
-
     /** Welcome screen › Sign in to your account: link this TV, then offer the account's backups (1.12.0). */
     var welcomeAccountOpen by mutableStateOf(false); private set
     fun welcomeSignIn() {

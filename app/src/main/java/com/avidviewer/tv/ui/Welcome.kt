@@ -32,14 +32,12 @@ import com.avidviewer.tv.R
 
 /**
  * The first screen of a new install (1.6.0): shown at start while there are no playlists. Avid Viewer comes with
- * no channels, so it says so, offers a setup code (highlighted), Add a playlist and Sign in to your account (link the
- * TV and restore a backup from the account, 1.12.0), and shows the user guide
- * as a QR code for a phone.
+ * no channels, so it says so. From 1.16.1 a device must be linked to an account before it gets playlists (licensing):
+ * the welcome screen has no Add a playlist; it shows this device's link code, and once linked, where to add
+ * playlists and Restore a backup.
  */
 @Composable
 fun WelcomeScreen(vm: AppViewModel) {
-    val add = remember { FocusRequester() }
-    LaunchedEffect(Unit) { focusWhenReady(vm) { runCatching { add.requestFocus() }.isSuccess } }
     Row(
         Modifier.fillMaxSize().background(C.Bg).padding(horizontal = 56.dp, vertical = 40.dp).testTag("welcome"),
         horizontalArrangement = Arrangement.spacedBy(48.dp),
@@ -55,16 +53,21 @@ fun WelcomeScreen(vm: AppViewModel) {
                 size = 16.sp, color = C.Soft, lines = Int.MAX_VALUE,
             )
             Label(
-                "It doesn't include any channels: add your provider's playlist, an Xtream Codes login (server, username, password) or an M3U link.",
+                "It doesn't include any channels: you add your provider's playlist (an Xtream Codes login or an M3U link) in your Avid Viewer account.",
                 size = 16.sp, color = C.Soft, lines = Int.MAX_VALUE,
             )
-            Label(
-                "Easier with a phone: link this device to your account with the code on the right, then add playlists at avidviewer.app/playlists, or restore another device's backup. No typing logins with the remote.",
-                size = 16.sp, color = C.Soft, lines = Int.MAX_VALUE,
-            )
-            Spacer(Modifier.height(6.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                TvButton("＋  Add a playlist", primary = true, modifier = Modifier.focusRequester(add).testTag("welcome-add")) { vm.welcomeAddPlaylist() }
+            if (vm.accountEmail == null) {
+                Label("To get started, link this device to your account", size = 20.sp, color = C.Text, weight = FontWeight.Bold, lines = 2, modifier = Modifier.testTag("welcome-steps"))
+                Label(
+                    "1. Scan the code on the right with your phone, or go to avidviewer.app/link and enter it.\n2. Sign in or make an account, and choose Add this device.\n3. Add your playlists at avidviewer.app/playlists. They arrive here within a minute, with no logins typed on the remote.",
+                    size = 16.sp, color = C.Soft, lines = Int.MAX_VALUE,
+                )
+            } else {
+                Label("This device is linked", size = 20.sp, color = C.Text, weight = FontWeight.Bold, lines = 2, modifier = Modifier.testTag("welcome-steps"))
+                Label(
+                    "Add your playlists at avidviewer.app/playlists and give them to a profile on this device. They arrive here within a minute while Avid Viewer is open. Or restore another device's backup.",
+                    size = 16.sp, color = C.Soft, lines = Int.MAX_VALUE,
+                )
             }
         }
         WelcomeLinkPanel(vm)
@@ -133,7 +136,7 @@ fun WelcomeAccountDialog(vm: AppViewModel) {
                             }
                         }
                         vm.backupStatus?.let { Label(it, size = 13.sp, color = C.Soft, lines = Int.MAX_VALUE) }
-                        if (list != null && list.isEmpty()) Label("Add a playlist or enter a setup code to get started; this device will back up to your account once you choose a backup PIN.", size = 13.sp, color = C.Muted, lines = Int.MAX_VALUE)
+                        if (list != null && list.isEmpty()) Label("No backups yet. Add playlists at avidviewer.app/playlists to get started; this device will back up to your account once you choose a backup PIN.", size = 13.sp, color = C.Muted, lines = Int.MAX_VALUE)
                     }
                 }
             }

@@ -2071,7 +2071,7 @@ class UsabilityTest {
         settle()
     }
 
-    /** 1.6.0: a new install (no playlists) opens on the welcome screen; Add a playlist goes to the add form. */
+    /** 1.6.0: a new install (no playlists) opens on the welcome screen; from 1.16.1 it only offers linking to an account. */
     @Test
     fun welcomeScreenOnANewInstall() {
         FakeAvidSite().use { site ->
@@ -2082,11 +2082,11 @@ class UsabilityTest {
             assertTrue(rule.onAllNodesWithText("K7M2-QX9P").fetchSemanticsNodes().isNotEmpty())
             assertTrue(vm.linkCode!!.qrUrl.endsWith("/link/?c=K7M2QX9P"))
             assertTrue(rule.onAllNodesWithTag("welcome-link-qr").fetchSemanticsNodes().isNotEmpty())
-            // Add a playlist is highlighted (setup codes were retired in 1.14.0).
-            waitFor("Add a playlist highlighted (focus: ${focused()})") { focused().contains("Add a playlist") }
+            // 1.16.1: a device must be linked to an account before it gets playlists: no Add a playlist here.
+            assertTrue(rule.onAllNodesWithText("Add a playlist", substring = true).fetchSemanticsNodes().isEmpty())
             assertTrue(rule.onAllNodesWithText("Enter a setup code").fetchSemanticsNodes().isEmpty())
-            press(listOf(Key.DirectionCenter))
-            waitFor("Settings › Playlists") { !vm.showWelcome && vm.screen == Screen.SETTINGS && vm.settingsSection == "playlists" }
+            assertTrue(rule.onAllNodesWithText("To get started, link this device to your account").fetchSemanticsNodes().isNotEmpty())
+            rule.runOnIdle { vm.showWelcome = false }
             waitFor("linking stopped when the welcome screen closed") { vm.linkCode == null }
         }
         // A TV with no playlists at all starts on it; one with playlists doesn't.
