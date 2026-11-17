@@ -46,7 +46,7 @@ While Avid Viewer is open, a device picks up changes within a minute: a playlist
 
 **You type a login only when you add or edit a playlist.** The first time, choose **Set up with passkey** on the Playlists page. From then on the website keeps logins locked with a key that only your **passkey** can unlock: when a profile goes to a new device, the page asks for your passkey (not the login) and locks a copy for that device, and **Edit** can show the saved login. Your devices also send the logins they have (locked so only your browser opens them), so playlists you typed on a TV, or saved before 1.15.0, don't need typing again. Without a passkey (or with a password manager that can't do this yet), the login goes to the devices that have the playlist when you save it, and you type it again for new ones.
 
-**Playlists added on a TV** (1.15.1) are listed under **Added on your devices**. **Add to account** makes one an account playlist for that device's profiles; the device keeps its copy, favorites and everything else.
+**Playlists added on a TV** (1.15.1) are listed under **Added on your devices**. **Add to account** makes one an account playlist for that device's profiles; the device keeps its copy, favorites and everything else. If you add a playlist on the website that a device already has (the same server and username, or the same M3U link), that device uses its own copy for it rather than adding a second one (1.15.2).
 
 **Removing a playlist:** **Remove** on its row takes it off every profile; each device removes it at its next check-in. It stays listed, tagged **Removing**, until every device has confirmed.
 
@@ -737,9 +737,17 @@ Every public release since 1.0.35, newest first. From 1.1.0, versions are number
 
 ### 1.15.2 — November 17, 2026, 6:57 AM CT (current)
 
+**Release notes**
+
+- **Removing a playlist no longer freezes the app.** On a Fire TV, removing a big playlist could stop the app responding until Fire OS closed it.
+- **No second copies of a playlist.** A playlist from your account that's already on the device (typed with the remote) takes over that copy, keeping its favorites and history. Two copies already on a device become one, keeping the device's own, and the TV says so.
+- **Website:** adding a playlist with the name of one a device already has points you to **Add to account** instead.
+
 **Change log**
 
-- Removing a playlist no longer freezes the app; a playlist from the account that's already on the device takes that one over instead of adding a second copy, and existing copies become one
+- Removing a playlist deletes its channels, guide and movies in the background
+- The same playlist from the account and from the device (same server and username, or the same M3U link) is one playlist; existing copies merge
+- Website: duplicate-name warning when adding a playlist
 
 ### 1.15.1 — November 17, 2026, 6:12 AM CT
 
