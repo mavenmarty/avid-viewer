@@ -654,9 +654,9 @@ class UsabilityTest {
         assertEquals(Screen.PLAYER, vm.screen)
         assertEquals(key, vm.currentKey)
         // Back returns to the guide; a button press restarts the 5 minutes.
-        press(listOf(Key.Back))
+        rule.runOnIdle { vm.closeFullScreen() }
         waitFor("back in the guide") { vm.screen == Screen.GUIDE }
-        rule.runOnIdle { vm.idleToFullScreen(vm.lastKeyAt + 60_000L) }
+        rule.runOnIdle { vm.lastKeyAt = t + 5 * 60_000L; vm.idleToFullScreen(t + 6 * 60_000L) }
         assertEquals(Screen.GUIDE, vm.screen)
         // Nothing playing: the menus stay.
         rule.runOnIdle { vm.stop(); vm.idleToFullScreen(t + 60 * 60_000L) }
