@@ -976,6 +976,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         if (android.os.Build.FINGERPRINT != "robolectric") viewModelScope.launch {
             while (true) { delay(30_000); com.avidviewer.tv.data.CrashLog.tick(getApplication()) }
         }
+        viewModelScope.launch {
+            while (true) { delay(10_000); runCatching { idleToFullScreen() } }
+        }
         // The catalog's hidden marks belong to one profile: put this profile's in place if another's are there,
         // or (a Kids profile) its categories may have changed.
         if (store.catalogProfile != profile.id || kidsMode) applyProfileVodLimits()
@@ -2555,6 +2558,28 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         if (currentKey != key || player.mediaItemCount == 0 || playerError != null) start(c)
         screen = Screen.PLAYER
         flashOsd(contextLabel())
+    }
+
+    // ---------------- burn-in guard (1.14.0) ----------------
+    /** How long the menus may stay on screen over a playing preview with no button pressed. */
+    internal var idleFullScreenMs = 5 * 60_000L
+    private var idleFrom = android.os.SystemClock.uptimeMillis()
+    /** Counts from now (the app came back on screen), not from a button pressed before it left. */
+    fun resetIdle() { idleFrom = android.os.SystemClock.uptimeMillis() }
+
+    /**
+     * Owner request (Nov 16): with a channel playing in a preview and the menus on screen, 5 minutes without a button
+     * press goes to full screen, so still menus don't burn into the screen. Back returns to where the viewer was.
+     */
+    internal fun idleToFullScreen(nowUptime: Long = android.os.SystemClock.uptimeMillis()) {
+        if (screen == Screen.PLAYER || showWelcome || vodPlaying != null) return
+        val key = currentKey ?: return
+        if (player.mediaItemCount == 0 || !player.playWhenReady || playerError != null) return
+        if (player.playbackState == Player.STATE_IDLE || player.playbackState == Player.STATE_ENDED) return
+        if (setupCodeOpen || welcomeAccountOpen || pendingRestore != null) return
+        if (nowUptime - maxOf(lastKeyAt, idleFrom) < idleFullScreenMs) return
+        trail("menus idle: full screen")
+        openFullScreen(key, if (screen == Screen.SPORTS) PlayContext.SPORTS else PlayContext.GROUP)
     }
 
     fun closeFullScreen() {

@@ -636,6 +636,33 @@ class UsabilityTest {
         }
     }
 
+    /** 1.14.0: a preview with the menus on screen goes full screen after 5 minutes without a button press. */
+    @Test
+    fun idleMenusOverAPlayingPreviewGoFullScreen() {
+        go(Screen.GUIDE)
+        rule.runOnIdle { vm.chooseGroup(TestData.P1, "NEWS") }
+        waitFor("channels") { vm.channelsIn("NEWS").isNotEmpty() }
+        val key = vm.channelsIn("NEWS").first().key
+        rule.runOnIdle { vm.preview(key) }
+        settle()
+        val t = android.os.SystemClock.uptimeMillis()
+        // 4 minutes: nothing happens.
+        rule.runOnIdle { vm.idleToFullScreen(t + 4 * 60_000L) }
+        assertEquals(Screen.GUIDE, vm.screen)
+        // 5 minutes without a button: full screen on the channel that was playing.
+        rule.runOnIdle { vm.idleToFullScreen(t + 5 * 60_000L + 1) }
+        assertEquals(Screen.PLAYER, vm.screen)
+        assertEquals(key, vm.currentKey)
+        // Back returns to the guide; a button press restarts the 5 minutes.
+        press(listOf(Key.Back))
+        waitFor("back in the guide") { vm.screen == Screen.GUIDE }
+        rule.runOnIdle { vm.idleToFullScreen(vm.lastKeyAt + 60_000L) }
+        assertEquals(Screen.GUIDE, vm.screen)
+        // Nothing playing: the menus stay.
+        rule.runOnIdle { vm.stop(); vm.idleToFullScreen(t + 60 * 60_000L) }
+        assertEquals(Screen.GUIDE, vm.screen)
+    }
+
     @Test
     fun reportABugShowsTheAddressDetailsAndQrCode() {
         go(Screen.SETTINGS)
