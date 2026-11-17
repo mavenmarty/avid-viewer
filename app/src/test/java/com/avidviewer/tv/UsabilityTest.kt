@@ -1624,6 +1624,8 @@ class UsabilityTest {
 
     /** A tiny Xtream Codes provider on this machine: a login, and a series with two seasons of episodes. */
     private class FakeProvider(private val plot: String = "A show for testing.") : AutoCloseable {
+        /** A third season appears (a new episode is released). */
+        @Volatile var season3 = false
         private val socket = java.net.ServerSocket(0, 50, java.net.InetAddress.getByName("127.0.0.1"))
         val port get() = socket.localPort
         private val thread = Thread {
@@ -1640,7 +1642,8 @@ class UsabilityTest {
                             target.contains("action=get_series_info") -> """{"info":{"name":"Test Show","plot":"$plot"},"episodes":{
                                 "1":[{"id":"101","episode_num":1,"title":"Pilot","container_extension":"mp4","info":{"duration":"00:42:00"}},
                                      {"id":"102","episode_num":2,"title":"Second","container_extension":"mp4","info":{}}],
-                                "2":[{"id":"201","episode_num":1,"title":"Season Two Opener","container_extension":"mkv","info":{}}]}}"""
+                                "2":[{"id":"201","episode_num":1,"title":"Season Two Opener","container_extension":"mkv","info":{}}]""" +
+                                (if (season3) ""","3":[{"id":"301","episode_num":1,"title":"Season Three","container_extension":"mkv","info":{}}]""" else "") + "}}"
                             target.contains("action=") -> "[]"
                             else -> """{"user_info":{"auth":1,"status":"Active"},"server_info":{}}"""
                         }.toByteArray()
@@ -1705,6 +1708,46 @@ class UsabilityTest {
         press(listOf(Key.Back))
         waitFor("Back opens the main menu on Series (focus: ${focused()} mode=${vm.navMode})") { vm.navMode == NavMode.FULL && focused().contains("Series") }
         assertEquals(Screen.SERIES, vm.screen)
+    }
+
+    /**
+     * 1.17.1 (owner report Nov 17): a series stays in Continue watching until its latest episode is watched, and comes
+     * back when a new episode or season appears. Episodes watched from the series page before 1.17.1 (saved under the
+     * provider's episode id) move to the series' own keys.
+     */
+    @Test
+    fun aSeriesStaysInContinueWatchingUntilItsLatestEpisodeIsWatched() {
+        FakeProvider().use { server ->
+            rule.runOnIdle { vm.addPlaylist("Fake provider", "xtream", "http://127.0.0.1:${server.port}", "u", "", "", "", liveOn = false, vodOn = true) }
+            waitFor("the provider to be added (status=${vm.status})") { vm.playlists.any { it.name == "Fake provider" } }
+            val pid = vm.playlists.first { it.name == "Fake provider" }.id
+            val show = com.avidviewer.tv.data.VodItem("$pid:s78", pid, "series", "Test Show", null, "", seriesId = "78", category = "Shows")
+            rule.runOnIdle { vm.catalog.replace(pid, sequenceOf(show)) { false } }
+            // Watched on 1.17.0 from the series page: saved under the provider's episode id.
+            rule.runOnIdle { vm.markWatched("$pid:e101") }
+            go(Screen.SERIES)
+            rule.runOnIdle { vm.openVodDetail(show) }
+            waitFor("episodes") { vm.detailEpisodes?.size == 3 }
+            assertTrue("moved to the series' key", vm.isWatched("$pid:s78:1:1"))
+            assertFalse(vm.isWatched("$pid:e101"))
+            assertEquals(listOf(show.key), vm.continueKeysForTests())
+            rule.runOnIdle { vm.closeVodDetail() }
+            // Watched up to the latest episode (S2 E1): off the list.
+            rule.runOnIdle { vm.markWatched("$pid:s78:1:2"); vm.markWatched("$pid:s78:2:1") }
+            assertTrue(vm.continueKeysForTests().isEmpty())
+            // A new season appears: back on the list.
+            server.season3 = true
+            rule.runOnIdle { vm.openVodDetail(show) }
+            waitFor("the new season") { vm.detailEpisodes?.size == 4 }
+            rule.runOnIdle { vm.closeVodDetail() }
+            assertEquals(listOf(show.key), vm.continueKeysForTests())
+            // Removed with Menu: off until something new happens; watching the new season's episode finishes it.
+            rule.runOnIdle { vm.removeFromContinue(show) }
+            assertTrue(vm.continueKeysForTests().isEmpty())
+            Thread.sleep(5)
+            rule.runOnIdle { vm.markWatched("$pid:s78:3:1") }
+            assertTrue(vm.continueKeysForTests().isEmpty())
+        }
     }
 
     /** Nov 12: from My List, a series with several copies (versions line) left no room for its episodes. */
