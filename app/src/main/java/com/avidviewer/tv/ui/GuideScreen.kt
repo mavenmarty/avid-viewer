@@ -164,8 +164,8 @@ fun GuideScreen(vm: AppViewModel) {
         // The first favorite was just added from the suggestions row: the highlight stays there (#18).
         // BUG-033: also while a suggestion is getting the highlight back after Add to List or ✕ (the picker had it,
         // so the row didn't count as focused when Favorites went from empty to one channel).
-        val suggestionBusy = vm.suggestionsFocused || vm.suggestionReturn != null || android.os.SystemClock.uptimeMillis() - vm.suggestionLandedAt < 3000
-        if (mode != GuideFocus.KEEP && vm.selectedGroup == FAV_GROUP && suggestionBusy && vm.suggestions().isNotEmpty()) return@LaunchedEffect
+        val returning = vm.suggestionReturn != null || android.os.SystemClock.uptimeMillis() - vm.suggestionLandedAt < 3000
+        if (vm.selectedGroup == FAV_GROUP && vm.suggestions().isNotEmpty() && (returning || (mode != GuideFocus.KEEP && vm.suggestionsFocused))) return@LaunchedEffect
         when (mode) {
             // Newly chosen category: start at the top.
             GuideFocus.TOP -> { scope.launch { listState.scrollToItem(0) }; pendingFocus = 0 }
