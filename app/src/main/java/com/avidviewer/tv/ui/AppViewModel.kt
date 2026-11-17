@@ -2529,6 +2529,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     // ---------------- playlists and profiles from avidviewer.app (1.14.0, profiles 1.15.0) ----------------
     private var reported = ""
     private var accountSyncBusy = false
+    private var accountSyncAgain = false
 
     /**
      * Reports this device's key and profiles (when they changed; the first time the account takes the profiles in),
@@ -2537,8 +2538,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
      */
     fun syncAccountPlaylists() {
         val token = account.token ?: return
-        if (accountSyncBusy) return
-        accountSyncBusy = true
+        // One at a time; a request during a sync runs right after it, so nothing asked for is lost.
+        if (accountSyncBusy) { accountSyncAgain = true; return }
+        accountSyncBusy = true; accountSyncAgain = false
         viewModelScope.launch {
             try {
                 val key = withContext(Dispatchers.IO) { account.deviceKey() } ?: return@launch
@@ -2583,7 +2585,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 }
             } catch (_: Exception) {
                 // Offline, or the site is busy: try again at the next check.
-            } finally { accountSyncBusy = false }
+            } finally {
+                accountSyncBusy = false
+                if (accountSyncAgain) { accountSyncAgain = false; syncAccountPlaylists() }
+            }
         }
     }
 
