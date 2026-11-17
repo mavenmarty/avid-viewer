@@ -127,12 +127,17 @@ object CrashLog {
         val s = session(context)
         if (!s.exists()) return false
         val marker = runCatching { s.readText() }.getOrDefault("")
+        val markerAt = s.lastModified()
         s.delete()
         if (file(context).exists()) return false
         // Nov 17 (AVR-b5a685ae, 1.15.2 → 1.16.0): an update installed while the app was on screen ends the old version
         // without onStop. A marker left by another version means the app was updated, not that it crashed.
+        // Nov 17 (AVR-9276c15f, 1.17.0 → 1.17.1): this runs from the Application, before MainActivity sets [version],
+        // so the version is read here; and an install after the marker's last tick is an update too.
+        val now = version.ifEmpty { installedVersion(context) }
         val was = Regex("^Avid Viewer (\\S+) ·").find(marker.lineSequence().firstOrNull().orEmpty())?.groupValues?.get(1)
-        if (was != null && version.isNotEmpty() && was != version) return false
+        if (was != null && now.isNotEmpty() && was != now) return false
+        if (updatedAfter(context, markerAt)) return false
         val reason = exitReason(context)
         if (reason?.userStopped == true) return false // force-stopped in Settings: not a crash
         val text = marker.lineSequence().firstOrNull().orEmpty().ifBlank { "Avid Viewer" } + "\n" +
@@ -144,6 +149,15 @@ object CrashLog {
         runCatching { file(context).writeText(text.take(12_000)) }
         return true
     }
+
+    private fun installedVersion(context: Context): String = runCatching {
+        context.packageManager.getPackageInfo(context.packageName, 0).versionName
+    }.getOrNull().orEmpty()
+
+    /** The app was installed (updated) after [markerAt], the marker's last write. */
+    private fun updatedAfter(context: Context, markerAt: Long): Boolean = markerAt > 0 && runCatching {
+        context.packageManager.getPackageInfo(context.packageName, 0).lastUpdateTime > markerAt
+    }.getOrDefault(false)
 
     private class Exit(val text: String, val detail: String?, val userStopped: Boolean)
 
@@ -162,8 +176,8 @@ object CrashLog {
                 android.app.ApplicationExitInfo.REASON_SIGNALED -> "the system stopped it"
                 else -> "closed by the system (reason ${e.reason})"
             }
-            val user = e.reason == 12 /* REASON_PACKAGE_STATE_CHANGE */ ||
-                e.reason == 14 /* REASON_PACKAGE_UPDATED (Android 14) */ ||
+            val user = e.reason == 15 /* REASON_PACKAGE_STATE_CHANGE */ ||
+                e.reason == 16 /* REASON_PACKAGE_UPDATED (Android 14) */ ||
                 e.reason == android.app.ApplicationExitInfo.REASON_USER_REQUESTED ||
                 e.reason == android.app.ApplicationExitInfo.REASON_USER_STOPPED
             val detail = "Exit: ${stamp(e.timestamp)}, memory at exit ${e.pss / 1024} MB" + (e.description?.let { " · " + it.take(200) } ?: "")

@@ -2,7 +2,7 @@
 
 <!-- The version below and the Release notes section are updated automatically after each published build
      (.github/workflows/user-guide.yml). Feature descriptions are written by hand. -->
-This guide covers **Avid Viewer 1.17.0**, the current public release. Avid Viewer is an IPTV player for Android TV and Fire TV. You bring your own provider (an Xtream Codes login or an M3U link); the app doesn't include any channels.
+This guide covers **Avid Viewer 1.17.1**, the current public release. Avid Viewer is an IPTV player for Android TV and Fire TV. You bring your own provider (an Xtream Codes login or an M3U link); the app doesn't include any channels.
 
 **Contents:** [Getting started](#1-getting-started) · [Main menu](#2-main-menu) · [TV Guide](#3-tv-guide) · [Full-screen playback](#4-full-screen-playback) · [Search](#5-search) · [Discover](#6-discover) · [Sports](#7-sports) · [Movies and Series](#8-movies-and-series) · [Settings](#9-settings) ([Profiles](#profiles)) · [Privacy](#10-privacy) · [Troubleshooting](#11-troubleshooting) · [Control4](#12-control4) · [Supplemental services](#13-supplemental-services) · [Cable & satellite](#14-using-your-cable-or-satellite-subscription) · [Release notes](#release-notes)
 
@@ -66,7 +66,7 @@ While Avid Viewer is open, a device picks up changes within a minute: a playlist
 From 1.17.0, where a profile stopped in each movie and episode, and the episodes it finished, follow it to its other TVs:
 
 - A title's page says where it stopped on another TV (for example **Stopped at 34:12 on Living room, today 8:40 PM**) with **▶ Resume** and **Start over**. A series opens on the next episode as usual, including episodes finished on another TV.
-- **Continue watching** (Movies and Series) lists the newest first, series included; a place from another TV says **from Bedroom**. **Menu** on a poster there removes it, on every TV.
+- **Continue watching** (Movies and Series) lists the newest first; a place from another TV says **from Bedroom**. A series stays there until its latest episode is watched, and comes back when a new episode or season appears (1.17.1). **Menu** on a poster there removes it, on every TV; a removed series stays off until something new happens to it.
 - The same title on another playlist (another provider, a 4K copy) picks up there too, matched by title and year, or series, season and episode.
 - **Private:** everything is locked on the TV with a key only your TVs and your passkey have; avidviewer.app and its admins can't read titles, times or TV names. The first time, unlock once with your passkey on the website (Needs your attention says when a TV is waiting for the key). Live TV is never sent.
 - **On by default.** Turn it off for the whole account (Account tab, **Keep my watch history**) or for one profile (the profile's **Watching** tab, which also lists its places with **Mark watched** and **Remove**, and has **Clear history**). Off deletes what your account holds; each TV keeps its own place. **Pause history** on a TV stops that TV sending.
@@ -319,7 +319,7 @@ Sports lists real games from **ESPN's schedules** for today and the next 2 days,
 
 ![Series in the Grid layout](images/series-grid.jpg)
 
-- **Left side**: Playlists, then categories: **All**, **Recently added**, **Continue watching**, **My List**, and your provider's categories.
+- **Left side**: Playlists, then categories: **All**, **Recently added**, **Continue watching** (movies part-way, and series until their latest episode is watched), **My List**, and your provider's categories.
 - **Right side**: posters for the chosen category. A category you pause on is read ahead, so OK shows it at once.
 - **Posters fill their tiles.** The title and year appear on a dark fade only on the highlighted poster, and on titles that have no artwork (most posters already show their title). The highlighted poster grows a little and gets a ring. **✓** in a corner means the title is in My List.
 - **Layouts**: the buttons above the posters switch between three ways of browsing. Each profile remembers its choice; **Up** from the top row of posters reaches them.
@@ -762,7 +762,26 @@ Every public release since 1.0.35, newest first. From 1.1.0, versions are number
 
 <!-- new-releases: entries for new builds are added automatically below this line -->
 
-### 1.17.0 — November 17, 2026, 10:38 AM CT (current)
+### 1.17.1 — November 17, 2026, 2:48 PM CT (current)
+
+**Release notes**
+
+- **Series in Continue watching:** a series stays until its latest episode is watched, and comes back when a new episode or season appears (before, series never showed there). Series watched before 1.17.1 come back once their page is opened. Removing a series keeps it off every TV until something new happens to it.
+- **Website:** Continue watching shows one row per series; the header says **Get the app** and **My account** (which opens Playlists).
+- **Suggestions:** adding a suggested channel to a list, or ✕, puts the highlight on the next suggestion.
+- **OK on a category always opens it.**
+- The temporary buffer log (from 1.10.0) is removed.
+
+**Change log**
+
+- Remove the temporary buffer log (1.10.0)
+- Series stay in Continue watching until the latest episode is watched
+- BUG-033, adding or dismissing a suggestion moves the highlight to the next one
+- OK on a category always opens it (BUG-045); test for BUG-033
+- Adding a suggested channel to a list keeps the highlight on the suggestions (BUG-033)
+- A suggestion getting the highlight back wins over the guide in every mode (BUG-033)
+
+### 1.17.0 — November 17, 2026, 10:38 AM CT
 
 **Release notes**
 

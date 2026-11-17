@@ -850,6 +850,52 @@ class UsabilityTest {
         }
     }
 
+    /** Nov 17: changing what one profile sees on the website must not change what another profile on the TV sees. */
+    @Test
+    fun hidingCategoriesForOneProfileLeavesTheOthersAlone() {
+        FakeAvidSite().use { site ->
+            restartWith { st -> st.savePlaylists(st.loadPlaylists().map { if (it.id == TestData.P1) it.copy(remoteId = "acctP1") else it }) }
+            linkForTest(site)
+            site.profileMap = mapOf("main" to "acctEvan")
+            fun vis(vararg hidden: String) = org.json.JSONObject().put("acctP1", org.json.JSONObject()
+                .put("hidden", org.json.JSONObject().put("live", org.json.JSONArray(hidden.toList())).put("movie", org.json.JSONArray()).put("series", org.json.JSONArray()))
+                .put("allowed", org.json.JSONObject().put("live", org.json.JSONArray()).put("movie", org.json.JSONArray()).put("series", org.json.JSONArray()))
+                .put("channels", org.json.JSONArray()))
+            fun send(evan: org.json.JSONObject, maven: org.json.JSONObject) {
+                site.profiles = org.json.JSONArray()
+                    .put(org.json.JSONObject().put("id", "acctEvan").put("name", "Evan").put("color", 0).put("pin", "")
+                        .put("playlists", org.json.JSONArray().put("acctP1")).put("visibility", evan))
+                    .put(org.json.JSONObject().put("id", "acctMaven").put("name", "Maven").put("color", 1).put("pin", "")
+                        .put("playlists", org.json.JSONArray().put("acctP1")).put("visibility", maven))
+                rule.runOnIdle { vm.syncAccountPlaylists() }
+            }
+            val st = com.avidviewer.tv.data.Store(ApplicationProvider.getApplicationContext<Application>())
+            fun hiddenFor(name: String): Set<String> {
+                val p = vm.profiles.list.first { it.name == name }
+                return if (p.id == vm.profile.id) vm.prefs.hiddenGroups else st.loadPrefs(p.id).hiddenGroups
+            }
+            val nfl = vm.liveCategoryId(TestData.P1, "SPORTS | NFL"); val news = vm.liveCategoryId(TestData.P1, "NEWS")
+            send(vis("SPORTS | NFL"), vis())
+            waitFor("two profiles") { vm.profiles.list.size == 2 && vm.profiles.list.all { it.remoteId.isNotEmpty() } }
+            waitFor("Evan's hides") { nfl in hiddenFor("Evan") }
+            assertFalse(nfl in hiddenFor("Maven"))
+            // Maven's change on the website, while Evan is in use.
+            send(vis("SPORTS | NFL"), vis("NEWS"))
+            waitFor("Maven's hides") { news in hiddenFor("Maven") }
+            assertEquals("Evan in use: unchanged", setOf(nfl), hiddenFor("Evan").filter { it.startsWith(TestData.P1) }.toSet())
+            // Again with Maven in use.
+            rule.runOnIdle { vm.chooseProfile(vm.profiles.list.first { it.name == "Maven" }.id) }
+            waitFor("Maven in use") { vm.profile.name == "Maven" }
+            send(vis("SPORTS | NFL"), vis())
+            waitFor("Maven shows NEWS again") { news !in hiddenFor("Maven") }
+            assertEquals("Maven in use: Evan unchanged", setOf(nfl), hiddenFor("Evan").filter { it.startsWith(TestData.P1) }.toSet())
+            send(vis(), vis("NEWS"))
+            waitFor("Maven hides NEWS") { news in hiddenFor("Maven") }
+            assertEquals("Evan's own change applied only to Evan", emptySet<String>(), hiddenFor("Evan").filter { it.startsWith(TestData.P1) }.toSet())
+            assertEquals(setOf(news), hiddenFor("Maven").filter { it.startsWith(TestData.P1) }.toSet())
+        }
+    }
+
     /**
      * 1.15.1: a device with account profiles tells the account every playlist it has, with each login locked for the
      * account's own key (only the owner's browser opens it); "Add to account" then makes a playlist typed on the TV that
