@@ -2530,11 +2530,11 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 val prof = reportProfiles()
                 val sig = key.publicB64 + prof + profiles.managed
                 if (sig != reported) {
-                    val vis = if (profiles.managed) null else withContext(Dispatchers.IO) { runCatching { reportVisibility() }.getOrNull() }
+                    val vis = if (profiles.list.any { it.remoteId.isNotEmpty() }) null else withContext(Dispatchers.IO) { runCatching { reportVisibility() }.getOrNull() }
                     val map = withContext(Dispatchers.IO) { com.avidviewer.tv.data.AccountApi.report2(token, key.publicB64, prof, vis, accountApi) }
-                    if (!profiles.managed) {
+                    if (!profiles.managed || map.isNotEmpty()) {
                         // The account has these profiles now: remember which account profile each one is.
-                        saveProfiles(profiles.copy(managed = true, list = profiles.list.map { p -> map[p.id]?.let { p.copy(remoteId = it) } ?: p }))
+                        saveProfiles(profiles.copy(managed = true, list = profiles.list.map { p -> map[p.id]?.takeIf { p.remoteId.isEmpty() }?.let { p.copy(remoteId = it) } ?: p }))
                         account.profilesHash = ""
                     }
                     reported = key.publicB64 + reportProfiles() + profiles.managed
