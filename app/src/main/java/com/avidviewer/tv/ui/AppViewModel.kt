@@ -887,7 +887,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Details of the last crash, if the app closed unexpectedly (shown once at start and in Settings › About). */
     // Closed while on screen last time with nothing caught (the TV freed memory, a native crash): that counts too.
-    var lastCrash by mutableStateOf(com.avidviewer.tv.data.CrashLog.run { adoptUncleanExit(app); read(app) }); private set
+    var lastCrash by mutableStateOf(com.avidviewer.tv.data.CrashLog.read(app)); private set // adopted in AvidViewerApp.onCreate
     var crashNoticeSeen by mutableStateOf(false)
 
     fun clearCrash() { com.avidviewer.tv.data.CrashLog.clear(getApplication()); lastCrash = null }
