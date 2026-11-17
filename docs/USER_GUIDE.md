@@ -180,6 +180,7 @@ While you're moving it, the item has a blue outline. A category shows its positi
 - **OK, Left, Right or Info**: show the info bar (channel number and name, ★ if it's a favorite, playlist, what's on now with times, and **Up next**). It hides after 5 seconds.
 - **Menu**: open **Picture & sound** (below), which also has **＋ Add to List…** for the channel you're watching.
 - **Back**: return to the screen you came from.
+- **Full screen by itself** (from 1.14.0): when a channel is playing in a preview (TV Guide, Favorites, Sports…) and no button is pressed for 5 minutes, the app goes to full screen on that channel, so still menus don't burn into the screen. **Back** returns to where you were. Nothing playing: the menus stay.
 
 ### Movies and episodes
 
@@ -720,12 +721,22 @@ Every public release since 1.0.35, newest first. From 1.1.0, versions are number
 
 ### 1.14.0 — November 16, 2026, 7:40 PM CT (current)
 
+**Release notes**
+
+- **Playlists from your phone.** On avidviewer.app/playlists, enter a playlist and choose which of your linked devices get it and, on each, which profiles can see it. Devices pick it up within a minute while Avid Viewer is open. Edit or remove it there too. See [Set up with your phone](#set-up-with-your-phone).
+- **Playlists per profile.** A playlist sent from the website can be limited to some profiles; the others don't see it anywhere.
+- **Setup codes retired.** The website's setup page and **Enter a setup code** are gone: link the device with the code on its screen, then send playlists from the website.
+- **No more crash message at every start.** 1.12.0 and 1.13.0 reported "closed while in use" each time the app opened; nothing had actually gone wrong.
+- **Full screen after 5 minutes.** With a channel playing in a preview and no button pressed for 5 minutes, the app goes full screen to avoid screen burn-in.
+
 **Change log**
 
-- Every start reported a crash (the unclean-exit check ran after the app marked itself on screen); check at app start
-- After 5 minutes without a button press over a playing preview, go full screen (burn-in guard)
-- Idle full screen closes through the view model
-- Playlists from avidviewer.app/playlists arrive on linked devices for the chosen profiles; setup codes retired
+- Device key (P-256, kept encrypted with the Android Keystore) and profiles reported to the account; inbox checked once a minute while on screen; logins opened on the device (ECDH + HKDF-SHA256 + AES-GCM) and checked like hand-added ones; acknowledgements back to the account
+- Playlists carry where they came from and the profiles that see them (kept in backups); the profile in use sees only its playlists
+- Setup codes removed from the app and the website (/setup/ goes to /playlists/)
+- The unclean-exit check runs when the app starts, before any screen marks itself on screen
+- Idle full screen from previews (5 minutes; Back returns)
+- Website: Playlists page, devices' keys and profiles, admin dashboard shows playlists and whether backups are on; deploys keep values added in the Cloudflare dashboard
 
 ### 1.13.0 — November 16, 2026, 5:51 PM CT
 
