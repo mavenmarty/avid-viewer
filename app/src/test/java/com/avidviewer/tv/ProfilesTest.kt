@@ -69,4 +69,21 @@ class ProfilesTest {
         assertEquals("showcase", back.get("p2")!!.vodLayout)
         assertEquals("midnight", back.owner.theme)
     }
+
+    /** 1.15.0 launch rules (decided Nov 16). */
+    @Test
+    fun whichProfileOpensAtStart() {
+        val dad = Profile(Profile.OWNER, "Dad"); val mom = Profile("mom", "Mom").withPin("1111")
+        val k1 = Profile("k1", "Kids", kids = true); val k2 = Profile("k2", "Teens", kids = true)
+        assertEquals("one profile: no profiles at all", ProfileSet.Launch(Profile.OWNER), ProfileSet(listOf(dad)).launch())
+        assertEquals("Kids: the first in order, with the splash", ProfileSet.Launch("k1", splash = true), ProfileSet(listOf(dad, mom, k1, k2), active = "mom").launch())
+        assertEquals("the last Kids profile used here", ProfileSet.Launch("k2", splash = true), ProfileSet(listOf(dad, mom, k1, k2), active = "mom", lastKids = "k2").launch())
+        assertEquals("no Kids: the last profile, no splash", ProfileSet.Launch("sam"), ProfileSet(listOf(dad, Profile("sam", "Sam")), active = "sam").launch())
+        assertEquals("…asking for its own PIN", ProfileSet.Launch("mom", choose = true), ProfileSet(listOf(dad, mom), active = "mom").launch())
+        // Profiles from the account may leave out the device's first profile; it doesn't come back on reading.
+        val acct = ProfileSet(listOf(Profile("a1", "Mom", remoteId = "a1"), Profile("a2", "Kids", kids = true, remoteId = "a2")), active = "a1", managed = true)
+        assertEquals(acct, ProfileSet.fromJson(acct.toJson()))
+        assertFalse("an account profile is a parent only if the account says so", Profile(Profile.OWNER, "Dad", remoteId = "x").isParent)
+        assertTrue(Profile(Profile.OWNER, "Me").isParent)
+    }
 }

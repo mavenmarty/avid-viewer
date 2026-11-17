@@ -21,6 +21,15 @@ class FakeAvidSite : AutoCloseable {
     @Volatile var report: org.json.JSONObject? = null
     val inbox = mutableListOf<org.json.JSONObject>()
     val acks = java.util.Collections.synchronizedList(mutableListOf<org.json.JSONObject>())
+    /** 1.15.0 account profiles: what /api/tv/report answers the first time (local id → account id), the device's profiles. */
+    @Volatile var profileMap: Map<String, String> = emptyMap()
+    @Volatile var managed = false
+    @Volatile var profiles: org.json.JSONArray? = null
+    val catalogs = java.util.Collections.synchronizedList(mutableListOf<org.json.JSONObject>())
+    val playing = java.util.Collections.synchronizedList(mutableListOf<org.json.JSONObject>())
+    /** The next Watching now report is told to stop (Stop stream on the website). */
+    @Volatile var stopNext = false
+    private fun profilesHash() = profiles?.toString()?.hashCode()?.toString(16) ?: ""
     /** One backup per TV: device id → (TV name, file text, PIN). */
     val backups = java.util.concurrent.ConcurrentHashMap<String, Triple<String, String, String>>()
     private fun deviceOf(auth: String) = if (auth.startsWith("Bearer TVTOKEN_claimed")) "d2" else "d1"
@@ -73,8 +82,23 @@ class FakeAvidSite : AutoCloseable {
             }).toString()
             path.startsWith("/api/tv/backup?device=") -> backups[path.substringAfter("device=")]?.let { 200 to org.json.JSONObject().put("data", it.second).toString() }
                 ?: (404 to """{"error":"That backup is no longer in your account."}""")
-            path == "/api/tv/report" -> { report = org.json.JSONObject(body); 200 to """{"ok":true}""" }
-            path == "/api/tv/inbox" -> 200 to org.json.JSONObject().put("items", org.json.JSONArray(synchronized(inbox) { inbox.toList() })).toString()
+            path == "/api/tv/report" -> {
+                report = org.json.JSONObject(body)
+                if (report!!.optInt("v") == 2) managed = true
+                200 to org.json.JSONObject().put("ok", true).put("managed", managed).put("profileMap", org.json.JSONObject(profileMap)).toString()
+            }
+            path.startsWith("/api/tv/inbox") && method == "GET" -> 200 to org.json.JSONObject().put("items", org.json.JSONArray(synchronized(inbox) { inbox.toList() })).apply {
+                if (managed) {
+                    put("managed", true).put("profilesHash", profilesHash())
+                    if (path.substringAfter("ph=", "") != profilesHash()) put("profiles", profiles ?: org.json.JSONArray())
+                }
+            }.toString()
+            path == "/api/tv/catalog" -> { catalogs += org.json.JSONObject(body); 200 to """{"ok":true}""" }
+            path == "/api/tv/playing" -> {
+                playing += org.json.JSONObject(body)
+                val stop = stopNext; stopNext = false
+                200 to org.json.JSONObject().put("ok", true).put("stop", stop).toString()
+            }
             path == "/api/tv/inbox/ack" -> {
                 val a = org.json.JSONObject(body); acks += a
                 synchronized(inbox) { inbox.removeAll { it.getString("playlistId") == a.getString("playlistId") && it.getInt("version") == a.getInt("version") } }

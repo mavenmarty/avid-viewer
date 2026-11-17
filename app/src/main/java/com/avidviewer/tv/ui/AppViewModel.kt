@@ -123,14 +123,12 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
      * At start: the last profile used, unless it needs a PIN, then a Kids profile (or it, behind Who's watching?).
      * Who's watching? shows when there are several profiles and the app asks at start, or the last one is locked.
      */
-    private val startup: Pair<ProfileSet, Boolean> = run {
+    private val startup: Pair<ProfileSet, ProfileSet.Launch> = run {
         val existing = !store.isNewInstall()
         val s = store.loadProfiles().let { s0 -> s0.withThemes(existing)?.also { store.saveProfiles(it) } ?: s0 }
-        val last = s.activeProfile
-        val locked = s.multiple && s.needsPin(last)
-        val id = if (locked) s.list.firstOrNull { it.kids }?.id ?: last.id else last.id
-        store.profileId = id
-        s.copy(active = id) to (s.multiple && (s.startMode == "ask" || (locked && !s.hasKids)))
+        val l = s.launch()
+        store.profileId = l.id
+        s.copy(active = l.id) to l
     }
     var profiles by mutableStateOf(startup.first); private set
     val profile: Profile get() = profiles.activeProfile
@@ -144,7 +142,12 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** The profile in use is a Kids profile: only its categories, no Settings, Discover or Sports. */
     val kidsMode: Boolean get() = profile.kids
     /** Who's watching? is on screen; nothing plays until a profile is chosen. */
-    var choosingProfile by mutableStateOf(startup.second); private set
+    var choosingProfile by mutableStateOf(startup.second.choose); private set
+    /** 1.15.0: the 5-second "Watching as Kids" splash at start (only when the app opens on a Kids profile). */
+    var splashProfile by mutableStateOf(if (startup.second.splash) startup.second.id else null); private set
+    fun dismissSplash() { splashProfile = null }
+    /** Change profile on the splash: Who's watching? (a grown-up profile then asks for its PIN). */
+    fun changeFromSplash() { splashProfile = null; askWhoIsWatching() }
     /** The profile switcher (from the main menu) is open. */
     var profileSwitcher by mutableStateOf(false)
     /** A PIN is being asked for: why, and what to do with a right one. */
@@ -195,7 +198,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         if (id != profile.id) {
             player.stop(); player.clearMediaItems(); vodPlaying = null
             store.profileId = id
-            profiles = profiles.copy(active = id).also { store.saveProfiles(it) }
+            profiles = profiles.copy(active = id, lastKids = if (target.kids) id else profiles.lastKids).also { store.saveProfiles(it) }
             prefs = store.loadPrefs()
             history = store.loadHistory(); resume = store.loadResume(); watched = LinkedHashSet(store.loadWatched())
             otherLive.clear(); playlistGroups = emptyMap(); favDataTick++
@@ -203,7 +206,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             // Playlists limited to some profiles: what this profile sees may differ (1.14.0).
             if (playlists.any { it.profiles != null }) { resetVod(); reloadAfterActiveChange() }
         }
-        choosingProfile = false
+        choosingProfile = false; splashProfile = null
         // Start like at launch, on this profile's last channel.
         screen = Screen.GUIDE; navMode = NavMode.GROUPS; vodDetail = null
         currentKey = null; selectedGroup = null; startupPreviewDone = false
@@ -916,6 +919,11 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             while (true) { if (onScreen && account.linked) syncAccountPlaylists(); delay(60_000) }
         }
         viewModelScope.launch {
+            // Watching now (1.15.0): which playlist and profile are playing, every 15 s, and a Stop from the account.
+            delay(3_000)
+            while (true) { if (account.linked) runCatching { reportPlaying() }; delay(15_000) }
+        }
+        viewModelScope.launch {
             while (true) { delay(10_000); runCatching { idleToFullScreen() } }
         }
         // The catalog's hidden marks belong to one profile: put this profile's in place if another's are there,
@@ -1109,7 +1117,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
      * be limited to some profiles); the others are kept but hidden everywhere.
      */
     val shownPlaylists: List<Playlist> get() = playlists.filter { isOn(it) }
-    fun isOn(p: Playlist) = p.enabled && p.visibleTo(profile.id)
+    fun isOn(p: Playlist) = p.enabled && p.visibleTo(profile)
 
     /** Playlist that feeds the TV Guide and Sports: switched on, with live TV on (any switched-on one as a last resort). */
     fun activePlaylist(): Playlist? =
@@ -2503,13 +2511,14 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         flashOsd(contextLabel())
     }
 
-    // ---------------- playlists from avidviewer.app/playlists (1.14.0) ----------------
+    // ---------------- playlists and profiles from avidviewer.app (1.14.0, profiles 1.15.0) ----------------
     private var reported = ""
     private var accountSyncBusy = false
 
     /**
-     * Reports this device's key and profiles (when they changed), then adds, changes or removes the playlists the account
-     * sent, and tells the account how each went. Offline or unlinked: nothing happens until the next minute.
+     * Reports this device's key and profiles (when they changed; the first time the account takes the profiles in),
+     * applies the account's profiles for this device, then adds, changes or removes the playlists it sent, and tells the
+     * account how each went. Offline or unlinked: nothing happens until the next minute.
      */
     fun syncAccountPlaylists() {
         val token = account.token ?: return
@@ -2518,22 +2527,254 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             try {
                 val key = withContext(Dispatchers.IO) { account.deviceKey() } ?: return@launch
-                val prof = profiles.list.map { Triple(it.id, it.name, it.kids) }
-                val sig = key.publicB64 + prof
+                val prof = reportProfiles()
+                val sig = key.publicB64 + prof + profiles.managed
                 if (sig != reported) {
-                    withContext(Dispatchers.IO) { com.avidviewer.tv.data.AccountApi.report(token, key.publicB64, prof, accountApi) }
-                    reported = sig
+                    val vis = if (profiles.managed) null else withContext(Dispatchers.IO) { runCatching { reportVisibility() }.getOrNull() }
+                    val map = withContext(Dispatchers.IO) { com.avidviewer.tv.data.AccountApi.report2(token, key.publicB64, prof, vis, accountApi) }
+                    if (!profiles.managed) {
+                        // The account has these profiles now: remember which account profile each one is.
+                        saveProfiles(profiles.copy(managed = true, list = profiles.list.map { p -> map[p.id]?.let { p.copy(remoteId = it) } ?: p }))
+                        account.profilesHash = ""
+                    }
+                    reported = key.publicB64 + reportProfiles() + profiles.managed
                 }
-                val items = withContext(Dispatchers.IO) { com.avidviewer.tv.data.AccountApi.inbox(token, accountApi) }
-                for (item in items) {
+                val box = withContext(Dispatchers.IO) { com.avidviewer.tv.data.AccountApi.inbox2(token, account.profilesHash.ifEmpty { null }, accountApi) }
+                box.profiles?.let { list ->
+                    account.profilesJson = list.toString()
+                    applyAccountProfiles(list)
+                    account.profilesHash = box.profilesHash
+                }
+                var changed = false
+                for (item in box.items) {
                     val problem = runCatching { applyAccountPlaylist(item, key) }.getOrElse { it.message ?: "Something went wrong on the device." }
                     trail("account playlist ${item.action}: " + (problem?.let { "failed" } ?: "done"))
+                    if (problem == null) changed = true
                     runCatching { withContext(Dispatchers.IO) { com.avidviewer.tv.data.AccountApi.ack(token, item, problem, accountApi) } }
                 }
+                // A playlist that just arrived: map the profiles' hidden categories onto it.
+                if (changed && box.profiles == null && account.profilesJson.isNotEmpty()) {
+                    runCatching { applyAccountProfiles(org.json.JSONArray(account.profilesJson)) }
+                }
+                if (box.managed) runCatching { sendCatalogs(token) }
             } catch (_: Exception) {
                 // Offline, or the site is busy: try again at the next check.
             } finally { accountSyncBusy = false }
         }
+    }
+
+    /** This device's profiles as the account sees them (the PIN only as its salted hash). */
+    private fun reportProfiles(): org.json.JSONArray = org.json.JSONArray().apply {
+        profiles.list.forEach { p ->
+            put(org.json.JSONObject().put("id", p.id).put("name", p.name).put("kids", p.kids).put("parent", p.isParent)
+                .put("color", p.color).put("pin", p.pinHash))
+        }
+    }
+
+    /**
+     * For the first report: what each profile hid (or, Kids, may see) in the playlists that came from the account, so the
+     * account starts from what this device already does. Keyed by local profile id, then account playlist id.
+     */
+    private fun reportVisibility(): org.json.JSONObject {
+        val acct = playlists.filter { it.remoteId.isNotEmpty() }.associateBy { it.id }
+        val out = org.json.JSONObject()
+        if (acct.isEmpty()) return out
+        for (p in profiles.list) {
+            val pr = if (p.id == profile.id) prefs else store.loadPrefs(p.id)
+            val per = HashMap<String, org.json.JSONObject>()
+            fun vis(pid: String) = per.getOrPut(acct.getValue(pid).remoteId) {
+                org.json.JSONObject().put("hidden", org.json.JSONObject().put("live", org.json.JSONArray()).put("movie", org.json.JSONArray()).put("series", org.json.JSONArray()))
+                    .put("allowed", org.json.JSONObject().put("live", org.json.JSONArray()).put("movie", org.json.JSONArray()).put("series", org.json.JSONArray()))
+                    .put("channels", org.json.JSONArray())
+            }
+            fun liveId(id: String) = id.split('\u0001', limit = 2).takeIf { it.size == 2 && it[0] in acct }
+            fun vodKey(k: String) = k.split('|', limit = 3).takeIf { it.size == 3 && it[1] in acct }
+            for (g in pr.hiddenGroups) liveId(g)?.let { (pid, raw) -> vis(pid).getJSONObject("hidden").getJSONArray("live").put(raw) }
+            for (c in pr.hiddenChannels) c.substringBefore(':').takeIf { it in acct && c.contains(':') }?.let { pid -> vis(pid).getJSONArray("channels").put(c.substringAfter(':')) }
+            for (v in pr.vodHiddenCats) vodKey(v)?.let { (k, pid, cat) -> vis(pid).getJSONObject("hidden").getJSONArray(k).put(cat) }
+            if (p.kids) {
+                for (g in p.allowedGroups) liveId(g)?.let { (pid, raw) -> vis(pid).getJSONObject("allowed").getJSONArray("live").put(raw) }
+                for (v in p.allowedVodCats) vodKey(v)?.let { (k, pid, cat) -> vis(pid).getJSONObject("allowed").getJSONArray(k).put(cat) }
+            }
+            if (per.isNotEmpty()) out.put(p.id, org.json.JSONObject().apply { per.forEach { (k, v) -> put(k, v) } })
+        }
+        return out
+    }
+
+    /**
+     * The account's profiles for this device (1.15.0), in the account's order: they replace the device's own. A profile
+     * the device already has keeps its favorites, lists and history; one taken off the device just isn't shown (its data
+     * stays, in case it comes back). With none, the device goes back to one profile of its own and shows no profiles.
+     */
+    internal fun applyAccountProfiles(list: org.json.JSONArray) {
+        val cur = profiles.list
+        val acctPl = playlists.filter { it.remoteId.isNotEmpty() }
+        val byRemote = acctPl.associateBy { it.remoteId }
+        val acctLocal = acctPl.map { it.id }.toSet()
+        if (list.length() == 0) {
+            if (cur.none { it.remoteId.isNotEmpty() }) { if (!profiles.managed) saveProfiles(profiles.copy(managed = true)); return }
+            val me = (cur.firstOrNull { it.isOwner } ?: Profile(Profile.OWNER, "Me", theme = com.avidviewer.tv.data.THEME_DEFAULT))
+            clearAccountHides(me)
+            val single = me.copy(remoteId = "", kids = false, parent = false, pinHash = "", acctHidden = emptySet(), allowedGroups = emptySet(), allowedVodCats = emptySet())
+            val wasActive = profile.id
+            saveProfiles(ProfileSet(listOf(single), single.id, profiles.startMode, managed = true))
+            if (wasActive != single.id) openProfile(single.id) else { favDataTick++; applyProfileVodLimits() }
+            return
+        }
+        val used = HashSet<String>()
+        val out = ArrayList<Profile>()
+        for (i in 0 until list.length()) {
+            val a = list.getJSONObject(i)
+            val rid = a.getString("id")
+            val old = cur.firstOrNull { it.remoteId == rid }
+                ?: cur.firstOrNull { it.isOwner && it.remoteId.isEmpty() && it.id !in used }
+                ?: cur.firstOrNull { it.id == rid }
+            val kids = a.optBoolean("kids")
+            var p = (old ?: Profile(rid, "", theme = com.avidviewer.tv.data.THEME_DEFAULT)).copy(
+                remoteId = rid, name = a.optString("name", "Profile"), kids = kids, parent = !kids && a.optBoolean("parent"),
+                color = a.optInt("color", 0).coerceIn(0, com.avidviewer.tv.data.PROFILE_COLORS.lastIndex), pinHash = if (kids) "" else a.optString("pin"),
+            )
+            used += p.id
+            // What it may see in each account playlist that's on this device.
+            val vis = a.optJSONObject("visibility") ?: org.json.JSONObject()
+            val hidden = HashSet<String>()
+            val allowLive = HashSet<String>(); val allowVod = HashSet<String>()
+            for (rk in vis.keys()) {
+                val pl = byRemote[rk] ?: continue
+                val v = vis.getJSONObject(rk)
+                val h = v.optJSONObject("hidden"); val al = v.optJSONObject("allowed")
+                fun arr(o: org.json.JSONObject?, k: String) = o?.optJSONArray(k)?.let { x -> List(x.length()) { x.getString(it) } } ?: emptyList()
+                arr(h, "live").forEach { hidden += "g:" + hiddenId(pl.id, it) }
+                listOf("movie", "series").forEach { k -> arr(h, k).forEach { hidden += "v:" + vodCatKey(k, pl.id, it) } }
+                v.optJSONArray("channels")?.let { x -> for (j in 0 until x.length()) hidden += "c:" + pl.id + ":" + x.getString(j) }
+                if (kids) {
+                    arr(al, "live").forEach { allowLive += hiddenId(pl.id, it) }
+                    listOf("movie", "series").forEach { k -> arr(al, k).forEach { allowVod += vodCatKey(k, pl.id, it) } }
+                }
+            }
+            if (kids) {
+                // Categories of the device's own playlists stay as they were; the account's playlists follow the account.
+                p = p.copy(allowedGroups = p.allowedGroups.filterNot { it.substringBefore('\u0001') in acctLocal }.toSet() + allowLive,
+                    allowedVodCats = p.allowedVodCats.filterNot { it.split('|').getOrNull(1) in acctLocal }.toSet() + allowVod)
+            }
+            if (p.acctHidden != hidden) { putAccountHides(p, p.acctHidden, hidden); p = p.copy(acctHidden = hidden) }
+            out += p
+        }
+        val before = profile
+        val active = out.firstOrNull { it.id == profiles.active }?.id
+        val set = profiles.copy(list = out, active = active ?: out.first().id, managed = true)
+        saveProfiles(set)
+        val now = profile
+        when {
+            active == null -> { splashProfile = null; openProfile(set.launch().id) }
+            before.kids != now.kids || before.allowedVodCats != now.allowedVodCats || before.allowedGroups != now.allowedGroups -> { applyProfileVodLimits(); favDataTick++ }
+            else -> favDataTick++
+        }
+    }
+
+    /** Replaces what the account hid before ([old]) with what it hides now ([new]) in [p]'s own hidden lists. */
+    private fun putAccountHides(p: Profile, old: Set<String>, new: Set<String>) {
+        fun part(set: Set<String>, k: String) = set.filter { it.startsWith(k) }.map { it.substring(2) }.toSet()
+        val f: (Prefs) -> Prefs = { pr ->
+            pr.copy(hiddenGroups = pr.hiddenGroups - part(old, "g:") + part(new, "g:"),
+                hiddenChannels = pr.hiddenChannels - part(old, "c:") + part(new, "c:"),
+                vodHiddenCats = pr.vodHiddenCats - part(old, "v:") + part(new, "v:"))
+        }
+        if (p.id == profile.id) updatePrefs(f)
+        else store.savePersonal(p.id, com.avidviewer.tv.data.personalOf(f(store.loadPrefs(p.id))))
+    }
+    private fun clearAccountHides(p: Profile) { if (p.acctHidden.isNotEmpty()) putAccountHides(p, p.acctHidden, emptySet()) }
+
+    /**
+     * Sends each account playlist's categories and channel names to the account (for choosing what profiles see on the
+     * website) when they changed, or once a day. Names and counts only; never what's watched.
+     */
+    private suspend fun sendCatalogs(token: String) {
+        val sent = runCatching { org.json.JSONObject(account.catalogSent) }.getOrDefault(org.json.JSONObject())
+        val nowMs = System.currentTimeMillis()
+        for (pl in playlists.filter { it.remoteId.isNotEmpty() && it.enabled }) {
+            val body = withContext(Dispatchers.IO) { catalogOf(pl) } ?: continue
+            val sig = body.toString().hashCode().toString(16)
+            val (was, at) = sent.optString(pl.remoteId).split('@').let { it.getOrElse(0) { "" } to (it.getOrNull(1)?.toLongOrNull() ?: 0L) }
+            if (was == sig && nowMs - at < 24 * 60 * 60_000L) continue
+            withContext(Dispatchers.IO) { com.avidviewer.tv.data.AccountApi.catalog(token, body, accountApi) }
+            sent.put(pl.remoteId, "$sig@$nowMs")
+            account.catalogSent = sent.toString()
+        }
+    }
+
+    /** One playlist's categories, with each live category's channels (id after the playlist's prefix, and name). */
+    private fun catalogOf(pl: Playlist): org.json.JSONObject? {
+        val groups = LinkedHashMap<String, org.json.JSONArray>()
+        if (pl.liveOn) live.forEachChannel(pl.id) { key, name, group, _ ->
+            groups.getOrPut(group) { org.json.JSONArray() }.put(org.json.JSONArray().put(key.substringAfter(':')).put(name))
+        }
+        fun vod(k: String) = org.json.JSONArray().apply {
+            if (pl.vodOn) runCatching { catalog.categories(k, listOf(pl.id), includeHidden = true) }.getOrDefault(emptyList())
+                .forEach { (_, c, n) -> put(org.json.JSONArray().put(c).put(n)) }
+        }
+        val movie = vod("movie"); val series = vod("series")
+        if (groups.isEmpty() && movie.length() == 0 && series.length() == 0) return null
+        var withChannels = true
+        while (true) {
+            val liveA = org.json.JSONArray()
+            groups.forEach { (g, ch) -> liveA.put(org.json.JSONObject().put("n", g).put("c", ch.length()).put("ch", if (withChannels) ch else org.json.JSONArray())) }
+            val o = org.json.JSONObject().put("playlistId", pl.remoteId).put("live", liveA).put("movie", movie).put("series", series)
+            // The website keeps up to about 1.9 MB: a very big playlist sends its categories without channel names.
+            if (!withChannels || o.toString().length < 1_800_000) return o
+            withChannels = false
+        }
+    }
+
+    // ---------------- Watching now (1.15.0) ----------------
+    /** When the current stream started (for "playing for 42 min" on the website). */
+    private var playingSince = 0L
+    private var playingReported = false
+    /** The account stopped this stream from avidviewer.app ("This stream was stopped from your account"). */
+    var streamStopped by mutableStateOf(false); private set
+    private var stoppedKey: String? = null
+    private var stoppedVod: VodItem? = null
+
+    /** Something is playing (or about to): a channel, a preview, a movie or an episode. */
+    private fun isStreaming(): Boolean = player.mediaItemCount > 0 && player.playWhenReady && playerError == null &&
+        player.playbackState != Player.STATE_IDLE && player.playbackState != Player.STATE_ENDED
+
+    /** Every 15 s while linked: tells the account which playlist and profile are playing (never the channel or title). */
+    internal suspend fun reportPlaying() {
+        val token = account.token ?: return
+        val on = isStreaming() && onScreen
+        if (!on && !playingReported) { playingSince = 0L; return }
+        val data = org.json.JSONObject().put("playing", on)
+        if (on) {
+            if (playingSince == 0L) playingSince = System.currentTimeMillis()
+            val pid = vodPlaying?.playlistId ?: currentKey?.substringBefore(':')
+            val pl = playlists.firstOrNull { it.id == pid }
+            data.put("playlistId", pl?.remoteId ?: "").put("playlistName", pl?.name ?: "A playlist").put("startedAt", playingSince)
+            if (profiles.multiple) data.put("profileId", profile.accountKey).put("profileName", profile.name)
+        } else playingSince = 0L
+        val stop = runCatching { withContext(Dispatchers.IO) { com.avidviewer.tv.data.AccountApi.playing(token, data, accountApi) } }.getOrNull() ?: return
+        playingReported = on
+        if (stop && on) stopFromAccount()
+    }
+
+    /** The account asked this device to stop (Watching now › Stop stream). */
+    private fun stopFromAccount() {
+        trail("stream stopped from the account")
+        stoppedKey = currentKey; stoppedVod = vodPlaying
+        if (screen == Screen.PLAYER) closeFullScreen()
+        player.stop()
+        playingSince = 0L; playingReported = false
+        streamStopped = true
+    }
+    /** "Back to the guide" on the stopped message. */
+    fun dismissStopped() { streamStopped = false }
+    /** "Watch again": starts the same stream again. */
+    fun watchAgain() {
+        streamStopped = false
+        val v = stoppedVod
+        if (v != null) { playVod(v); return }
+        val c = channel(stoppedKey) ?: return
+        start(c)
     }
 
     /** One instruction from the account; returns why it couldn't be done, or null. */
@@ -2576,7 +2817,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             }
             existing == null -> { status = "Added ${p.name} from your account."; syncAllPlaylists(force = false) }
             login != null -> refreshPlaylist(p.id)
-            else -> if (!p.visibleTo(profile.id) || existing.profiles != p.profiles) { resetVod(); reloadAfterActiveChange() }
+            else -> if (!p.visibleTo(profile) || existing.profiles != p.profiles) { resetVod(); reloadAfterActiveChange() }
         }
         return null
     }

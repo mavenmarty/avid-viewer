@@ -32,9 +32,19 @@ data class Profile(
     val theme: String = "",
     /** Movies and Series layout: "grid", "featured" or "showcase". */
     val vodLayout: String = "grid",
+    /** 1.15.0: the avidviewer.app account profile this one is (empty = only on this device). */
+    val remoteId: String = "",
+    /**
+     * 1.15.0: what the account hid for this profile, as last put into its own hidden lists ("g:" live category id,
+     * "c:" channel key, "v:" movie/series category key), so the next change from the account can take them out again.
+     */
+    val acctHidden: Set<String> = emptySet(),
 ) {
     val isOwner get() = id == OWNER
-    val isParent get() = isOwner || parent
+    /** The device's first profile is a parent until the account manages profiles; then the account says. */
+    val isParent get() = parent || (isOwner && remoteId.isEmpty())
+    /** The id the account knows this profile by (playlists sent from the account name these). */
+    val accountKey get() = remoteId.ifEmpty { id }
     val hasPin get() = pinHash.isNotEmpty()
     val initial get() = name.trim().firstOrNull()?.uppercaseChar()?.toString() ?: "?"
 
@@ -49,6 +59,7 @@ data class Profile(
         .put("id", id).put("name", name).put("color", color).put("kids", kids).put("parent", parent).put("pin", pinHash)
         .put("allowedGroups", JSONArray(allowedGroups.toList())).put("allowedVodCats", JSONArray(allowedVodCats.toList()))
         .put("theme", theme).put("vodLayout", vodLayout)
+        .apply { if (remoteId.isNotEmpty()) put("remoteId", remoteId); if (acctHidden.isNotEmpty()) put("acctHidden", JSONArray(acctHidden.toList())) }
 
     companion object {
         const val OWNER = "main"
@@ -58,6 +69,7 @@ data class Profile(
             kids = o.optBoolean("kids"), parent = o.optBoolean("parent"), pinHash = o.optString("pin"),
             allowedGroups = strings(o.optJSONArray("allowedGroups")), allowedVodCats = strings(o.optJSONArray("allowedVodCats")),
             theme = o.optString("theme", ""), vodLayout = o.optString("vodLayout", "grid"),
+            remoteId = o.optString("remoteId", ""), acctHidden = strings(o.optJSONArray("acctHidden")),
         )
 
         fun hashPin(pin: String): String {
@@ -74,8 +86,12 @@ data class Profile(
 data class ProfileSet(
     val list: List<Profile> = listOf(Profile(Profile.OWNER, "Me")),
     val active: String = Profile.OWNER,
-    /** "ask" (Who's watching?) or "last" (the last profile used; Kids instead when that one needs a PIN). */
+    /** "ask" (Who's watching?) or "last" (the last profile used; Kids instead when that one needs a PIN). Before 1.15.0. */
     val startMode: String = "ask",
+    /** 1.15.0: profiles come from the avidviewer.app account (managed there; this device only shows them). */
+    val managed: Boolean = false,
+    /** The last Kids profile used on this device (it opens at start while the device has a Kids profile). */
+    val lastKids: String = "",
 ) {
     val activeProfile: Profile get() = list.firstOrNull { it.id == active } ?: list.first()
     val owner: Profile get() = list.firstOrNull { it.isOwner } ?: list.first()
@@ -102,16 +118,38 @@ data class ProfileSet(
         if (list.none { it.theme.isEmpty() }) null
         else copy(list = list.map { if (it.theme.isEmpty()) it.copy(theme = if (existingInstall) THEME_LEGACY else THEME_DEFAULT) else it })
 
+    /**
+     * Which profile opens when the app starts (1.15.0, decided Nov 16):
+     *  - 0 or 1 profile: that one, and no profiles anywhere;
+     *  - a Kids profile on the device: the last Kids profile used here, else the first in the list (the account's order),
+     *    with a 5-second splash ([Launch.splash]);
+     *  - otherwise the last profile used, no splash (Who's watching? only when that one is locked with its own PIN).
+     */
+    fun launch(): Launch {
+        if (!multiple) return Launch(activeProfile.id)
+        if (hasKids) {
+            val kid = list.firstOrNull { it.id == lastKids && it.kids } ?: list.first { it.kids }
+            return Launch(kid.id, splash = true)
+        }
+        val last = activeProfile
+        return Launch(last.id, choose = last.hasPin)
+    }
+    data class Launch(val id: String, val splash: Boolean = false, val choose: Boolean = false)
+
     fun toJson(): JSONObject = JSONObject().put("active", active).put("startMode", startMode)
         .put("profiles", JSONArray().apply { list.forEach { put(it.toJson()) } })
+        .apply { if (managed) put("managed", true); if (lastKids.isNotEmpty()) put("lastKids", lastKids) }
 
     companion object {
         fun fromJson(o: JSONObject): ProfileSet {
             val a = o.optJSONArray("profiles") ?: JSONArray()
+            val managed = o.optBoolean("managed")
             val list = (0 until a.length()).mapNotNull { runCatching { Profile.fromJson(a.getJSONObject(it)) }.getOrNull() }
-                .let { l -> if (l.none { it.isOwner }) listOf(Profile(Profile.OWNER, "Me")) + l else l }
-            val active = o.optString("active", Profile.OWNER).takeIf { id -> list.any { it.id == id } } ?: Profile.OWNER
-            return ProfileSet(list, active, o.optString("startMode", "ask").takeIf { it == "ask" || it == "last" } ?: "ask")
+                // A device's own profiles always include the first one; profiles from the account may not.
+                .let { l -> if (l.none { it.isOwner } && (!managed || l.isEmpty())) listOf(Profile(Profile.OWNER, "Me")) + l else l }
+            val active = o.optString("active", Profile.OWNER).takeIf { id -> list.any { it.id == id } } ?: list.first().id
+            return ProfileSet(list, active, o.optString("startMode", "ask").takeIf { it == "ask" || it == "last" } ?: "ask",
+                managed, o.optString("lastKids", ""))
         }
     }
 }

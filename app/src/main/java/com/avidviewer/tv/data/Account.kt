@@ -15,7 +15,9 @@ import org.json.JSONObject
  * polls ([poll]) until the person approves it on their phone; the TV then gets its own token. A setup code made
  * while signed in carries a link token the TV trades for one ([claim]). The token is kept encrypted on the TV
  * ([AccountStore]); [me] checks it's still linked (a TV removed on the Account page gets 401).
- * Only the TV's name, model and app version are sent: never playlists, channels or what's watched.
+ * Only the TV's name, model and app version are sent: never what's watched. Since 1.15.0 a device with account profiles
+ * also sends each account playlist's categories and channel names (for choosing what profiles see) and, while playing,
+ * which playlist and profile are in use (Watching now).
  */
 object AccountApi {
     const val BASE = "https://avidviewer.app"
@@ -133,15 +135,52 @@ object AccountApi {
         if (code != 200) failed(code, o)
     }
 
-    fun inbox(token: String, base: String = BASE): List<InboxItem> {
-        val (code, o) = call(base, "/api/tv/inbox", null, token)
+    fun inbox(token: String, base: String = BASE): List<InboxItem> = inbox2(token, null, base).items
+
+    // ---- account profiles (1.15.0) ----
+    /** What the account wants on this device: playlist changes, and its profiles when they changed since [profilesHash]. */
+    data class Inbox(val items: List<InboxItem>, val managed: Boolean, val profilesHash: String, val profiles: JSONArray?)
+
+    fun inbox2(token: String, profilesHash: String?, base: String = BASE): Inbox {
+        val q = profilesHash?.let { "?ph=" + java.net.URLEncoder.encode(it, "UTF-8") } ?: ""
+        val (code, o) = call(base, "/api/tv/inbox$q", null, token)
         if (code != 200) failed(code, o)
-        val a = o.optJSONArray("items") ?: return emptyList()
-        return List(a.length()) {
+        val a = o.optJSONArray("items") ?: JSONArray()
+        val items = List(a.length()) {
             val x = a.getJSONObject(it)
             InboxItem(x.getString("playlistId"), x.optString("action"), x.optInt("version"), x.optString("name"), x.optString("type"),
                 x.optJSONArray("profiles")?.let { p -> List(p.length()) { i -> p.getString(i) } }, x.optJSONObject("payload"))
         }
+        return Inbox(items, o.optBoolean("managed"), o.optString("profilesHash"), o.optJSONArray("profiles"))
+    }
+
+    /**
+     * Reports this device's key and its profiles (1.15.0 form). The first time, the account takes them in (same name =
+     * same profile) and answers which account profile each one now is: local id → account id.
+     */
+    fun report2(token: String, publicKey: String, profiles: JSONArray, visibility: JSONObject?, base: String = BASE): Map<String, String> {
+        val b = JSONObject().put("v", 2).put("pubkey", publicKey).put("profiles", profiles)
+        visibility?.let { b.put("visibility", it) }
+        val (code, o) = call(base, "/api/tv/report", b, token)
+        if (code != 200) failed(code, o)
+        val m = o.optJSONObject("profileMap") ?: JSONObject()
+        return m.keys().asSequence().associateWith { m.getString(it) }
+    }
+
+    /** A playlist's categories and channels (names and counts only), for choosing what each profile sees on the website. */
+    fun catalog(token: String, data: JSONObject, base: String = BASE) {
+        val (code, o) = call(base, "/api/tv/catalog", data, token)
+        if (code != 200) failed(code, o)
+    }
+
+    /**
+     * Watching now: which playlist and profile are playing (never the channel or title), or nothing. Answers true when
+     * the account asked this device to stop.
+     */
+    fun playing(token: String, data: JSONObject, base: String = BASE): Boolean {
+        val (code, o) = call(base, "/api/tv/playing", data, token)
+        if (code != 200) failed(code, o)
+        return o.optBoolean("stop")
     }
 
     fun ack(token: String, item: InboxItem, error: String?, base: String = BASE) {
@@ -213,6 +252,18 @@ class AccountStore(context: Context) {
         }
         DeviceKey.load(pub!!, priv!!)
     }.getOrNull()
+
+    /** 1.15.0: the hash of the account profiles last applied here, and that list (to map it again when playlists arrive). */
+    var profilesHash: String
+        get() = prefs.getString("profilesHash", "").orEmpty()
+        set(v) { prefs.edit().putString("profilesHash", v).apply() }
+    var profilesJson: String
+        get() = prefs.getString("profilesJson", "").orEmpty()
+        set(v) { prefs.edit().putString("profilesJson", v).apply() }
+    /** Each account playlist's catalog as last sent: playlist id → "signature@time". */
+    var catalogSent: String
+        get() = prefs.getString("catalogSent", "{}").orEmpty()
+        set(v) { prefs.edit().putString("catalogSent", v).apply() }
 
     fun update(me: AccountApi.Me) { prefs.edit().putString("email", me.email).putString("name", me.name).apply() }
 

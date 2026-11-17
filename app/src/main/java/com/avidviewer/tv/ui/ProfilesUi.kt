@@ -220,6 +220,29 @@ fun PinDialog(vm: AppViewModel) {
 /** Settings › Profiles. */
 internal fun LazyListScope.profilesSettings(vm: AppViewModel, ask: (Confirm) -> Unit) {
     val set = vm.profiles
+    if (set.managed && set.list.any { it.remoteId.isNotEmpty() }) {
+        // 1.15.0: the account manages this device's profiles (and their PINs); the device only shows them.
+        item {
+            Label("Managed at avidviewer.app/profiles. Profiles, their PINs, their playlists and what each one can see are set there, " +
+                "and the profiles on this device at avidviewer.app/devices. Changes arrive within a minute.", size = 13.sp, color = C.Soft, lines = Int.MAX_VALUE)
+        }
+        set.list.forEach { p ->
+            item(key = "profile-${p.id}") {
+                SettingBlock(p.name + if (p.id == vm.profile.id) " · watching now" else "",
+                    listOfNotNull(if (p.kids) "Kids" else if (p.parent) "Parent" else null, if (p.kids) "no PIN" else if (p.hasPin) "PIN set" else "no PIN").joinToString(" · ")) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        ProfileAvatar(p, 36.dp)
+                        TvButton("Colour theme…", modifier = Modifier.testTag("profile-edit-${p.id}"), selected = vm.editingProfile == p.id) {
+                            vm.editingProfile = if (vm.editingProfile == p.id) null else p.id
+                        }
+                    }
+                }
+            }
+            if (vm.editingProfile == p.id) item(key = "theme-${p.id}") { ThemePicker(p.theme) { vm.setTheme(it, p) } }
+        }
+        item { Label(startRule, size = 13.sp, color = C.Muted, lines = Int.MAX_VALUE) }
+        return
+    }
     // Changing profiles needs a parent (with their PIN) unless the profile in use is one.
     fun asParent(why: String, then: () -> Unit) = if (vm.profile.isParent) then() else vm.withParentPin(why, then)
     item {
@@ -286,14 +309,68 @@ internal fun LazyListScope.profilesSettings(vm: AppViewModel, ask: (Confirm) -> 
         }
         if (vm.editingProfile == p.id) profileEditor(vm, p)
     }
-    item {
-        SettingBlock("When the app starts", if (set.multiple) "" else "Who's watching? appears once there's more than one profile.") {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                TvButton("Ask who's watching", selected = set.startMode == "ask") { vm.setStartMode("ask") }
-                TvButton("Last profile used", selected = set.startMode == "last") { vm.setStartMode("last") }
+    item { Label(startRule, size = 13.sp, color = C.Muted, lines = Int.MAX_VALUE) }
+}
+
+/** Which profile opens at start (1.15.0). */
+private const val startRule = "When the app starts: with a Kids profile on this device, it opens on Kids (the last Kids profile used here) " +
+    "and shows a 5-second splash with Change profile. Otherwise it opens on the last profile used. With one profile, there are no profiles to choose."
+
+/** The 5-second "Watching as Kids" splash when the app opens on a Kids profile (1.15.0). */
+@Composable
+fun KidsSplash(vm: AppViewModel) {
+    val p = vm.profiles.get(vm.splashProfile ?: return) ?: run { vm.dismissSplash(); return }
+    val change = remember { FocusRequester() }
+    var left by remember { mutableStateOf(5) }
+    BackHandler { vm.dismissSplash() }
+    LaunchedEffect(p.id) {
+        while (left > 0) { kotlinx.coroutines.delay(1_000); left-- }
+        vm.dismissSplash()
+    }
+    Box(Modifier.fillMaxSize().background(C.Bg).testTag("kids-splash"), contentAlignment = Alignment.Center) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(22.dp)) {
+            ProfileAvatar(p, 140.dp)
+            Text("Watching as", color = C.Soft, fontSize = 20.sp)
+            Text(p.name, color = C.Text, fontSize = 44.sp, fontWeight = FontWeight.Bold)
+            TvButton("Change profile", primary = false, modifier = Modifier.focusRequester(change).testTag("splash-change")) { vm.changeFromSplash() }
+        }
+        Column(Modifier.align(Alignment.BottomCenter).padding(bottom = 44.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Box(Modifier.width(240.dp).height(5.dp).clip(RoundedCornerShape(3.dp)).background(C.Line)) {
+                Box(Modifier.fillMaxHeight().fillMaxWidth((5 - left) / 5f).background(C.Accent))
             }
+            Label("Continuing in $left second${if (left == 1) "" else "s"} · press Back to continue now", size = 14.sp, color = C.Muted)
         }
     }
+    LaunchedEffect(Unit) { focusWhenReady(vm) { runCatching { change.requestFocus() }.isSuccess } }
+}
+
+/** A chip with the profile in use, on the info bar over video (1.15.0; only on a device with 2+ profiles). */
+@Composable
+fun ProfileChip(vm: AppViewModel, modifier: Modifier = Modifier) {
+    if (!vm.profiles.multiple) return
+    val p = vm.profile
+    Row(modifier.clip(RoundedCornerShape(50)).background(C.Surface2).padding(start = 4.dp, end = 12.dp, top = 4.dp, bottom = 4.dp).testTag("osd-profile"),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        ProfileAvatar(p, 24.dp)
+        Text(p.name, color = C.Text, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+    }
+}
+
+/** "This stream was stopped from your account" (Watching now › Stop stream on avidviewer.app). */
+@Composable
+fun StreamStoppedDialog(vm: AppViewModel) {
+    if (!vm.streamStopped) return
+    val first = remember { FocusRequester() }
+    AlertDialog(
+        onDismissRequest = { vm.dismissStopped() },
+        containerColor = C.Surface,
+        modifier = Modifier.testTag("stream-stopped"),
+        title = { Text("This stream was stopped from your account", color = C.Text, fontWeight = FontWeight.Bold) },
+        text = { Label("Someone using your Avid Viewer account ended it on avidviewer.app, usually to free up a stream for another TV.", size = 15.sp, color = C.Soft, lines = 4) },
+        confirmButton = { TvButton("Back to the guide", primary = true, modifier = Modifier.focusRequester(first)) { vm.dismissStopped() } },
+        dismissButton = { TvButton("Watch again") { vm.watchAgain() } },
+    )
+    LaunchedEffect(Unit) { focusWhenReady(vm) { runCatching { first.requestFocus() }.isSuccess } }
 }
 
 /** Name, colour, Kids or Parent, and a Kids profile's categories. */
