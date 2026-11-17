@@ -688,6 +688,43 @@ class UsabilityTest {
     }
 
     /**
+     * 1.15.2: a playlist from the account that this device already has (typed with the remote) doesn't arrive as a second
+     * copy: the device's own becomes the account's. Two copies already there become one, keeping the device's own.
+     */
+    @Test
+    fun theSamePlaylistFromTheAccountIsNotAddedTwice() {
+        FakeAvidSite().use { site ->
+            linkForTest(site)
+            rule.runOnIdle { vm.syncAccountPlaylists() }
+            waitFor("key reported") { site.report != null }
+            val pub = site.report!!.getString("pubkey")
+            val before = vm.playlists.size
+            val mine = vm.playlists.first { it.id == TestData.P1 }
+            val login = org.json.JSONObject().put("name", "My provider").put("type", "m3u").put("m3uUrl", mine.m3uUrl)
+            synchronized(site.inbox) {
+                site.inbox += org.json.JSONObject().put("playlistId", "acctP1").put("action", "add").put("version", 1).put("name", "My provider")
+                    .put("type", "m3u").put("profiles", org.json.JSONObject.NULL).put("payload", sealFor(pub, login))
+            }
+            rule.runOnIdle { vm.syncAccountPlaylists() }
+            waitFor("acknowledged (acks: ${site.acks})") { site.acks.any { it.getString("playlistId") == "acctP1" } }
+            assertTrue(site.acks.first { it.getString("playlistId") == "acctP1" }.getBoolean("ok"))
+            assertEquals("no second copy", before, vm.playlists.size)
+            assertEquals("acctP1", vm.playlists.first { it.id == TestData.P1 }.remoteId)
+        }
+    }
+
+    /** 1.15.2: removing a big playlist doesn't hold up the screen (its rows go in the background). */
+    @Test
+    fun removingAPlaylistReturnsAtOnce() {
+        rule.runOnIdle {
+            val t = System.nanoTime()
+            vm.removePlaylist(TestData.P2)
+            assertTrue("removed in the list", vm.playlists.none { it.id == TestData.P2 })
+            assertTrue("returned quickly", System.nanoTime() - t < 500_000_000L)
+        }
+    }
+
+    /**
      * 1.14.0: a playlist sent from avidviewer.app/playlists arrives on a linked device, is limited to the profiles chosen
      * there (another profile doesn't see it), follows a change of profiles without a new login, and goes when removed.
      */
