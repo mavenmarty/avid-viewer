@@ -32,6 +32,10 @@ object CrashLog {
     /** Memory set aside so that, after an out-of-memory error, there's room to write the report. */
     @Volatile private var reserve: ByteArray? = null
     @Volatile private var version = ""
+    /** For tests: the version the marker is written with and compared against. */
+    internal var runningVersion: String
+        get() = version
+        set(v) { version = v }
     @Volatile private var active = false
     private val steps = ArrayDeque<String>()
 
@@ -125,6 +129,10 @@ object CrashLog {
         val marker = runCatching { s.readText() }.getOrDefault("")
         s.delete()
         if (file(context).exists()) return false
+        // Nov 17 (AVR-b5a685ae, 1.15.2 → 1.16.0): an update installed while the app was on screen ends the old version
+        // without onStop. A marker left by another version means the app was updated, not that it crashed.
+        val was = Regex("^Avid Viewer (\\S+) ·").find(marker.lineSequence().firstOrNull().orEmpty())?.groupValues?.get(1)
+        if (was != null && version.isNotEmpty() && was != version) return false
         val reason = exitReason(context)
         if (reason?.userStopped == true) return false // force-stopped in Settings: not a crash
         val text = marker.lineSequence().firstOrNull().orEmpty().ifBlank { "Avid Viewer" } + "\n" +
@@ -154,7 +162,9 @@ object CrashLog {
                 android.app.ApplicationExitInfo.REASON_SIGNALED -> "the system stopped it"
                 else -> "closed by the system (reason ${e.reason})"
             }
-            val user = e.reason == android.app.ApplicationExitInfo.REASON_USER_REQUESTED ||
+            val user = e.reason == 12 /* REASON_PACKAGE_STATE_CHANGE */ ||
+                e.reason == 14 /* REASON_PACKAGE_UPDATED (Android 14) */ ||
+                e.reason == android.app.ApplicationExitInfo.REASON_USER_REQUESTED ||
                 e.reason == android.app.ApplicationExitInfo.REASON_USER_STOPPED
             val detail = "Exit: ${stamp(e.timestamp)}, memory at exit ${e.pss / 1024} MB" + (e.description?.let { " · " + it.take(200) } ?: "")
             Exit(text, detail, user)

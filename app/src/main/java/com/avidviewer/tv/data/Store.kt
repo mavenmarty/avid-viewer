@@ -318,12 +318,30 @@ class Store(private val context: Context) {
     fun saveResume(m: Map<String, Long>, id: String = profileId) = writeAtomic(personalFile("resume.json", id), JSONObject(m).toString())
 
     // ---- episodes watched to the end (the series page opens on the next one) ----
-    fun loadWatched(): Set<String> = runCatching {
-        val f = personalFile("watched.json")
-        if (!f.exists()) emptySet() else org.json.JSONArray(f.readText()).let { a -> (0 until a.length()).map { a.getString(it) }.toHashSet() }
+    fun loadWatched(id: String = profileId): Set<String> = runCatching {
+        val f = personalFile("watched.json", id)
+        if (!f.exists()) emptySet() else org.json.JSONArray(f.readText()).let { a -> (0 until a.length()).map { a.getString(it) }.toCollection(LinkedHashSet()) }
     }.getOrDefault(emptySet())
 
-    fun saveWatched(keys: Collection<String>) = writeAtomic(personalFile("watched.json"), org.json.JSONArray(keys.toList().takeLast(5000)).toString())
+    fun saveWatched(keys: Collection<String>, id: String = profileId) = writeAtomic(personalFile("watched.json", id), org.json.JSONArray(keys.toList().takeLast(5000)).toString())
+
+    // ---- 1.17.0: about each place: the length, when it changed, and which TV it came from (null = this one) ----
+    data class PlaceInfo(val dur: Long, val at: Long, val tv: String? = null)
+
+    fun loadPlaceInfo(id: String = profileId): Map<String, PlaceInfo> = runCatching {
+        val f = personalFile("placeinfo.json", id)
+        if (!f.exists()) emptyMap() else JSONObject(f.readText()).let { o ->
+            o.keys().asSequence().associateWith { k -> o.getJSONObject(k).let { PlaceInfo(it.optLong("d"), it.optLong("t"), it.optString("tv").ifBlank { null }) } }
+        }
+    }.getOrDefault(emptyMap())
+
+    fun savePlaceInfo(m: Map<String, PlaceInfo>, id: String = profileId) = writeAtomic(personalFile("placeinfo.json", id), JSONObject().apply {
+        m.entries.sortedByDescending { it.value.at }.take(6000).forEach { (k, v) -> put(k, JSONObject().put("d", v.dur).put("t", v.at).apply { v.tv?.let { put("tv", it) } }) }
+    }.toString())
+
+    /** 1.17.0: what this TV last sent or received for each profile's history (see AppViewModel.syncHistory). */
+    fun loadHistorySync(id: String): JSONObject = runCatching { JSONObject(personalFile("historysync.json", id).readText()) }.getOrDefault(JSONObject())
+    fun saveHistorySync(o: JSONObject, id: String) = writeAtomic(personalFile("historysync.json", id), o.toString())
 
     /**
      * Every profile other than the owner, with its own files, for a backup: id → {"personal", "history",
@@ -333,7 +351,7 @@ class Store(private val context: Context) {
         val out = JSONObject()
         File(dir, "profiles").listFiles()?.filter { it.isDirectory }?.forEach { d ->
             val o = JSONObject()
-            for (n in listOf("personal", "history", "resume", "watched")) File(d, "$n.json").takeIf { it.exists() }?.let { o.put(n, it.readText()) }
+            for (n in listOf("personal", "history", "resume", "watched", "placeinfo")) File(d, "$n.json").takeIf { it.exists() }?.let { o.put(n, it.readText()) }
             out.put(d.name, o)
         }
         return out
@@ -345,7 +363,7 @@ class Store(private val context: Context) {
         o.keys().forEach { id ->
             if (id == Profile.OWNER || !Regex("[A-Za-z0-9_-]{1,40}").matches(id)) return@forEach
             val files = o.optJSONObject(id) ?: return@forEach
-            for (n in listOf("personal", "history", "resume", "watched")) files.optString(n).takeIf { it.isNotEmpty() }?.let { writeAtomic(File(profileDir(id), "$n.json"), it) }
+            for (n in listOf("personal", "history", "resume", "watched", "placeinfo")) files.optString(n).takeIf { it.isNotEmpty() }?.let { writeAtomic(File(profileDir(id), "$n.json"), it) }
         }
     }
 

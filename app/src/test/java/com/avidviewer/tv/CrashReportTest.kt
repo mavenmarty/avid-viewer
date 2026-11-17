@@ -65,6 +65,26 @@ class CrashReportTest {
         log.leftNormally(app); log.clear(app)
     }
 
+    /** Nov 17 (AVR-b5a685ae): updating the app while it's on screen isn't a crash (the marker is from the old version). */
+    @Test
+    fun anUpdateWhileOnScreenIsNotReportedAsACrash() {
+        val app = androidx.test.core.app.ApplicationProvider.getApplicationContext<android.app.Application>()
+        val log = com.avidviewer.tv.data.CrashLog
+        val keep = log.runningVersion
+        log.clear(app)
+        log.runningVersion = "1.15.2"
+        log.inUse(app); log.note(app, "Screen: settings")
+        Thread.sleep(300)
+        log.runningVersion = "1.16.0" // the new version starts
+        assertFalse(log.adoptUncleanExit(app))
+        assertEquals(null, log.read(app))
+        // The same version closed while on screen is still reported.
+        log.inUse(app); log.note(app, "Screen: guide")
+        Thread.sleep(300)
+        assertTrue(log.adoptUncleanExit(app))
+        log.leftNormally(app); log.clear(app); log.runningVersion = keep
+    }
+
     /**
      * 1.13.1: the screen is marked "on screen" (onStart) before the view model may exist. Creating the view model then
      * must not report the run that's on screen right now as a crash (it did in 1.12.0–1.13.0, at every start).
