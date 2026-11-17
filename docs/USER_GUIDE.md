@@ -2,7 +2,7 @@
 
 <!-- The version below and the Release notes section are updated automatically after each published build
      (.github/workflows/user-guide.yml). Feature descriptions are written by hand. -->
-This guide covers **Avid Viewer 1.15.0**, the current public release. Avid Viewer is an IPTV player for Android TV and Fire TV. You bring your own provider (an Xtream Codes login or an M3U link); the app doesn't include any channels.
+This guide covers **Avid Viewer 1.15.2**, the current public release. Avid Viewer is an IPTV player for Android TV and Fire TV. You bring your own provider (an Xtream Codes login or an M3U link); the app doesn't include any channels.
 
 **Contents:** [Getting started](#1-getting-started) · [Main menu](#2-main-menu) · [TV Guide](#3-tv-guide) · [Full-screen playback](#4-full-screen-playback) · [Search](#5-search) · [Discover](#6-discover) · [Sports](#7-sports) · [Movies and Series](#8-movies-and-series) · [Settings](#9-settings) ([Profiles](#profiles)) · [Privacy](#10-privacy) · [Troubleshooting](#11-troubleshooting) · [Control4](#12-control4) · [Supplemental services](#13-supplemental-services) · [Cable & satellite](#14-using-your-cable-or-satellite-subscription) · [Release notes](#release-notes)
 
@@ -44,7 +44,17 @@ From 1.15.0 your playlists and profiles live in your account at avidviewer.app, 
 
 While Avid Viewer is open, a device picks up changes within a minute: a playlist arrives when any profile on the device has it, is checked like one added by hand, and leaves when no profile there has it any more. Each page shows where things stand (for example **waiting for the device to open**).
 
-**You type a login only when you add or edit a playlist.** The website keeps it locked with a key that only your **passkey** can unlock, so when a profile goes to a new device, the page asks for your passkey (not the login) and locks a copy for that device. Without a passkey (or with a password manager that can't do this yet), the login goes to the devices that have the playlist when you save it, and you type it again for new ones. Logins are never shown after they're saved.
+**You type a login only when you add or edit a playlist.** The first time, choose **Set up with passkey** on the Playlists page. From then on the website keeps logins locked with a key that only your **passkey** can unlock: when a profile goes to a new device, the page asks for your passkey (not the login) and locks a copy for that device, and **Edit** can show the saved login. Your devices also send the logins they have (locked so only your browser opens them), so playlists you typed on a TV, or saved before 1.15.0, don't need typing again. Without a passkey (or with a password manager that can't do this yet), the login goes to the devices that have the playlist when you save it, and you type it again for new ones.
+
+**Playlists added on a TV** (1.15.1) are listed under **Added on your devices**. **Add to account** makes one an account playlist for that device's profiles; the device keeps its copy, favorites and everything else. If you add a playlist on the website that a device already has (the same server and username, or the same M3U link), that device uses its own copy for it rather than adding a second one (1.15.2).
+
+**Removing a playlist:** **Remove** on its row takes it off every profile; each device removes it at its next check-in. It stays listed, tagged **Removing**, until every device has confirmed.
+
+**What the website knows** about each playlist shows under its name: live categories and channels, movie and series categories, and which device sent them. If there are none, it says why (for example the device couldn't load the playlist).
+
+**Needs your attention** (1.15.1): every account tab lists what failed or is waiting on you, such as a playlist a device couldn't add (with the device's own words and what to check), a device waiting for a login, a device that needs an update, or changes waiting for a device that hasn't checked in. The tabs show counts. **Dismiss** hides an item until something about it changes; **Show dismissed** brings it back. A device not seen for 7 days is marked **Away**: its changes wait for it, and you can remove it if it's no longer used.
+
+**The website's tabs:** Playlists · Profiles · Devices (profiles on each device, rename, remove, Add a device) · Backups (each device's backup, Show PIN, how to restore) · Account (passkeys, locked logins, signed-in browsers, privacy, delete account).
 
 **Private by design:** each device's copy is locked with a key only that device has (made when it's linked; it never leaves the device), and the copy kept in your account is locked with your passkey. The website can't read your logins. To help you choose what each profile sees, devices send each account playlist's category and channel names and counts; what you watch is never sent.
 
@@ -356,7 +366,7 @@ Each profile also has its own **theme** (colours) and its own Movies and Series 
 **On the website:**
 
 - **New profile:** a name and colour; **Parent** (its PIN unlocks any profile on the TV); a 4-digit **PIN** (optional unless your account has a Kids profile).
-- **Kids profile:** sees only the categories you allow (everything starts hidden; adult categories can never be shown). Before a Kids profile is created, every grown-up profile needs a PIN, so a child can't switch to it; the page asks for any that are missing. A grown-up's PIN can't be removed while a Kids profile exists. PINs are saved only as a salted one-way hash and reach devices the same way.
+- **Kids profile:** sees only the categories you allow (everything starts hidden; adult categories can never be shown). Before a Kids profile is created, every grown-up profile needs a PIN, so a child can't switch to it; the page asks for any that are missing. A Kids profile that came from a device whose grown-ups have no PIN stays unfinished (not sent to devices) until you choose **Finish setting up** and set them (1.15.1). A grown-up's PIN can't be removed while a Kids profile exists. PINs are saved only as a salted one-way hash and reach devices the same way.
 - **What a profile can see:** pick a playlist, then **Live TV**, **Movies** or **Series**: each category is **Shown** or **Hidden**; open a live category to hide single channels. Hidden items disappear from the guide, search, Favorites and Sports for that profile on every device it's on. The names come from the playlist as a device last downloaded it.
 
 **On a device that isn't linked,** Settings › Profiles works as before: **＋ Add profile**, **＋ Add Kids profile** (if no grown-up has a PIN yet, the app asks you to set the first profile's PIN), and for each profile **Edit** (name, colour, theme; a Kids profile's categories), **Set PIN / Change PIN**, **Parent**, **Delete…**. In a profile that isn't a parent, changing profiles asks for a parent's PIN.
@@ -725,7 +735,44 @@ Every public release since 1.0.35, newest first. From 1.1.0, versions are number
 
 <!-- new-releases: entries for new builds are added automatically below this line -->
 
-### 1.15.0 — November 16, 2026, 9:34 PM CT (current)
+### 1.15.2 — November 17, 2026, 6:57 AM CT (current)
+
+**Release notes**
+
+- **Removing a playlist no longer freezes the app.** On a Fire TV, removing a big playlist could stop the app responding until Fire OS closed it.
+- **No second copies of a playlist.** A playlist from your account that's already on the device (typed with the remote) takes over that copy, keeping its favorites and history. Two copies already on a device become one, keeping the device's own, and the TV says so.
+- **Website:** adding a playlist with the name of one a device already has points you to **Add to account** instead.
+
+**Change log**
+
+- Removing a playlist deletes its channels, guide and movies in the background
+- The same playlist from the account and from the device (same server and username, or the same M3U link) is one playlist; existing copies merge
+- Website: duplicate-name warning when adding a playlist
+
+### 1.15.1 — November 17, 2026, 6:12 AM CT
+
+**Release notes**
+
+- **Playlists added on your devices show on the website.** avidviewer.app/playlists lists them under **Added on your devices**; **Add to account** gives one to that device's profiles (and so to other devices with those profiles) without typing it again. The device keeps its copy.
+- **No more retyping logins.** After **Set up with passkey** (once), your devices send the logins they have, locked so only your browser can open them. Playlists saved before 1.15.0 get their logins from a device that has them.
+- **Edit shows the login:** **Show the saved login** (passkey) or **Fill in from** a device.
+- **Remove on every playlist row.** A removed playlist stays listed, tagged **Removing**, until every device confirms it's gone.
+- **What the website knows** about each playlist: its live categories and channels, movie and series categories, and which device sent them, or why there are none yet.
+- **Account pages in five tabs:** Playlists · Profiles · Devices · Backups · Account. Signing in opens Playlists.
+- **Needs your attention** on every tab: anything that failed or is waiting on you, in plain words, with what to do. Each item can be dismissed.
+- **Kids profiles finish** once every grown-up profile has a PIN; until then they aren't sent to devices.
+- **Away devices:** a device that hasn't checked in for 7 days is marked Away; its changes wait for it.
+- **On the TV:** a playlist from your account that can't be added says why.
+
+**Change log**
+
+- Devices report every playlist they have; logins locked for the account's own key (made in your browser, opened only with your passkey)
+- Add to account for playlists typed on a TV; logins imported from devices; Edit fills in the login
+- Remove on each row, Removing until devices confirm; categories known per playlist
+- Account pages in five tabs; Backups and Account tabs; Needs your attention with dismiss; Away devices; Kids profiles finish when grown-ups have PINs
+- Website database migrations 0010–0011
+
+### 1.15.0 — November 16, 2026, 9:34 PM CT
 
 **Release notes**
 

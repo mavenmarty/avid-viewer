@@ -916,6 +916,80 @@ class UsabilityTest {
         }
     }
 
+    /**
+     * 1.16.0: favorites and lists follow the profile through the account; category and channel order and names follow
+     * the playlist. This device's changes go up; the account's newer ones come down; nothing is sent when nothing changed.
+     */
+    @Test
+    fun favoritesListsAndOrderFollowTheAccount() {
+        FakeAvidSite().use { site ->
+            restartWith { st -> st.savePlaylists(st.loadPlaylists().map { if (it.id == TestData.P1) it.copy(remoteId = "acctP1") else it }) }
+            linkForTest(site)
+            site.profileMap = mapOf("main" to "acctDad")
+            site.profiles = org.json.JSONArray()
+                .put(org.json.JSONObject().put("id", "acctDad").put("name", "Dad").put("parent", true).put("color", 0).put("pin", "")
+                    .put("playlists", org.json.JSONArray().put("acctP1")).put("visibility", org.json.JSONObject()))
+            waitFor("channels") { vm.channels.any { it.group == "NEWS" } }
+            val news = vm.channels.filter { it.group == "NEWS" }
+            val sports = vm.channels.first { it.group != "NEWS" }
+            val id0 = news[0].key.substringAfter(':'); val id1 = news.getOrElse(1) { news[0] }.key.substringAfter(':')
+            // Changed here before the first sync: a favorite and a renamed category.
+            rule.runOnIdle { vm.updatePrefs { it.copy(favorites = listOf(news[0].key), groupNames = mapOf("NEWS" to "Headlines")) } }
+            rule.runOnIdle { vm.syncAccountPlaylists() }
+            waitFor("lists sent") { site.syncs.any { it.getJSONArray("profiles").length() > 0 } }
+            val sent = site.syncs.last { it.getJSONArray("profiles").length() > 0 }
+            val dad = sent.getJSONArray("profiles").getJSONObject(0)
+            assertEquals("acctDad", dad.getString("id"))
+            assertEquals("acctP1:$id0", dad.getJSONObject("data").getJSONArray("favorites").getString(0))
+            assertTrue("a real change time", dad.getLong("changedAt") > 1L)
+            val order = sent.getJSONArray("playlists").getJSONObject(0)
+            assertEquals("acctP1", order.getString("id"))
+            assertEquals("Headlines", order.getJSONObject("data").getJSONObject("groupNames").getString("NEWS"))
+            // Nothing changed: nothing sent again.
+            val n = site.syncs.size
+            rule.runOnIdle { vm.syncAccountPlaylists() }
+            waitFor("synced again") { site.syncs.size > n }
+            assertEquals(0, site.syncs.last().getJSONArray("profiles").length())
+            assertEquals(0, site.syncs.last().getJSONArray("playlists").length())
+            // Changed on the website: favorites, a list, the category order and names, a channel's name.
+            site.syncReply = org.json.JSONObject()
+                .put("profiles", org.json.JSONArray().put(org.json.JSONObject().put("id", "acctDad").put("hash", "h2").put("data", org.json.JSONObject()
+                    .put("favorites", org.json.JSONArray().put("acctP1:$id1").put("acctOther:9"))
+                    .put("lists", org.json.JSONArray().put(org.json.JSONObject().put("id", "w1").put("name", "Evening").put("hidden", false)
+                        .put("keys", org.json.JSONArray().put(sports.key.replaceBefore(':', "acctP1"))))))))
+                .put("playlists", org.json.JSONArray().put(org.json.JSONObject().put("id", "acctP1").put("hash", "o2").put("data", org.json.JSONObject()
+                    .put("groupOrder", org.json.JSONArray().put(sports.group).put("NEWS"))
+                    .put("groupNames", org.json.JSONObject().put("NEWS", "News today"))
+                    .put("channelOrder", org.json.JSONObject().put("NEWS", org.json.JSONArray().put(id1).put(id0)))
+                    .put("channelNames", org.json.JSONObject().put(id0, "My channel")))))
+            val m = site.syncs.size
+            rule.runOnIdle { vm.syncAccountPlaylists() }
+            waitFor("applied") { vm.prefs.favorites == listOf(news.getOrElse(1) { news[0] }.key) }
+            assertEquals("Evening", vm.prefs.lists.single().name)
+            assertEquals(listOf(sports.key), vm.prefs.lists.single().keys)
+            assertEquals("News today", vm.groupName("NEWS"))
+            assertEquals(sports.group, vm.prefs.groupOrder.first())
+            assertEquals("My channel", vm.channelName(news[0]))
+            assertEquals(listOf(news.getOrElse(1) { news[0] }.key, news[0].key).distinct(), vm.prefs.channelOrder["NEWS"]!!.distinct())
+            // Applying the account's version isn't a change here; the account's hashes are sent as known.
+            val k = site.syncs.size
+            rule.runOnIdle { vm.syncAccountPlaylists() }
+            waitFor("synced after applying") { site.syncs.size > k }
+            val last = site.syncs.last()
+            assertEquals(0, last.getJSONArray("profiles").length())
+            assertEquals(0, last.getJSONArray("playlists").length())
+            assertEquals("h2", last.getJSONObject("known").getJSONObject("profiles").getString("acctDad"))
+            assertEquals("o2", last.getJSONObject("known").getJSONObject("playlists").getString("acctP1"))
+            assertTrue(m > 0)
+            // A change on the TV goes up, with the channel of the playlist this device doesn't have kept.
+            rule.runOnIdle { vm.updatePrefs { it.copy(favorites = listOf(news[0].key)) } }
+            rule.runOnIdle { vm.syncAccountPlaylists() }
+            waitFor("change sent") { site.syncs.last().getJSONArray("profiles").length() > 0 }
+            val fav = site.syncs.last().getJSONArray("profiles").getJSONObject(0).getJSONObject("data").getJSONArray("favorites")
+            assertEquals(listOf("acctP1:$id0", "acctOther:9"), (0 until fav.length()).map { fav.getString(it) })
+        }
+    }
+
     /** 1.15.0: with 2+ profiles, the info bar over video shows the profile in use; with one, it doesn't. */
     @Test
     fun theInfoBarShowsTheProfileInUse() {

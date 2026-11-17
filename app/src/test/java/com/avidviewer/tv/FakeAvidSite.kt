@@ -29,6 +29,9 @@ class FakeAvidSite : AutoCloseable {
     val playing = java.util.Collections.synchronizedList(mutableListOf<org.json.JSONObject>())
     /** The next Watching now report is told to stop (Stop stream on the website). */
     @Volatile var stopNext = false
+    /** 1.16.0: what devices sent to /api/tv/sync, and the next answer (then empty). */
+    val syncs = java.util.Collections.synchronizedList(mutableListOf<org.json.JSONObject>())
+    @Volatile var syncReply: org.json.JSONObject? = null
     /** 1.15.1: the account's public key sent to devices, and the playlists devices reported. */
     @Volatile var accountKey: String? = null
     @Volatile var devicePlaylists: org.json.JSONArray? = null
@@ -98,6 +101,12 @@ class FakeAvidSite : AutoCloseable {
                 }
             }.toString()
             path == "/api/tv/playlists" -> { devicePlaylists = org.json.JSONObject(body).getJSONArray("playlists"); 200 to """{"ok":true}""" }
+            path == "/api/tv/sync" -> {
+                syncs += org.json.JSONObject(body)
+                val r = syncReply ?: org.json.JSONObject().put("profiles", org.json.JSONArray()).put("playlists", org.json.JSONArray())
+                syncReply = null
+                200 to r.toString()
+            }
             path == "/api/tv/catalog" -> { catalogs += org.json.JSONObject(body); 200 to """{"ok":true}""" }
             path == "/api/tv/playing" -> {
                 playing += org.json.JSONObject(body)

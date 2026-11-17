@@ -182,6 +182,16 @@ object AccountApi {
         if (code != 200) failed(code, o)
     }
 
+    /**
+     * 1.16.0: favorites and lists (per account profile) and category/channel order and names (per account playlist):
+     * sends what changed here, answers what the account has that this device doesn't ([known] hashes).
+     */
+    fun listsSync(token: String, data: JSONObject, base: String = BASE): JSONObject {
+        val (code, o) = call(base, "/api/tv/sync", data, token)
+        if (code != 200) failed(code, o)
+        return o
+    }
+
     /** A playlist's categories and channels (names and counts only), for choosing what each profile sees on the website. */
     fun catalog(token: String, data: JSONObject, base: String = BASE) {
         val (code, o) = call(base, "/api/tv/catalog", data, token)
@@ -279,6 +289,22 @@ class AccountStore(context: Context) {
     var playlistsSent: String
         get() = prefs.getString("playlistsSent", "").orEmpty()
         set(v) { prefs.edit().putString("playlistsSent", v).apply() }
+    /**
+     * 1.16.0: favorites/lists and order sync state: {"p":{accountProfileId:{"h":hash,"s":sig,"d":lastAccountDoc}},
+     * "o":{accountPlaylistId:{"h","s"}}} — the account's version last received (hash), and this device's own version
+     * last sent or applied (signature), so only real changes go up.
+     */
+    var listsState: String
+        get() = prefs.getString("listsState", "{}").orEmpty()
+        set(v) { prefs.edit().putString("listsState", v).apply() }
+    /** When favorites or lists last changed on this device, per local profile id; when order or names last changed. */
+    var listsChanged: String
+        get() = prefs.getString("listsChanged", "{}").orEmpty()
+        set(v) { prefs.edit().putString("listsChanged", v).apply() }
+    var orderChangedAt: Long
+        get() = prefs.getLong("orderChangedAt", 0L)
+        set(v) { prefs.edit().putLong("orderChangedAt", v).apply() }
+
     /** Each account playlist's catalog as last sent: playlist id → "signature@time". */
     var catalogSent: String
         get() = prefs.getString("catalogSent", "{}").orEmpty()
