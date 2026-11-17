@@ -2587,7 +2587,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                     }
                     reported = key.publicB64 + reportProfiles() + profiles.managed
                 }
-                val box = withContext(Dispatchers.IO) { com.avidviewer.tv.data.AccountApi.inbox2(token, account.profilesHash.ifEmpty { null }, accountApi) }
+                // Until the one-time repair has run, ask for the profiles even if they haven't changed.
+                val box = withContext(Dispatchers.IO) { com.avidviewer.tv.data.AccountApi.inbox2(token, account.profilesHash.ifEmpty { null }?.takeIf { account.hidesRepaired }, accountApi) }
                 box.profiles?.let { list ->
                     account.profilesJson = list.toString()
                     applyAccountProfiles(list)
@@ -2686,6 +2687,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             if (wasActive != single.id) openProfile(single.id) else { favDataTick++; applyProfileVodLimits() }
             return
         }
+        // 1.17.2: once, every profile's hidden items in the account's playlists become exactly the account's (1.17.0–1.17.1
+        // could write one profile's settings onto another during a sync; the account has each profile's own).
+        val repair = !account.hidesRepaired
         val used = HashSet<String>()
         val out = ArrayList<Profile>()
         for (i in 0 until list.length()) {
@@ -2722,13 +2726,14 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 p = p.copy(allowedGroups = p.allowedGroups.filterNot { it.substringBefore('\u0001') in acctLocal }.toSet() + allowLive,
                     allowedVodCats = p.allowedVodCats.filterNot { it.split('|').getOrNull(1) in acctLocal }.toSet() + allowVod)
             }
-            if (p.acctHidden != hidden) { putAccountHides(p, p.acctHidden, hidden); p = p.copy(acctHidden = hidden) }
+            if (repair || p.acctHidden != hidden) { putAccountHides(p, p.acctHidden, hidden, if (repair) acctLocal else null); p = p.copy(acctHidden = hidden) }
             out += p
         }
         val before = profile
         val active = out.firstOrNull { it.id == profiles.active }?.id
         val set = profiles.copy(list = out, active = active ?: out.first().id, managed = true)
         saveProfiles(set)
+        if (repair) { account.hidesRepaired = true; trail("hidden items matched to the account") }
         val now = profile
         when {
             active == null -> { splashProfile = null; openProfile(set.launch().id) }
@@ -2737,13 +2742,18 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    /** Replaces what the account hid before ([old]) with what it hides now ([new]) in [p]'s own hidden lists. */
-    private fun putAccountHides(p: Profile, old: Set<String>, new: Set<String>) {
+    /**
+     * Replaces what the account hid before ([old]) with what it hides now ([new]) in [p]'s own hidden lists. With
+     * [exact] (the account's playlists on this device), everything hidden in those playlists is replaced, not just the
+     * account's earlier hides.
+     */
+    private fun putAccountHides(p: Profile, old: Set<String>, new: Set<String>, exact: Set<String>? = null) {
         fun part(set: Set<String>, k: String) = set.filter { it.startsWith(k) }.map { it.substring(2) }.toSet()
+        fun inAcct(pid: String?) = exact != null && pid != null && pid in exact
         val f: (Prefs) -> Prefs = { pr ->
-            pr.copy(hiddenGroups = pr.hiddenGroups - part(old, "g:") + part(new, "g:"),
-                hiddenChannels = pr.hiddenChannels - part(old, "c:") + part(new, "c:"),
-                vodHiddenCats = pr.vodHiddenCats - part(old, "v:") + part(new, "v:"))
+            pr.copy(hiddenGroups = pr.hiddenGroups.filterNot { it.contains('\u0001') && inAcct(it.substringBefore('\u0001')) }.toSet() - part(old, "g:") + part(new, "g:"),
+                hiddenChannels = pr.hiddenChannels.filterNot { it.contains(':') && inAcct(it.substringBefore(':')) }.toSet() - part(old, "c:") + part(new, "c:"),
+                vodHiddenCats = pr.vodHiddenCats.filterNot { inAcct(it.split('|').getOrNull(1)) }.toSet() - part(old, "v:") + part(new, "v:"))
         }
         if (p.id == profile.id) updatePrefs(f)
         else store.savePersonal(p.id, com.avidviewer.tv.data.personalOf(f(store.loadPrefs(p.id))))
@@ -3119,8 +3129,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 st.put("since", o.optLong("seq"))
             }
             if (changed) {
-                if (cur) onMain.add { resume = rm; watched = ws; placeInfo = inf; vodVersion++ }
                 store.saveResume(rm, p.id); store.saveWatched(ws, p.id); store.savePlaceInfo(inf, p.id)
+                // Nov 17: decided when it's applied, not when it was read: the profile in use may have changed since.
+                onMain.add { if (p.id == profile.id) { resume = rm; watched = ws; placeInfo = inf; vodVersion++ } }
             }
             st.put("items", items)
             // Discover settings and My List: the first time, the account's and this TV's join; after that the newer wins.
@@ -3129,8 +3140,13 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             fun applyDoc(doc: org.json.JSONObject) {
                 val pr = if (cur) prefs else store.loadPrefs(p.id)
                 val (np, keep) = withDiscoverDoc(pr, doc)
-                if (cur) onMain.add { applyingAccount = true; try { updatePrefs { np } } finally { applyingAccount = false }; applyDiscoverStart() }
-                else store.savePersonal(p.id, com.avidviewer.tv.data.personalOf(np))
+                // Nov 17 (Evan's TV showed Maven's categories): only the Discover fields change, on the profile the doc
+                // is for, read when it's applied. Writing the whole settings read earlier put one profile's hidden
+                // categories, favorites and My List on another when the profile in use changed during the sync.
+                onMain.add {
+                    if (p.id == profile.id) { applyingAccount = true; try { updatePrefs { withDiscoverDoc(it, doc).first } } finally { applyingAccount = false }; applyDiscoverStart() }
+                    else store.savePersonal(p.id, com.avidviewer.tv.data.personalOf(withDiscoverDoc(store.loadPrefs(p.id), doc).first))
+                }
                 st.put("keep", keep)
                 st.put("disc", if (first) "" else discoverDoc(np, keep).toString().hashCode().toString(16))
             }
@@ -3290,10 +3306,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             for (i in 0 until a.length()) {
                 val o = a.getJSONObject(i); val id = o.optString("id"); val doc = o.optJSONObject("data") ?: continue
                 val p = accProfiles.firstOrNull { it.remoteId == id } ?: continue
-                val cur = if (p.id == profile.id) prefs else withContext(Dispatchers.IO) { store.loadPrefs(p.id) }
-                val next = withAccountLists(cur, doc, toLocal, toRemote)
-                if (p.id == profile.id) { applyingAccount = true; try { updatePrefs { next } } finally { applyingAccount = false } }
-                else withContext(Dispatchers.IO) { store.savePersonal(p.id, com.avidviewer.tv.data.personalOf(next)) }
+                // Read and written in one step for the profile [doc] is for (never another profile's settings).
+                val next: Prefs
+                if (p.id == profile.id) { applyingAccount = true; try { updatePrefs { pr -> withAccountLists(pr, doc, toLocal, toRemote) } } finally { applyingAccount = false }; next = prefs }
+                else { next = withAccountLists(store.loadPrefs(p.id), doc, toLocal, toRemote); store.savePersonal(p.id, com.avidviewer.tv.data.personalOf(next)) }
                 ps.put(id, org.json.JSONObject().put("h", o.optString("hash")).put("d", doc).put("s", sigOf(listsDocOf(next, toRemote, doc))))
                 changedHere = true
             }

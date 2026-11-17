@@ -893,6 +893,20 @@ class UsabilityTest {
             waitFor("Maven hides NEWS") { news in hiddenFor("Maven") }
             assertEquals("Evan's own change applied only to Evan", emptySet<String>(), hiddenFor("Evan").filter { it.startsWith(TestData.P1) }.toSet())
             assertEquals(setOf(news), hiddenFor("Maven").filter { it.startsWith(TestData.P1) }.toSet())
+            // A TV that already had another profile's hides written onto Maven (1.17.0–1.17.1): the first sync after
+            // the update makes them exactly the account's again; other playlists keep what was hidden on the TV.
+            val mavenId = vm.profiles.list.first { it.name == "Maven" }.id
+            rule.runOnIdle { vm.chooseProfile(vm.profiles.list.first { it.name == "Evan" }.id) }
+            waitFor("Evan in use") { vm.profile.name == "Evan" }
+            val other = vm.channels.firstOrNull { !it.key.startsWith(TestData.P1 + ":") }
+            val otherHide = other?.let { vm.liveCategoryId(it.key.substringBefore(':'), it.group) }
+            val bad = st.loadPrefs(mavenId).let { it.copy(hiddenGroups = it.hiddenGroups + nfl + vm.liveCategoryId(TestData.P1, "KIDS") + listOfNotNull(otherHide)) }
+            st.savePersonal(mavenId, com.avidviewer.tv.data.personalOf(bad))
+            com.avidviewer.tv.data.AccountStore(ApplicationProvider.getApplicationContext<Application>()).hidesRepaired = false
+            send(vis(), vis("NEWS"))
+            waitFor("repaired") { com.avidviewer.tv.data.AccountStore(ApplicationProvider.getApplicationContext<Application>()).hidesRepaired }
+            assertEquals(setOf(news), hiddenFor("Maven").filter { it.startsWith(TestData.P1) }.toSet())
+            otherHide?.let { assertTrue("hides in the TV's own playlists stay", it in hiddenFor("Maven")) }
         }
     }
 
