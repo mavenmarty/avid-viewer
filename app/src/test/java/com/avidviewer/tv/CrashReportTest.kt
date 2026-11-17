@@ -86,6 +86,33 @@ class CrashReportTest {
     }
 
     /**
+     * AVR-9276c15f (1.17.0 → 1.17.1): at a real start the check runs from the Application, before MainActivity sets
+     * the version; it must read the installed version itself.
+     */
+    @Test
+    fun anUpdateIsRecognisedBeforeTheScreenSetsTheVersion() {
+        val app = androidx.test.core.app.ApplicationProvider.getApplicationContext<android.app.Application>()
+        val log = com.avidviewer.tv.data.CrashLog
+        val keep = log.runningVersion
+        val installed = app.packageManager.getPackageInfo(app.packageName, 0).versionName.orEmpty()
+        org.junit.Assume.assumeTrue(installed.isNotEmpty())
+        log.clear(app)
+        log.runningVersion = "0.0.1" // the old version was on screen
+        log.inUse(app); log.note(app, "Screen: settings")
+        Thread.sleep(300)
+        log.runningVersion = "" // the new version starts: nothing set yet
+        assertFalse(log.adoptUncleanExit(app))
+        assertEquals(null, log.read(app))
+        // The installed version itself closed while on screen: still reported.
+        log.runningVersion = installed
+        log.inUse(app); log.note(app, "Screen: guide")
+        Thread.sleep(300)
+        log.runningVersion = ""
+        assertTrue(log.adoptUncleanExit(app))
+        log.leftNormally(app); log.clear(app); log.runningVersion = keep
+    }
+
+    /**
      * 1.13.1: the screen is marked "on screen" (onStart) before the view model may exist. Creating the view model then
      * must not report the run that's on screen right now as a crash (it did in 1.12.0–1.13.0, at every start).
      */
