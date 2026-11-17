@@ -2109,6 +2109,13 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             vodVersion++
             regroupLater() // a hidden copy may have stood for its title
         }
+        if (!applyingAccount && account.token != null) {
+            if (before.favorites != prefs.favorites || before.lists != prefs.lists) runCatching {
+                account.listsChanged = org.json.JSONObject(account.listsChanged).put(profile.id, System.currentTimeMillis()).toString()
+            }
+            if (before.groupOrder != prefs.groupOrder || before.groupNames != prefs.groupNames || before.channelOrder != prefs.channelOrder || before.channelNames != prefs.channelNames)
+                account.orderChangedAt = System.currentTimeMillis()
+        }
         if (before.favorites !== prefs.favorites || before.lists !== prefs.lists) {
             // A channel from another playlist was added to a list: reload that playlist's small cache.
             val added = listedKeys(prefs) - listedKeys(before)
@@ -2569,6 +2576,11 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 runCatching { mergeDuplicateAccountPlaylists() }
                 if (box.managed) runCatching { sendDevicePlaylists(token, box.accountKey) }
                 if (box.managed) runCatching { sendCatalogs(token) }
+                if (box.managed) runCatching { syncLists(token) }.onFailure { e ->
+                    trail("lists sync: failed")
+                    val why = e.message.orEmpty()
+                    if (why.isNotEmpty() && why != listsProblem) { listsProblem = why; status = "Couldn't sync favorites and lists with your account: $why" }
+                }
             } catch (_: Exception) {
                 // Offline, or the site is busy: try again at the next check.
             } finally { accountSyncBusy = false }
@@ -2742,6 +2754,153 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
         withContext(Dispatchers.IO) { com.avidviewer.tv.data.AccountApi.devicePlaylists(token, list, accountApi) }
         account.playlistsSent = sig
+    }
+
+    // ---------------- favorites, lists, order and names with the account (1.16.0) ----------------
+    // Favorites and lists belong to a profile and follow it to every device; category and channel order and names
+    // belong to a playlist. Either side can change them; the most recent change wins. The account uses its own
+    // playlist ids in keys ("<account playlist>:<channel id>"); this device maps them to its own playlist ids.
+
+    private var applyingAccount = false
+    private var listsProblem = ""
+
+    private fun lj(a: List<String>) = org.json.JSONArray().apply { a.forEach { put(it) } }
+    private fun ls(a: org.json.JSONArray?) = if (a == null) emptyList() else (0 until a.length()).map { a.optString(it) }.filter { it.isNotEmpty() }
+    private fun sigOf(o: org.json.JSONObject) = o.toString().hashCode().toString(16)
+
+    /** [p]'s favorites and lists as the account sees them (account playlists only; others stay on this device). */
+    private fun listsDocOf(p: Prefs, toRemote: Map<String, String>, accountDoc: org.json.JSONObject?): org.json.JSONObject {
+        fun map(keys: List<String>) = keys.mapNotNull { k -> toRemote[k.substringBefore(':')]?.let { it + ":" + k.substringAfter(':') } }
+        // Keys for account playlists this device doesn't have are kept as the account has them.
+        val mine = toRemote.values.toSet()
+        fun keep(keys: List<String>) = keys.filter { it.substringBefore(':') !in mine }
+        val accLists = accountDoc?.optJSONArray("lists")
+        fun accKeys(id: String): List<String> { if (accLists == null) return emptyList(); for (i in 0 until accLists.length()) { val l = accLists.getJSONObject(i); if (l.optString("id") == id) return keep(ls(l.optJSONArray("keys"))) }; return emptyList() }
+        return org.json.JSONObject()
+            .put("favorites", lj(map(p.favorites) + keep(ls(accountDoc?.optJSONArray("favorites")))))
+            .put("lists", org.json.JSONArray().apply {
+                p.lists.forEach { l -> put(org.json.JSONObject().put("id", l.id).put("name", l.name).put("hidden", l.hidden).put("keys", lj(map(l.keys) + accKeys(l.id)))) }
+            })
+    }
+
+    /** [p] with the account's favorites and lists; this device's channels from playlists not in the account stay. */
+    private fun withAccountLists(p: Prefs, doc: org.json.JSONObject, toLocal: Map<String, String>, toRemote: Map<String, String>): Prefs {
+        fun map(keys: List<String>) = keys.mapNotNull { k -> toLocal[k.substringBefore(':')]?.let { it + ":" + k.substringAfter(':') } }
+        fun localOnly(keys: List<String>) = keys.filter { it.substringBefore(':') !in toRemote }
+        val lists = doc.optJSONArray("lists") ?: org.json.JSONArray()
+        val out = (0 until lists.length()).map { i ->
+            val l = lists.getJSONObject(i); val id = l.optString("id")
+            val old = p.lists.firstOrNull { it.id == id }
+            ChannelList(id = id, name = l.optString("name"), hidden = l.optBoolean("hidden"), keys = (map(ls(l.optJSONArray("keys"))) + localOnly(old?.keys.orEmpty())).distinct())
+        } + p.lists.filter { o -> out0(lists).none { it == o.id } && o.keys.isNotEmpty() && o.keys.all { it.substringBefore(':') !in toRemote } }
+        return p.copy(favorites = (map(ls(doc.optJSONArray("favorites"))) + localOnly(p.favorites)).distinct(), lists = out)
+    }
+    private fun out0(a: org.json.JSONArray) = (0 until a.length()).map { a.getJSONObject(it).optString("id") }
+
+    /** One account playlist's live order and names, in the account's terms (channel ids without the playlist prefix). */
+    private fun orderDocOf(p: Prefs, pl: Playlist, groups: Set<String>): org.json.JSONObject {
+        val pre = pl.id + ":"
+        return org.json.JSONObject()
+            .put("groupOrder", lj(p.groupOrder.filter { it in groups }))
+            .put("groupNames", org.json.JSONObject().apply { p.groupNames.filterKeys { it in groups }.toSortedMap().forEach { (k, v) -> put(k, v) } })
+            .put("channelOrder", org.json.JSONObject().apply {
+                p.channelOrder.filterKeys { it in groups }.toSortedMap().forEach { (g, keys) -> keys.filter { it.startsWith(pre) }.map { it.removePrefix(pre) }.takeIf { it.isNotEmpty() }?.let { put(g, lj(it)) } }
+            })
+            .put("channelNames", org.json.JSONObject().apply { p.channelNames.filterKeys { it.startsWith(pre) }.toSortedMap().forEach { (k, v) -> put(k.removePrefix(pre), v) } })
+    }
+
+    private fun withAccountOrder(p: Prefs, doc: org.json.JSONObject, pl: Playlist, groups: Set<String>): Prefs {
+        val pre = pl.id + ":"
+        val order = ls(doc.optJSONArray("groupOrder")).filter { it in groups }
+        val gn = doc.optJSONObject("groupNames") ?: org.json.JSONObject()
+        val co = doc.optJSONObject("channelOrder") ?: org.json.JSONObject()
+        val cn = doc.optJSONObject("channelNames") ?: org.json.JSONObject()
+        val names = p.groupNames.filterKeys { it !in groups } + gn.keys().asSequence().filter { it in groups }.associateWith { gn.optString(it) }
+        val chOrder = p.channelOrder.mapValues { (g, keys) -> if (g in groups) keys.filterNot { it.startsWith(pre) } else keys }.toMutableMap()
+        co.keys().forEach { g -> if (g in groups) chOrder[g] = ls(co.optJSONArray(g)).map { pre + it } + chOrder[g].orEmpty() }
+        val chNames = p.channelNames.filterKeys { !it.startsWith(pre) } + cn.keys().asSequence().associate { pre + it to cn.optString(it) }
+        // This playlist's categories first in the account's order (the rest keep theirs); unlisted ones follow the provider.
+        val groupOrder = if (order.isEmpty()) p.groupOrder.filter { it !in groups } else order + p.groupOrder.filter { it !in groups }
+        return p.copy(groupOrder = groupOrder, groupNames = names, channelOrder = chOrder.filterValues { it.isNotEmpty() }, channelNames = chNames)
+    }
+
+    /** Sends this device's changes to favorites, lists, order and names, and applies the account's newer ones. */
+    private suspend fun syncLists(token: String) {
+        val acctPls = playlists.filter { it.remoteId.isNotEmpty() }
+        val toRemote = acctPls.associate { it.id to it.remoteId }
+        val toLocal = acctPls.associate { it.remoteId to it.id }
+        val state = runCatching { org.json.JSONObject(account.listsState) }.getOrDefault(org.json.JSONObject())
+        val ps = state.optJSONObject("p") ?: org.json.JSONObject().also { state.put("p", it) }
+        val os = state.optJSONObject("o") ?: org.json.JSONObject().also { state.put("o", it) }
+        val changed = runCatching { org.json.JSONObject(account.listsChanged) }.getOrDefault(org.json.JSONObject())
+        val body = org.json.JSONObject()
+        val known = org.json.JSONObject(); val kp = org.json.JSONObject(); val ko = org.json.JSONObject()
+        known.put("profiles", kp).put("playlists", ko); body.put("known", known)
+        val accProfiles = profiles.list.filter { it.remoteId.isNotEmpty() }
+        val sendP = org.json.JSONArray()
+        for (p in accProfiles) {
+            val st = ps.optJSONObject(p.remoteId)
+            val pr = if (p.id == profile.id) prefs else withContext(Dispatchers.IO) { store.loadPrefs(p.id) }
+            val doc = listsDocOf(pr, toRemote, st?.optJSONObject("d"))
+            val sig = sigOf(doc)
+            st?.optString("h")?.takeIf { it.isNotEmpty() }?.let { kp.put(p.remoteId, it) }
+            if (st == null || st.optString("s") != sig) {
+                val at = changed.optLong(p.id, 0L).takeIf { it > 0 } ?: if (st == null) 1L else System.currentTimeMillis()
+                sendP.put(org.json.JSONObject().put("id", p.remoteId).put("changedAt", at).put("data", doc))
+            }
+        }
+        body.put("profiles", sendP)
+        val groupsOf = HashMap<String, Set<String>>()
+        val sendO = org.json.JSONArray()
+        for (pl in acctPls) {
+            val groups = withContext(Dispatchers.IO) { HashSet<String>().also { g -> runCatching { live.forEachChannel(pl.id) { _, _, grp, _ -> g.add(grp) } } } }
+            if (groups.isEmpty()) continue
+            groupsOf[pl.remoteId] = groups
+            val st = os.optJSONObject(pl.remoteId)
+            st?.optString("h")?.takeIf { it.isNotEmpty() }?.let { ko.put(pl.remoteId, it) }
+            val doc = orderDocOf(prefs, pl, groups)
+            val sig = sigOf(doc)
+            if (st == null || st.optString("s") != sig) {
+                // Never changed here and never synced: only send it if there is something to say.
+                val empty = doc.optJSONArray("groupOrder")!!.length() == 0 && doc.optJSONObject("groupNames")!!.length() == 0 && doc.optJSONObject("channelOrder")!!.length() == 0 && doc.optJSONObject("channelNames")!!.length() == 0
+                if (st == null && empty) { os.put(pl.remoteId, org.json.JSONObject().put("s", sig)); continue }
+                val at = account.orderChangedAt.takeIf { it > 0 } ?: 1L
+                sendO.put(org.json.JSONObject().put("id", pl.remoteId).put("changedAt", at).put("data", doc))
+            }
+        }
+        body.put("playlists", sendO)
+        val res = withContext(Dispatchers.IO) { com.avidviewer.tv.data.AccountApi.listsSync(token, body, accountApi) }
+        // What was sent is now this device's last-known version.
+        for (i in 0 until sendP.length()) { val o = sendP.getJSONObject(i); ps.put(o.getString("id"), (ps.optJSONObject(o.getString("id")) ?: org.json.JSONObject()).put("s", sigOf(o.getJSONObject("data")))) }
+        for (i in 0 until sendO.length()) { val o = sendO.getJSONObject(i); os.put(o.getString("id"), (os.optJSONObject(o.getString("id")) ?: org.json.JSONObject()).put("s", sigOf(o.getJSONObject("data")))) }
+        // The account's versions this device doesn't have yet.
+        var changedHere = false
+        res.optJSONArray("profiles")?.let { a ->
+            for (i in 0 until a.length()) {
+                val o = a.getJSONObject(i); val id = o.optString("id"); val doc = o.optJSONObject("data") ?: continue
+                val p = accProfiles.firstOrNull { it.remoteId == id } ?: continue
+                val cur = if (p.id == profile.id) prefs else withContext(Dispatchers.IO) { store.loadPrefs(p.id) }
+                val next = withAccountLists(cur, doc, toLocal, toRemote)
+                if (p.id == profile.id) { applyingAccount = true; try { updatePrefs { next } } finally { applyingAccount = false } }
+                else withContext(Dispatchers.IO) { store.savePersonal(p.id, com.avidviewer.tv.data.personalOf(next)) }
+                ps.put(id, org.json.JSONObject().put("h", o.optString("hash")).put("d", doc).put("s", sigOf(listsDocOf(next, toRemote, doc))))
+                changedHere = true
+            }
+        }
+        res.optJSONArray("playlists")?.let { a ->
+            for (i in 0 until a.length()) {
+                val o = a.getJSONObject(i); val id = o.optString("id"); val doc = o.optJSONObject("data") ?: continue
+                val pl = acctPls.firstOrNull { it.remoteId == id } ?: continue
+                val groups = groupsOf[id] ?: continue
+                val next = withAccountOrder(prefs, doc, pl, groups)
+                applyingAccount = true; try { updatePrefs { next } } finally { applyingAccount = false }
+                os.put(id, org.json.JSONObject().put("h", o.optString("hash")).put("s", sigOf(orderDocOf(next, pl, groups))))
+                changedHere = true
+            }
+        }
+        account.listsState = state.toString()
+        if (changedHere) { trail("lists sync: applied the account's changes"); regroupLater(); favDataTick++ }
+        listsProblem = ""
     }
 
     /** One playlist's categories, with each live category's channels (id after the playlist's prefix, and name). */
