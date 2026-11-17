@@ -2209,7 +2209,7 @@ class UsabilityTest {
     /** BUG-033 (#18): adding a suggested channel to a list, or ✕, moves the highlight to the next suggestion. */
     @Test
     fun addingOrDismissingASuggestionHighlightsTheNextOne() {
-        val keys = vm.channels.filter { it.playlistId == TestData.P1 }.take(4).map { it.key }
+        val keys = vm.channels.filter { it.key.startsWith(TestData.P1 + ":") }.take(4).map { it.key }
         rule.runOnIdle {
             vm.updatePrefs { it.copy(showSuggestions = true, favorites = emptyList()) }
             vm.setSuggestionsForTests(keys.map { com.avidviewer.tv.data.Suggestion(it, TestData.P1, "near you", 1) })
@@ -2232,6 +2232,18 @@ class UsabilityTest {
         waitFor("the next suggestion after ✕ (focus: ${focused()})") { isFocusedTag("sugg-add-${keys[2]}") }
         settle(600)
         assertTrue("…and keeps it (focus: ${focused()})", isFocusedTag("sugg-add-${keys[2]}"))
+    }
+
+    /** BUG-045: OK on a category always moves the highlight into its channels, even if the suggestions flag was left set. */
+    @Test
+    fun okOnACategoryAlwaysOpensIt() {
+        rule.runOnIdle {
+            vm.updatePrefs { it.copy(showSuggestions = true) }
+            vm.setSuggestionsForTests(vm.channels.filter { it.key.startsWith(TestData.P1 + ":") }.take(2).map { com.avidviewer.tv.data.Suggestion(it.key, TestData.P1, "near you", 1) })
+            vm.suggestionsFocused = true // left set by a suggestions row that went away
+            vm.chooseGroup(TestData.P1, "NEWS")
+        }
+        waitFor("a NEWS channel has the highlight (focus: ${focused()})") { vm.guideHasFocus && vm.channels.filter { it.group == "NEWS" }.any { focused().contains(vm.channelName(it)) } }
     }
 
     private fun isFocusedTag(tag: String) = runCatching {
