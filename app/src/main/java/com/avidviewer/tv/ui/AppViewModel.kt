@@ -2550,6 +2550,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                     val problem = runCatching { applyAccountPlaylist(item, key) }.getOrElse { it.message ?: "Something went wrong on the device." }
                     trail("account playlist ${item.action}: " + (problem?.let { "failed" } ?: "done"))
                     if (problem == null) changed = true
+                    // Say so on the TV too (the website lists it under Needs your attention).
+                    else if (item.action != "remove") status = "Couldn't add ${item.name.ifBlank { "a playlist" }} from your account: ${problem.trimEnd('.')}. Details at avidviewer.app/playlists."
                     runCatching { withContext(Dispatchers.IO) { com.avidviewer.tv.data.AccountApi.ack(token, item, problem, accountApi) } }
                 }
                 // A playlist that just arrived: map the profiles' hidden categories onto it.
