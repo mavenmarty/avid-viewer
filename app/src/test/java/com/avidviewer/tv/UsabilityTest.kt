@@ -854,6 +854,13 @@ class UsabilityTest {
             val news = (0 until cat.getJSONArray("live").length()).map { cat.getJSONArray("live").getJSONObject(it) }.first { it.getString("n") == "NEWS" }
             assertTrue(news.getInt("c") > 0)
             assertEquals(newsKey.substringAfter(':'), news.getJSONArray("ch").getJSONArray(0).getString(0))
+            // BUG-057: the next account check doesn't build the catalog again when nothing changed (it froze Fire TVs).
+            val builds = vm.catalogBuilds; val sentBefore = site.catalogs.size
+            val checksBefore = site.syncs.size
+            rule.runOnIdle { vm.syncAccountPlaylists() }
+            waitFor("another account check") { site.syncs.size > checksBefore }
+            assertEquals(builds, vm.catalogBuilds)
+            assertEquals(sentBefore, site.catalogs.size)
         }
     }
 
