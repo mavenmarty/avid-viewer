@@ -286,7 +286,6 @@ fun GroupNav(vm: AppViewModel) {
         add("menu"); add("title"); add("fav"); vm.shownLists.forEach { add("list-" + it.id) }
         add("newlist"); add("search"); add("spacer"); groups.forEach { add("g:" + it.raw) }
     }
-    // R-4: the list opens already scrolled to the current category (it used to draw from the top, then jump there).
     // R-4: a current category further down than a screenful opens already scrolled to it (it used to draw from the
     // top and then jump there). Nearer the top nothing changes: it's on screen either way.
     val navState = remember {

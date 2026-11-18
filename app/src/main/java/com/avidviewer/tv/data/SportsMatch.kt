@@ -138,6 +138,11 @@ class SportsMatcher(private val games: List<Game>, private val isHidden: (String
     /** Clears the guide id lookup between playlists (keeps what was found). */
     fun nextPlaylist() = byEpg.clear()
 
+    /** Whether a guide listing with [epgId] could name any channel added for this playlist (else it's skipped unread). */
+    fun wantsGuide(pid: String, epgId: String): Boolean = byEpg.containsKey("$pid|$epgId")
+    /** Whether any channel added for this playlist has a guide id at all (no: its guide isn't read). */
+    fun anyGuide(): Boolean = byEpg.isNotEmpty()
+
     /** Channels per game id, best first, at most [max] each. */
     fun result(max: Int = 12): Map<String, List<ChannelMatch>> = found.mapValues { (_, m) ->
         m.values.map { ChannelMatch(it.key, it.name, it.pid, it.kinds, it.reasons, it.country) }

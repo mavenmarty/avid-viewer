@@ -139,6 +139,22 @@ class SportsTest {
     }
 
     @Test
+    fun onlyTheGuideOfChannelsThatCanBeShownIsLookedAt() {
+        // Nov 18: the guide listings of channels that weren't added (hidden, or in a hidden category) are skipped unread.
+        val now = System.currentTimeMillis()
+        val g = EspnFeed.parse("NHL", FakeEspn.board(liveGame(now))).single()
+        val m = SportsMatcher(listOf(g)) { false }
+        assertFalse("no channels yet: no guide to read", m.anyGuide())
+        m.addChannel("p", "p:tbs", "US| TBS", "tbs.us", group = "SPORTS")
+        assertTrue(m.anyGuide())
+        assertTrue(m.wantsGuide("p", "tbs.us"))
+        assertFalse("the guide id of a channel left out", m.wantsGuide("p", "hidden.us"))
+        assertFalse("another playlist's", m.wantsGuide("q", "tbs.us"))
+        m.addProgram("p", "tbs.us", g.start - 5 * 60_000L, g.start + 3 * 3600_000L, "NHL Hockey", "Detroit Red Wings at St. Louis Blues")
+        assertEquals(listOf("p:tbs"), m.result()[g.id].orEmpty().map { it.key })
+    }
+
+    @Test
     fun theSportsScreenListsEspnGamesWithTheirChannelsFromEveryPlaylist() {
         TestData.seed(app)
         val now = System.currentTimeMillis()
