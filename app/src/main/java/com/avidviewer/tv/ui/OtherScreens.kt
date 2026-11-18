@@ -876,6 +876,11 @@ fun SettingsScreen(vm: AppViewModel) {
                                     vm.updateStatus?.let { Label(it, size = 12.sp, color = C.Soft, lines = 3) }
                                 }
                             }
+                            if (vm.inBeta || vm.betaInstalled) item(key = "beta") {
+                                SettingBlock("Beta", betaText(vm.inBeta, vm.betaInstalled)) {
+                                    Label("BETA", size = 12.sp, color = C.Accent, modifier = Modifier.testTag("beta-tag"))
+                                }
+                            }
                             item(key = "playback-log") {
                                 @Suppress("UNUSED_VARIABLE") val rev = vm.playbackLogRev
                                 val log = vm.playbackLog
@@ -917,7 +922,7 @@ private fun sectionSummary(vm: AppViewModel, id: String): String? = when (id) {
     "discover" -> if (vm.prefs.tmdbKeyEnc.isBlank()) "Needs TMDB key" else "${vm.prefs.myServices.size} services"
     "privacy" -> if (vm.prefs.historyPaused) "History paused" else "History on"
     "profiles" -> if (vm.profiles.multiple) "${vm.profiles.list.size} profiles · ${vm.profile.name}" else "Just you"
-    "about" -> vm.update?.let { "Update ${it.versionName} available" } ?: "Version ${vm.installed.second}"
+    "about" -> vm.update?.let { "Update ${it.versionName} available" } ?: ("Version ${vm.installed.second}" + if (vm.inBeta) " · Beta" else "")
     "account" -> vm.accountEmail ?: "Not linked"
     else -> null
 }
@@ -1119,6 +1124,13 @@ internal fun QrCode(text: String, modifier: Modifier = Modifier) {
             if (matrix.get(x, y)) drawRect(androidx.compose.ui.graphics.Color.Black, topLeft = androidx.compose.ui.geometry.Offset(x * cell, y * cell), size = androidx.compose.ui.geometry.Size(cell + 0.5f, cell + 0.5f))
         }
     }
+}
+
+/** Settings › Updates & about, for a device in the beta or still on a beta build. */
+internal fun betaText(inBeta: Boolean, betaInstalled: Boolean): String = when {
+    inBeta -> "This device is in the beta: it gets new versions before everyone else. Crash reports and playback logs say beta. " +
+        "To leave, turn off Offer this device beta builds at avidviewer.app/devices; it keeps this version until a public one catches up."
+    else -> "This device has left the beta. It keeps this beta version until a public version is newer, then updates as usual."
 }
 
 private fun appVersion(vm: AppViewModel): String = try {

@@ -27,7 +27,8 @@ object AccountApi {
     data class Info(val name: String, val model: String, val appVersion: String)
     data class Start(val userCode: String, val deviceCode: String, val interval: Int, val expiresIn: Int, val qrUrl: String)
     data class Linked(val token: String, val email: String, val name: String, val deviceId: String)
-    data class Me(val email: String, val name: String)
+    /** [beta]: this device is in the beta (chosen at avidviewer.app/admin); [betaTag]: the beta build offered to it. */
+    data class Me(val email: String, val name: String, val beta: Boolean = false, val betaTag: String? = null)
     /** One TV's backup in the account (each TV keeps only its most recent). */
     data class CloudBackup(
         val deviceId: String, val name: String, val model: String, val appVersion: String, val createdAt: Long,
@@ -85,7 +86,9 @@ object AccountApi {
     fun me(token: String, appVersion: String, base: String = BASE): Me? {
         val (code, o) = call(base, "/api/tv/me", null, token, appVersion)
         return when (code) {
-            200 -> Me(o.optString("email"), o.optString("name"))
+            200 -> o.optJSONObject("beta").let { b ->
+                Me(o.optString("email"), o.optString("name"), b?.optBoolean("in") == true, b?.optString("tag")?.takeIf { it.isNotBlank() && it != "null" })
+            }
             401 -> null
             else -> throw Problem("avidviewer.app answered $code.")
         }

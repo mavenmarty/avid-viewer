@@ -30,16 +30,38 @@ object Updater {
         return PackageInfoCompat.getLongVersionCode(info) to (info.versionName ?: "")
     }
 
-    /** "v1.1.0.190" → "1.1.0"; "v1.0.179" → "1.0.179". */
+    /** Beta builds (Nov 18, 2026): GitHub pre-releases tagged beta-v<version>-<n>.<build>. */
+    private val BETA_TAG = Regex("""^beta-v(\d+\.\d+\.\d+)-(\d+)\.(\d+)$""")
+
+    fun isBetaTag(tag: String) = BETA_TAG.matches(tag)
+
+    /** True for a beta build's version name ("1.20.0 beta 2"). */
+    fun isBetaVersion(versionName: String) = versionName.contains(" beta ")
+
+    /** "v1.1.0.190" → "1.1.0"; "v1.0.179" → "1.0.179"; "beta-v1.20.0-2.360" → "1.20.0 beta 2". */
     fun displayVersion(tag: String): String {
+        BETA_TAG.matchEntire(tag)?.let { return "${it.groupValues[1]} beta ${it.groupValues[2]}" }
         val parts = tag.removePrefix("v").split('.')
         return if (parts.size >= 4) parts.take(3).joinToString(".") else parts.joinToString(".")
     }
 
-    fun latest(): Release? {
-        val o = JSONObject(Net.text("https://api.github.com/repos/$REPO/releases/latest"))
+    /** The public release. Pre-releases (betas) are never returned by releases/latest. */
+    fun latest(): Release? = parse(JSONObject(Net.text("https://api.github.com/repos/$REPO/releases/latest")))
+
+    /** One release by tag: the beta build offered to this device. */
+    fun byTag(tag: String): Release? =
+        parse(JSONObject(Net.text("https://api.github.com/repos/$REPO/releases/tags/" + java.net.URLEncoder.encode(tag, "UTF-8"))))
+
+    /**
+     * What this device should be offered: the newest of the public release and (in the beta) the offered beta build.
+     * Leaving the beta keeps the beta build until a public one is newer: public builds always have higher numbers.
+     */
+    fun pick(public: Release?, beta: Release?, installedCode: Long): Release? =
+        listOfNotNull(public, beta).maxByOrNull { it.versionCode }?.takeIf { it.versionCode > installedCode }
+
+    internal fun parse(o: JSONObject): Release? {
         // e.g. v1.0.179 (up to 1.0.179) or v1.1.0.190 (semantic version + build): the last part is the
-        // version code. Shown as 1.0.179 / 1.1.0.
+        // version code. Shown as 1.0.179 / 1.1.0. Betas: beta-v1.20.0-2.360, shown as 1.20.0 beta 2.
         val tag = o.optString("tag_name")
         val code = tag.substringAfterLast('.').toLongOrNull() ?: return null
         val assets = o.optJSONArray("assets") ?: return null

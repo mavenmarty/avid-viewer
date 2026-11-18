@@ -453,6 +453,23 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     var guideQuery by mutableStateOf("")
     var vodQuery by mutableStateOf(mapOf("movie" to "", "series" to ""))
     var update by mutableStateOf<Updater.Release?>(null); internal set
+
+    // Beta channel (Nov 18, 2026). Declared here, before init runs checkForUpdate.
+    private val betaPrefs = app.getSharedPreferences("beta", android.content.Context.MODE_PRIVATE)
+    /** This device is in the beta (avidviewer.app chose it), as of the last check-in. */
+    var inBeta by mutableStateOf(betaPrefs.getBoolean("in", false)); private set
+    /** The beta build offered to this device, e.g. beta-v1.20.0-2.360. */
+    private var betaTag: String? = betaPrefs.getString("tag", null)
+    /** The installed version is a beta build ("1.20.0 beta 2"). */
+    val betaInstalled: Boolean get() = Updater.isBetaVersion(installed.second)
+
+    /** Keeps what the account said about the beta; null when the device isn't linked (public versions only). */
+    internal fun noteBeta(m: com.avidviewer.tv.data.AccountApi.Me?) {
+        inBeta = m?.beta == true
+        betaTag = if (inBeta) m?.betaTag else null
+        betaPrefs.edit().putBoolean("in", inBeta).putString("tag", betaTag).apply()
+    }
+
     var updateStatus by mutableStateOf<String?>(null); private set
     var updateBusy by mutableStateOf(false); private set
     /** The downloaded update, when the installer needs a second way in ("Open installer"). */
@@ -532,7 +549,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** Settings › Account › Sign out of this TV: forgets the link here and tells the account (best effort). */
     fun signOutOfAccount() {
         val token = account.token
-        account.clear(); backupPinSet = false; lastBackupAt = 0L; cloudBackups = null; accountEmail = null; accountTvName = ""; linkCode = null
+        account.clear(); backupPinSet = false; lastBackupAt = 0L; cloudBackups = null; accountEmail = null; accountTvName = ""; linkCode = null; noteBeta(null)
         accountStatus = "This device is no longer linked to an account. Its playlists and settings stay."
         if (token != null) viewModelScope.launch(Dispatchers.IO) { com.avidviewer.tv.data.AccountApi.signOut(token, accountApi) }
     }
@@ -545,9 +562,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             val me = runCatching { withContext(Dispatchers.IO) { com.avidviewer.tv.data.AccountApi.me(token, accountInfo().appVersion, accountApi) } }
             me.onSuccess { m ->
                 if (m == null) {
-                    account.clear(); backupPinSet = false; lastBackupAt = 0L; cloudBackups = null; accountEmail = null; accountTvName = ""
+                    account.clear(); backupPinSet = false; lastBackupAt = 0L; cloudBackups = null; accountEmail = null; accountTvName = ""; noteBeta(null)
                     accountStatus = "This device was removed from your account on avidviewer.app. Link it again any time."
-                } else { account.update(m); accountEmail = m.email; accountTvName = m.name }
+                } else { account.update(m); accountEmail = m.email; accountTvName = m.name; noteBeta(m) }
             }
         }
     }
@@ -4056,9 +4073,17 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun checkForUpdate(quiet: Boolean = false) {
         viewModelScope.launch {
             if (!quiet) updateStatus = "Checking for updates…"
-            val r = runCatching { withContext(Dispatchers.IO) { Updater.latest() } }
+            val r = runCatching {
+                withContext(Dispatchers.IO) {
+                    // Ask the account first whether this device is in the beta (and which build it's offered).
+                    account.token?.let { t -> runCatching { com.avidviewer.tv.data.AccountApi.me(t, accountInfo().appVersion, accountApi) }.getOrNull()?.let { m -> withContext(Dispatchers.Main) { noteBeta(m) } } }
+                    val pub = Updater.latest()
+                    val beta = betaTag?.takeIf { inBeta }?.let { tag -> runCatching { Updater.byTag(tag) }.getOrNull() }
+                    pub to beta
+                }
+            }
             lastUpdateCheck = System.currentTimeMillis()
-            r.onSuccess { rel ->
+            r.map { (pub, beta) -> Updater.pick(pub, beta, installed.first) ?: pub }.onSuccess { rel ->
                 update = rel?.takeIf { it.versionCode > installed.first }
                 onUpdateFound()
                 updateStatus = when {

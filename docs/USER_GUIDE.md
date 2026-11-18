@@ -2,7 +2,7 @@
 
 <!-- The version below and the Release notes section are updated automatically after each published build
      (.github/workflows/user-guide.yml). Feature descriptions are written by hand. -->
-This guide covers **Avid Viewer 1.18.0**, the current public release. Avid Viewer is an IPTV player for Android TV and Fire TV. You bring your own provider (an Xtream Codes login or an M3U link); the app doesn't include any channels.
+This guide covers **Avid Viewer 1.19.0**, the current public release. Avid Viewer is an IPTV player for Android TV and Fire TV. You bring your own provider (an Xtream Codes login or an M3U link); the app doesn't include any channels.
 
 **Contents:** [Getting started](#1-getting-started) · [Main menu](#2-main-menu) · [TV Guide](#3-tv-guide) · [Full-screen playback](#4-full-screen-playback) · [Search](#5-search) · [Discover](#6-discover) · [Sports](#7-sports) · [Movies and Series](#8-movies-and-series) · [Settings](#9-settings) ([Profiles](#profiles)) · [Privacy](#10-privacy) · [Troubleshooting](#11-troubleshooting) · [Control4](#12-control4) · [Supplemental services](#13-supplemental-services) · [Cable & satellite](#14-using-your-cable-or-satellite-subscription) · [Release notes](#release-notes)
 
@@ -309,6 +309,7 @@ Sports lists real games from **ESPN's schedules** for today and the next 2 days,
   - **In the guide:** a listing during the game that names both teams.
   - **Event channel:** the channel's name has both teams, for example "NHL 03: Red Wings @ Blues".
   - **Local TV:** a team's regional network (FanDuel Sports Network, MSG, Altitude…).
+- **Ready when you open it (1.19.0):** about 2 minutes after the app starts, Sports gets the schedules and finds the channels in the background, so the screen is ready. Hidden channels and hidden categories are left out, guide listings included. With **All**, the details show the first game in the list.
 - **OK on a game** moves to its channels. **OK on a channel** plays it in the preview; **OK** again opens full screen. In full screen, **Channel Up/Down** goes through that game's channels, best first, wrapping around at the end; the info bar shows the game and "channel 2 of 3". **Back** returns to Sports with the channel you were watching (or the game) highlighted.
 - **Every playlist:** Sports searches every switched-on playlist with live TV. Hidden channels and categories are skipped.
 - **North America only:**
@@ -427,7 +428,7 @@ Profiles are included in backups (see [Backup & restore](#backup--restore)).
 
 ![Settings › TV guide](images/settings-tv-guide.jpg)
 
-- **Download the guide every**: 4, 8, 12 or 24 hours (8 is the default). The app also follows this while it stays open. Each download keeps up to 7 days of listings. A guide source that hasn't changed since the last download isn't downloaded again.
+- **Download the guide every**: 4, 8, 12 or 24 hours (8 is the default). The app also follows this while it stays open. Each download keeps up to 7 days of listings. A guide source that hasn't changed since the last download isn't downloaded again. From 1.19.0 the guide keeps programmes only for channels some profile on this TV can see (and any channel in a profile's Favorites or lists); showing a hidden channel or category again downloads the guide again after about 20 seconds.
 - **Last downloaded**: when each playlist's guide last downloaded and how many sources it has. **Download the guide now** gets every guide again.
 - **Channels matched by hand**: how many there are, with **Clear all matches** (asks first).
 
@@ -591,7 +592,9 @@ The app notes every freeze in the playback log, with its likely cause. Open **Me
 - **"data stopped arriving… the provider's server paused the stream"**: no error, but nothing came. Usually the provider.
 - **"the TV's video decoder"** (picture stopped while the sound went on, or many dropped frames): the TV struggled with the video, often 4K or HEVC on a Fire TV Stick. Try the HD version of the channel.
 
-**Automatic reconnect (1.10.0).** When the picture stands still for 5 seconds while the sound plays, or no data has arrived for 4 seconds with less than 8 seconds left in the buffer, the app reopens the stream by itself and shows "Reconnecting…". Live channels come back at the live point, movies and episodes where they were. It doesn't reconnect in a channel's first 10 seconds, and stops after 3 reconnects in 3 minutes on one channel (a channel that keeps failing usually has a provider problem). Each reconnect is in the playback log, with whether the picture came back.
+**Automatic reconnect (1.10.0).** When the picture stands still for 5 seconds while the sound plays, or no data has arrived for 4 seconds with less than 8 seconds left in the buffer, the app reopens the stream by itself and shows "Reconnecting…". Live channels come back at the live point, movies and episodes where they were. It doesn't reconnect in a channel's first 10 seconds. From 1.19.0: a second reconnect within a minute restarts the player completely; after 3 reconnects in 3 minutes it keeps trying every 30 seconds while the picture stays stuck (before, it stopped); it also reconnects when the picture has waited 6 seconds while the provider only trickles data, and when the picture keeps stopping for a moment (more than 5 times in 30 seconds, logged once as "Stuttered N times"). Each reconnect is in the playback log, with whether the picture came back.
+
+**Channels that won't play (1.19.0).** The message says why: "The provider refused this channel (HTTP 405)…" (often a channel that isn't in your subscription or is off the air), "Can't find the provider's server…" (check the internet connection or DNS), or "The provider's server isn't answering…". A channel the provider refused is marked **⚠ didn't play** in the guide for a day; the mark goes as soon as it plays. To take it out of the guide, use Menu › Hide channel.
 
 Sending the log (Send playback log) helps us find a pattern across days.
 
@@ -765,7 +768,27 @@ Every public release since 1.0.35, newest first. From 1.1.0, versions are number
 
 <!-- new-releases: entries for new builds are added automatically below this line -->
 
-### 1.18.0 — November 18, 2026, 5:16 AM CT (current)
+### 1.19.0 — November 18, 2026, 10:16 AM CT (current)
+
+**Release notes**
+
+- **No more "stopped responding" on accounts with big playlists:** a once-a-minute check that froze the remote on some Fire TVs now runs in the background, and only when channels change.
+- **Frozen channels keep trying:** after 3 reconnects in 3 minutes the app keeps reconnecting every 30 s while the picture stays stuck (before, it gave up); a second reconnect within a minute restarts the player completely; streams that only trickle, or keep stopping for a moment, are reconnected too.
+- **Screens draw once:** back from full screen the guide comes back full width straight away, and lists open on where you were instead of jumping there.
+- **Sports is ready when you open it** (it loads about 2 minutes after start), finds channels faster by skipping hidden ones, and with **All** shows the first game in the list.
+- **The guide keeps only channels you can watch** (hidden on every profile = not kept, unless in Favorites or a list); showing a channel again downloads the guide again.
+- **Channels that won't play say why** ("The provider refused this channel (HTTP 405)…", "Can't find the provider's server…") and are marked **⚠ didn't play** in the guide for a day.
+- **Fewer crashes and better reports:** a key press that pointed at something off screen no longer closes the app; crash reports say when the app had stopped responding; no duplicate report emails.
+
+**Change log**
+
+- App no longer stops responding during account checks; frozen channels keep reconnecting; screens draw once
+- Sports is ready before it's opened; its channel search skips hidden channels' guide
+- The guide keeps only channels some profile on the TV can see
+- Crash and playback reports retry only when the relay was never reached (no duplicate emails, #27)
+- GitHub issues #20 #22 #23 #24 #25 #29
+
+### 1.18.0 — November 18, 2026, 5:16 AM CT
 
 **Release notes**
 

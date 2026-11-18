@@ -11,7 +11,14 @@ on:
       - ".github/scripts/update_user_guide.py"
       - ".github/scripts/build_guide_pdf.py"
       - ".github/scripts/guide-pdf.css"
+  # Actions › Build APK › Run workflow on "next" with "Publish to beta" ticked: a GitHub pre-release for beta devices
+  # ("1.20.0 beta 2", tag beta-v1.20.0-2.<build>). Public TVs read only releases/latest, which never returns a pre-release.
   workflow_dispatch:
+    inputs:
+      beta:
+        description: "Publish to beta (run on next)"
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -78,6 +85,17 @@ jobs:
           git fetch -q --tags --unshallow origin 2>/dev/null || git fetch -q --tags origin
           .github/scripts/next_version.sh ${{ github.run_number }}
 
+      # A beta of the coming version: its number counts the betas of that version already published.
+      - name: Beta version
+        id: beta
+        if: inputs.beta && github.ref == 'refs/heads/next'
+        run: |
+          v=${{ steps.ver.outputs.version }}
+          n=$(( $(git tag --list "beta-v$v-*" | wc -l) + 1 ))
+          echo "name=$v beta $n" >> "$GITHUB_OUTPUT"
+          echo "tag=beta-v$v-$n.${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+          echo "Beta: $v beta $n"
+
       - name: Build release APK
         if: github.ref != 'refs/heads/ci-check'
         env:
@@ -86,7 +104,7 @@ jobs:
           SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_PASSWORD }}
           SIGNING_KEY_ALIAS: avidviewer
           VERSION_CODE: ${{ github.run_number }}
-          VERSION_NAME: ${{ steps.ver.outputs.version }}
+          VERSION_NAME: ${{ steps.beta.outputs.name || steps.ver.outputs.version }}
         run: gradle --no-daemon assembleRelease
 
       - name: Rename APK
@@ -128,3 +146,15 @@ jobs:
           body: Install AvidViewer.apk on your TV box. New versions install over the old one and keep your settings.
           files: AvidViewer.apk
           make_latest: true
+
+      - name: Publish beta (pre-release)
+        if: steps.key.outputs.signed == 'true' && steps.beta.outputs.tag != ''
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.beta.outputs.tag }}
+          target_commitish: ${{ github.sha }}
+          name: Avid Viewer ${{ steps.beta.outputs.name }}
+          body: Beta build for devices in the Avid Viewer beta. Offer it to them in the admin view (avidviewer.app/admin › Beta).
+          files: AvidViewer.apk
+          prerelease: true
+          make_latest: false
