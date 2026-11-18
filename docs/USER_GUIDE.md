@@ -57,7 +57,7 @@ While Avid Viewer is open, a device picks up changes within a minute: a playlist
 
 **The website's tabs:** Playlists · Profiles · Devices (profiles on each device, rename, remove, Add a device) · Backups (each device's backup, Show PIN, how to restore) · Account (passkeys, locked logins, signed-in browsers, privacy, delete account).
 
-**Private by design:** each device's copy is locked with a key only that device has (made when it's linked; it never leaves the device), and the copy kept in your account is locked with your passkey. The website can't read your logins. To help you choose what each profile sees, devices send each account playlist's category and channel names and counts; what you watch is never sent.
+**Private by design:** each device's copy is locked with a key only that device has (made when it's linked; it never leaves the device), and the copy kept in your account is locked with your passkey. The website can't read your logins. To help you choose what each profile sees, devices send each account playlist's category and channel names and counts. Where you stopped (see [Pick up where you left off](#pick-up-where-you-left-off)) is sent locked, so the website can't read what you watch.
 
 **Watching now:** the Playlists and Devices pages show which playlists are playing, on which device and profile, and for how long, never the channel or title. **Stop stream** ends playback on that device within a few seconds (useful when your provider allows only one or two streams); the device says **This stream was stopped from your account** and offers **Watch again**.
 
@@ -67,8 +67,9 @@ From 1.17.0, where a profile stopped in each movie and episode, and the episodes
 
 - A title's page says where it stopped on another TV (for example **Stopped at 34:12 on Living room, today 8:40 PM**) with **▶ Resume** and **Start over**. A series opens on the next episode as usual, including episodes finished on another TV.
 - **Continue watching** (Movies and Series) lists the newest first; a place from another TV says **from Bedroom**. A series stays there until its latest episode is watched, and comes back when a new episode or season appears (1.17.1). **Menu** on a poster there removes it, on every TV; a removed series stays off until something new happens to it.
+- **The last live channel** (1.18.0) comes first in Continue watching, on every TV: the channel this profile last watched for 2 minutes or more, until the program on it ends (if less than 10 minutes were left when you stopped, until the next one ends; 1 hour on a channel with no guide). **OK** tunes it; **Menu** › Remove takes it off. When this TV's own last channel is newer, it comes second. On the website it's on the profile's **Watching** tab ("Live TV · until 9:00 PM").
 - The same title on another playlist (another provider, a 4K copy) picks up there too, matched by title and year, or series, season and episode.
-- **Private:** everything is locked on the TV with a key only your TVs and your passkey have; avidviewer.app and its admins can't read titles, times or TV names. The first time, unlock once with your passkey on the website (Needs your attention says when a TV is waiting for the key). Live TV is never sent.
+- **Private:** everything is locked on the TV with a key only your TVs and your passkey have; avidviewer.app and its admins can't read titles, times or TV names. The first time, unlock once with your passkey on the website (Needs your attention says when a TV is waiting for the key). For live TV only the last channel is sent, never the program (1.18.0).
 - **On by default.** Turn it off for the whole account (Account tab, **Keep my watch history**) or for one profile (the profile's **Watching** tab, which also lists its places with **Mark watched** and **Remove**, and has **Clear history**). Off deletes what your account holds; each TV keeps its own place. **Pause history** on a TV stops that TV sending.
 - **Kids profiles** never share where they stopped and have no Discover, for their privacy.
 
@@ -76,8 +77,8 @@ From 1.17.0, where a profile stopped in each movie and episode, and the episodes
 
 From 1.16.0, **favorites and lists belong to a profile** and follow it to every TV, and **the order and names of a playlist's live categories and channels** belong to the playlist, for every profile and device. Change them on the website or on a TV (Add to List, Re-order, Rename): the change reaches the account and the other TVs within a minute while Avid Viewer is open, and **the most recent change wins**, wherever it was made. The first time a TV syncs a profile, its favorites and lists are combined with the account's (lists with the same name become one).
 
-- **Favorites & lists** (a profile's page): pick ★ Favorites or a list on the left. **＋ Add channels** searches all of the profile's playlists or lets you browse a playlist's categories, listing every channel; tick channels, or use **Select all** / **Select none** for the channels shown (1.17.2), and choose **Add**. Each channel has **⤒** (top), **▲ ▼** (one step), **⤓** (bottom) and **✕** (remove from the list). **＋ New list**, and for a list: **Rename**, **Hide on the TV**, **Delete list**. Drag lists to change their order on the TV; ★ Favorites is always first. Channels the profile can't see aren't offered.
-- **Order & names** (a playlist's page): categories on the left, the chosen category's channels on the right. **Rename** in place (the provider's name shows underneath; empty = the provider's name; Enter saves, Esc cancels). **Arrange:** A–Z or the provider's order. **Undo last change**, and **Reset all to the provider's order and names**.
+- **Favorites & lists** (a profile's page): pick ★ Favorites or a list on the left. **＋ Add channels** searches all of the profile's playlists or lets you browse a playlist's categories, listing every channel; tick channels, or use **Select all** / **Select none** for the channels shown (1.17.2), and choose **Add**. Each channel has **⤒** (top), **▲ ▼** (one step), **⤓** (bottom) and **✕** (remove from the list). **＋ New list**, and for a list: **Rename**, **Hide on the TV**, **Delete list**. Drag lists to change their order on the TV; ★ Favorites is always first. **Sort** (1.18.0) for each list: **A–Z** (channels from every playlist mixed, by name) or **Manual**; dragging a channel switches to Manual. Channels the profile can't see aren't offered.
+- **Order & names** (a playlist's page): categories on the left, the chosen category's channels on the right. **Rename** in place (the provider's name shows underneath; empty = the provider's name; Enter saves, Esc cancels). **Sort channels** (1.18.0): **Provider's order · A–Z · Manual**, one setting for every category of the playlist, on every profile and device; A–Z uses the names as shown, renames included; dragging a channel switches to Manual, starting from the order shown. Categories: **Arrange:** A–Z or the provider's order. **Undo last change**, and **Reset all to the provider's order and names**.
 - **Drag and drop:** drag a row by **⋮⋮** with a mouse or finger; the page scrolls at the top and bottom edges. With a keyboard: Tab to ⋮⋮, **Space** to pick it up, **↑ ↓** to move, **Space** to drop, **Esc** to cancel.
 - Live TV only for now: movie and series category order is still set on each TV.
 
@@ -122,7 +123,7 @@ At the bottom of the menu you'll see:
 - **Current weather** (if a postal code is set and Show weather is on).
 - An **Update x.y.z** button when a new version is available.
 
-When the TV has more than one profile, the app first asks **Who's watching?** (or opens the last profile used, if you chose that in Settings › Profiles). Then it opens on the TV Guide with the menu shown as icons, on:
+When the TV has a Kids profile, the app first asks **Who's watching?**; otherwise it opens on the last profile used (see [Which profile opens](#profiles)). Then it opens on the TV Guide with the menu shown as icons, on:
 
 1. the last channel you watched, in its own category;
 2. if that channel is in ★ Favorites or one of your lists, that list (the channel can belong to another playlist);
@@ -200,13 +201,15 @@ When you choose Re-order, a small help panel appears at the top right, over the 
 
 With a linked account (1.16.0), a playlist's live category and channel order and names go to every TV, and can also be set on the website.
 
+**Sorting** (1.18.0): **Menu on a category › Sort channels** chooses **Provider's order**, **A–Z** (by the name as shown, renames included) or **Manual** for every category of the playlist, on every profile and TV (also Settings › Playlists › a playlist › **Channel order**). Re-ordering a channel in a playlist sorted A–Z or by the provider switches it to Manual, starting from the order on screen. Categories are always in your own order.
+
 While you're moving it, the item has a blue outline. A category shows its position (for example "4/27") and a channel shows ⇅ in place of its number. Channels move within whatever the guide is showing (a category, ★ Favorites or one of your lists), and channel numbers follow the new order.
 
 ### Favorites and your lists
 
 - **★ Favorites** gathers channels from every playlist in one place and is always shown. From 1.16.0, with a linked account, favorites and lists follow the profile to every TV and can be managed on the website ([Organizing on the website](#organizing-on-the-website)). Favorites, lists, renames, hidden channels and guide matches stay on the right channels when your provider adds, removes or reorders channels, and after restoring a backup.
 - **Your lists** (for example "Kids" or "News") can also hold channels from any playlist. Make one with **＋ New list** or from Add to List.
-- Press **Menu on a list** to **Rename**, **Move up / Move down** or **Delete** it. Deleting asks you to confirm; the channels stay in your playlists.
+- Press **Menu on a list** to **Rename**, **Move up / Move down**, **Sort** or **Delete** it. **Menu on ★ Favorites** has **Sort**. Sort (1.18.0): **A–Z** mixes channels from every playlist by name; **Manual** keeps your order. Each profile sorts its own lists; re-ordering a channel switches the list to Manual. Deleting asks you to confirm; the channels stay in your playlists.
 - **Suggested near [your town]**: at the top of Favorites, the app suggests channels from your playlists that look local to your postal code. Press **＋ Add to List** to keep one; the highlight moves on to the next suggestion. **Hide suggestions** is at the right of the heading: press **▲** from a suggestion to reach it. Dismissed channels aren't suggested again unless you restore them in Settings.
 - **Removing a channel** from Favorites or a list (Menu › Remove, the Add to List picker, or hiding it) keeps the highlight on the channel that takes its place.
 
@@ -398,11 +401,11 @@ Each profile also has its own **theme** (colours) and its own Movies and Series 
 
 **On a device that isn't linked,** Settings › Profiles works as before: **＋ Add profile**, **＋ Add Kids profile** (if no grown-up has a PIN yet, the app asks you to set the first profile's PIN), and for each profile **Edit** (name, colour, theme; a Kids profile's categories), **Set PIN / Change PIN**, **Parent**, **Delete…**. In a profile that isn't a parent, changing profiles asks for a parent's PIN.
 
-**Which profile opens when the app starts (1.15.0)**
+**Which profile opens when the app starts (1.18.0)**
 
 - **One profile (or none):** there are no profiles anywhere: no Who's watching?, no switcher, no profile on the info bar.
-- **A Kids profile on the device:** the app opens on Kids (the last Kids profile used on this device, otherwise the first one in your account's order) and shows a 5-second **Watching as Kids** splash with **Change profile**. Back, or waiting, continues.
-- **No Kids profile:** the app opens straight on the last profile used, with no splash (if that profile has its own PIN, Who's watching? asks for it).
+- **A Kids profile on the device:** the app opens on **Who's watching?**, with the Kids profile highlighted (the last Kids profile used on this device, otherwise the first one in your account's order). **OK** opens Kids; a grown-up profile asks for its PIN. Nothing plays until a profile is chosen. (1.15.0–1.17.2 opened Kids with a 5-second splash instead.)
+- **No Kids profile:** the app opens straight on the last profile used (if that profile has its own PIN, Who's watching? asks for it).
 
 **Kids profile on the TV**
 
@@ -412,7 +415,7 @@ Each profile also has its own **theme** (colours) and its own Movies and Series 
 
 **Who's watching? and switching**
 
-- **Who's watching?** (from the splash's **Change profile**, or **Switch profile**): **Left/Right** pick a profile, **OK** opens it. Profiles that need a PIN show "PIN"; Kids profiles show "Kids".
+- **Who's watching?** (at start with a Kids profile, or from **Switch profile**): **Left/Right** pick a profile, **OK** opens it. Profiles that need a PIN show "PIN"; Kids profiles show "Kids".
 - **Switch profile**: **OK** on the profile at the top of the main menu.
 - **The profile in use** shows on the info bar over video (above the clock, and on movies and episodes), on devices with two or more profiles.
 - **PIN**: type the 4 digits with the remote's number keys or the on-screen pad. A profile's own PIN or any parent's PIN opens it. After 5 wrong PINs in a row the app says "Too many tries. Wait a minute."
@@ -533,7 +536,7 @@ From 1.11.0 a device can be linked to an Avid Viewer account at avidviewer.app. 
 - **Linked:** Settings › Account shows the account and this device's name. **Sign out of this device** (asks first) unlinks it and forgets its backup PIN; playlists and settings on the device stay.
 - **Your devices** on avidviewer.app/account shows each linked device's name, model, app version and when it last checked in, with **Rename** and **Remove**. A removed device unlinks itself the next time it checks in (a minute after the app starts, then every 6 hours); its backup stays in your account for 30 days.
 - **Profiles on this device** (1.15.0, Settings › Account): the account's profiles on this device and their playlists, with **Check for changes now**.
-- **What's shared:** linking sends the device's name, model and Avid Viewer version; from 1.14.0 also a public key, so the website can send it playlists only it can open; from 1.15.0 its profiles (names, Kids, Parent, PINs as salted hashes) the first time, the category and channel names of your account's playlists, and while something plays, which playlist and profile (for Watching now). Your settings go to your account only in a backup, locked with your backup PIN. What you watch is never sent.
+- **What's shared:** linking sends the device's name, model and Avid Viewer version; from 1.14.0 also a public key, so the website can send it playlists only it can open; from 1.15.0 its profiles (names, Kids, Parent, PINs as salted hashes) the first time, the category and channel names of your account's playlists, and while something plays, which playlist and profile (for Watching now). Your settings go to your account only in a backup, locked with your backup PIN. From 1.17.0, where each profile stopped (movies, episodes and, from 1.18.0, the last live channel) is sent locked with a key only your TVs and your passkey have; the website and its admins can't read it. Watching now shows only the playlist, device and profile, never the channel or title.
 
 #### Backup & restore
 
@@ -763,6 +766,13 @@ Every public release since 1.0.35, newest first. From 1.1.0, versions are number
 <!-- new-releases: entries for new builds are added automatically below this line -->
 
 ### 1.18.0 — November 18, 2026, 5:16 AM CT (current)
+
+**Release notes**
+
+- **The last live channel in Continue watching:** the live channel this profile last watched, on any TV, comes first until its program ends. OK tunes it; Menu › Remove takes it off. Only the channel is sent, locked; never the program. See [Pick up where you left off](#pick-up-where-you-left-off).
+- **Sort channels:** one setting per playlist, **Provider's order · A–Z · Manual**, for every category, profile and TV (Menu on a category › Sort channels; Settings › Playlists › Channel order; the website's Order & names). A–Z uses the names as shown, renames included. Moving a channel switches to Manual.
+- **Sort ★ Favorites and lists:** A–Z (channels from every playlist mixed) or Manual, per profile (Menu on the list; the website's Favorites & lists).
+- **Who's watching? first with a Kids profile**, with Kids highlighted; without one, the app opens straight on the last profile used. The Kids splash is gone.
 
 **Change log**
 
