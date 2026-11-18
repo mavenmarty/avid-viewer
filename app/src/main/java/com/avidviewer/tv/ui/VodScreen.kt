@@ -491,7 +491,7 @@ private fun VodDetail(vm: AppViewModel, v: VodItem) {
             val stars = (info?.rating?.ifBlank { null } ?: v.rating).takeIf { it.isNotBlank() && it != "0" }
             Row(horizontalArrangement = Arrangement.spacedBy(32.dp), modifier = Modifier.padding(vertical = 4.dp)) {
                 genre?.let { DetailFact("Genre", it, v.category.takeIf { c -> c.isNotBlank() && !c.equals(it, true) }) }
-                on?.let { DetailFact("On", it, if (versions.size > 1) "${versions.size} versions" else null) }
+                on?.let { DetailFact("On", it, if (versions.size > 1) "and ${versions.size - 1} more copies" else null) }
                 stars?.let { DetailFact("Rating", "★ $it", "provider") }
             }
             // 1.17.0: where this profile stopped on another TV.
