@@ -288,10 +288,7 @@ fun GroupNav(vm: AppViewModel) {
     }
     fun navItemOf(k: String) = navKeys().indexOf(when { k == FAV_GROUP -> "fav"; isListGroup(k) -> "list-" + k.removePrefix(LIST_PREFIX); else -> "g:$k" })
     // R-4: the list opens already scrolled to the current category (it used to draw from the top, then jump there).
-    val navState = remember {
-        val item = (vm.navFocusKey ?: vm.selectedGroup)?.let { navItemOf(it) } ?: -1
-        androidx.compose.foundation.lazy.LazyListState(if (item > 3) item - 3 else 0)
-    }
+    val navState = androidx.compose.foundation.lazy.rememberLazyListState()
     // Re-order mode: keep the moving category on screen as it moves.
     val moving = vm.movingGroup
     LaunchedEffect(moving, groups.indexOfFirst { it.raw == moving }) {
