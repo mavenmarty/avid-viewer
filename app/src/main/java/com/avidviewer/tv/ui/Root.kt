@@ -109,11 +109,17 @@ fun AppRoot(vm: AppViewModel) {
                 if (!guideFull) NavRail(vm)
                 if (browsing && vm.navMode == NavMode.COLLAPSED) PlaylistTree(vm)
                 if (browsing && vm.navMode == NavMode.GROUPS && !guideFull) GroupNav(vm)
+                // Whether the guide area had the highlight since it appeared (its first "no highlight" report, before the
+                // highlight arrives, isn't a loss).
+                val guideHad = remember { booleanArrayOf(false) }
                 Box(Modifier.fillMaxHeight().weight(1f).onFocusChanged {
                     // Into the guide from the category list (a category chosen, ▶): the full layout at once, even
                     // if a request to highlight a category was still pending. Losing the highlight (to full screen,
-                    // a dialog) changes nothing: only the menus taking it bring them back (R-1).
+                    // or a channel's dialogs) changes nothing, so coming back doesn't redraw (R-1); anywhere else, the
+                    // menus come back as before.
                     if (browsing && it.hasFocus) { if (!vm.guideHasFocus) vm.navFocusKey = null; vm.guideHasFocus = true }
+                    else if (!it.hasFocus && guideHad[0] && !vm.guideAwayBriefly()) vm.guideHasFocus = false
+                    guideHad[0] = it.hasFocus
                 }) {
                     when (vm.screen) {
                         Screen.SEARCH -> SearchScreen(vm)

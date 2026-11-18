@@ -282,7 +282,7 @@ class NavigationFixesTest {
         key(Key.DirectionCenter) // preview
         key(Key.DirectionCenter) // full screen
         assertTrue(waitFor(3_000) { vm.screen == Screen.PLAYER })
-        assertTrue("still meant to be full width while in full screen", vm.guideFullLayout)
+        assertTrue("the guide still counts as having the highlight while in full screen", vm.guideHasFocus)
         // Back, then look at the very first frame drawn.
         rule.mainClock.autoAdvance = false
         try {

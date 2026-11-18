@@ -105,7 +105,7 @@ fun NavRail(vm: AppViewModel) {
 
     Column(
         Modifier.width(if (expanded) 176.dp else 60.dp).fillMaxHeight().background(C.Rail)
-            .onFocusChanged { railFocused = it.hasFocus; if (it.hasFocus) vm.guideHasFocus = false }
+            .onFocusChanged { railFocused = it.hasFocus }
             .padding(horizontal = 8.dp, vertical = 10.dp),
         verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
@@ -206,7 +206,7 @@ fun PlaylistTree(vm: AppViewModel) {
         focusWhenReady(vm) { runCatching { first.requestFocus() }.isSuccess }
     }
     LazyColumn(
-        Modifier.width(250.dp).fillMaxHeight().background(C.Bg).onFocusChanged { vm.inPlaylistTree = it.hasFocus; if (it.hasFocus) vm.guideHasFocus = false },
+        Modifier.width(250.dp).fillMaxHeight().background(C.Bg).onFocusChanged { vm.inPlaylistTree = it.hasFocus },
         state = treeState,
         contentPadding = PaddingValues(10.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp),
@@ -314,7 +314,7 @@ fun GroupNav(vm: AppViewModel) {
     }
     LazyColumn(
         state = navState,
-        modifier = Modifier.width(210.dp).fillMaxHeight().background(C.Rail).onFocusChanged { vm.inGroupNav = it.hasFocus; if (it.hasFocus) vm.guideHasFocus = false }.dimWhenInactive(),
+        modifier = Modifier.width(210.dp).fillMaxHeight().background(C.Rail).onFocusChanged { vm.inGroupNav = it.hasFocus }.dimWhenInactive(),
         contentPadding = PaddingValues(10.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {

@@ -4435,6 +4435,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     val guideFullLayout: Boolean
         get() = (screen == Screen.LIVE || screen == Screen.GUIDE) && navMode == NavMode.GROUPS && selectedGroup != null &&
             guideHasFocus && navFocusKey == null
+    /** The guide lost the highlight only for a moment: full screen, or a dialog about a channel (R-1). */
+    fun guideAwayBriefly(): Boolean = screen == Screen.PLAYER || channelMenu != null || matchingChannel != null || listPickerKey != null
     /** The width of the guide's programme area last measured, full width and not (R-3: the first frame uses it). */
     var guideGridWidthFull = 0f
     var guideGridWidthNarrow = 0f
