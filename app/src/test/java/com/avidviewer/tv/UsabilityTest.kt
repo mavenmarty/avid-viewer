@@ -2506,4 +2506,44 @@ class UsabilityTest {
             assertEquals(SORT_MANUAL, lists.getString("favSort"))
         }
     }
+
+    @Test
+    fun theGuideKeepsOnlyChannelsSomeProfileCanSeeAndDownloadsAgainWhenOneIsShown() {
+        // A guide address that answers (the test playlists' go nowhere), so downloads complete.
+        val server = java.net.ServerSocket(0)
+        kotlin.concurrent.thread(isDaemon = true) {
+            while (!server.isClosed) {
+                val c = runCatching { server.accept() }.getOrNull() ?: break
+                kotlin.concurrent.thread(isDaemon = true) {
+                    c.use { conn ->
+                        val r = conn.getInputStream().bufferedReader()
+                        r.readLine() ?: return@use
+                        while (true) { val l = r.readLine() ?: break; if (l.isEmpty()) break }
+                        val body = "<?xml version=\"1.0\"?><tv></tv>".toByteArray()
+                        conn.getOutputStream().apply { write("HTTP/1.1 200 OK\r\nContent-Type: text/xml\r\nContent-Length: ${body.size}\r\nConnection: close\r\n\r\n".toByteArray()); write(body); flush() }
+                    }
+                }
+            }
+        }
+        val guideUrl = "http://127.0.0.1:${server.localPort}/g.xml"
+        restartWith { st -> st.savePlaylists(st.loadPlaylists().map { if (it.id == TestData.P1) it.copy(epgUrl = guideUrl, epgSources = emptyList()) else it }) }
+        rule.runOnIdle { vm.chooseGroup(TestData.P1, "NEWS") }
+        waitFor("channels") { vm.channelsIn("NEWS").isNotEmpty() }
+        val sports = vm.channels.filter { it.group != "NEWS" && vm.epgIdOf(it) != null }.groupBy { it.group }.entries.first { it.value.size >= 2 }
+        val (fav, other) = sports.value[0] to sports.value[1]
+        val all = kotlinx.coroutines.runBlocking { vm.guideIdsForTests(TestData.P1) }
+        assertTrue(vm.epgIdOf(other)!! in all)
+        // Hidden on the only profile: its guide isn't kept, except a channel that's in Favorites.
+        rule.runOnIdle { vm.updatePrefs { it.copy(favorites = listOf(fav.key)) }; vm.setGroupsHidden(TestData.P1, listOf(sports.key), true) }
+        val kept = kotlinx.coroutines.runBlocking { vm.guideIdsForTests(TestData.P1) }
+        assertFalse("a hidden category's channel isn't kept", vm.epgIdOf(other)!! in kept)
+        assertTrue("a favorite in it still is", vm.epgIdOf(fav)!! in kept)
+        assertTrue(vm.epgIdOf(vm.channelsIn("NEWS").first())!! in kept)
+        // The change is noticed after a pause and the guide downloaded for the new set.
+        waitFor("downloaded for the new set", ms = 60_000) { vm.guideKeptSigForTests(TestData.P1) == kept.sorted().hashCode().toString() }
+        // Shown again: downloaded again, with it.
+        rule.runOnIdle { vm.setGroupsHidden(TestData.P1, listOf(sports.key), false) }
+        waitFor("downloaded again", ms = 60_000) { vm.guideKeptSigForTests(TestData.P1) == all.sorted().hashCode().toString() }
+        server.close()
+    }
 }
