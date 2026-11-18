@@ -28,32 +28,33 @@ This guide covers **Avid Viewer 1.20.1**, the current public release. Avid Viewe
 
 The first time you open Avid Viewer, and every time it starts while there are no playlists, it shows a welcome screen:
 
-- **From 1.17.0 a device is linked to an account before it gets playlists** (licensing): the welcome screen shows the steps to link it, and there is no Add a playlist there.
-- **Link to your account** (right side, from 1.13.0): the device shows its own 8-character code and a QR code. Scan the QR code with your phone (it opens **avidviewer.app/link** with the code filled in), or go to avidviewer.app/link and type the code. Sign in or make an account, then choose **Add this device**. A new code replaces one that runs out (10 minutes). Once it's added, the device offers the backups in your account, for moving from another device; see [Backup & restore](#backup--restore). After linking, the panel says **Linked to** your email with **Restore a backup**.
+- **A device is linked to an account before it gets playlists.** The welcome screen shows the steps to link it; playlists are added on the website, not with the remote.
+- **Link to your account** (right side): the device shows its own 8-character code and a QR code. Scan the QR code with your phone (it opens **avidviewer.app/link** with the code filled in), or go to avidviewer.app/link and type the code. Sign in or make an account, then choose **Add this device**. A new code replaces one that runs out (10 minutes).
+- **Linked:** the screen says **This device is linked** and shows your email. Next, add your playlists at **avidviewer.app/playlists** and give them to a profile on this device; they arrive within a minute while Avid Viewer is open. To copy another device's settings, use **Restore from your account** later in Settings › Updates & about (see [Backup & restore](#backup--restore)).
 
 Once a playlist has been added, the app opens on the TV Guide instead.
 
 ### Set up with your phone
 
-From 1.15.0 your playlists and profiles live in your account at avidviewer.app, and you manage them from a phone or computer instead of the remote: **playlists** go to **profiles**, each profile chooses what it can see, and profiles go to **devices**.
+Your playlists and profiles live in your account at avidviewer.app, and you manage them from a phone or computer instead of the remote: **playlists** go to **profiles**, each profile chooses what it can see, and profiles go to **devices**.
 
 1. **Link the device to your account:** its welcome screen shows a code and a QR code (or Settings › Account › **Link this device**). Scan the QR code with your phone, or type the code at **avidviewer.app/link**, and choose **Add this device**. See [Account](#account).
 2. **Playlists** (avidviewer.app/playlists): **＋ Add a playlist**, enter a **name** and either an **Xtream Codes login** (server, username, password) or an **M3U link**, with an optional guide (XMLTV) link, and tick the **profiles** that get it.
 3. **Profiles** (avidviewer.app/profiles): **＋ Add a profile** for each person (or the kids). **Manage** a profile to choose its playlists, its devices, and **what it can see** in each playlist: categories and channels, for live TV, movies and series.
 4. **Devices** (avidviewer.app/devices): tick the profiles that appear on each device.
-5. **Favorites and lists** (1.16.0): Profiles › **Manage** › **Favorites & lists**. **Order and names** of categories and channels: Playlists › **Edit** › **Order & names**. See [Organizing on the website](#organizing-on-the-website).
+5. **Favorites and lists:** Profiles › **Manage** › **Favorites & lists**. **Order and names** of categories and channels: Playlists › **Edit** › **Order & names**. See [Organizing on the website](#organizing-on-the-website).
 
 While Avid Viewer is open, a device picks up changes within a minute: a playlist arrives when any profile on the device has it, is checked like one added by hand, and leaves when no profile there has it any more. Each page shows where things stand (for example **waiting for the device to open**).
 
-**You type a login only when you add or edit a playlist.** The first time, choose **Set up with passkey** on the Playlists page. From then on the website keeps logins locked with a key that only your **passkey** can unlock: when a profile goes to a new device, the page asks for your passkey (not the login) and locks a copy for that device, and **Edit** can show the saved login. Your devices also send the logins they have (locked so only your browser opens them), so playlists you typed on a TV, or saved before 1.15.0, don't need typing again. Without a passkey (or with a password manager that can't do this yet), the login goes to the devices that have the playlist when you save it, and you type it again for new ones.
+**You type a login only when you add or edit a playlist.** The first time, choose **Set up with passkey** on the Playlists page. From then on the website keeps logins locked with a key that only your **passkey** can unlock: when a profile goes to a new device, the page asks for your passkey (not the login) and locks a copy for that device, and **Edit** can show the saved login. Your devices also send the logins they have (locked so only your browser opens them), so playlists you typed on a TV don't need typing again. Without a passkey (or with a password manager that can't do this yet), the login goes to the devices that have the playlist when you save it, and you type it again for new ones.
 
-**Playlists added on a TV** (1.15.1) are listed under **Added on your devices**. **Add to account** makes one an account playlist for that device's profiles; the device keeps its copy, favorites and everything else. If you add a playlist on the website that a device already has (the same server and username, or the same M3U link), that device uses its own copy for it rather than adding a second one (1.15.2).
+**Playlists added on a TV** are listed under **Added on your devices**. **Add to account** makes one an account playlist for that device's profiles; the device keeps its copy, favorites and everything else. If you add a playlist on the website that a device already has (the same server and username, or the same M3U link), that device uses its own copy for it rather than adding a second one.
 
 **Removing a playlist:** **Remove** on its row takes it off every profile; each device removes it at its next check-in. It stays listed, tagged **Removing**, until every device has confirmed.
 
 **What the website knows** about each playlist shows under its name: live categories and channels, movie and series categories, and which device sent them. If there are none, it says why (for example the device couldn't load the playlist).
 
-**Needs your attention** (1.15.1): every account tab lists what failed or is waiting on you, such as a playlist a device couldn't add (with the device's own words and what to check), a device waiting for a login, a device that needs an update, or changes waiting for a device that hasn't checked in. The tabs show counts. **Dismiss** hides an item until something about it changes; **Show dismissed** brings it back. A device not seen for 7 days is marked **Away**: its changes wait for it, and you can remove it if it's no longer used.
+**Needs your attention:** every account tab lists what failed or is waiting on you, such as a playlist a device couldn't add (with the device's own words and what to check), a device waiting for a login, a device that needs an update, or changes waiting for a device that hasn't checked in. The tabs show counts. **Dismiss** hides an item until something about it changes; **Show dismissed** brings it back. A device not seen for 7 days is marked **Away**: its changes wait for it, and you can remove it if it's no longer used.
 
 **The website's tabs:** Playlists · Profiles · Devices (profiles on each device, rename, remove, Add a device) · Backups (each device's backup, Show PIN, how to restore) · Account (passkeys, locked logins, signed-in browsers, privacy, delete account).
 
@@ -63,32 +64,30 @@ While Avid Viewer is open, a device picks up changes within a minute: a playlist
 
 ### Pick up where you left off
 
-From 1.17.0, where a profile stopped in each movie and episode, and the episodes it finished, follow it to its other TVs:
+Where a profile stopped in each movie and episode, and the episodes it finished, follow it to its other TVs:
 
 - A title's page says where it stopped on another TV (for example **Stopped at 34:12 on Living room, today 8:40 PM**) with **▶ Resume** and **Start over**. A series opens on the next episode as usual, including episodes finished on another TV.
-- **Continue watching** (Movies and Series) lists the newest first; a place from another TV says **from Bedroom**. A series stays there until its latest episode is watched, and comes back when a new episode or season appears (1.17.1). **Menu** on a poster there removes it, on every TV; a removed series stays off until something new happens to it.
-- **The last live channel** (1.18.0) comes first in Continue watching, on every TV: the channel this profile last watched for 2 minutes or more, until the program on it ends (if less than 10 minutes were left when you stopped, until the next one ends; 1 hour on a channel with no guide). **OK** tunes it; **Menu** › Remove takes it off. When this TV's own last channel is newer, it comes second. On the website it's on the profile's **Watching** tab ("Live TV · until 9:00 PM").
+- **Continue watching** (Movies and Series) lists the newest first; a place from another TV says **from Bedroom**. A series stays there until its latest episode is watched, and comes back when a new episode or season appears. **Menu** on a poster there removes it, on every TV; a removed series stays off until something new happens to it.
+- **The last live channel** comes first in Continue watching, on every TV: the channel this profile last watched for 2 minutes or more, until the program on it ends (if less than 10 minutes were left when you stopped, until the next one ends; 1 hour on a channel with no guide). **OK** tunes it; **Menu** › Remove takes it off. When this TV's own last channel is newer, it comes second. On the website it's on the profile's **Watching** tab ("Live TV · until 9:00 PM").
 - The same title on another playlist (another provider, a 4K copy) picks up there too, matched by title and year, or series, season and episode.
-- **Private:** everything is locked on the TV with a key only your TVs and your passkey have; avidviewer.app and its admins can't read titles, times or TV names. The first time, unlock once with your passkey on the website (Needs your attention says when a TV is waiting for the key). For live TV only the last channel is sent, never the program (1.18.0).
+- **Private:** everything is locked on the TV with a key only your TVs and your passkey have; avidviewer.app and its admins can't read titles, times or TV names. The first time, unlock once with your passkey on the website (Needs your attention says when a TV is waiting for the key). For live TV only the last channel is sent, never the program.
 - **On by default.** Turn it off for the whole account (Account tab, **Keep my watch history**) or for one profile (the profile's **Watching** tab, which also lists its places with **Mark watched** and **Remove**, and has **Clear history**). Off deletes what your account holds; each TV keeps its own place. **Pause history** on a TV stops that TV sending.
 - **Kids profiles** never share where they stopped and have no Discover, for their privacy.
 
 ### Organizing on the website
 
-From 1.16.0, **favorites and lists belong to a profile** and follow it to every TV, and **the order and names of a playlist's live categories and channels** belong to the playlist, for every profile and device. Change them on the website or on a TV (Add to List, Re-order, Rename): the change reaches the account and the other TVs within a minute while Avid Viewer is open, and **the most recent change wins**, wherever it was made. The first time a TV syncs a profile, its favorites and lists are combined with the account's (lists with the same name become one).
+**Favorites and lists belong to a profile** and follow it to every TV, and **the order and names of a playlist's live categories and channels** belong to the playlist, for every profile and device. Change them on the website or on a TV (Add to List, Re-order, Rename): the change reaches the account and the other TVs within a minute while Avid Viewer is open, and **the most recent change wins**, wherever it was made. The first time a TV syncs a profile, its favorites and lists are combined with the account's (lists with the same name become one).
 
-- **Favorites & lists** (a profile's page): pick ★ Favorites or a list on the left. **＋ Add channels** searches all of the profile's playlists or lets you browse a playlist's categories, listing every channel; tick channels, or use **Select all** / **Select none** for the channels shown (1.17.2), and choose **Add**. Each channel has **⤒** (top), **▲ ▼** (one step), **⤓** (bottom) and **✕** (remove from the list). **＋ New list**, and for a list: **Rename**, **Hide on the TV**, **Delete list**. Drag lists to change their order on the TV; ★ Favorites is always first. **Sort** (1.18.0) for each list: **A–Z** (channels from every playlist mixed, by name) or **Manual**; dragging a channel switches to Manual. Channels the profile can't see aren't offered.
-- **Order & names** (a playlist's page): categories on the left, the chosen category's channels on the right. **Rename** in place (the provider's name shows underneath; empty = the provider's name; Enter saves, Esc cancels). **Sort channels** (1.18.0): **Provider's order · A–Z · Manual**, one setting for every category of the playlist, on every profile and device; A–Z uses the names as shown, renames included; dragging a channel switches to Manual, starting from the order shown. Categories: **Arrange:** A–Z or the provider's order. **Undo last change**, and **Reset all to the provider's order and names**.
+- **Favorites & lists** (a profile's page): pick ★ Favorites or a list on the left. **＋ Add channels** searches all of the profile's playlists or lets you browse a playlist's categories, listing every channel; tick channels, or use **Select all** / **Select none** for the channels shown, and choose **Add**. Each channel has **⤒** (top), **▲ ▼** (one step), **⤓** (bottom) and **✕** (remove from the list). **＋ New list**, and for a list: **Rename**, **Hide on the TV**, **Delete list**. Drag lists to change their order on the TV; ★ Favorites is always first. **Sort** for each list: **A–Z** (channels from every playlist mixed, by name) or **Manual**; dragging a channel switches to Manual. Channels the profile can't see aren't offered.
+- **Order & names** (a playlist's page): categories on the left, the chosen category's channels on the right. **Rename** in place (the provider's name shows underneath; empty = the provider's name; Enter saves, Esc cancels). **Sort channels:** **Provider's order · A–Z · Manual**, one setting for every category of the playlist, on every profile and device; A–Z uses the names as shown, renames included; dragging a channel switches to Manual, starting from the order shown. Categories: **Arrange:** A–Z or the provider's order. **Undo last change**, and **Reset all to the provider's order and names**.
 - **Drag and drop:** drag a row by **⋮⋮** with a mouse or finger; the page scrolls at the top and bottom edges. With a keyboard: Tab to ⋮⋮, **Space** to pick it up, **↑ ↓** to move, **Space** to drop, **Esc** to cancel.
 - Live TV only for now: movie and series category order is still set on each TV.
-
-**Devices on 1.14.0** keep the playlists sent to them, but need 1.15.0 to use profiles from the account.
 
 ### Add your first playlist
 
 ![Settings › Playlists](images/settings-playlists.jpg)
 
-Easiest: add playlists at avidviewer.app/playlists (see [Set up with your phone](#set-up-with-your-phone)). To type one with the remote, the device must be linked to your account first (1.17.0): on a device that isn't, Add playlist shows its link code instead of the form. Devices that already had playlists before 1.17.0 keep them, and ask to be linked (Not now waits 7 days).
+Easiest: add playlists at avidviewer.app/playlists (see [Set up with your phone](#set-up-with-your-phone)). To type one with the remote, the device must be linked to your account first: on a device that isn't, Add playlist shows its link code instead of the form. A device that has playlists but isn't linked keeps them, and asks to be linked (Not now waits 7 days).
 
 1. Open **Settings › Playlists** and choose **Add playlist**.
 2. Pick the type:
@@ -132,7 +131,7 @@ When the TV has a Kids profile, the app first asks **Who's watching?**; otherwis
 
 ## 3. TV Guide
 
-![The TV Guide: preview and details at the top, categories on the left, the grid on the right](images/tv-guide.jpg)
+![The TV Guide: preview and details at the top, and the guide across the full width, 2 hours at a time](images/tv-guide.jpg)
 
 The TV Guide is the home screen for live TV. Next to the main menu it has:
 
@@ -148,7 +147,7 @@ The TV Guide is the home screen for live TV. Next to the main menu it has:
 
 - The top shows a **preview window** and a **details panel** for the highlighted channel or program: channel number and name (plus the playlist name when you have more than one), the program title with a **New** tag for new episodes, the times with **N min left** and a progress bar (or **starts in …** for a later program), up to two lines about the show, and what's **Next**.
 - Below it is a **timeline grid**: two-line channel names on the left, programs across 2 hours (full width) or 2.5 hours (with the category list), with a line marking "now". Above the times, the row names the category, the day and the time zone ("KIDS · Today · CST"). The columns sit on your clock's :00 and :30.
-- **Left/Right** move between programs. Going past the last program in view scrolls the guide forward by half hours, **as far as the guide has listings, up to 7 days**. The guide doesn't scroll back before now (1.10.0): Left on the first program moves to the channel name, and Left again to the category list.
+- **Left/Right** move between programs. Going past the last program in view scrolls the guide forward by half hours, **as far as the guide has listings, up to 7 days**. The guide doesn't scroll back before now: Left on the first program moves to the channel name, and Left again to the category list.
 - **The program airing now** starts at the left edge; any part that has already aired isn't shown. There's no catch-up: OK plays the channel live.
 - **Day strip:** when the guide reaches past today, a row of buttons sits above the times: **Now**, **Tomorrow**, then the next days (**Sat**, **Sun**…). **OK** on a day moves the guide to that day at the same time as now; **Now** comes back. The day on screen is filled in.
 - **Hold Left** on a later time to jump straight back to now.
@@ -199,17 +198,17 @@ When you choose Re-order, a small help panel appears at the top right, over the 
 - **◀** moves it to the top; **▶** moves it to the bottom.
 - **OK or Back** finishes, and the new order is saved.
 
-With a linked account (1.16.0), a playlist's live category and channel order and names go to every TV, and can also be set on the website.
+With a linked account, a playlist's live category and channel order and names go to every TV, and can also be set on the website.
 
-**Sorting** (1.18.0): **Menu on a category › Sort channels** chooses **Provider's order**, **A–Z** (by the name as shown, renames included) or **Manual** for every category of the playlist, on every profile and TV (also Settings › Playlists › a playlist › **Channel order**). Re-ordering a channel in a playlist sorted A–Z or by the provider switches it to Manual, starting from the order on screen. Categories are always in your own order.
+**Sorting:** **Menu on a category › Sort channels** chooses **Provider's order**, **A–Z** (by the name as shown, renames included) or **Manual** for every category of the playlist, on every profile and TV (also Settings › Playlists › a playlist › **Channel order**). Re-ordering a channel in a playlist sorted A–Z or by the provider switches it to Manual, starting from the order on screen. Categories are always in your own order.
 
 While you're moving it, the item has a blue outline. A category shows its position (for example "4/27") and a channel shows ⇅ in place of its number. Channels move within whatever the guide is showing (a category, ★ Favorites or one of your lists), and channel numbers follow the new order.
 
 ### Favorites and your lists
 
-- **★ Favorites** gathers channels from every playlist in one place and is always shown. From 1.16.0, with a linked account, favorites and lists follow the profile to every TV and can be managed on the website ([Organizing on the website](#organizing-on-the-website)). Favorites, lists, renames, hidden channels and guide matches stay on the right channels when your provider adds, removes or reorders channels, and after restoring a backup.
+- **★ Favorites** gathers channels from every playlist in one place and is always shown. With a linked account, favorites and lists follow the profile to every TV and can be managed on the website ([Organizing on the website](#organizing-on-the-website)). Favorites, lists, renames, hidden channels and guide matches stay on the right channels when your provider adds, removes or reorders channels, and after restoring a backup.
 - **Your lists** (for example "Kids" or "News") can also hold channels from any playlist. Make one with **＋ New list** or from Add to List.
-- Press **Menu on a list** to **Rename**, **Move up / Move down**, **Sort** or **Delete** it. **Menu on ★ Favorites** has **Sort**. Sort (1.18.0): **A–Z** mixes channels from every playlist by name; **Manual** keeps your order. Each profile sorts its own lists; re-ordering a channel switches the list to Manual. Deleting asks you to confirm; the channels stay in your playlists.
+- Press **Menu on a list** to **Rename**, **Move up / Move down**, **Sort** or **Delete** it. **Menu on ★ Favorites** has **Sort**. **Sort:** **A–Z** mixes channels from every playlist by name; **Manual** keeps your order. Each profile sorts its own lists; re-ordering a channel switches the list to Manual. Deleting asks you to confirm; the channels stay in your playlists.
 - **Suggested near [your town]**: at the top of Favorites, the app suggests channels from your playlists that look local to your postal code. Press **＋ Add to List** to keep one; the highlight moves on to the next suggestion. **Hide suggestions** is at the right of the heading: press **▲** from a suggestion to reach it. Dismissed channels aren't suggested again unless you restore them in Settings.
 - **Removing a channel** from Favorites or a list (Menu › Remove, the Add to List picker, or hiding it) keeps the highlight on the channel that takes its place.
 
@@ -221,7 +220,7 @@ While you're moving it, the item has a blue outline. A category shows its positi
 - **OK, Left, Right or Info**: show the info bar (channel number and name, ★ if it's a favorite, playlist, what's on now with times, and **Up next**). It hides after 5 seconds.
 - **Menu**: open **Picture & sound** (below), which also has **＋ Add to List…** for the channel you're watching.
 - **Back**: return to the screen you came from.
-- **Full screen by itself** (from 1.14.0): when a channel is playing in a preview (TV Guide, Favorites, Sports…) and no button is pressed for 5 minutes, the app goes to full screen on that channel, so still menus don't burn into the screen. **Back** returns to where you were. Nothing playing: the menus stay.
+- **Full screen by itself:** when a channel is playing in a preview (TV Guide, Favorites, Sports…) and no button is pressed for 5 minutes, the app goes to full screen on that channel, so still menus don't burn into the screen. **Back** returns to where you were. Nothing playing: the menus stay.
 
 ### Movies and episodes
 
@@ -283,8 +282,8 @@ After you play a channel, program, movie or episode from Search, **Back** return
 Discover shows what's new and popular, and where to watch it, using TMDB and JustWatch data.
 
 - **Tabs**: New, Trending, For you, In theaters.
-- **Per profile (1.17.0)**, on the website (Profiles › a profile › **Discover**): My streaming services, how Discover opens (**Everything**, **On your provider** or **My services**) and **titles for grown-ups** (off: movies rated R or NC-17 are left out; TMDB's lists have no series ratings). My List follows the profile to every TV. Kids profiles have no Discover.
-- **TMDB key for the whole account (1.17.0)**: enter it once on a profile's Discover tab on the website; every TV gets it, locked.
+- **Per profile**, on the website (Profiles › a profile › **Discover**): My streaming services, how Discover opens (**Everything**, **On your provider** or **My services**) and **titles for grown-ups** (off: movies rated R or NC-17 are left out; TMDB's lists have no series ratings). My List follows the profile to every TV. Kids profiles have no Discover.
+- **TMDB key for the whole account:** enter it once on a profile's Discover tab on the website; every TV gets it, locked.
 - **On your provider**: only show titles your own playlists have (the ones tagged **▶ ON YOUR PROVIDER**).
 - **My services**: only show titles on the streaming services you've picked.
 - **Menu on a title**: add it to **My List**, or press again to take it off. A ✓ on the poster shows it's in My List. Only titles on your provider can go in My List.
@@ -309,7 +308,7 @@ Sports lists real games from **ESPN's schedules** for today and the next 2 days,
   - **In the guide:** a listing during the game that names both teams.
   - **Event channel:** the channel's name has both teams, for example "NHL 03: Red Wings @ Blues".
   - **Local TV:** a team's regional network (FanDuel Sports Network, MSG, Altitude…).
-- **Ready when you open it (1.19.0):** about 2 minutes after the app starts, Sports gets the schedules and finds the channels in the background, so the screen is ready. Hidden channels and hidden categories are left out, guide listings included. With **All**, the details show the first game in the list.
+- **Ready when you open it:** about 2 minutes after the app starts, Sports gets the schedules and finds the channels in the background, so the screen is ready. Hidden channels and hidden categories are left out, guide listings included. With **All**, the details show the first game in the list.
 - **OK on a game** moves to its channels. **OK on a channel** plays it in the preview; **OK** again opens full screen. In full screen, **Channel Up/Down** goes through that game's channels, best first, wrapping around at the end; the info bar shows the game and "channel 2 of 3". **Back** returns to Sports with the channel you were watching (or the game) highlighted.
 - **Every playlist:** Sports searches every switched-on playlist with live TV. Hidden channels and categories are skipped.
 - **North America only:**
@@ -354,7 +353,7 @@ Sports lists real games from **ESPN's schedules** for today and the next 2 days,
 
 ![Settings: sections on the left, the open section on the right](images/settings-playback.jpg)
 
-Settings has sections on the left and the open section's options on the right. **Up/Down** move through the sections; the section list scrolls to keep the highlighted one in view. **OK** opens the highlighted section and moves into it, on its first option (**Right** also moves into the open section). Inside a section, Up and Down stop at the first and last option. **Left** at the left edge of a section, or **Back**, returns to that section in the list; **Back** again opens the main menu. From 1.12.0 **Account** is the first section, just above **Playlists** (Settings still opens on Playlists).
+Settings has sections on the left and the open section's options on the right. **Up/Down** move through the sections; the section list scrolls to keep the highlighted one in view. **OK** opens the highlighted section and moves into it, on its first option (**Right** also moves into the open section). Inside a section, Up and Down stop at the first and last option. **Left** at the left edge of a section, or **Back**, returns to that section in the list; **Back** again opens the main menu. **Account** is the first section, just above **Playlists** (Settings still opens on Playlists).
 
 ### Playlists
 
@@ -369,7 +368,7 @@ Settings has sections on the left and the open section's options on the right. *
   - **▤ Guide sources**: where this playlist's TV guide comes from (see below).
   - Switches: **Playlist on** (off hides it everywhere without deleting anything), **Live TV & guide**, and **Movies & series**.
 - **Details** shows the type, server, username, playlist link, TV guide source and status.
-- **From your phone** (under the add form, from 1.14.0): link this device to your account, then add playlists at avidviewer.app/playlists. See [Set up with your phone](#set-up-with-your-phone).
+- **From your phone** (under the add form): link this device to your account, then add playlists at avidviewer.app/playlists. See [Set up with your phone](#set-up-with-your-phone).
 
 **Guide sources** (Settings › Playlists › choose a playlist › ▤ Guide sources)
 
@@ -392,20 +391,20 @@ Each person in the household can have their own profile. A profile has its own �
 
 Each profile also has its own **theme** (colours) and its own Movies and Series **layout**. See [Display & time](#display--time).
 
-**Profiles from your account (1.15.0).** On a linked device, profiles are managed at **avidviewer.app/profiles**, with their PINs, playlists and what each one can see, and each device shows the profiles ticked for it at avidviewer.app/devices. Settings › Profiles then says **Managed at avidviewer.app** and lists them (each can still pick its colour theme). The first time a device on 1.15.0 checks in, its own profiles are added to your account (a profile with the same name as one already there becomes that one), with their PINs, what they hid in the account's playlists and, for Kids, their categories; their favorites and history stay on the device. A profile taken off a device disappears from it, but its favorites and history stay there in case it comes back.
+**Profiles from your account.** On a linked device, profiles are managed at **avidviewer.app/profiles**, with their PINs, playlists and what each one can see, and each device shows the profiles ticked for it at avidviewer.app/devices. Settings › Profiles then says **Managed at avidviewer.app** and lists them (each can still pick its colour theme). The first time a device checks in, its own profiles are added to your account (a profile with the same name as one already there becomes that one), with their PINs, what they hid in the account's playlists and, for Kids, their categories; their favorites and history stay on the device. A profile taken off a device disappears from it, but its favorites and history stay there in case it comes back.
 
 **On the website:**
 
 - **New profile:** a name and colour; **Parent** (its PIN unlocks any profile on the TV); a 4-digit **PIN** (optional unless your account has a Kids profile).
-- **Kids profile:** sees only the categories you allow (everything starts hidden; adult categories can never be shown). Before a Kids profile is created, every grown-up profile needs a PIN, so a child can't switch to it; the page asks for any that are missing. A Kids profile that came from a device whose grown-ups have no PIN stays unfinished (not sent to devices) until you choose **Finish setting up** and set them (1.15.1). A grown-up's PIN can't be removed while a Kids profile exists. PINs are saved only as a salted one-way hash and reach devices the same way.
-- **What a profile can see:** pick a playlist, then **Live TV**, **Movies** or **Series**: each category is **Shown** or **Hidden**; open a live category to hide single channels. Hidden items disappear from the guide, search, Favorites and Sports for that profile on every device it's on. The names come from the playlist as a device last downloaded it. The page says whose choices you're editing, for which playlist, and when they were last saved; each profile keeps its own (1.17.2).
+- **Kids profile:** sees only the categories you allow (everything starts hidden; adult categories can never be shown). Before a Kids profile is created, every grown-up profile needs a PIN, so a child can't switch to it; the page asks for any that are missing. A Kids profile that came from a device whose grown-ups have no PIN stays unfinished (not sent to devices) until you choose **Finish setting up** and set them. A grown-up's PIN can't be removed while a Kids profile exists. PINs are saved only as a salted one-way hash and reach devices the same way.
+- **What a profile can see:** pick a playlist, then **Live TV**, **Movies** or **Series**: each category is **Shown** or **Hidden**; open a live category to hide single channels. Hidden items disappear from the guide, search, Favorites and Sports for that profile on every device it's on. The names come from the playlist as a device last downloaded it. The page says whose choices you're editing, for which playlist, and when they were last saved; each profile keeps its own.
 
 **On a device that isn't linked,** Settings › Profiles works as before: **＋ Add profile**, **＋ Add Kids profile** (if no grown-up has a PIN yet, the app asks you to set the first profile's PIN), and for each profile **Edit** (name, colour, theme; a Kids profile's categories), **Set PIN / Change PIN**, **Parent**, **Delete…**. In a profile that isn't a parent, changing profiles asks for a parent's PIN.
 
-**Which profile opens when the app starts (1.18.0)**
+**Which profile opens when the app starts**
 
 - **One profile (or none):** there are no profiles anywhere: no Who's watching?, no switcher, no profile on the info bar.
-- **A Kids profile on the device:** the app opens on **Who's watching?**, with the Kids profile highlighted (the last Kids profile used on this device, otherwise the first one in your account's order). **OK** opens Kids; a grown-up profile asks for its PIN. Nothing plays until a profile is chosen. (1.15.0–1.17.2 opened Kids with a 5-second splash instead.)
+- **A Kids profile on the device:** the app opens on **Who's watching?**, with the Kids profile highlighted (the last Kids profile used on this device, otherwise the first one in your account's order). **OK** opens Kids; a grown-up profile asks for its PIN. Nothing plays until a profile is chosen.
 - **No Kids profile:** the app opens straight on the last profile used (if that profile has its own PIN, Who's watching? asks for it).
 
 **Kids profile on the TV**
@@ -428,7 +427,7 @@ Profiles are included in backups (see [Backup & restore](#backup--restore)).
 
 ![Settings › TV guide](images/settings-tv-guide.jpg)
 
-- **Download the guide every**: 4, 8, 12 or 24 hours (8 is the default). The app also follows this while it stays open. Each download keeps up to 7 days of listings. A guide source that hasn't changed since the last download isn't downloaded again. From 1.19.0 the guide keeps programmes only for channels some profile on this TV can see (and any channel in a profile's Favorites or lists); showing a hidden channel or category again downloads the guide again after about 20 seconds.
+- **Download the guide every**: 4, 8, 12 or 24 hours (8 is the default). The app also follows this while it stays open. Each download keeps up to 7 days of listings. A guide source that hasn't changed since the last download isn't downloaded again. The guide keeps programmes only for channels some profile on this TV can see (and any channel in a profile's Favorites or lists); showing a hidden channel or category again downloads the guide again after about 20 seconds.
 - **Last downloaded**: when each playlist's guide last downloaded and how many sources it has. **Download the guide now** gets every guide again.
 - **Channels matched by hand**: how many there are, with **Clear all matches** (asks first).
 
@@ -461,7 +460,7 @@ Rename, re-order and Add to List are done with Menu on the item itself in the TV
 
 - **Theme**: the colours of the profile you're using. Each profile has its own; change another profile's in Settings › Profiles › Edit. **OK** on a preview picks it, and ✓ marks the one in use.
   - **Dark roast**: dark brown, a soft warm-grey highlight with dark text, muted gold. New installs and new profiles start on it.
-  - **Midnight blue**: navy with a bright blue ring, the look up to 1.3.0. Profiles that existed before 1.4.0 keep it until you change it.
+  - **Midnight blue**: navy with a bright blue ring.
   - **Espresso & cream**, **Espresso & ivory** and **Mocha & latte**: other warm themes, from darkest to lightest base.
 
   ![Settings › Display & time › Theme](images/settings-theme.jpg)
@@ -486,8 +485,8 @@ Rename, re-order and Add to List are done with Menu on the item itself in the TV
 
 ![Settings › Discover](images/settings-discover.jpg)
 
-- **TMDB API key**: Save it (or press Done on the keyboard), or Remove it (asks first). With a linked account it can be set once for every TV on the website (1.17.0).
-- **My streaming services**: pick the services you subscribe to. From 1.17.0 these belong to the profile and follow it to every TV.
+- **TMDB API key**: Save it (or press Done on the keyboard), or Remove it (asks first). With a linked account it can be set once for every TV on the website.
+- **My streaming services**: pick the services you subscribe to. These belong to the profile and follow it to every TV.
 
 ### Playback
 
@@ -521,7 +520,7 @@ Everything here stays on the device; nothing is uploaded or backed up to the clo
   - The **Update available** dialog (**Update now** / **Later**) opens by itself only once the newest version has been out for **24 hours** and isn't installed yet. If an even newer version comes out in the meantime, the 24 hours start again. **Later** waits another 24 hours. It never opens over full-screen video. A TV left running checks for new versions every 6 hours (when **Check for updates automatically** is on).
   - The download shows its progress. If the connection stalls, the app waits 15 seconds and continues from where it stopped (up to 8 tries). The finished file is checked before installing, and a damaged download is refused.
   - If Android's installer doesn't appear within about 25 seconds, an **Open installer** button opens Android's own install screen for the same file.
-- **Beta versions (1.20.0):** to try new versions before everyone else, turn on **Offer this device beta builds** for the device at **avidviewer.app/devices**. Its status says **Offered · waiting to be chosen** until it's chosen for the beta (you get an email), then **In the beta**. A device in the beta is offered beta versions here and in the main menu, named like **1.20.0 beta 2**, and this section shows a **Beta** block. Beta versions can have rough edges; their crash reports and playback logs say beta. To leave, turn the switch off: the device keeps its beta version until a public version is newer, then updates as usual.
+- **Beta versions:** to try new versions before everyone else, turn on **Offer this device beta builds** for the device at **avidviewer.app/devices**. Its status says **Offered · waiting to be chosen** until it's chosen for the beta (you get an email), then **In the beta**. A device in the beta is offered beta versions here and in the main menu, named like **1.20.0 beta 2**, and this section shows a **Beta** block. Beta versions can have rough edges; their crash reports and playback logs say beta. To leave, turn the switch off: the device keeps its beta version until a public version is newer, then updates as usual.
 - **Last crash**: if the app closed unexpectedly, the details are kept here on the device, with **Report issue** and **Clear crash report** (asks first). **Report issue** sends them to **bugs@avidviewer.app** and then clears them (see *If the app closes unexpectedly* below).
 - **Playback log**: a summary ("Playback log: 3 freezes (longest 12 s), 1 error today") and the latest problems, each with its likely cause. Channels and titles appear as short codes ("Live channel 4F2A", "Title 9C01"), never by name. **Send playback log** sends it to bugs@avidviewer.app; **Clear log** asks first. **Send it automatically** (on by default) sends it at most once a day, and only when there were freezes or errors since the last send.
 - **Report a bug**: email **bugs@avidviewer.app** with what happened and the steps that lead to it. The section lists the details to include, read from the TV (app version, device model, Android and Fire OS versions, and the last crash's error). Scan the **QR code** with a phone camera to start that email with the details filled in; **Open email app** appears only on TVs that have one. No playlists, logins or provider addresses are included.
@@ -531,18 +530,18 @@ Everything here stays on the device; nothing is uploaded or backed up to the clo
 
 ### Account
 
-From 1.11.0 a device can be linked to an Avid Viewer account at avidviewer.app. From 1.12.0 that's also where its backups are kept (see below).
+A device is linked to an Avid Viewer account at avidviewer.app, which is also where its backups are kept (see below).
 
 - **Making an account:** at **avidviewer.app/signin**, enter your email for a one-time sign-in link, or use a passkey you've added. There are no passwords. Your account page (**avidviewer.app/account**) lists your devices, their backups, passkeys and signed-in browsers, your watch-history choice, and **Delete account**.
 - **Link this device** (Settings › Account, or the code on the welcome screen): the device shows an 8-character code and a QR code. Scan the QR code with your phone (the code is filled in for you), or open **avidviewer.app/link** (**Add a device** on your Account page) and type the code. Sign in if asked, check the device it found, give it a name, and choose **Add this device**. The device notices within a few seconds and shows **Linked to** your email. The code works for 10 minutes; **Cancel** stops waiting.
 - **Linked:** Settings › Account shows the account and this device's name. **Sign out of this device** (asks first) unlinks it and forgets its backup PIN; playlists and settings on the device stay.
 - **Your devices** on avidviewer.app/account shows each linked device's name, model, app version and when it last checked in, with **Rename** and **Remove**. A removed device unlinks itself the next time it checks in (a minute after the app starts, then every 6 hours); its backup stays in your account for 30 days.
-- **Profiles on this device** (1.15.0, Settings › Account): the account's profiles on this device and their playlists, with **Check for changes now**.
-- **What's shared:** linking sends the device's name, model and Avid Viewer version; from 1.14.0 also a public key, so the website can send it playlists only it can open; from 1.15.0 its profiles (names, Kids, Parent, PINs as salted hashes) the first time, the category and channel names of your account's playlists, and while something plays, which playlist and profile (for Watching now). Your settings go to your account only in a backup, locked with your backup PIN. From 1.17.0, where each profile stopped (movies, episodes and, from 1.18.0, the last live channel) is sent locked with a key only your TVs and your passkey have; the website and its admins can't read it. Watching now shows only the playlist, device and profile, never the channel or title.
+- **Profiles on this device** (Settings › Account): the account's profiles on this device and their playlists, with **Check for changes now**.
+- **What's shared:** linking sends the device's name, model and Avid Viewer version, and a public key, so the website can send it playlists only it can open; also its profiles (names, Kids, Parent, PINs as salted hashes) the first time, the category and channel names of your account's playlists, and while something plays, which playlist and profile (for Watching now). Your settings go to your account only in a backup, locked with your backup PIN. Where each profile stopped (movies, episodes and the last live channel) is sent locked with a key only your TVs and your passkey have; the website and its admins can't read it. Watching now shows only the playlist, device and profile, never the channel or title.
 
 #### Backup & restore
 
-From 1.12.0, backups are kept in your **avidviewer.app account**, so only a device linked to your account can back up or restore. On a device that isn't linked, this section shows **Link this device** (see [Account](#account)). Backup files on the device and network-share (SAMBA) backups were removed in 1.12.0.
+Backups are kept in your **avidviewer.app account**, so only a device linked to your account can back up or restore. On a device that isn't linked, this section shows **Link this device** (see [Account](#account)).
 
 A backup holds your playlists (with their logins), ★ Favorites and your lists, renamed and re-ordered channels and categories, hidden items, Sports leagues and options, location, the TMDB key, all other settings, watch history and resume points, and every profile with its own favorites, lists, hidden items and history (profile PINs are stored only as one-way hashes). After a restore the app opens on the owner's profile. Channels, guides and movie catalogs aren't included; they download again after a restore.
 
@@ -561,7 +560,7 @@ A backup holds your playlists (with their logins), ★ Favorites and your lists,
 2. Choose one. The confirmation shows which device it's from, when it was made and which playlists it holds. Restoring replaces the playlists and settings on this device and can't be undone.
 3. Enter that backup's PIN. A wrong PIN is refused and nothing changes. After a restore, channels and guides start downloading again, and this device backs up with the same PIN from then on (if it didn't have one).
 
-**Setting up a new device:** its welcome screen shows a code and a QR code. Scan it (or type the code at **avidviewer.app/link**, **Add a device** on your Account page), choose **Add this device**, then pick the backup to copy on the device.
+**Setting up a new device:** link it from its welcome screen (scan the QR code, or type the code at **avidviewer.app/link**, **Add a device** on your Account page). Its playlists, profiles, favorites and lists come from your account. To copy another device's own settings too (picture & sound, guide sources, display), choose **Restore from your account** here and pick that device's backup.
 
 **Forgot the PIN?** Sign in at **avidviewer.app/account**, find the backup under **Backups** and choose **Show PIN**. For your security it's shown only after a sign-in in the last hour, or a passkey sign-in.
 
@@ -577,11 +576,13 @@ A backup holds your playlists (with their logins), ★ Favorites and your lists,
 - Profile PINs are stored only as salted one-way hashes, never as the digits.
 - The **playback log** (freezes and errors) never records what you watch: each channel or title is a short code made from a random number kept on your TV, which can't be turned back into a name. It is sent to bugs@avidviewer.app at most once a day when there were problems, or when you choose Send playback log. Turn off **Send it automatically** in Settings › Updates & about to send it only by hand. Addresses, logins and IP addresses are removed first.
 - Crash details leave the TV only when you choose **Report issue**. They go to bugs@avidviewer.app through a small mail relay, with web addresses, server and host names, IP addresses, user names, passwords and tokens removed first.
-- **Security checks (1.10.1)** use freeRASP by Talsec. It checks the TV and the app for tampering (root, hooking tools, a modified copy, debuggers, emulators) and sends Talsec anonymous findings about the device and app for its security reports; nothing about what you watch, your playlists or logins. Alerts the app finds are also sent to bugs@avidviewer.app through the crash relay, each kind once and at most once a day.
-- **Accounts (1.11.0):** linking a TV to an avidviewer.app account sends only the TV's name, model and app version; the TV keeps its own key, encrypted with the Android Keystore. Playlists sent from avidviewer.app/playlists (1.14.0) are locked in your browser for each device with that device's own key; the website can't read the logins, and keeps each locked copy only until the device has it. What an account stores is on the website's [privacy page](https://avidviewer.app/privacy/).
+- **Security checks** use freeRASP by Talsec. It checks the TV and the app for tampering (root, hooking tools, a modified copy, debuggers, emulators) and sends Talsec anonymous findings about the device and app for its security reports; nothing about what you watch, your playlists or logins. Alerts the app finds are also sent to bugs@avidviewer.app through the crash relay, each kind once and at most once a day.
+- **Accounts:** linking a TV to an avidviewer.app account sends only the TV's name, model and app version; the TV keeps its own key, encrypted with the Android Keystore. Playlists sent from avidviewer.app/playlists are locked in your browser for each device with that device's own key; the website can't read the logins, and keeps each locked copy only until the device has it. What an account stores is on the website's [privacy page](https://avidviewer.app/privacy/).
 - Outside services get only what they need: your postal code (Open-Meteo, for weather), title lookups (TMDB/JustWatch, if you add a key), scoreboards (ESPN), update checks (GitHub) and, when you choose Report issue, the crash report (the Avid Viewer crash relay, a Google Apps Script web app).
 
 ## 11. Troubleshooting
+
+**First, make sure Avid Viewer is up to date.** This guide describes the latest version, and many problems are already fixed in it. Open **Settings › Updates & about** and choose **Check now**; if a new version is offered, choose **Download and install**. The main menu also shows **Update** when one is ready. If the app can't update itself, install the latest version with the Downloader app (code **2895338**). If something still doesn't work as described here after updating, report it (Settings › Updates & about › **Report a bug**).
 
 ### If video freezes
 
@@ -593,9 +594,9 @@ The app notes every freeze in the playback log, with its likely cause. Open **Me
 - **"data stopped arriving… the provider's server paused the stream"**: no error, but nothing came. Usually the provider.
 - **"the TV's video decoder"** (picture stopped while the sound went on, or many dropped frames): the TV struggled with the video, often 4K or HEVC on a Fire TV Stick. Try the HD version of the channel.
 
-**Automatic reconnect (1.10.0).** When the picture stands still for 5 seconds while the sound plays, or no data has arrived for 4 seconds with less than 8 seconds left in the buffer, the app reopens the stream by itself and shows "Reconnecting…". Live channels come back at the live point, movies and episodes where they were. It doesn't reconnect in a channel's first 10 seconds. From 1.19.0: a second reconnect within a minute restarts the player completely; after 3 reconnects in 3 minutes it keeps trying every 30 seconds while the picture stays stuck (before, it stopped); it also reconnects when the picture has waited 6 seconds while the provider only trickles data, and when the picture keeps stopping for a moment (more than 5 times in 30 seconds, logged once as "Stuttered N times"). Each reconnect is in the playback log, with whether the picture came back.
+**Automatic reconnect.** When the picture stands still for 5 seconds while the sound plays, or no data has arrived for 4 seconds with less than 8 seconds left in the buffer, the app reopens the stream by itself and shows "Reconnecting…". Live channels come back at the live point, movies and episodes where they were. It doesn't reconnect in a channel's first 10 seconds. A second reconnect within a minute restarts the player completely; after 3 reconnects in 3 minutes it keeps trying every 30 seconds while the picture stays stuck; it also reconnects when the picture has waited 6 seconds while the provider only trickles data, and when the picture keeps stopping for a moment (more than 5 times in 30 seconds, logged once as "Stuttered N times"). Each reconnect is in the playback log, with whether the picture came back.
 
-**Channels that won't play (1.19.0).** The message says why: "The provider refused this channel (HTTP 405)…" (often a channel that isn't in your subscription or is off the air), "Can't find the provider's server…" (check the internet connection or DNS), or "The provider's server isn't answering…". A channel the provider refused is marked **⚠ didn't play** in the guide for a day; the mark goes as soon as it plays. To take it out of the guide, use Menu › Hide channel.
+**Channels that won't play.** The message says why: "The provider refused this channel (HTTP 405)…" (often a channel that isn't in your subscription or is off the air), "Can't find the provider's server…" (check the internet connection or DNS), or "The provider's server isn't answering…". A channel the provider refused is marked **⚠ didn't play** in the guide for a day; the mark goes as soon as it plays. To take it out of the guide, use Menu › Hide channel.
 
 Sending the log (Send playback log) helps us find a pattern across days.
 
@@ -603,20 +604,13 @@ Sending the log (Send playback log) helps us find a pattern across days.
 - **No channels or guide**: check that the playlist, and its Live TV switch, are on in Settings › Playlists, then choose Refresh.
 - **No movies or series**: turn on Movies & series for the playlist and Refresh.
 - **Discover is empty**: add a TMDB API key in Settings › Discover, or turn off "My services".
-- **Sports showed no games for a long time after updating to 1.2.0** (with a big TV guide and several playlists): update to 1.3.0 or later; games now appear at once.
-- **Sports is empty**: check the leagues in Settings › Sports tab; off-season leagues have no games. "Couldn't reach ESPN" means the schedules couldn't be downloaded, so the last list is shown. On 1.0.141 this appeared for every league; update to 1.0.147 or later.
+- **Sports is empty**: check the leagues in Settings › Sports tab; off-season leagues have no games. "Couldn't reach ESPN" means the schedules couldn't be downloaded, so the last list is shown.
 - **A game shows "No channel yet"**: your playlists have no channel named for its network, and no guide listing or event channel for it yet. Those often appear closer to the start. You can also use **Search the guide** on the game.
-- **Discover froze or the app closed after about 20 seconds** (1.0.137 and earlier, with large movie catalogs): update the app.
-- **Channels and the guide took minutes to appear after updating to 1.0.160** (with a big movie and series catalog): update to 1.0.162 or later. If you're still on 1.0.160, leave the app open until they appear; it only happens once.
-- **The app froze or closed while pressing Up/Down quickly in the TV Guide** (1.0.147 and earlier, mostly in big categories after wrapping from the top to the bottom): update to 1.0.160 or later.
 - **No audio tracks or captions to choose in Picture & sound**: the stream doesn't carry them. Many live channels have one audio track and no captions; try another channel, or set captions to **On (when available)** so they show when a program has them.
-- **Movies or Series were slow, or the app stopped responding on Series** (1.0.160 to 1.0.162, with a big catalog): update to 1.0.165 or later.
 - **A title is missing from Movies or Series**: it may be listed once under another copy. Open it and use **⇄ N versions**.
 - **A channel or category disappeared**: it may be hidden. Check Settings › List Editor.
-- **A guide row ends early and Right won't go further**: fixed in 1.0.133 for guides that list overlapping programmes; update the app.
 - **A channel shows the wrong listings, or none**: press Menu on it and choose **Match guide…**. If a whole guide is consistently early or late, set a **time offset** on its source in Settings › Playlists › ▤ Guide sources.
-- **Favorites landed one channel off after a restore** (on a version before 1.0.94): that backup can't fix them automatically. Set them once, then make a new backup; newer backups record which channel each favorite points to.
-- **An update hangs at about 95%** (updating from 1.0.82 or earlier, which have the old updater): try again. If it still hangs, install the new version once by hand with the Downloader app; later updates resume stalled downloads.
+- **An update hangs part-way**: the download picks up where it stopped by itself; if it still doesn't finish, choose **Download and install** again, or install the latest version by hand with the Downloader app (code **2895338**).
 
 ### If the app closes unexpectedly
 
@@ -628,15 +622,15 @@ The next time it starts, the app says **Avid Viewer closed unexpectedly**:
 - If it can't be sent (no connection, for example), the message says so and the details stay in **Settings › Updates & about › Last crash**, where **Report issue** can try again.
 - **Cancel** closes the message. Nothing is sent, and the details stay in Last crash.
 
-**If the app vanished to the Fire TV home screen.** Sometimes the TV closes the app itself, usually to free memory, and the app gets no chance to save anything. From 1.7.0 the app notices at its next start and shows the same message, so **Report issue** covers this too. The report says the app **closed while in use**, with the last few steps (screen names such as "Screen: search", or "Search: 2 words"; never what you searched or watched) and the memory in use. On Fire OS 8 and later it also includes the reason the TV gives (low memory, not responding, or a crash in the video code). Leaving the app with Home or Back is never reported, nor is force-stopping it in the TV's settings, nor is installing an update while the app is on screen (1.17.2).
+**If the app vanished to the Fire TV home screen.** Sometimes the TV closes the app itself, usually to free memory, and the app gets no chance to save anything. The app notices at its next start and shows the same message, so **Report issue** covers this too. The report says the app **closed while in use**, with the last few steps (screen names such as "Screen: search", or "Search: 2 words"; never what you searched or watched) and the memory in use. On Fire OS 8 and later it also includes the reason the TV gives (low memory, not responding, or a crash in the video code). Leaving the app with Home or Back is never reported, nor is force-stopping it in the TV's settings, nor is installing an update while the app is on screen.
 
 ### Backup questions
 
-**Backup & restore only says Link this device.** Backups live in your avidviewer.app account from 1.12.0. Link the device in Settings › Account, then back up.
+**Backup & restore only says Link this device.** Backups live in your avidviewer.app account. Link the device in Settings › Account, then back up.
 
 **I forgot my backup PIN.** Sign in at avidviewer.app/account and choose **Show PIN** next to the backup. If it asks you to sign in again, that's because the PIN is shown only after a recent sign-in.
 
-**A backup from an older version (an `.avbak` file or a network share).** These can't be restored from 1.12.0. Once the device is linked to your account, it makes a new backup in your account the next day (or choose Back up now).
+**An `.avbak` backup file or a network-share backup.** These can't be restored any more. Once the device is linked to your account, it makes a new backup in your account the next day (or choose Back up now).
 
 ### Reliability
 
@@ -771,10 +765,11 @@ Every public release since 1.0.35, newest first. From 1.1.0, versions are number
 
 ### 1.20.1 — November 18, 2026, 1:05 PM CT (current)
 
-**Change log**
+**Release notes**
 
-- Welcome screen links the device and points to the website; no Restore a backup there
-- A guide source's status no longer vanishes when two playlists' guides download at once
+- **Welcome screen:** it links the device to your account and then points you to avidviewer.app/playlists. **Restore a backup** is no longer on it, and linking no longer pops up your account's backups; to copy another device's own settings, use **Restore from your account** in Settings › Updates & about.
+- **Guide sources keep their status:** a source's "Updated…" line no longer disappears when two playlists' guides download at the same time.
+- **User guide:** written for the latest version throughout, with new screenshots, and Troubleshooting starts with making sure the app is up to date.
 
 ### 1.20.0 — November 18, 2026, 11:47 AM CT
 
