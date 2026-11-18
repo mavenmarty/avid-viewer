@@ -104,19 +104,22 @@ fun AppRoot(vm: AppViewModel) {
                 // Inside the TV Guide with a category chosen, the guide takes the whole screen: the main menu and
                 // the category list step aside. ◀ from the channel names, or Back, brings back the category list
                 // (on the current category) with the main menu as icons (both set navFocusKey).
-                val guideFull = browsing && vm.navMode == NavMode.GROUPS && vm.selectedGroup != null &&
-                    vm.guideHasFocus && vm.navFocusKey == null
-                androidx.compose.runtime.SideEffect { vm.guideFullLayout = guideFull }
+                val guideFull = vm.guideFullLayout
                 // The main menu is otherwise always there: icons only while a lower layer is in use.
                 if (!guideFull) NavRail(vm)
                 if (browsing && vm.navMode == NavMode.COLLAPSED) PlaylistTree(vm)
                 if (browsing && vm.navMode == NavMode.GROUPS && !guideFull) GroupNav(vm)
+                // Whether the guide area had the highlight since it appeared (its first "no highlight" report, before the
+                // highlight arrives, isn't a loss).
+                val guideHad = remember { booleanArrayOf(false) }
                 Box(Modifier.fillMaxHeight().weight(1f).onFocusChanged {
-                    val now = browsing && it.hasFocus
                     // Into the guide from the category list (a category chosen, ▶): the full layout at once, even
-                    // if a request to highlight a category was still pending.
-                    if (now && !vm.guideHasFocus) vm.navFocusKey = null
-                    vm.guideHasFocus = now
+                    // if a request to highlight a category was still pending. Losing the highlight (to full screen,
+                    // or a channel's dialogs) changes nothing, so coming back doesn't redraw (R-1); anywhere else, the
+                    // menus come back as before.
+                    if (browsing && it.hasFocus) { if (!vm.guideHasFocus) vm.navFocusKey = null; vm.guideHasFocus = true }
+                    else if (!it.hasFocus && guideHad[0] && !vm.guideAwayBriefly()) vm.guideHasFocus = false
+                    guideHad[0] = it.hasFocus
                 }) {
                     when (vm.screen) {
                         Screen.SEARCH -> SearchScreen(vm)

@@ -70,13 +70,15 @@ class PlaybackMonitor(
     private val reconnects = ArrayDeque<Long>()
     private var reconnectAt = 0L
     private var reconnectWhy = ""
+    /** 3 reconnects in 3 minutes: from then on at most one every [SLOW_RECONNECT_MS]. */
+    private var slowReconnect = false
 
     /** A channel or title is starting ([key]: its key, never shown; the log gets a code instead of the name). */
     fun started(key: String, live: Boolean) {
         endStall(left = true)
         endPicture()
         this.live = live
-        startedAt = clock(); reconnects.clear(); reconnectAt = 0
+        startedAt = clock(); reconnects.clear(); reconnectAt = 0; slowReconnect = false
         DataFlow.lastBytesAt = startedAt
         name = log.label(key, live)
         everReady = false; lastRendered = -1; dropped = 0; droppedWindow = 0; recentLoadErrors.clear()
@@ -132,10 +134,12 @@ class PlaybackMonitor(
         }
         while (reconnects.isNotEmpty() && now - reconnects.first() > 180_000) reconnects.removeFirst()
         val why = reconnectReason(now, startedAt, reconnectAt, picStuckSince, DataFlow.lastBytesAt, buffered, everReady) ?: return
+        if (reconnects.size < 3) slowReconnect = false
         if (reconnects.size >= 3) {
-            if (reconnects.size == 3) log.add(PlaybackLog.RECOVER, name, "Not reconnecting again: 3 reconnects in 3 minutes ($why).")
-            reconnects.addLast(now)
-            return
+            // BUG-058: after 3 in 3 minutes the app used to stop trying, and a channel could sit frozen for minutes
+            // (295 s in one log) until the viewer changed it. Now it keeps trying, every 30 s, while it stays stuck.
+            if (!slowReconnect) { slowReconnect = true; log.add(PlaybackLog.RECOVER, name, "Reconnecting less often: 3 reconnects in 3 minutes ($why); trying every 30 s while it stays stuck.") }
+            if (!mayReconnect(now, reconnects)) return
         }
         reconnects.addLast(now)
         if (why.startsWith("the picture")) endPicture() else endStall(left = false)
@@ -147,6 +151,8 @@ class PlaybackMonitor(
 
     /** Playback stopped (leaving full screen or the app). (The temporary buffer log of 1.10.0 was removed in 1.17.1.) */
     fun finished() {
+        // BUG-059: close a freeze or picture stop under this channel's code before forgetting it (a later close had none).
+        endStall(left = true); endPicture()
         name = ""
     }
 
@@ -170,6 +176,7 @@ class PlaybackMonitor(
 
     private fun endStall(left: Boolean) {
         if (stallAt == 0L) return
+        if (name.isEmpty()) { stallAt = 0; return }
         val s = ((clock() - stallAt) / 1000).toInt()
         val errs = recentLoadErrors.filter { it.first >= stallAt - 15_000 }.map { it.second }
         val why = cause(errs, bufferBefore, (meter.bitrateEstimate / 1000).toInt(), streamKbps())
@@ -215,6 +222,11 @@ class PlaybackMonitor(
     }
 
     companion object {
+        /** After 3 reconnects in 3 minutes, the shortest gap between reconnects (BUG-058). */
+        const val SLOW_RECONNECT_MS = 30_000L
+
+        /** [recent]: reconnects in the last 3 minutes, oldest first. Up to 3 at once, then one every [SLOW_RECONNECT_MS]. */
+        fun mayReconnect(now: Long, recent: Collection<Long>): Boolean = recent.size < 3 || now - recent.last() >= SLOW_RECONNECT_MS
         /**
          * Why the stream should be reconnected now, or null (see checkReconnect): the picture still for 5 s, or no
          * data for 4 s with under 8 s buffered; never in the first 10 s of a channel or of a reconnect.
@@ -264,7 +276,15 @@ class PlaybackMonitor(
                 chain.any { it is UnknownHostException } -> "server not found (DNS)"
                 chain.any { it is java.net.ConnectException } -> "couldn't connect to the server"
                 chain.any { it is java.net.SocketException } -> "connection dropped"
-                else -> e.javaClass.simpleName.ifBlank { "download failed" }
+                // BUG-059: never the class name: release builds are obfuscated, so it read as "t" in the logs.
+                chain.any { it is javax.net.ssl.SSLException } -> "secure connection failed (SSL)"
+                chain.any { it is java.io.EOFException } -> "the connection ended early"
+                chain.any { it is java.io.InterruptedIOException } -> "connection timed out"
+                chain.any { it is java.net.ProtocolException } -> "the server's answer couldn't be read"
+                chain.any { it is androidx.media3.common.ParserException } -> "the stream's data couldn't be read"
+                chain.any { it is HttpDataSource.CleartextNotPermittedException } -> "plain http isn't allowed for this address"
+                chain.any { it is HttpDataSource.HttpDataSourceException } -> "download failed (network)"
+                else -> "download failed"
             }
         }
 

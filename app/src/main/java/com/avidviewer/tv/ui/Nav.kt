@@ -171,7 +171,6 @@ fun NavRail(vm: AppViewModel) {
 fun PlaylistTree(vm: AppViewModel) {
     val active = vm.activePlaylist()?.id
     val first = remember { FocusRequester() }
-    val treeState = androidx.compose.foundation.lazy.rememberLazyListState()
     /** The keys of the list's items, in order: the same keys the items below are given. */
     fun treeKeys(): List<String> = buildList {
         add("tfav"); vm.shownLists.forEach { add("tl-" + it.id) }; add("ttitle")
@@ -183,6 +182,12 @@ fun PlaylistTree(vm: AppViewModel) {
                 if (groups == null) add("ld-" + p.id) else groups.forEach { add("g-" + p.id + "-" + it.raw) }
             }
         }
+    }
+    // R-4: opens scrolled to the category being come back from, instead of drawing from the top and jumping.
+    val treeState = remember {
+        val k = vm.navFocusKey
+        val item = if (k == null) -1 else treeKeys().indexOf(when { k == FAV_GROUP -> "tfav"; isListGroup(k) -> "tl-" + k.removePrefix(LIST_PREFIX); else -> "g-$active-$k" })
+        androidx.compose.foundation.lazy.LazyListState(if (item > 3) item - 3 else 0)
     }
     // Leaving the screen while it had the highlight must not leave "in the playlist list" set (NAV-03):
     // Left would then act as Back from somewhere else entirely.
@@ -274,13 +279,19 @@ fun PlaylistTree(vm: AppViewModel) {
 @Composable
 fun GroupNav(vm: AppViewModel) {
     val groups = vm.groups()
-    val navState = androidx.compose.foundation.lazy.rememberLazyListState()
     androidx.compose.runtime.DisposableEffect(Unit) { onDispose { vm.inGroupNav = false } }
     val scope = androidx.compose.runtime.rememberCoroutineScope()
     /** The keys of the list's items, in order: the same keys the items below are given. */
     fun navKeys(): List<String> = buildList {
         add("menu"); add("title"); add("fav"); vm.shownLists.forEach { add("list-" + it.id) }
         add("newlist"); add("search"); add("spacer"); groups.forEach { add("g:" + it.raw) }
+    }
+    // R-4: a current category further down than a screenful opens already scrolled to it (it used to draw from the
+    // top and then jump there). Nearer the top nothing changes: it's on screen either way.
+    val navState = remember {
+        val k = vm.navFocusKey ?: vm.selectedGroup
+        val item = k?.let { navKeys().indexOf(when { it == FAV_GROUP -> "fav"; isListGroup(it) -> "list-" + it.removePrefix(LIST_PREFIX); else -> "g:$it" }) } ?: -1
+        androidx.compose.foundation.lazy.LazyListState(if (item >= 12) item - 3 else 0)
     }
     // Re-order mode: keep the moving category on screen as it moves.
     val moving = vm.movingGroup

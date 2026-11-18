@@ -179,7 +179,9 @@ const val INACTIVE_ALPHA = 0.72f
 /** Dims a side list (categories, settings sections) while the highlight is elsewhere on the screen (STATE-05). */
 fun Modifier.dimWhenInactive(): Modifier = composed {
     var has by remember { mutableStateOf(true) }
-    onFocusChanged { has = it.hasFocus }.alpha(if (has) 1f else INACTIVE_ALPHA)
+    // R-5: a short fade, so a list that loses the highlight a few frames after a screen appears doesn't snap darker.
+    val a by androidx.compose.animation.core.animateFloatAsState(if (has) 1f else INACTIVE_ALPHA, androidx.compose.animation.core.tween(160), label = "dim")
+    onFocusChanged { has = it.hasFocus }.alpha(a)
 }
 
 /**

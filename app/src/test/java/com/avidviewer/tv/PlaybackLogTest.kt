@@ -117,4 +117,24 @@ class PlaybackLogTest {
         assertTrue(log.summary(), log.summary().contains("1 reconnect"))
         assertTrue(log.unsent().any { it.kind == PlaybackLog.RECOVER })
     }
+
+    @Test
+    fun afterThreeReconnectsItKeepsTryingEvery30Seconds() {
+        val m = com.avidviewer.tv.ui.PlaybackMonitor
+        assertTrue(m.mayReconnect(100_000, listOf(10_000L, 50_000L)))
+        // 3 in 3 minutes: not again straight away (BUG-058: it used to stop for good)…
+        assertFalse(m.mayReconnect(100_000, listOf(10_000L, 50_000L, 90_000L)))
+        // …but 30 s after the last one it tries again.
+        assertTrue(m.mayReconnect(120_000, listOf(10_000L, 50_000L, 90_000L)))
+    }
+
+    @Test
+    fun downloadErrorsAreNamedNeverByClassName() {
+        // Release builds are obfuscated: an unknown exception's class name read as "t" (BUG-059).
+        class T : java.io.IOException("x")
+        val d: (java.io.IOException) -> String = { com.avidviewer.tv.ui.PlaybackMonitor.describe(it) }
+        assertEquals("download failed", d(T()))
+        assertEquals("secure connection failed (SSL)", d(java.io.IOException(javax.net.ssl.SSLHandshakeException("h"))))
+        assertEquals("the connection ended early", d(java.io.EOFException()))
+    }
 }

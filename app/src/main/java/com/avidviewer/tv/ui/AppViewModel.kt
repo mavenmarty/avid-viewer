@@ -2841,15 +2841,28 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         val sent = runCatching { org.json.JSONObject(account.catalogSent) }.getOrDefault(org.json.JSONObject())
         val nowMs = System.currentTimeMillis()
         for (pl in playlists.filter { it.remoteId.isNotEmpty() && it.enabled }) {
-            val body = withContext(Dispatchers.IO) { catalogOf(pl) } ?: continue
-            val sig = body.toString().hashCode().toString(16)
             val (was, at) = sent.optString(pl.remoteId).split('@').let { it.getOrElse(0) { "" } to (it.getOrNull(1)?.toLongOrNull() ?: 0L) }
+            // BUG-057: the catalog (every channel name, up to ~1.8 MB) was rebuilt and turned into text on the screen's
+            // thread at every account check (each minute), long enough on a Fire TV for "not responding". Now it's only
+            // rebuilt when the playlist's channels or movie/series catalog changed, or once a day, and always off it.
+            val stamp = withContext(Dispatchers.IO) {
+                runCatching { live.channelsSavedAt(pl.id) }.getOrDefault(0L).toString() + "/" + runCatching { catalog.savedAt(pl.id) }.getOrDefault(0L) + "/" + pl.liveOn + pl.vodOn
+            }
+            if (catalogStamp[pl.id] == stamp && nowMs - at < 24 * 60 * 60_000L) continue
+            catalogBuilds++
+            val built = withContext(Dispatchers.IO) { catalogOf(pl)?.let { b -> b to b.toString().hashCode().toString(16) } }
+            catalogStamp[pl.id] = stamp
+            val (body, sig) = built ?: continue
             if (was == sig && nowMs - at < 24 * 60 * 60_000L) continue
             withContext(Dispatchers.IO) { com.avidviewer.tv.data.AccountApi.catalog(token, body, accountApi) }
             sent.put(pl.remoteId, "$sig@$nowMs")
             account.catalogSent = sent.toString()
         }
     }
+    /** What each playlist's catalog was last built from (channels saved at, catalog version), so it isn't rebuilt each minute. */
+    private val catalogStamp = HashMap<String, String>()
+    /** How many times a catalog was built (tests: not at every account check). */
+    internal var catalogBuilds = 0; private set
 
     /**
      * Tells the account every playlist on this device (1.15.1), when something changed: names, types and switches, and,
@@ -3225,7 +3238,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         val states = HashMap<String, org.json.JSONObject>()
         val sent = HashMap<String, Map<String, String>>()
         val sentDisc = HashMap<String, String>()
-        for (p in acc) {
+        // BUG-057: off the screen's thread (an HMAC for every place, AES for each one sent).
+        withContext(Dispatchers.Default) { for (p in acc) {
             val st = withContext(Dispatchers.IO) { store.loadHistorySync(p.id) }; states[p.id] = st
             val o = org.json.JSONObject().put("id", p.remoteId).put("since", st.optLong("since"))
             if (H != null) {
@@ -3273,7 +3287,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 if (st.has("disc") && st.optString("disc") != dsig) { o.put("discover", org.json.JSONObject().put("blob", com.avidviewer.tv.data.History.lock(hk, doc)).put("at", System.currentTimeMillis())); discSent.add(p.id) }
             }
             arr.put(o)
-        }
+        } }
         val res = withContext(Dispatchers.IO) { com.avidviewer.tv.data.AccountApi.history(token, body, accountApi) }
         if (H == null) {
             val sealed = res.key ?: return
@@ -3476,10 +3490,12 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Sends this device's changes to favorites, lists, order and names, and applies the account's newer ones. */
     private suspend fun syncLists(token: String) {
+        // BUG-057: the documents (every channel key of a playlist's order, each profile's lists) are built, compared and
+        // read back off the screen's thread; only the writes to the profile's settings run on it.
         val acctPls = playlists.filter { it.remoteId.isNotEmpty() }
         val toRemote = acctPls.associate { it.id to it.remoteId }
         val toLocal = acctPls.associate { it.remoteId to it.id }
-        val state = runCatching { org.json.JSONObject(account.listsState) }.getOrDefault(org.json.JSONObject())
+        val state = withContext(Dispatchers.Default) { runCatching { org.json.JSONObject(account.listsState) }.getOrDefault(org.json.JSONObject()) }
         val ps = state.optJSONObject("p") ?: org.json.JSONObject().also { state.put("p", it) }
         val os = state.optJSONObject("o") ?: org.json.JSONObject().also { state.put("o", it) }
         val changed = runCatching { org.json.JSONObject(account.listsChanged) }.getOrDefault(org.json.JSONObject())
@@ -3491,8 +3507,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         for (p in accProfiles) {
             val st = ps.optJSONObject(p.remoteId)
             val pr = if (p.id == profile.id) prefs else withContext(Dispatchers.IO) { store.loadPrefs(p.id) }
-            val doc = listsDocOf(pr, toRemote, st?.optJSONObject("d"))
-            val sig = sigOf(doc)
+            val (doc, sig) = withContext(Dispatchers.Default) { listsDocOf(pr, toRemote, st?.optJSONObject("d")).let { it to sigOf(it) } }
             st?.optString("h")?.takeIf { it.isNotEmpty() }?.let { kp.put(p.remoteId, it) }
             if (st == null || st.optString("s") != sig) {
                 val at = changed.optLong(p.id, 0L).takeIf { it > 0 } ?: if (st == null) 1L else System.currentTimeMillis()
@@ -3508,8 +3523,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             groupsOf[pl.remoteId] = groups
             val st = os.optJSONObject(pl.remoteId)
             st?.optString("h")?.takeIf { it.isNotEmpty() }?.let { ko.put(pl.remoteId, it) }
-            val doc = orderDocOf(prefs, pl, groups)
-            val sig = sigOf(doc)
+            val snap = prefs
+            val (doc, sig) = withContext(Dispatchers.Default) { orderDocOf(snap, pl, groups).let { it to sigOf(it) } }
             if (st == null || st.optString("s") != sig) {
                 // Never changed here and never synced: only send it if there is something to say.
                 val empty = doc.optJSONArray("groupOrder")!!.length() == 0 && doc.optJSONObject("groupNames")!!.length() == 0 && doc.optJSONObject("channelOrder")!!.length() == 0 && doc.optJSONObject("channelNames")!!.length() == 0 && !doc.has("channelSort")
@@ -3521,8 +3536,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         body.put("playlists", sendO)
         val res = withContext(Dispatchers.IO) { com.avidviewer.tv.data.AccountApi.listsSync(token, body, accountApi) }
         // What was sent is now this device's last-known version.
-        for (i in 0 until sendP.length()) { val o = sendP.getJSONObject(i); ps.put(o.getString("id"), (ps.optJSONObject(o.getString("id")) ?: org.json.JSONObject()).put("s", sigOf(o.getJSONObject("data")))) }
-        for (i in 0 until sendO.length()) { val o = sendO.getJSONObject(i); os.put(o.getString("id"), (os.optJSONObject(o.getString("id")) ?: org.json.JSONObject()).put("s", sigOf(o.getJSONObject("data")))) }
+        withContext(Dispatchers.Default) {
+            for (i in 0 until sendP.length()) { val o = sendP.getJSONObject(i); ps.put(o.getString("id"), (ps.optJSONObject(o.getString("id")) ?: org.json.JSONObject()).put("s", sigOf(o.getJSONObject("data")))) }
+            for (i in 0 until sendO.length()) { val o = sendO.getJSONObject(i); os.put(o.getString("id"), (os.optJSONObject(o.getString("id")) ?: org.json.JSONObject()).put("s", sigOf(o.getJSONObject("data")))) }
+        }
         // The account's versions this device doesn't have yet.
         var changedHere = false
         res.optJSONArray("profiles")?.let { a ->
@@ -3531,9 +3548,14 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 val p = accProfiles.firstOrNull { it.remoteId == id } ?: continue
                 // Read and written in one step for the profile [doc] is for (never another profile's settings).
                 val next: Prefs
-                if (p.id == profile.id) { applyingAccount = true; try { updatePrefs { pr -> withAccountLists(pr, doc, toLocal, toRemote) } } finally { applyingAccount = false }; next = prefs }
-                else { next = withAccountLists(store.loadPrefs(p.id), doc, toLocal, toRemote); store.savePersonal(p.id, com.avidviewer.tv.data.personalOf(next)) }
-                ps.put(id, org.json.JSONObject().put("h", o.optString("hash")).put("d", doc).put("s", sigOf(listsDocOf(next, toRemote, doc))))
+                if (p.id == profile.id) {
+                    val snap = prefs
+                    val made = withContext(Dispatchers.Default) { withAccountLists(snap, doc, toLocal, toRemote) }
+                    // Worked out from the settings as they were; if they changed meanwhile, again from the new ones.
+                    applyingAccount = true; try { updatePrefs { pr -> if (pr === snap) made else withAccountLists(pr, doc, toLocal, toRemote) } } finally { applyingAccount = false }; next = prefs
+                } else { next = withContext(Dispatchers.IO) { withAccountLists(store.loadPrefs(p.id), doc, toLocal, toRemote).also { store.savePersonal(p.id, com.avidviewer.tv.data.personalOf(it)) } } }
+                val sig = withContext(Dispatchers.Default) { sigOf(listsDocOf(next, toRemote, doc)) }
+                ps.put(id, org.json.JSONObject().put("h", o.optString("hash")).put("d", doc).put("s", sig))
                 changedHere = true
             }
         }
@@ -3542,13 +3564,16 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 val o = a.getJSONObject(i); val id = o.optString("id"); val doc = o.optJSONObject("data") ?: continue
                 val pl = acctPls.firstOrNull { it.remoteId == id } ?: continue
                 val groups = groupsOf[id] ?: continue
-                val next = withAccountOrder(prefs, doc, pl, groups)
-                applyingAccount = true; try { updatePrefs { next } } finally { applyingAccount = false }
-                os.put(id, org.json.JSONObject().put("h", o.optString("hash")).put("s", sigOf(orderDocOf(next, pl, groups))))
+                val snap = prefs
+                val made = withContext(Dispatchers.Default) { withAccountOrder(snap, doc, pl, groups) }
+                applyingAccount = true; try { updatePrefs { pr -> if (pr === snap) made else withAccountOrder(pr, doc, pl, groups) } } finally { applyingAccount = false }
+                val next = prefs
+                val sig = withContext(Dispatchers.Default) { sigOf(orderDocOf(next, pl, groups)) }
+                os.put(id, org.json.JSONObject().put("h", o.optString("hash")).put("s", sig))
                 changedHere = true
             }
         }
-        account.listsState = state.toString()
+        account.listsState = withContext(Dispatchers.Default) { state.toString() }
         if (changedHere) { trail("lists sync: applied the account's changes"); regroupLater(); favDataTick++ }
         listsProblem = ""
     }
@@ -4398,10 +4423,24 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** Back walks up the navigation: categories → playlists → full menu → TV Guide. Returns false to let the app exit. */
     /** Which left-hand list has the highlight, so Back and Left know which layer the viewer is on. */
     var inGroupNav = false
-    /** The TV Guide itself (channels, programmes, preview) has the highlight: it then fills the screen. */
-    var guideHasFocus by mutableStateOf(false)
-    /** The guide is drawn full width (main menu and category list hidden): 2 hours across the screen. */
-    var guideFullLayout by mutableStateOf(false)
+    /**
+     * The viewer is in the TV Guide itself (channels, programmes, preview): it then fills the screen. Set when the guide
+     * takes the highlight; cleared only when the main menu, the playlist list or the category list takes it (Left/Back
+     * also set [navFocusKey]). Leaving for full screen or a dialog doesn't clear it, so coming back doesn't first draw
+     * the menu and categories and then fold them away (Nov 18 redraw audit, R-1). Starts set: the app opens in the guide.
+     */
+    var guideHasFocus by mutableStateOf(true)
+    /** The guide is drawn full width (main menu and category list hidden): 2 hours across the screen. Worked out in the
+     *  same frame as the layout, so the guide's time scale never lags a frame behind it (R-2). */
+    val guideFullLayout: Boolean
+        get() = (screen == Screen.LIVE || screen == Screen.GUIDE) && navMode == NavMode.GROUPS && selectedGroup != null &&
+            guideHasFocus && navFocusKey == null
+    /** The guide lost the highlight only for a moment: full screen, or a dialog about a channel (R-1). */
+    fun guideAwayBriefly(): Boolean = screen == Screen.PLAYER || channelMenu != null || matchingChannel != null || listPickerKey != null
+    /** The width of the guide's programme area last measured, full width and not (R-3: the first frame uses it). */
+    var guideGridWidthFull = 0f
+    var guideGridWidthNarrow = 0f
+
     var inPlaylistTree = false
     /** Whether the highlight is inside a Settings section (not on the section list). */
     var settingsInContent = false

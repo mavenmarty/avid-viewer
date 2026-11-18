@@ -30,6 +30,7 @@ import com.avidviewer.tv.ui.PlayContext
 import com.avidviewer.tv.ui.Screen
 import org.junit.Before
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -96,7 +97,7 @@ class NavigationFixesTest {
         return views.lastOrNull()?.takeIf { it !== rule.activity.window.decorView }
     }
 
-    private fun key(k: Key, count: Boolean = true) {
+    private fun key(k: Key, count: Boolean = true, settleAfter: Boolean = true) {
         if (count) presses++
         val code = k.nativeKeyCode
         rule.runOnUiThread {
@@ -106,7 +107,7 @@ class NavigationFixesTest {
             val target = topWindowView()
             if (target != null) { target.dispatchKeyEvent(down); target.dispatchKeyEvent(up) } else { rule.activity.dispatchKeyEvent(down); rule.activity.dispatchKeyEvent(up) }
         }
-        settle()
+        if (settleAfter) settle()
     }
 
     private fun moveTo(label: String, dir: Key = Key.DirectionDown, max: Int = 10): Boolean {
@@ -269,5 +270,35 @@ class NavigationFixesTest {
         assertTrue(moveTo(next))
         key(Key.DirectionRight)
         expectFocus("$next's first channel") { it.contains("$next Channel 1") }
+    }
+
+    /** Nov 18 redraw audit (R-1): back from full screen the guide is full width from the first frame; the menu and
+     *  category list are never drawn and then folded away. A dialog over the guide doesn't change it either. */
+    @Test fun backFromFullScreenTheGuideStaysFullWidthWithoutRedrawing() {
+        fun categoriesShown() = rule.onAllNodes(hasText("‹", substring = true)).fetchSemanticsNodes().isNotEmpty()
+        rule.runOnIdle { vm.chooseGroup(TestData.P1, "KIDS") }
+        waitFor { focused().contains("KIDS Channel 1 with") }
+        assertTrue(waitFor(3_000) { vm.guideFullLayout && !categoriesShown() })
+        key(Key.DirectionCenter) // preview
+        key(Key.DirectionCenter) // full screen
+        assertTrue(waitFor(3_000) { vm.screen == Screen.PLAYER })
+        assertTrue("the guide still counts as having the highlight while in full screen", vm.guideHasFocus)
+        // Back, then look at the very first frame drawn.
+        rule.mainClock.autoAdvance = false
+        try {
+            key(Key.Back, settleAfter = false)
+            rule.mainClock.advanceTimeByFrame()
+            assertTrue("first frame back: the guide is on screen", vm.screen == Screen.GUIDE || vm.screen == Screen.LIVE)
+            assertFalse("first frame back: no category list", categoriesShown())
+            assertTrue("first frame back: 2 hours across", vm.guideFullLayout)
+            repeat(20) { rule.mainClock.advanceTimeByFrame(); assertFalse("never drawn later either", categoriesShown()) }
+        } finally { rule.mainClock.autoAdvance = true }
+        // Menu on a channel (a dialog), then Back: still full width.
+        waitFor { focused().contains("KIDS Channel") }
+        key(Key.Menu)
+        assertTrue("menu open, the guide behind it still full width", waitFor(3_000) { vm.channelMenu != null } && vm.guideFullLayout && !categoriesShown())
+        key(Key.Back)
+        assertTrue(waitFor(3_000) { vm.channelMenu == null })
+        assertTrue(vm.guideFullLayout && !categoriesShown())
     }
 }

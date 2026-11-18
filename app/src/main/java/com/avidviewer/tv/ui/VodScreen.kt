@@ -89,7 +89,12 @@ fun VodScreen(vm: AppViewModel, kind: String) {
     LaunchedEffect(kind, vq, vm.vodVersion) { if (vq.length >= 2) { kotlinx.coroutines.delay(300); vm.loadVodNear(kind, vq) } }
     val items = if (vq.isNotBlank()) vm.vodSearch(kind, vq) else vm.vodItems(kind)
 
-    val catState = androidx.compose.foundation.lazy.rememberLazyListState()
+    // R-4: the category list opens scrolled to the category being shown (it used to start at the top on every visit).
+    val catState = remember(kind) {
+        val si = specials.indexOfFirst { it.first == current }
+        val row = if (si >= 0) 1 + si else cats.indexOfFirst { it.first == current }.let { if (it >= 0) 2 + specials.size + it else 1 }
+        androidx.compose.foundation.lazy.LazyListState((row - 2).coerceAtLeast(0))
+    }
     // The category rows' highlight handles, by name: Back or Left from the posters goes to the current one.
     val catFrs = remember(kind) { HashMap<String, FocusRequester>() }
     val catWrap = rememberListWrap(catState)
@@ -159,7 +164,9 @@ fun VodScreen(vm: AppViewModel, kind: String) {
         // Layouts (1.4.0, per profile): Grid, Featured (the highlighted title's art and details above the posters)
         // and Showcase (its art fills the screen, with one row of posters along the bottom).
         val layout = vm.vodLayout
-        var hero by remember(kind, current, vq) { mutableStateOf<VodItem?>(null) }
+        // R-7: starts on the title you were on (Back from its page or the player), not on the first poster, so the
+        // big artwork isn't drawn for one title and then swapped.
+        var hero by remember(kind, current, vq) { mutableStateOf<VodItem?>(vm.nav[vm.vodPath(kind, current, vq)]?.key?.let { k -> items.firstOrNull { it.key == k } }) }
         val shown = hero ?: items.firstOrNull()
         Box(Modifier.weight(1f).fillMaxHeight()) {
         if (layout == "showcase" && items.isNotEmpty()) VodHero(vm, shown, full = true, modifier = Modifier.fillMaxSize())

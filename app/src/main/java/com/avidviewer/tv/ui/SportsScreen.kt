@@ -124,7 +124,11 @@ private fun GameList(vm: AppViewModel, games: List<AppViewModel.SportGame>, sele
         if (final.isNotEmpty()) { out.add(Row0.Header("FINAL")); final.forEach { out.add(Row0.Card(it)) } }
         out
     }
-    val listState = androidx.compose.foundation.lazy.rememberLazyListState()
+    // R-4: back from full screen the list opens on the game's card (it drew from the top first, then jumped).
+    val listState = remember {
+        val i = if (vm.sportsReturnPending) rows.indexOfFirst { it is Row0.Card && it.g.game.id == selectedId } else -1
+        androidx.compose.foundation.lazy.LazyListState(if (i >= 0) i + if (vm.sportsNote != null) 1 else 0 else 0)
+    }
     // Coming back from a game further down the list: scroll it into view so its card can take the highlight.
     LaunchedEffect(vm.sportsReturnPending) {
         if (!vm.sportsReturnPending) return@LaunchedEffect
