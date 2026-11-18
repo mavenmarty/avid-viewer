@@ -235,6 +235,27 @@ class ScreenshotTest {
             rule.runOnIdle { vm.navSelect(Screen.SERIES) }
             settle(600)
             shot("g-series")
+            // Nov 18, 2026: the title pages in the hero style (artwork, facts, ratings).
+            rule.runOnIdle {
+                vm.vodOf("series").firstOrNull()?.let { v ->
+                    vm.putArtForTests(v, com.avidviewer.tv.data.Art(null, "Two harbor families fight over the docks of a fading port town.", 8.7, 1312, listOf(80)))
+                    vm.openVodDetail(v)
+                }
+            }
+            settle(1200)
+            shot("g-series-page")
+            rule.runOnIdle { vm.closeVodDetail(); vm.navSelect(Screen.MOVIES) }
+            settle(400)
+            rule.runOnIdle {
+                vm.vodOf("movie").firstOrNull()?.let { v ->
+                    vm.putArtForTests(v, com.avidviewer.tv.data.Art(null, "A lone engineer on a silent research station picks up a signal from her own future.", 7.9, 4213, listOf(878)))
+                    vm.openVodDetail(v)
+                }
+            }
+            settle(1200)
+            shot("g-movie-page")
+            rule.runOnIdle { vm.closeVodDetail() }
+            settle(300)
             for (sec in listOf("playlists", "channels", "guide", "location", "display", "sports", "discover", "playback", "privacy", "storage", "about")) {
                 rule.runOnIdle { vm.navSelect(Screen.SETTINGS); vm.settingsSection = sec }
                 settle(500)

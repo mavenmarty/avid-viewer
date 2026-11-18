@@ -141,22 +141,37 @@ private fun TitleDetail(vm: AppViewModel, t: Title) {
     val where = vm.whereCache[t.key]
     val first = remember { FocusRequester() }
     LaunchedEffect(t.key) { focusWhenReady(vm) { runCatching { first.requestFocus() }.isSuccess } }
-    Row(Modifier.fillMaxSize().padding(24.dp), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
-        Box(Modifier.width(210.dp).aspectRatio(2f / 3f).clip(RoundedCornerShape(10.dp)).background(badgeColor(t.name))) {
-            Text(t.name, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold, modifier = Modifier.align(Alignment.BottomStart).padding(10.dp))
-            if (t.poster != null) TvImage(model = t.poster, contentDescription = t.name, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+    // Nov 18, 2026 (hero style): the title's wide artwork fills the screen and fades into the page.
+    Box(Modifier.fillMaxSize()) {
+        val img = com.avidviewer.tv.data.Art.big(t.backdrop) ?: t.poster
+        if (img != null) Box(Modifier.align(Alignment.TopEnd).fillMaxWidth(0.8f).fillMaxHeight(0.86f)) {
+            TvImage(model = img, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize().testTag("discover-art"))
+            Box(Modifier.fillMaxSize().background(androidx.compose.ui.graphics.Brush.horizontalGradient(0f to C.Bg, 0.3f to C.Bg.copy(alpha = 0.78f), 0.62f to C.Bg.copy(alpha = 0.2f), 1f to Color.Transparent)))
+            Box(Modifier.fillMaxSize().background(androidx.compose.ui.graphics.Brush.verticalGradient(0f to Color.Transparent, 0.45f to C.Bg.copy(alpha = 0.3f), 0.8f to C.Bg.copy(alpha = 0.9f), 1f to C.Bg)))
         }
         // One scrolling column: the buttons, the description, every version and Where to watch can all be
         // reached with Down. (The versions used to get only the height left over below a fixed layout;
         // on a 960×540 TV screen that was nothing, so no version could be highlighted.)
-        androidx.compose.foundation.lazy.LazyColumn(Modifier.weight(1f).fillMaxHeight().testTag("discover-detail"), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        androidx.compose.foundation.lazy.LazyColumn(Modifier.fillMaxSize().testTag("discover-detail"), verticalArrangement = Arrangement.spacedBy(10.dp),
+            contentPadding = PaddingValues(start = 48.dp, end = 48.dp, top = 56.dp, bottom = 20.dp)) {
             item(key = "head") {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text(t.name, color = C.Text, fontSize = 26.sp, fontWeight = FontWeight.Bold, maxLines = 2)
-                    Label(
-                        listOf(if (t.type == "tv") "Series" else "Movie", t.year, if (t.rating > 0) "★ %.1f".format(t.rating) else "").filter { it.isNotBlank() }.joinToString("  ·  "),
-                        size = 14.sp, color = C.Soft,
-                    )
+                Column(Modifier.fillMaxWidth(0.62f), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(t.name, color = C.Text, fontSize = 44.sp, fontWeight = FontWeight.Bold, maxLines = 2, lineHeight = 48.sp)
+                    Label(listOf(t.year, if (t.type == "tv") "Series" else "Movie").filter { it.isNotBlank() }.joinToString("  ·  "), size = 15.sp, color = C.Text)
+                    val genre = t.genres.firstNotNullOfOrNull { com.avidviewer.tv.data.Art.genreName(it) }
+                    Row(horizontalArrangement = Arrangement.spacedBy(32.dp)) {
+                        genre?.let { Column { Text("Genre", color = C.Muted, fontSize = 12.sp); Text(it, color = C.Text, fontSize = 19.sp, fontWeight = FontWeight.Bold) } }
+                        Column {
+                            Text("On", color = C.Muted, fontSize = 12.sp)
+                            Text(if (match != null) "Your provider" else "Not on your provider", color = C.Text, fontSize = 19.sp, fontWeight = FontWeight.Bold)
+                            if (versions.size > 1) Text("${versions.size} versions", color = C.Soft, fontSize = 12.sp)
+                        }
+                        if (t.rating > 0 && t.votes > 0) Column(Modifier.testTag("discover-rating")) {
+                            Text("TMDB", color = C.Muted, fontSize = 12.sp)
+                            Text("★ " + String.format(java.util.Locale.US, "%.1f", t.rating), color = C.Text, fontSize = 19.sp, fontWeight = FontWeight.Bold)
+                            Text(com.avidviewer.tv.data.Art(null, "", t.rating, t.votes).votesText, color = C.Soft, fontSize = 12.sp)
+                        }
+                    }
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         if (match != null) {
                             TvButton(if (match.kind == "series") "▶ Episodes" else "▶ Play", primary = true, modifier = Modifier.focusRequester(first)) { vm.playMatched(match) }

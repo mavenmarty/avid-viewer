@@ -4069,6 +4069,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     private fun newSourceId() = "src-" + System.currentTimeMillis().toString(36) + java.util.UUID.randomUUID().toString().take(4)
 
     // ---------------- artwork and details from TMDB (Nov 18, 2026: the hero style) ----------------
+    /** ▶ from the Movies/Series categories: a poster takes the highlight (the Grid's details sit above the posters). */
+    var vodPosterFocus by mutableStateOf(0)
+
     private val artStore by lazy { com.avidviewer.tv.data.ArtStore(app.filesDir) }
     /** Looked-up artwork by [com.avidviewer.tv.data.ArtStore.key]; a key with a null value has no TMDB match. */
     var art by mutableStateOf<Map<String, com.avidviewer.tv.data.Art?>>(emptyMap()); private set
