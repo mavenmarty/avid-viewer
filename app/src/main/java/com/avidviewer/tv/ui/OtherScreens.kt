@@ -477,6 +477,12 @@ fun PlaylistsScreen(vm: AppViewModel) {
                 item { Spacer(Modifier.height(4.dp)) }
                 item { MiniToggle("Playlist on", if (selP.enabled) "Shown in the guide, search and Sports" else "Hidden everywhere; nothing is deleted", selP.enabled) { vm.setPlaylistEnabled(selP.id, !selP.enabled) } }
                 item { MiniToggle("Live TV & guide", if (selP.liveOn) "Channels and TV guide load" else "Live channels aren't loaded", selP.liveOn, enabled = selP.enabled) { vm.setPlaylistContent(selP.id, !selP.liveOn, selP.vodOn) } }
+                item {
+                    // 1.18.0: how this playlist's channels are sorted (every category, profile and TV). OK steps through.
+                    val mode = vm.channelSortOf(selP.id)
+                    val next = when (mode) { SORT_PROVIDER -> SORT_AZ; SORT_AZ -> SORT_MANUAL; else -> SORT_PROVIDER }
+                    androidx.compose.foundation.layout.Box(Modifier.testTag("channel-sort")) { OptionRow("Channel order: " + vm.sortLabel(mode)) { vm.setChannelSort(selP.id, next) } }
+                }
                 item { MiniToggle("Movies & series", if (selP.vodOn) "Movies and series load" else "Movies and series aren't loaded", selP.vodOn, enabled = selP.enabled) { vm.setPlaylistContent(selP.id, selP.liveOn, !selP.vodOn) } }
                 vm.status?.let { st -> item { Label(st, size = 12.sp, color = C.Soft, lines = Int.MAX_VALUE, modifier = Modifier.padding(top = 4.dp)) } }
             }

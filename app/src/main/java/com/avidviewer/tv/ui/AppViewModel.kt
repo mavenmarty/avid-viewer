@@ -89,6 +89,10 @@ enum class GuideFocus {
 const val GUIDE_DAYS = 7
 /** 1.18.0: the live card in Continue watching is a [VodItem] of this kind, keyed [LIVE_PREFIX] + channel key. */
 const val LIVE_KIND = "live"
+/** 1.18.0: how channels and lists are sorted. */
+const val SORT_PROVIDER = "provider"
+const val SORT_AZ = "az"
+const val SORT_MANUAL = "manual"
 const val LIVE_PREFIX = "live|"
 /** A live channel is shared with the profile's other TVs after this long on it. */
 const val LIVE_AFTER = 2 * 60_000L
@@ -127,8 +131,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     // ---------------- profiles ----------------
     /**
-     * At start: the last profile used, unless it needs a PIN, then a Kids profile (or it, behind Who's watching?).
-     * Who's watching? shows when there are several profiles and the app asks at start, or the last one is locked.
+     * At start ([ProfileSet.launch]): with a Kids profile on the device, Who's watching? (Kids behind it); otherwise the
+     * last profile used, behind Who's watching? only when it's locked with its own PIN.
      */
     private val startup: Pair<ProfileSet, ProfileSet.Launch> = run {
         val existing = !store.isNewInstall()
@@ -2149,7 +2153,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             if (before.favorites != prefs.favorites || before.lists != prefs.lists) runCatching {
                 account.listsChanged = org.json.JSONObject(account.listsChanged).put(profile.id, System.currentTimeMillis()).toString()
             }
-            if (before.groupOrder != prefs.groupOrder || before.groupNames != prefs.groupNames || before.channelOrder != prefs.channelOrder || before.channelNames != prefs.channelNames)
+            if (before.favSort != prefs.favSort) runCatching {
+                account.listsChanged = org.json.JSONObject(account.listsChanged).put(profile.id, System.currentTimeMillis()).toString()
+            }
+            if (before.groupOrder != prefs.groupOrder || before.groupNames != prefs.groupNames || before.channelOrder != prefs.channelOrder || before.channelNames != prefs.channelNames || before.channelSort != prefs.channelSort)
                 account.orderChangedAt = System.currentTimeMillis()
         }
         if (before.favorites !== prefs.favorites || before.lists !== prefs.lists) {
@@ -2225,12 +2232,64 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** Channels of one category in the user's order, hidden ones included. */
-    fun editorChannelsIn(chs: List<Channel>, raw: String): List<Channel> {
-        val list = chs.filter { it.group == raw }
-        val order = prefs.channelOrder[raw] ?: return list
-        val byKey = list.associateBy { it.key }
-        return order.mapNotNull { byKey[it] } + list.filterNot { it.key in order }
+    fun editorChannelsIn(chs: List<Channel>, raw: String): List<Channel> = sortedIn(chs.filter { it.group == raw }, raw)
+
+    // ---------------- sorting (1.18.0, design boards 25–27, note 20) ----------------
+    /** How [pid]'s channels are sorted: the setting, else Manual when it has an order of its own, else the provider's. */
+    fun channelSortOf(pid: String): String = prefs.channelSort[pid]
+        ?: if (prefs.channelOrder.values.any { l -> l.any { it.startsWith("$pid:") } }) SORT_MANUAL else SORT_PROVIDER
+
+    /** A–Z by the name exactly as shown (renames count, nothing skipped), case ignored. */
+    private val byShownName: Comparator<Channel> = compareBy<Channel, String>(String.CASE_INSENSITIVE_ORDER) { channelName(it) }.thenBy { channelName(it) }
+
+    /** One category's channels ([list], in the provider's order) as its playlist is sorted. */
+    private fun sortedIn(list: List<Channel>, group: String): List<Channel> {
+        val pid = list.firstOrNull()?.key?.substringBefore(':') ?: return list
+        return when (channelSortOf(pid)) {
+            SORT_AZ -> list.sortedWith(byShownName)
+            SORT_PROVIDER -> list
+            else -> { val order = prefs.channelOrder[group] ?: return list; val byKey = list.associateBy { it.key }; order.mapNotNull { byKey[it] } + list.filterNot { it.key in order } }
+        }
     }
+
+    /** Sets how [pid]'s channels are sorted, for every category, profile and device. Manual starts from the order shown now. */
+    fun setChannelSort(pid: String, mode: String) {
+        if (channelSortOf(pid) == mode) return
+        updatePrefs { p ->
+            val order = if (mode == SORT_MANUAL) p.channelOrder + manualSnapshot(pid) else p.channelOrder
+            p.copy(channelSort = p.channelSort + (pid to mode), channelOrder = order)
+        }
+        status = "Channels in ${playlists.firstOrNull { it.id == pid }?.name ?: "this playlist"}: " + sortLabel(mode) + "."
+    }
+
+    fun sortLabel(mode: String) = when (mode) { SORT_AZ -> "A–Z"; SORT_PROVIDER -> "Provider’s order"; else -> "Manual" }
+
+    /** Every category of [pid] (when it's the playlist in memory) in the order shown now, to start Manual from. */
+    private fun manualSnapshot(pid: String): Map<String, List<String>> {
+        if (channels.firstOrNull()?.key?.substringBefore(':') != pid) return emptyMap()
+        return channels.groupBy { it.group }.mapValues { (g, l) -> sortedIn(l, g).map { it.key } }
+    }
+
+    /** ★ Favorites or a list sorted "az" or "manual" (its own order). Lists belong to the profile. */
+    fun listSortOf(group: String): String = if (group == FAV_GROUP) prefs.favSort else userList(group)?.sort ?: SORT_MANUAL
+
+    fun setListSort(group: String, mode: String) {
+        if (listSortOf(group) == mode) return
+        // Manual starts from the A–Z order on screen.
+        val shown = if (mode == SORT_MANUAL) listKeys(group).let { ks -> sortKeysAz(ks) } else null
+        updatePrefs { p ->
+            if (group == FAV_GROUP) p.copy(favSort = mode, favorites = shown ?: p.favorites)
+            else p.copy(lists = p.lists.map { if (LIST_PREFIX + it.id == group) it.copy(sort = mode, keys = shown ?: it.keys) else it })
+        }
+        status = (if (group == FAV_GROUP) "Favorites" else userList(group)?.name ?: "List") + ": " + sortLabel(mode) + "."
+    }
+
+    /** [keys] in A–Z order by the channels' shown names (channels not found keep their place at the end). */
+    private fun sortKeysAz(keys: List<String>): List<String> {
+        val found = keys.mapNotNull { k -> channel(k) }
+        return found.sortedWith(byShownName).map { it.key } + keys.filter { k -> found.none { it.key == k } }
+    }
+
 
     fun channelsIn(group: String?): List<Channel> {
         if (group == null) return emptyList()
@@ -2242,11 +2301,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     private fun computeChannelsIn(group: String): List<Channel> {
-        if (isListGroup(group)) return listKeys(group).mapNotNull { channel(it) }
-        val list = channels.filter { it.group == group && it.key !in prefs.hiddenChannels && channelAllowed(it) }
-        val order = prefs.channelOrder[group] ?: return list
-        val byKey = list.associateBy { it.key }
-        return order.mapNotNull { byKey[it] } + list.filterNot { it.key in order }
+        if (isListGroup(group)) return listKeys(group).mapNotNull { channel(it) }.let { l -> if (listSortOf(group) == SORT_AZ) l.sortedWith(byShownName) else l }
+        return sortedIn(channels.filter { it.group == group && it.key !in prefs.hiddenChannels && channelAllowed(it) }, group)
     }
 
     /** Looks in the active playlist first, then in other playlists' saved channels (for combined Favorites). */
@@ -2320,6 +2376,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** Moves a channel to [index] in the category or list the guide is showing. */
     fun moveChannelTo(key: String, index: Int) {
         val g = selectedGroup ?: return
+        ensureManual(g, key)
         val order = channelsIn(g).map { it.key }.toMutableList()
         if (!order.remove(key)) return
         order.add(index.coerceIn(0, order.size), key)
@@ -2330,6 +2387,12 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /** Re-ordering in a list or playlist sorted A–Z (or the provider's order) switches it to Manual, from the order shown. */
+    private fun ensureManual(group: String, key: String) {
+        if (isListGroup(group)) { if (listSortOf(group) != SORT_MANUAL) setListSort(group, SORT_MANUAL) }
+        else { val pid = key.substringBefore(':'); if (channelSortOf(pid) != SORT_MANUAL) setChannelSort(pid, SORT_MANUAL) }
+    }
+
     fun moveChannelBy(key: String, delta: Int) {
         val i = channelsIn(selectedGroup).indexOfFirst { it.key == key }
         if (i >= 0) moveChannelTo(key, i + delta)
@@ -2337,6 +2400,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     fun moveChannel(key: String, dir: Int) {
         val c = channel(key) ?: return
+        ensureManual(c.group, key)
         val order = channelsIn(c.group).map { it.key }.toMutableList()
         val i = order.indexOf(key); val j = i + dir
         if (i < 0 || j !in order.indices) return
@@ -2365,6 +2429,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     var groupMenu by mutableStateOf<String?>(null)
 
     fun moveFavorite(key: String, dir: Int) {
+        ensureManual(FAV_GROUP, key)
         val l = prefs.favorites.toMutableList(); val i = l.indexOf(key); val j = i + dir
         if (i < 0 || j !in l.indices) return
         l[i] = l[j].also { l[j] = l[i] }
@@ -2472,6 +2537,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     private fun moveInList(group: String, key: String, dir: Int) {
+        ensureManual(group, key)
         val lst = userList(group) ?: return
         val l = lst.keys.toMutableList(); val i = l.indexOf(key); val j = i + dir
         if (i < 0 || j !in l.indices) return
@@ -2743,7 +2809,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         if (repair) { account.hidesRepaired = true; trail("hidden items matched to the account") }
         val now = profile
         when {
-            active == null -> { splashProfile = null; openProfile(set.launch().id) }
+            active == null -> { splashProfile = null; val l = set.launch(); openProfile(l.id); if (l.choose) askWhoIsWatching() }
             before.kids != now.kids || before.allowedVodCats != now.allowedVodCats || before.allowedGroups != now.allowedGroups -> { applyProfileVodLimits(); favDataTick++ }
             else -> favDataTick++
         }
@@ -3356,8 +3422,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         fun accKeys(id: String): List<String> { if (accLists == null) return emptyList(); for (i in 0 until accLists.length()) { val l = accLists.getJSONObject(i); if (l.optString("id") == id) return keep(ls(l.optJSONArray("keys"))) }; return emptyList() }
         return org.json.JSONObject()
             .put("favorites", lj(map(p.favorites) + keep(ls(accountDoc?.optJSONArray("favorites")))))
+            .put("favSort", p.favSort)
             .put("lists", org.json.JSONArray().apply {
-                p.lists.forEach { l -> put(org.json.JSONObject().put("id", l.id).put("name", l.name).put("hidden", l.hidden).put("keys", lj(map(l.keys) + accKeys(l.id)))) }
+                p.lists.forEach { l -> put(org.json.JSONObject().put("id", l.id).put("name", l.name).put("hidden", l.hidden).put("sort", l.sort).put("keys", lj(map(l.keys) + accKeys(l.id)))) }
             })
     }
 
@@ -3369,9 +3436,11 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         val out = (0 until lists.length()).map { i ->
             val l = lists.getJSONObject(i); val id = l.optString("id")
             val old = p.lists.firstOrNull { it.id == id }
-            ChannelList(id = id, name = l.optString("name"), hidden = l.optBoolean("hidden"), keys = (map(ls(l.optJSONArray("keys"))) + localOnly(old?.keys.orEmpty())).distinct())
+            ChannelList(id = id, name = l.optString("name"), hidden = l.optBoolean("hidden"), keys = (map(ls(l.optJSONArray("keys"))) + localOnly(old?.keys.orEmpty())).distinct(),
+                sort = when (l.optString("sort")) { SORT_AZ -> SORT_AZ; SORT_MANUAL -> SORT_MANUAL; else -> old?.sort ?: SORT_MANUAL })
         } + p.lists.filter { o -> out0(lists).none { it == o.id } && o.keys.isNotEmpty() && o.keys.all { it.substringBefore(':') !in toRemote } }
-        return p.copy(favorites = (map(ls(doc.optJSONArray("favorites"))) + localOnly(p.favorites)).distinct(), lists = out)
+        val fs = when (doc.optString("favSort")) { SORT_AZ -> SORT_AZ; SORT_MANUAL -> SORT_MANUAL; else -> p.favSort }
+        return p.copy(favorites = (map(ls(doc.optJSONArray("favorites"))) + localOnly(p.favorites)).distinct(), lists = out, favSort = fs)
     }
     private fun out0(a: org.json.JSONArray) = (0 until a.length()).map { a.getJSONObject(it).optString("id") }
 
@@ -3385,6 +3454,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 p.channelOrder.filterKeys { it in groups }.toSortedMap().forEach { (g, keys) -> keys.filter { it.startsWith(pre) }.map { it.removePrefix(pre) }.takeIf { it.isNotEmpty() }?.let { put(g, lj(it)) } }
             })
             .put("channelNames", org.json.JSONObject().apply { p.channelNames.filterKeys { it.startsWith(pre) }.toSortedMap().forEach { (k, v) -> put(k.removePrefix(pre), v) } })
+            .apply { p.channelSort[pl.id]?.let { put("channelSort", it) } }
     }
 
     private fun withAccountOrder(p: Prefs, doc: org.json.JSONObject, pl: Playlist, groups: Set<String>): Prefs {
@@ -3399,7 +3469,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         val chNames = p.channelNames.filterKeys { !it.startsWith(pre) } + cn.keys().asSequence().associate { pre + it to cn.optString(it) }
         // This playlist's categories first in the account's order (the rest keep theirs); unlisted ones follow the provider.
         val groupOrder = if (order.isEmpty()) p.groupOrder.filter { it !in groups } else order + p.groupOrder.filter { it !in groups }
-        return p.copy(groupOrder = groupOrder, groupNames = names, channelOrder = chOrder.filterValues { it.isNotEmpty() }, channelNames = chNames)
+        val sort = doc.optString("channelSort").takeIf { it == SORT_PROVIDER || it == SORT_AZ || it == SORT_MANUAL }
+        return p.copy(groupOrder = groupOrder, groupNames = names, channelOrder = chOrder.filterValues { it.isNotEmpty() }, channelNames = chNames,
+            channelSort = if (sort == null) p.channelSort else p.channelSort + (pl.id to sort))
     }
 
     /** Sends this device's changes to favorites, lists, order and names, and applies the account's newer ones. */
@@ -3440,7 +3512,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             val sig = sigOf(doc)
             if (st == null || st.optString("s") != sig) {
                 // Never changed here and never synced: only send it if there is something to say.
-                val empty = doc.optJSONArray("groupOrder")!!.length() == 0 && doc.optJSONObject("groupNames")!!.length() == 0 && doc.optJSONObject("channelOrder")!!.length() == 0 && doc.optJSONObject("channelNames")!!.length() == 0
+                val empty = doc.optJSONArray("groupOrder")!!.length() == 0 && doc.optJSONObject("groupNames")!!.length() == 0 && doc.optJSONObject("channelOrder")!!.length() == 0 && doc.optJSONObject("channelNames")!!.length() == 0 && !doc.has("channelSort")
                 if (st == null && empty) { os.put(pl.remoteId, org.json.JSONObject().put("s", sig)); continue }
                 val at = account.orderChangedAt.takeIf { it > 0 } ?: 1L
                 sendO.put(org.json.JSONObject().put("id", pl.remoteId).put("changedAt", at).put("data", doc))

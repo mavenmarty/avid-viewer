@@ -210,6 +210,7 @@ fun PlaylistTree(vm: AppViewModel) {
             Focusable(
                 modifier = Modifier.fillMaxWidth().height(44.dp).navFocusTarget(vm, FAV_GROUP),
                 color = C.Surface,
+                onMenu = { vm.listMenu = FAV_GROUP },
                 onClick = { vm.ensureFavoriteData(); vm.chooseGroup(active ?: "", FAV_GROUP) },
             ) {
                 Text("★", color = C.Accent, fontSize = 14.sp, modifier = Modifier.padding(start = 10.dp, end = 8.dp))
@@ -318,6 +319,7 @@ fun GroupNav(vm: AppViewModel) {
             Focusable(
                 modifier = Modifier.fillMaxWidth().height(38.dp).navFocusTarget(vm, FAV_GROUP).rightIntoGuide(vm, FAV_GROUP).activePath(on),
                 color = if (on) C.Surface2 else Color.Transparent,
+                onMenu = { vm.listMenu = FAV_GROUP },
                 onClick = { vm.ensureFavoriteData(); vm.chooseGroup(vm.activePlaylist()?.id ?: "", FAV_GROUP) },
             ) {
                 Glyph("★", C.Accent, 14.sp, Modifier.padding(start = 10.dp, end = 6.dp))
