@@ -105,7 +105,7 @@ fun NavRail(vm: AppViewModel) {
 
     Column(
         Modifier.width(if (expanded) 176.dp else 60.dp).fillMaxHeight().background(C.Rail)
-            .onFocusChanged { railFocused = it.hasFocus }
+            .onFocusChanged { railFocused = it.hasFocus; if (it.hasFocus) vm.guideHasFocus = false }
             .padding(horizontal = 8.dp, vertical = 10.dp),
         verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
@@ -171,7 +171,6 @@ fun NavRail(vm: AppViewModel) {
 fun PlaylistTree(vm: AppViewModel) {
     val active = vm.activePlaylist()?.id
     val first = remember { FocusRequester() }
-    val treeState = androidx.compose.foundation.lazy.rememberLazyListState()
     /** The keys of the list's items, in order: the same keys the items below are given. */
     fun treeKeys(): List<String> = buildList {
         add("tfav"); vm.shownLists.forEach { add("tl-" + it.id) }; add("ttitle")
@@ -183,6 +182,12 @@ fun PlaylistTree(vm: AppViewModel) {
                 if (groups == null) add("ld-" + p.id) else groups.forEach { add("g-" + p.id + "-" + it.raw) }
             }
         }
+    }
+    // R-4: opens scrolled to the category being come back from, instead of drawing from the top and jumping.
+    val treeState = remember {
+        val k = vm.navFocusKey
+        val item = if (k == null) -1 else treeKeys().indexOf(when { k == FAV_GROUP -> "tfav"; isListGroup(k) -> "tl-" + k.removePrefix(LIST_PREFIX); else -> "g-$active-$k" })
+        androidx.compose.foundation.lazy.LazyListState(if (item > 3) item - 3 else 0)
     }
     // Leaving the screen while it had the highlight must not leave "in the playlist list" set (NAV-03):
     // Left would then act as Back from somewhere else entirely.
@@ -201,7 +206,7 @@ fun PlaylistTree(vm: AppViewModel) {
         focusWhenReady(vm) { runCatching { first.requestFocus() }.isSuccess }
     }
     LazyColumn(
-        Modifier.width(250.dp).fillMaxHeight().background(C.Bg).onFocusChanged { vm.inPlaylistTree = it.hasFocus },
+        Modifier.width(250.dp).fillMaxHeight().background(C.Bg).onFocusChanged { vm.inPlaylistTree = it.hasFocus; if (it.hasFocus) vm.guideHasFocus = false },
         state = treeState,
         contentPadding = PaddingValues(10.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp),
@@ -274,13 +279,18 @@ fun PlaylistTree(vm: AppViewModel) {
 @Composable
 fun GroupNav(vm: AppViewModel) {
     val groups = vm.groups()
-    val navState = androidx.compose.foundation.lazy.rememberLazyListState()
     androidx.compose.runtime.DisposableEffect(Unit) { onDispose { vm.inGroupNav = false } }
     val scope = androidx.compose.runtime.rememberCoroutineScope()
     /** The keys of the list's items, in order: the same keys the items below are given. */
     fun navKeys(): List<String> = buildList {
         add("menu"); add("title"); add("fav"); vm.shownLists.forEach { add("list-" + it.id) }
         add("newlist"); add("search"); add("spacer"); groups.forEach { add("g:" + it.raw) }
+    }
+    fun navItemOf(k: String) = navKeys().indexOf(when { k == FAV_GROUP -> "fav"; isListGroup(k) -> "list-" + k.removePrefix(LIST_PREFIX); else -> "g:$k" })
+    // R-4: the list opens already scrolled to the current category (it used to draw from the top, then jump there).
+    val navState = remember {
+        val item = (vm.navFocusKey ?: vm.selectedGroup)?.let { navItemOf(it) } ?: -1
+        androidx.compose.foundation.lazy.LazyListState(if (item > 3) item - 3 else 0)
     }
     // Re-order mode: keep the moving category on screen as it moves.
     val moving = vm.movingGroup
@@ -304,7 +314,7 @@ fun GroupNav(vm: AppViewModel) {
     }
     LazyColumn(
         state = navState,
-        modifier = Modifier.width(210.dp).fillMaxHeight().background(C.Rail).onFocusChanged { vm.inGroupNav = it.hasFocus }.dimWhenInactive(),
+        modifier = Modifier.width(210.dp).fillMaxHeight().background(C.Rail).onFocusChanged { vm.inGroupNav = it.hasFocus; if (it.hasFocus) vm.guideHasFocus = false }.dimWhenInactive(),
         contentPadding = PaddingValues(10.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {

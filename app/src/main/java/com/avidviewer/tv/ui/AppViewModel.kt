@@ -4423,10 +4423,22 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** Back walks up the navigation: categories → playlists → full menu → TV Guide. Returns false to let the app exit. */
     /** Which left-hand list has the highlight, so Back and Left know which layer the viewer is on. */
     var inGroupNav = false
-    /** The TV Guide itself (channels, programmes, preview) has the highlight: it then fills the screen. */
-    var guideHasFocus by mutableStateOf(false)
-    /** The guide is drawn full width (main menu and category list hidden): 2 hours across the screen. */
-    var guideFullLayout by mutableStateOf(false)
+    /**
+     * The viewer is in the TV Guide itself (channels, programmes, preview): it then fills the screen. Set when the guide
+     * takes the highlight; cleared only when the main menu, the playlist list or the category list takes it (Left/Back
+     * also set [navFocusKey]). Leaving for full screen or a dialog doesn't clear it, so coming back doesn't first draw
+     * the menu and categories and then fold them away (Nov 18 redraw audit, R-1). Starts set: the app opens in the guide.
+     */
+    var guideHasFocus by mutableStateOf(true)
+    /** The guide is drawn full width (main menu and category list hidden): 2 hours across the screen. Worked out in the
+     *  same frame as the layout, so the guide's time scale never lags a frame behind it (R-2). */
+    val guideFullLayout: Boolean
+        get() = (screen == Screen.LIVE || screen == Screen.GUIDE) && navMode == NavMode.GROUPS && selectedGroup != null &&
+            guideHasFocus && navFocusKey == null
+    /** The width of the guide's programme area last measured, full width and not (R-3: the first frame uses it). */
+    var guideGridWidthFull = 0f
+    var guideGridWidthNarrow = 0f
+
     var inPlaylistTree = false
     /** Whether the highlight is inside a Settings section (not on the section list). */
     var settingsInContent = false

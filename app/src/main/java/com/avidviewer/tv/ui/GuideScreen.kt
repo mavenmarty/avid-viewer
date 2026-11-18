@@ -94,7 +94,10 @@ fun GuideScreen(vm: AppViewModel) {
     // Nov 15: the guide fills the screen (full layout: 2 hours across the whole width; with the category list
     // showing: 2.5 hours). Minutes are as wide as the room allows, measured from the timeline row.
     val winMin = if (vm.guideFullLayout) 120 else WINDOW_MIN
-    var gridWidthDp by remember { mutableStateOf(0f) }
+    // R-3: starts from the width measured last time (full width or not), so the first frame isn't drawn at a default
+    // scale and then redrawn once measured.
+    val full = vm.guideFullLayout
+    var gridWidthDp by remember(full) { mutableStateOf(if (full) vm.guideGridWidthFull else vm.guideGridWidthNarrow) }
     val dpm = if (gridWidthDp > 0f) gridWidthDp / winMin else DP_PER_MIN
     // The visible 2.5-hour window starts at the current (local) half hour plus [slots] × 30 minutes: back 2 hours,
     // ahead as far as the guide data goes (at least 12 hours, at most GUIDE_DAYS days).
@@ -368,7 +371,10 @@ fun GuideScreen(vm: AppViewModel) {
             Label(listOfNotNull(vm.selectedGroup?.let { vm.groupName(it) }, vm.dayLabel(winStart)).joinToString(" · ") + " · ${vm.zoneLabel()}" + if (slots != 0) "  ◀" else "",
                 size = 12.sp, modifier = Modifier.width((CH_COL + 3).dp))
             val density = androidx.compose.ui.platform.LocalDensity.current
-            Box(Modifier.weight(1f).onSizeChanged { gridWidthDp = with(density) { it.width.toDp().value } - 6f }) {
+            Box(Modifier.weight(1f).onSizeChanged {
+                gridWidthDp = with(density) { it.width.toDp().value } - 6f
+                if (full) vm.guideGridWidthFull = gridWidthDp else vm.guideGridWidthNarrow = gridWidthDp
+            }) {
                 for (i in 0 until winMin / 30) {
                     Label(vm.fmtTime(winStart + i * half), size = 12.sp, modifier = Modifier.offset(x = (i * 30 * dpm).dp))
                 }
