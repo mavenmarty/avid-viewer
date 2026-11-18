@@ -40,7 +40,14 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun dispatchKeyEvent(event: android.view.KeyEvent): Boolean {
-        val handled = super.dispatchKeyEvent(event)
+        // #22: a key that makes Compose follow a focus link to something not on screen threw "FocusRequester is not
+        // initialized" and closed the app. Now it's noted for crash reports and the press is used up instead.
+        val handled = try { super.dispatchKeyEvent(event) } catch (e: IllegalStateException) {
+            if (e.message?.contains("FocusRequester is not initialized") != true) throw e
+            com.avidviewer.tv.data.CrashLog.note(this, "Focus target missing on ${vm.screen.name.lowercase()}; key ignored")
+            vm.focusRescue++
+            true
+        }
         // A remote arrow or OK that reached nothing because nothing is highlighted: put the highlight back.
         if (!handled && event.action == android.view.KeyEvent.ACTION_DOWN && !vm.anyFocus && event.keyCode in rescueKeys) vm.focusRescue++
         return handled

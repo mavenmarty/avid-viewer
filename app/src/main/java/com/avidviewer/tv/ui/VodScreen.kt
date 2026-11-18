@@ -405,6 +405,8 @@ private fun VodDetail(vm: AppViewModel, v: VodItem) {
         // them. (Given only the height left under the text, the episodes could get none: a long
         // description, or the versions line of a title with several copies, e.g. from My List.)
         val seasonFr = remember { FocusRequester() }
+        /** #22: whether the selected season's button is on screen (▲ from the first episode only aims at it then). */
+        val seasonOn = remember { mutableStateOf(false) }
         LazyColumn(Modifier.weight(1f).fillMaxHeight().testTag("vod-detail"), verticalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(bottom = 20.dp)) {
           item(key = "head") { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(v.name, color = C.Text, fontSize = 26.sp, fontWeight = FontWeight.Bold, maxLines = 2)
@@ -441,13 +443,13 @@ private fun VodDetail(vm: AppViewModel, v: VodItem) {
             info?.cast?.takeIf { it.isNotBlank() }?.let { Label("Cast: $it", size = 13.sp, lines = if (isSeries) 1 else 2) }
             info?.director?.takeIf { it.isNotBlank() }?.let { Label("Director: $it", size = 13.sp, lines = 1) }
           } }
-          if (isSeries) seasonsAndEpisodes(vm, v, seasonFr, episodeFocus) { onEpisode = it }
+          if (isSeries) seasonsAndEpisodes(vm, v, seasonFr, seasonOn, episodeFocus) { onEpisode = it }
         }
     }
 }
 
 /** The season buttons, then the chosen season's episodes, as items of the title page's list. */
-private fun androidx.compose.foundation.lazy.LazyListScope.seasonsAndEpisodes(vm: AppViewModel, series: VodItem, seasonFr: FocusRequester, episodeFocus: FocusRequester, onLastFocused: (Boolean) -> Unit) {
+private fun androidx.compose.foundation.lazy.LazyListScope.seasonsAndEpisodes(vm: AppViewModel, series: VodItem, seasonFr: FocusRequester, seasonOn: androidx.compose.runtime.MutableState<Boolean>, episodeFocus: FocusRequester, onLastFocused: (Boolean) -> Unit) {
     val eps = vm.detailEpisodes
     when {
         eps == null -> item(key = "eps-loading") { Label("Loading episodes…", size = 13.sp) }
@@ -456,8 +458,13 @@ private fun androidx.compose.foundation.lazy.LazyListScope.seasonsAndEpisodes(vm
             val seasons = eps.map { it.season }.distinct()
             val season = vm.detailSeason ?: seasons.first()
             item(key = "seasons") {
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    items(seasons) { s -> TvButton("Season $s", selected = s == season, modifier = if (s == season) Modifier.focusRequester(seasonFr) else Modifier) { vm.detailSeason = s } }
+                // Opens scrolled to the selected season, so its button (▲'s target from the first episode) is there.
+                val rowState = remember(series.key) { androidx.compose.foundation.lazy.LazyListState((seasons.indexOf(season) - 1).coerceAtLeast(0)) }
+                LazyRow(state = rowState, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    items(seasons) { s ->
+                        if (s == season) androidx.compose.runtime.DisposableEffect(Unit) { seasonOn.value = true; onDispose { seasonOn.value = false } }
+                        TvButton("Season $s", selected = s == season, modifier = if (s == season) Modifier.focusRequester(seasonFr) else Modifier) { vm.detailSeason = s }
+                    }
                 }
             }
             val shown = eps.filter { it.season == season }
@@ -467,7 +474,7 @@ private fun androidx.compose.foundation.lazy.LazyListScope.seasonsAndEpisodes(vm
                 val ek = vm.episodeKey(series, e)
                 val r = vm.resumeOf(ek)
                 val isLast = target != null && target.key == e.key && target.season == e.season && target.number == e.number
-                Focusable(Modifier.fillMaxWidth().height(52.dp).then(if (e == shown.first()) Modifier.focusProperties { up = seasonFr } else Modifier).then(if (isLast) Modifier.focusRequester(episodeFocus).onFocusChanged { onLastFocused(it.isFocused) } else Modifier), onClick = { vm.playDetailEpisode(e) }) {
+                Focusable(Modifier.fillMaxWidth().height(52.dp).then(if (e == shown.first()) Modifier.focusProperties { if (seasonOn.value) up = seasonFr } else Modifier).then(if (isLast) Modifier.focusRequester(episodeFocus).onFocusChanged { onLastFocused(it.isFocused) } else Modifier), onClick = { vm.playDetailEpisode(e) }) {
                     Label("E${e.number}", size = 13.sp, color = C.Accent, weight = FontWeight.Bold, modifier = Modifier.width(50.dp).padding(start = 12.dp))
                     Column(Modifier.weight(1f)) {
                         Label(e.title, size = 14.sp, color = C.Text, weight = FontWeight.SemiBold)

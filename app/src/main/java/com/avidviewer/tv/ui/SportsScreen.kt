@@ -46,7 +46,10 @@ import com.avidviewer.tv.data.Team
 fun SportsScreen(vm: AppViewModel) {
     LaunchedEffect(Unit) { if (vm.sportGames.isEmpty()) vm.refreshSports() }
     val games = vm.sportsVisibleGames()
-    val selected = games.firstOrNull { it.game.id == vm.selectedGame } ?: games.firstOrNull()
+    // #24: with no game chosen (or the chosen one gone from the list) the details show the first game listed, in the
+    // list's own order (live, then upcoming, then finals), not the earliest game, which was often a final off screen.
+    val listed = vm.sportsListOrder(games)
+    val selected = listed.firstOrNull { it.game.id == vm.selectedGame } ?: listed.firstOrNull()
     val channelsFr = remember { FocusRequester() }
     val goToChannels = remember { mutableStateOf(0) }
     LaunchedEffect(goToChannels.value) {
@@ -113,9 +116,10 @@ private fun GameList(vm: AppViewModel, games: List<AppViewModel.SportGame>, sele
     }
     val rows = remember(games, vm.now / 60_000) {
         val out = ArrayList<Row0>()
-        val live = games.filter { it.game.live }
-        val upcoming = games.filter { it.game.state == "pre" }
-        val final = games.filter { it.game.final }.sortedByDescending { it.game.start }
+        val ordered = vm.sportsListOrder(games)
+        val live = ordered.filter { it.game.live }
+        val upcoming = ordered.filter { it.game.state == "pre" }
+        val final = ordered.filter { it.game.final }
         if (live.isNotEmpty()) { out.add(Row0.Header("LIVE NOW · ${live.size}")); live.forEach { out.add(Row0.Card(it)) } }
         upcoming.groupBy { vm.dayLabel(it.game.start) }.forEach { (day, list) ->
             out.add(Row0.Header(if (day == "Today") "LATER TODAY" else day.uppercase()))

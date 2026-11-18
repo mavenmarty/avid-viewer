@@ -957,7 +957,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
         player.addAnalyticsListener(playback)
         // Nov 15: the stream is reopened when the picture sticks or the data stops (PlaybackMonitor.checkReconnect).
-        playback.onReconnect = { live -> reconnectStream(live) }
+        playback.onReconnect = { live, full -> reconnectStream(live, full) }
         viewModelScope.launch {
             var tick = 0
             while (true) {
@@ -4255,6 +4255,11 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             r to live.channelsByKeys(keys).associateBy { it.key }
         }
 
+    /** [games] in the order the Sports list shows them: live, then upcoming by start, then finals newest first (#24). */
+    fun sportsListOrder(games: List<SportGame>): List<SportGame> =
+        games.filter { it.game.live } + games.filter { !it.game.live && it.game.state == "pre" }.sortedBy { it.game.start } +
+            games.filter { !it.game.live && it.game.final }.sortedByDescending { it.game.start }
+
     /** The games the Sports screen lists (league filter, and the "no channel found" setting). */
     fun sportsVisibleGames(): List<SportGame> = sportGames.filter { g ->
         (sportLeague == null || g.game.league == sportLeague) && (prefs.sportsShowUnmatched || g.channels.isNotEmpty() || g.game.id !in sportsMatchedIds)
@@ -4991,9 +4996,11 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
      * Reopens the stream: a live channel at the live point, a movie or episode where it was. The picture is back
      * in a second or two, instead of staying frozen.
      */
-    private fun reconnectStream(live: Boolean) {
+    private fun reconnectStream(live: Boolean, full: Boolean = false) {
         val pos = player.currentPosition
         player.stop()
+        // #23: a second reconnect within a minute starts the player afresh with the same stream (decoders and all).
+        if (full) player.currentMediaItem?.let { item -> player.clearMediaItems(); player.setMediaItem(item) }
         player.prepare()
         if (live) player.seekToDefaultPosition() else player.seekTo(pos)
         player.playWhenReady = true
