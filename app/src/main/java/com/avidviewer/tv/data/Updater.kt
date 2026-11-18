@@ -45,6 +45,12 @@ object Updater {
         return if (parts.size >= 4) parts.take(3).joinToString(".") else parts.joinToString(".")
     }
 
+    /** Settings › Updates & about, for a device in the beta or still on a beta build. */
+    fun betaText(inBeta: Boolean): String = if (inBeta)
+        "This device is in the beta: it gets new versions before everyone else. Crash reports and playback logs say beta. " +
+            "To leave, turn off Offer this device beta builds at avidviewer.app/devices; it keeps this version until a public one catches up."
+    else "This device has left the beta. It keeps this beta version until a public version is newer, then updates as usual."
+
     /** The public release. Pre-releases (betas) are never returned by releases/latest. */
     fun latest(): Release? = parse(JSONObject(Net.text("https://api.github.com/repos/$REPO/releases/latest")))
 

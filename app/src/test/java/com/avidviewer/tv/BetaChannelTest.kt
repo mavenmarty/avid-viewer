@@ -2,7 +2,6 @@ package com.avidviewer.tv
 
 import com.avidviewer.tv.data.AccountApi
 import com.avidviewer.tv.data.Updater
-import com.avidviewer.tv.ui.betaText
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -59,10 +58,13 @@ class BetaChannelTest {
             assertFalse(AccountApi.me("TVTOKEN_1", "1.19.0", site.base)!!.beta)
         }
     }
+}
 
+/** Plain JUnit (no Android needed). */
+class BetaTextTest {
     @Test
     fun settingsExplainTheBetaAndHowToLeave() {
-        assertTrue(betaText(true, true).contains("avidviewer.app/devices"))
-        assertTrue(betaText(false, true).contains("left the beta"))
+        assertTrue(Updater.betaText(true).contains("avidviewer.app/devices"))
+        assertTrue(Updater.betaText(false).contains("left the beta"))
     }
 }

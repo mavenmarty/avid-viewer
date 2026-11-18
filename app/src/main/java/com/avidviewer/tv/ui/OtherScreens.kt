@@ -2,6 +2,8 @@
 
 package com.avidviewer.tv.ui
 
+import com.avidviewer.tv.data.Updater
+
 import androidx.compose.ui.graphics.Color
 
 import androidx.compose.ui.input.key.type
@@ -877,7 +879,7 @@ fun SettingsScreen(vm: AppViewModel) {
                                 }
                             }
                             if (vm.inBeta || vm.betaInstalled) item(key = "beta") {
-                                SettingBlock("Beta", betaText(vm.inBeta, vm.betaInstalled)) {
+                                SettingBlock("Beta", Updater.betaText(vm.inBeta)) {
                                     Label("BETA", size = 12.sp, color = C.Accent, modifier = Modifier.testTag("beta-tag"))
                                 }
                             }
@@ -1124,13 +1126,6 @@ internal fun QrCode(text: String, modifier: Modifier = Modifier) {
             if (matrix.get(x, y)) drawRect(androidx.compose.ui.graphics.Color.Black, topLeft = androidx.compose.ui.geometry.Offset(x * cell, y * cell), size = androidx.compose.ui.geometry.Size(cell + 0.5f, cell + 0.5f))
         }
     }
-}
-
-/** Settings › Updates & about, for a device in the beta or still on a beta build. */
-internal fun betaText(inBeta: Boolean, betaInstalled: Boolean): String = when {
-    inBeta -> "This device is in the beta: it gets new versions before everyone else. Crash reports and playback logs say beta. " +
-        "To leave, turn off Offer this device beta builds at avidviewer.app/devices; it keeps this version until a public one catches up."
-    else -> "This device has left the beta. It keeps this beta version until a public version is newer, then updates as usual."
 }
 
 private fun appVersion(vm: AppViewModel): String = try {

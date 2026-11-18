@@ -1288,7 +1288,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             type = type, server = server.trim(), username = user.trim(), password = pass,
             m3uUrl = m3u.trim(), liveOn = liveOn, vodOn = vodOn,
             // A guide address typed when adding becomes the playlist's first guide source (the provider's guide stays on too).
-            epgSources = if (epg.isBlank()) emptyList() else listOf(EpgSource("src-" + System.currentTimeMillis().toString(36), "Guide address", epg.trim())),
+            epgSources = if (epg.isBlank()) emptyList() else listOf(EpgSource(newSourceId(), "Guide address", epg.trim())),
         )
         viewModelScope.launch {
             busy = true
@@ -1321,7 +1321,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             name = name.ifBlank { old.name }, type = type, server = server.trim(), username = user.trim(),
             password = pass.ifEmpty { old.password }, m3uUrl = m3u.trim(),
             epgSources = if (epg.isBlank() || old.epgSources.any { it.url == epg.trim() }) old.epgSources
-                else old.epgSources + EpgSource("src-" + System.currentTimeMillis().toString(36), "Guide address", epg.trim()),
+                else old.epgSources + EpgSource(newSourceId(), "Guide address", epg.trim()),
         )
         viewModelScope.launch {
             busy = true
@@ -1960,7 +1960,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun setProviderGuide(playlistId: String, on: Boolean) { updateSources(playlistId) { it.copy(providerGuide = on) }; refreshGuideNow(playlistId) }
 
     fun addEpgSource(playlistId: String, name: String, url: String, offsetHours: Int) {
-        val src = EpgSource("src-" + System.currentTimeMillis().toString(36), name.trim().ifBlank { "Guide source" }, url.trim(), true, offsetHours.coerceIn(-12, 12))
+        val src = EpgSource(newSourceId(), name.trim().ifBlank { "Guide source" }, url.trim(), true, offsetHours.coerceIn(-12, 12))
         updateSources(playlistId) { it.copy(epgSources = it.epgSources + src) }
         status = "Added ${src.name}. Downloading the guide…"
         refreshGuideNow(playlistId)
@@ -4068,6 +4068,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun playMatched(v: VodItem) { if (v.kind == "series") openVodDetail(v) else playVod(v) }
+
+    /** A guide source's id: the time plus a random part, so two added in the same millisecond never share one. */
+    private fun newSourceId() = "src-" + System.currentTimeMillis().toString(36) + java.util.UUID.randomUUID().toString().take(4)
 
     // ---------------- app updates ----------------
     fun checkForUpdate(quiet: Boolean = false) {
