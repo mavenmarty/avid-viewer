@@ -397,6 +397,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     var status by mutableStateOf<String?>(null)
     var busy by mutableStateOf(false); private set
     var playerError by mutableStateOf<String?>(null); private set
+    /** Screenshots for the user guide: the stand-in stream never plays, so its error would cover the picture. */
+    internal fun clearPlayerErrorForTests() { playerError = null }
     var now by mutableLongStateOf(System.currentTimeMillis()); private set
     var weather by mutableStateOf<Weather?>(null); private set
     var vod by mutableStateOf<List<VodItem>>(emptyList()); private set
