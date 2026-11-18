@@ -15,6 +15,8 @@ class FakeAvidSite : AutoCloseable {
     val base get() = "http://127.0.0.1:${server.localPort}"
     val calls = java.util.Collections.synchronizedList(ArrayList<String>())
     @Volatile var approved = false
+    /** Beta channel: what /api/tv/me says (null: the "beta" field is left out, as before Nov 18, 2026). */
+    @Volatile var beta: String? = null
     @Volatile var removed = false
     /** Setup codes it serves: fingerprint → data. */
     /** 1.14.0 playlists from the account: what the device last reported, what it should do, and its answers. */
@@ -80,7 +82,7 @@ class FakeAvidSite : AutoCloseable {
             path == "/api/tv/link/start" -> 200 to """{"userCode":"K7M2QX9P","deviceCode":"DEVICECODE","interval":1,"expiresIn":600,"qrUrl":"$base/link/?c=K7M2QX9P"}"""
             path == "/api/tv/link/poll" -> 200 to (if (approved) """{"status":"approved","token":"TVTOKEN_abcdefghijklmnopqrstuvwxyz","email":"viewer@example.com","name":"Living room","deviceId":"d1"}""" else """{"status":"pending"}""")
             path == "/api/tv/link/claim" -> 200 to """{"status":"approved","token":"TVTOKEN_claimedabcdefghijklmnopqrst","email":"viewer@example.com","name":"Den TV","deviceId":"d2"}"""
-            path == "/api/tv/me" -> if (removed || !auth.startsWith("Bearer TVTOKEN_")) 401 to """{"error":"This TV is not linked."}""" else 200 to """{"email":"viewer@example.com","name":"Living room"}"""
+            path == "/api/tv/me" -> if (removed || !auth.startsWith("Bearer TVTOKEN_")) 401 to """{"error":"This TV is not linked."}""" else 200 to """{"email":"viewer@example.com","name":"Living room"""" + (beta?.let { ""","beta":$it""" } ?: "") + "}"
             path == "/api/tv/signout" -> 200 to """{"ok":true}"""
             path == "/api/tv/backup" && method == "POST" -> {
                 val o = org.json.JSONObject(body)
