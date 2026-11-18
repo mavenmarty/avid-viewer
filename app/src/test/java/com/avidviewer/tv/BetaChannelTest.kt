@@ -10,9 +10,12 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
+import android.app.Application
 
 /** Beta channel (Nov 18, 2026): chosen devices get GitHub pre-releases tagged beta-v<version>-<n>.<build>. */
 @RunWith(RobolectricTestRunner::class)
+@Config(sdk = [34], application = Application::class)
 class BetaChannelTest {
     private fun release(tag: String) = Updater.parse(JSONObject().put("tag_name", tag).put("body", "")
         .put("assets", org.json.JSONArray().put(JSONObject().put("name", "AvidViewer.apk").put("browser_download_url", "https://example.com/a.apk").put("size", 10))))!!
