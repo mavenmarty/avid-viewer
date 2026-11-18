@@ -1038,7 +1038,8 @@ class UsabilityTest {
                     .put("channelNames", org.json.JSONObject().put(id0, "My channel")))))
             val m = site.syncs.size
             rule.runOnIdle { vm.syncAccountPlaylists() }
-            waitFor("applied") { vm.prefs.favorites == listOf(news.getOrElse(1) { news[0] }.key) }
+            // The lists and the order are applied one after the other (worked out off the screen's thread, BUG-057).
+            waitFor("applied") { vm.prefs.favorites == listOf(news.getOrElse(1) { news[0] }.key) && vm.groupName("NEWS") == "News today" }
             assertEquals("Evening", vm.prefs.lists.single().name)
             assertEquals(listOf(sports.key), vm.prefs.lists.single().keys)
             assertEquals("News today", vm.groupName("NEWS"))

@@ -4429,10 +4429,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
      * also set [navFocusKey]). Leaving for full screen or a dialog doesn't clear it, so coming back doesn't first draw
      * the menu and categories and then fold them away (Nov 18 redraw audit, R-1). Starts set: the app opens in the guide.
      */
-    var guideHasFocus: Boolean
-        get() = guideHasFocusState
-        set(v) { if (v != guideHasFocusState) trail("guideHasFocus=$v") ; guideHasFocusState = v }
-    private var guideHasFocusState by mutableStateOf(true)
+    var guideHasFocus by mutableStateOf(true)
     /** The guide is drawn full width (main menu and category list hidden): 2 hours across the screen. Worked out in the
      *  same frame as the layout, so the guide's time scale never lags a frame behind it (R-2). */
     val guideFullLayout: Boolean

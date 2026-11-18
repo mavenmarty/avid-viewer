@@ -286,9 +286,14 @@ fun GroupNav(vm: AppViewModel) {
         add("menu"); add("title"); add("fav"); vm.shownLists.forEach { add("list-" + it.id) }
         add("newlist"); add("search"); add("spacer"); groups.forEach { add("g:" + it.raw) }
     }
-    fun navItemOf(k: String) = navKeys().indexOf(when { k == FAV_GROUP -> "fav"; isListGroup(k) -> "list-" + k.removePrefix(LIST_PREFIX); else -> "g:$k" })
     // R-4: the list opens already scrolled to the current category (it used to draw from the top, then jump there).
-    val navState = androidx.compose.foundation.lazy.rememberLazyListState()
+    // R-4: a current category further down than a screenful opens already scrolled to it (it used to draw from the
+    // top and then jump there). Nearer the top nothing changes: it's on screen either way.
+    val navState = remember {
+        val k = vm.navFocusKey ?: vm.selectedGroup
+        val item = k?.let { navKeys().indexOf(when { it == FAV_GROUP -> "fav"; isListGroup(it) -> "list-" + it.removePrefix(LIST_PREFIX); else -> "g:$it" }) } ?: -1
+        androidx.compose.foundation.lazy.LazyListState(if (item >= 12) item - 3 else 0)
+    }
     // Re-order mode: keep the moving category on screen as it moves.
     val moving = vm.movingGroup
     LaunchedEffect(moving, groups.indexOfFirst { it.raw == moving }) {

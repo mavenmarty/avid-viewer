@@ -82,10 +82,13 @@ object CrashReport {
         if (relay.isBlank()) return false
         val body = json.toString().toRequestBody("application/json; charset=utf-8".toMediaType())
         val req = Request.Builder().url(relay).header("User-Agent", USER_AGENT).post(body).build()
-        return runCatching {
-            Net.client.newCall(req).execute().use { r ->
-                r.isSuccessful && JSONObject(r.body?.string().orEmpty()).optBoolean("ok", false)
-            }
-        }.getOrDefault(false)
+        // Once more after a connection that failed (not after an answer): a report shouldn't be lost to a hiccup.
+        repeat(2) { attempt ->
+            try {
+                return Net.client.newCall(req).execute().use { r -> r.isSuccessful && JSONObject(r.body?.string().orEmpty()).optBoolean("ok", false) }
+            } catch (e: java.io.IOException) { if (attempt == 0) Thread.sleep(500) }
+            catch (_: Exception) { return false }
+        }
+        return false
     }
 }
