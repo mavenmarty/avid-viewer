@@ -2474,8 +2474,8 @@ class UsabilityTest {
             assertTrue(vm.prefs.channelOrder["NEWS"].orEmpty().isNotEmpty())
 
             // ★ Favorites A–Z mixes playlists by name; Manual starts from that order.
-            rule.runOnIdle { vm.updatePrefs { it.copy(favorites = listOf("${TestData.P1}:c1-2", "${TestData.P2}:f3")) } }
-            waitFor("favorites") { vm.channelsIn(FAV_GROUP).size == 2 }
+            rule.runOnIdle { vm.toggleInList(FAV_GROUP, "${TestData.P1}:c1-2"); vm.toggleInList(FAV_GROUP, "${TestData.P2}:f3"); vm.ensureFavoriteData() }
+            waitFor("favorites") { vm.channel("${TestData.P2}:f3") != null && vm.channelsIn(FAV_GROUP).size == 2 }
             rule.runOnIdle { vm.setListSort(FAV_GROUP, SORT_AZ) }
             waitFor("fav az") { vm.channelsIn(FAV_GROUP).first().key == "${TestData.P2}:f3" }
             rule.runOnIdle { vm.setListSort(FAV_GROUP, SORT_MANUAL) }
