@@ -82,11 +82,13 @@ object CrashReport {
         if (relay.isBlank()) return false
         val body = json.toString().toRequestBody("application/json; charset=utf-8".toMediaType())
         val req = Request.Builder().url(relay).header("User-Agent", USER_AGENT).post(body).build()
-        // Once more after a connection that failed (not after an answer): a report shouldn't be lost to a hiccup.
+        // Once more only when the relay was never reached (couldn't connect, name not found): after a timeout the relay
+        // may already have mailed the report, and a second try would send it twice (#27).
         repeat(2) { attempt ->
             try {
                 return Net.client.newCall(req).execute().use { r -> r.isSuccessful && JSONObject(r.body?.string().orEmpty()).optBoolean("ok", false) }
-            } catch (e: java.io.IOException) { if (attempt == 0) Thread.sleep(500) }
+            } catch (e: java.net.ConnectException) { if (attempt == 0) Thread.sleep(500) else return false }
+            catch (e: java.net.UnknownHostException) { if (attempt == 0) Thread.sleep(500) else return false }
             catch (_: Exception) { return false }
         }
         return false
