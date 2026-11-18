@@ -31,10 +31,9 @@ import androidx.compose.ui.unit.sp
 import com.avidviewer.tv.R
 
 /**
- * The first screen of a new install (1.6.0): shown at start while there are no playlists. Avid Viewer comes with
- * no channels, so it says so. From 1.16.1 a device must be linked to an account before it gets playlists (licensing):
- * the welcome screen has no Add a playlist; it shows this device's link code, and once linked, where to add
- * playlists and Restore a backup.
+ * The first screen of a new install: shown at start while there are no playlists. Avid Viewer comes with no channels,
+ * and a device must be linked to an account before it gets playlists (licensing), so it shows this device's link code
+ * and, once linked, where to add playlists. Restoring a backup is in Settings › Updates & about.
  */
 @Composable
 fun WelcomeScreen(vm: AppViewModel) {
@@ -65,7 +64,7 @@ fun WelcomeScreen(vm: AppViewModel) {
             } else {
                 Label("This device is linked", size = 20.sp, color = C.Text, weight = FontWeight.Bold, lines = 2, modifier = Modifier.testTag("welcome-steps"))
                 Label(
-                    "Add your playlists at avidviewer.app/playlists and give them to a profile on this device. They arrive here within a minute while Avid Viewer is open. Or restore another device's backup.",
+                    "Add your playlists at avidviewer.app/playlists and give them to a profile on this device. They arrive here within a minute while Avid Viewer is open.",
                     size = 16.sp, color = C.Soft, lines = Int.MAX_VALUE,
                 )
             }
@@ -77,7 +76,7 @@ fun WelcomeScreen(vm: AppViewModel) {
 /**
  * The welcome screen's right side (1.12.1): this device's own link code, made by avidviewer.app for this device,
  * with a QR code that opens avidviewer.app/link with the code filled in (like signing in to a TV app). A new code
- * replaces an expired one; once it's approved, the account's backups are offered.
+ * replaces an expired one.
  */
 @Composable
 private fun WelcomeLinkPanel(vm: AppViewModel) {
@@ -93,7 +92,7 @@ private fun WelcomeLinkPanel(vm: AppViewModel) {
             vm.accountEmail != null -> {
                 Label("Linked to", size = 14.sp, color = C.Soft)
                 Label(vm.accountEmail.orEmpty(), size = 18.sp, color = C.Text, weight = FontWeight.Bold, lines = 2)
-                TvButton("Restore a backup", modifier = Modifier.testTag("welcome-signin")) { vm.welcomeSignIn() }
+                Label("Next: add your playlists at avidviewer.app/playlists.", size = 13.sp, color = C.Soft, lines = 3, modifier = Modifier.testTag("welcome-next"))
             }
             code != null -> {
                 Label("Link to your account", size = 18.sp, color = C.Text, weight = FontWeight.Bold)
@@ -109,43 +108,6 @@ private fun WelcomeLinkPanel(vm: AppViewModel) {
     }
 }
 
-
-/** Welcome › Sign in to your account: the link code, then the account's backups to restore (1.12.0). */
-@Composable
-fun WelcomeAccountDialog(vm: AppViewModel) {
-    val fmt = remember { java.text.SimpleDateFormat("MMM d, yyyy h:mm a", java.util.Locale.getDefault()) }
-    androidx.compose.material3.AlertDialog(
-        onDismissRequest = { vm.closeWelcomeAccount() },
-        containerColor = C.Surface,
-        modifier = Modifier.testTag("welcome-account"),
-        title = { androidx.compose.material3.Text(if (vm.accountEmail == null) "Sign in to your account" else "Linked to ${vm.accountEmail}", color = C.Text, fontWeight = FontWeight.Bold) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                val code = vm.linkCode
-                when {
-                    vm.accountEmail == null && code != null -> LinkCodePanel(vm, code)
-                    vm.accountEmail == null -> Label(vm.accountStatus ?: "Getting a code…", size = 14.sp, color = C.Soft, lines = Int.MAX_VALUE)
-                    else -> {
-                        val list = vm.cloudBackups
-                        if (!list.isNullOrEmpty()) {
-                            Label("Choose a backup to restore on this device:", size = 14.sp, color = C.Soft)
-                            list.take(8).forEach { b ->
-                                val who = when { b.thisTv -> "This device"; b.removed -> "${b.name} (removed)"; else -> b.name }
-                                val pls = b.playlists?.let { n -> "  ·  $n playlist" + if (n == 1) "" else "s" } ?: ""
-                                TvButton("$who  ·  ${fmt.format(b.createdAt)}$pls", modifier = Modifier.testTag("cloud-backup")) { vm.chooseCloudBackup(b) }
-                            }
-                        }
-                        vm.backupStatus?.let { Label(it, size = 13.sp, color = C.Soft, lines = Int.MAX_VALUE) }
-                        if (list != null && list.isEmpty()) Label("No backups yet. Add playlists at avidviewer.app/playlists to get started; this device will back up to your account once you choose a backup PIN.", size = 13.sp, color = C.Muted, lines = Int.MAX_VALUE)
-                    }
-                }
-            }
-        },
-        confirmButton = {},
-        dismissButton = { TvButton(if (vm.accountEmail != null) "Close" else "Cancel", modifier = Modifier.testTag("welcome-account-close")) { vm.closeWelcomeAccount() } },
-    )
-    if (vm.pendingRestore != null) RestorePinDialog(vm)
-}
 
 /**
  * 1.16.1: a device with playlists that isn't linked to an account. Its playlists keep working; this asks to link it

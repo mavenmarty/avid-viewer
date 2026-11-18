@@ -619,27 +619,21 @@ class UsabilityTest {
         }
     }
 
-    /** 1.12.0: the welcome screen's Sign in to your account links the TV, then restores a backup from the account. */
+    /** Linking from the welcome screen says what's next (add playlists on the website) and offers no backups. */
     @Test
-    fun welcomeSignInRestoresAnotherTvsBackup() {
+    fun linkingFromTheWelcomeScreenPointsToTheWebsiteAndOffersNoBackups() {
         FakeAvidSite().use { site ->
-            val wanted = vm.playlists.map { it.id }
             site.backups["d9"] = Triple("Bedroom", com.avidviewer.tv.data.Backup.write(
                 com.avidviewer.tv.data.Backup.Contents(vm.playlists, vm.prefs, "", vm.history, emptyMap(), System.currentTimeMillis(), "test"), "1357"), "1357")
             rule.runOnIdle { vm.accountApi = site.base; vm.showWelcome = true }
-            // 1.12.1: the welcome screen shows this device's code by itself; approving it opens the account's backups.
             waitFor("code shown") { rule.onAllNodesWithText("K7M2-QX9P").fetchSemanticsNodes().isNotEmpty() }
             site.approved = true
-            waitFor("linked and listed") { vm.accountEmail != null && vm.cloudBackups?.isNotEmpty() == true }
-            waitFor("Bedroom shown") { rule.onAllNodesWithText("Bedroom", substring = true).fetchSemanticsNodes().isNotEmpty() }
-            rule.onNodeWithText("Bedroom", substring = true).performClick()
-            waitFor("PIN asked") { vm.pendingRestore != null }
-            var ok: Boolean? = null
-            rule.runOnIdle { vm.restore("1357") { ok = it } }
-            waitFor("restored") { ok == true }
-            assertFalse(vm.showWelcome); assertFalse(vm.welcomeAccountOpen)
-            assertEquals(wanted, vm.playlists.map { it.id })
-            assertTrue("same PIN kept for this TV's backups", vm.backupPinSet)
+            waitFor("linked") { vm.accountEmail != null }
+            waitFor("next step shown") { rule.onAllNodesWithTag("welcome-next").fetchSemanticsNodes().isNotEmpty() }
+            settle()
+            assertTrue("no backup offered", rule.onAllNodesWithText("Restore a backup").fetchSemanticsNodes().isEmpty())
+            assertTrue("no backup list", rule.onAllNodesWithText("Bedroom", substring = true).fetchSemanticsNodes().isEmpty())
+            assertNull(vm.cloudBackups)
         }
     }
 
