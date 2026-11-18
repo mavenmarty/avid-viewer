@@ -2546,4 +2546,23 @@ class UsabilityTest {
         waitFor("downloaded again", ms = 60_000) { vm.guideKeptSigForTests(TestData.P1) == all.sorted().hashCode().toString() }
         server.close()
     }
+
+    @Test
+    fun aChannelTheProviderRefusesIsExplainedAndMarkedUntilItPlays() {
+        val spec = androidx.media3.datasource.DataSpec(android.net.Uri.parse("http://127.0.0.1:9/s.ts"))
+        val e405 = androidx.media3.common.PlaybackException("x", androidx.media3.datasource.HttpDataSource.InvalidResponseCodeException(405, "Not Allowed", null, emptyMap(), spec, ByteArray(0)),
+            androidx.media3.common.PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS)
+        val (text, refused) = vm.playErrorText(e405)
+        assertTrue(text, text.startsWith("The provider refused this channel (HTTP 405)"))
+        assertTrue(refused)
+        val dns = androidx.media3.common.PlaybackException("x", java.io.IOException(java.net.UnknownHostException("h")), androidx.media3.common.PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED)
+        assertTrue(vm.playErrorText(dns).first.startsWith("Can't find the provider's server"))
+        val key = vm.channels.first().key
+        rule.runOnIdle { vm.noteFailedChannel(key, true) }
+        assertTrue(vm.failedRecently(key))
+        waitFor("marked in the guide") { rule.onAllNodesWithText("didn't play", substring = true).fetchSemanticsNodes().isNotEmpty() || vm.selectedGroup != vm.channels.first().group }
+        // It played: the mark goes.
+        rule.runOnIdle { vm.noteFailedChannel(key, false) }
+        assertFalse(vm.failedRecently(key))
+    }
 }

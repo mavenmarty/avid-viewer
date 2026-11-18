@@ -137,4 +137,38 @@ class PlaybackLogTest {
         assertEquals("secure connection failed (SSL)", d(java.io.IOException(javax.net.ssl.SSLHandshakeException("h"))))
         assertEquals("the connection ended early", d(java.io.EOFException()))
     }
+
+    @Test
+    fun aTrickleAndStutteringAreReasonsToReconnect() {
+        fun r(now: Long, stalling: Long = 0, grew: Long = now, stops: Int = 0) =
+            com.avidviewer.tv.ui.PlaybackMonitor.reconnectReason(now, 0, 0, 0, now, 20_000, true, stalling, grew, stops)
+        // #23: waiting 6 s while a few bytes arrive (so "no data" never fires) but the buffer doesn't grow.
+        assertTrue(r(60_000, stalling = 54_000, grew = 50_000)!!.startsWith("waiting 6 s with the buffer not growing"))
+        assertEquals("still growing: not yet", null, r(60_000, stalling = 54_000, grew = 59_000))
+        // #25: more than 5 stops in 30 s.
+        assertTrue(r(60_000, stops = 6)!!.startsWith("stuttering"))
+        assertEquals(null, r(60_000, stops = 5))
+    }
+
+    @Test
+    fun manyShortStopsAreOneStutterEntry() {
+        val app = ApplicationProvider.getApplicationContext<android.app.Application>()
+        val log = PlaybackLog(File(dir, "stutter.txt"))
+        var t = 1_000_000L
+        val player = androidx.media3.exoplayer.ExoPlayer.Builder(app).build()
+        val m = PlaybackMonitor(player, androidx.media3.exoplayer.upstream.DefaultBandwidthMeter.Builder(app).build(), log) { t }
+        val ev = androidx.media3.exoplayer.analytics.AnalyticsListener.EventTime(0, androidx.media3.common.Timeline.EMPTY, 0, null, 0, androidx.media3.common.Timeline.EMPTY, 0, null, 0, 0)
+        m.started("p:ch1", live = true)
+        m.onPlaybackStateChanged(ev, androidx.media3.common.Player.STATE_READY)
+        // #25: 50 flips between waiting and playing, 250 ms apart (the log used to get 50 "Froze 0 s" entries).
+        repeat(50) {
+            t += 250; m.onPlaybackStateChanged(ev, androidx.media3.common.Player.STATE_BUFFERING)
+            t += 100; m.onPlaybackStateChanged(ev, androidx.media3.common.Player.STATE_READY)
+        }
+        t += 5_000; m.sample()
+        val stalls = log.entries().filter { it.kind == PlaybackLog.STALL }
+        assertTrue("at most the first stop and one stutter entry: $stalls", stalls.size <= 2)
+        assertTrue(stalls.any { it.text.startsWith("Stuttered") })
+        player.release()
+    }
 }

@@ -66,10 +66,12 @@ class PlaybackMonitor(
 
     // ---- Reconnecting (Nov 15) ----
     /** Reconnects the stream ([live]: at the live point; else where it was). Set by AppViewModel. */
-    var onReconnect: ((live: Boolean) -> Unit)? = null
+    var onReconnect: ((live: Boolean, full: Boolean) -> Unit)? = null
     private val reconnects = ArrayDeque<Long>()
     private var reconnectAt = 0L
     private var reconnectWhy = ""
+    private var lastBufferEnd = 0L
+    private var bufferGrewAt = 0L
     /** 3 reconnects in 3 minutes: from then on at most one every [SLOW_RECONNECT_MS]. */
     private var slowReconnect = false
 
@@ -79,6 +81,7 @@ class PlaybackMonitor(
         endPicture()
         this.live = live
         startedAt = clock(); reconnects.clear(); reconnectAt = 0; slowReconnect = false
+        stallStarts.clear(); lastStallEnd = 0; stutterCount = 0; stutterSince = 0; lastBufferEnd = 0; bufferGrewAt = startedAt; minuteAt = 0
         DataFlow.lastBytesAt = startedAt
         name = log.label(key, live)
         everReady = false; lastRendered = -1; dropped = 0; droppedWindow = 0; recentLoadErrors.clear()
@@ -103,9 +106,13 @@ class PlaybackMonitor(
             } else endPicture()
         } else if (!player.isPlaying) endPicture()
         lastRendered = rendered; lastPosition = pos
+        if (stutterCount > 0 && stallAt == 0L && now - lastStallEnd >= 3_000) endStutter()
+        // #23: the buffer's end, to tell a stream that trickles a few bytes (so "no data" never fires) from one that flows.
+        val bufEnd = player.bufferedPosition
+        if (bufEnd > lastBufferEnd) { lastBufferEnd = bufEnd; bufferGrewAt = now }
         checkReconnect(now, buffered)
         if (droppedWindowAt > 0 && now - droppedWindowAt > 10_000) {
-            if (droppedWindow >= 30) log.add(PlaybackLog.DROPPED, name, "$droppedWindow frames dropped in 10 s (the TV struggled to decode${videoText().let { if (it.isBlank()) "" else ": $it" }})")
+            if (droppedWindow >= 30) put(PlaybackLog.DROPPED, "$droppedWindow frames dropped in 10 s (the TV struggled to decode${videoText().let { if (it.isBlank()) "" else ": $it" }})")
             droppedWindow = 0; droppedWindowAt = 0
         }
         stats = stats.copy(
@@ -129,24 +136,28 @@ class PlaybackMonitor(
         val state = player.playbackState
         if (state != Player.STATE_READY && state != Player.STATE_BUFFERING) return
         if (reconnectAt > 0 && player.isPlaying && now - reconnectAt in 1..60_000 && reconnectWhy.isNotEmpty()) {
-            log.add(PlaybackLog.RECOVER, name, "Playing again ${((now - reconnectAt) / 1000).coerceAtLeast(1)} s after reconnecting ($reconnectWhy).")
+            put(PlaybackLog.RECOVER, "Playing again ${((now - reconnectAt) / 1000).coerceAtLeast(1)} s after reconnecting ($reconnectWhy).")
             reconnectWhy = ""
         }
         while (reconnects.isNotEmpty() && now - reconnects.first() > 180_000) reconnects.removeFirst()
-        val why = reconnectReason(now, startedAt, reconnectAt, picStuckSince, DataFlow.lastBytesAt, buffered, everReady) ?: return
+        val stops = stallStarts.count { now - it <= 30_000 }
+        val why = reconnectReason(now, startedAt, reconnectAt, picStuckSince, DataFlow.lastBytesAt, buffered, everReady,
+            stallingSince = stallAt, bufferGrewAt = bufferGrewAt, stopsIn30s = stops) ?: return
         if (reconnects.size < 3) slowReconnect = false
         if (reconnects.size >= 3) {
             // BUG-058: after 3 in 3 minutes the app used to stop trying, and a channel could sit frozen for minutes
             // (295 s in one log) until the viewer changed it. Now it keeps trying, every 30 s, while it stays stuck.
-            if (!slowReconnect) { slowReconnect = true; log.add(PlaybackLog.RECOVER, name, "Reconnecting less often: 3 reconnects in 3 minutes ($why); trying every 30 s while it stays stuck.") }
+            if (!slowReconnect) { slowReconnect = true; put(PlaybackLog.RECOVER, "Reconnecting less often: 3 reconnects in 3 minutes ($why); trying every 30 s while it stays stuck.") }
             if (!mayReconnect(now, reconnects)) return
         }
         reconnects.addLast(now)
         if (why.startsWith("the picture")) endPicture() else endStall(left = false)
-        log.add(PlaybackLog.RECOVER, name, "Reconnected: $why.")
+        put(PlaybackLog.RECOVER, "Reconnected: $why.")
         reconnectAt = now; reconnectWhy = why
-        DataFlow.lastBytesAt = now
-        onReconnect?.invoke(live)
+        DataFlow.lastBytesAt = now; bufferGrewAt = now; stallStarts.clear()
+        // #23: a reconnect within a minute of the last one rebuilds the player (a restart alone rarely helped again).
+        val full = reconnects.size >= 2 && now - reconnects[reconnects.size - 2] < 60_000
+        onReconnect?.invoke(live, full)
     }
 
     /** Playback stopped (leaving full screen or the app). (The temporary buffer log of 1.10.0 was removed in 1.17.1.) */
@@ -169,23 +180,64 @@ class PlaybackMonitor(
     override fun onPlaybackStateChanged(eventTime: AnalyticsListener.EventTime, state: Int) {
         when (state) {
             Player.STATE_READY -> { everReady = true; endStall(left = false) }
-            Player.STATE_BUFFERING -> if (everReady && stallAt == 0L) { stallAt = clock(); bufferBefore = lastBuffered }
+            Player.STATE_BUFFERING -> if (everReady && stallAt == 0L) {
+                stallAt = clock(); bufferBefore = lastBuffered
+                stallStarts.addLast(stallAt); while (stallStarts.size > 40) stallStarts.removeFirst()
+            }
             Player.STATE_ENDED, Player.STATE_IDLE -> endStall(left = true)
         }
+    }
+
+    // ---- #25: stutter (the player flipping between waiting and playing, many times a second) ----
+    private val stallStarts = ArrayDeque<Long>()
+    private var lastStallEnd = 0L
+    private var stutterCount = 0
+    private var stutterSince = 0L
+
+    /** A burst of short stops has ended: one entry for all of them. */
+    private fun endStutter() {
+        if (stutterCount >= 2) note(PlaybackLog.STALL, "Stuttered $stutterCount times over ${((lastStallEnd - stutterSince) / 1000).coerceAtLeast(1)} s (the picture kept stopping for a moment). Likely: data arriving unevenly from the provider.", 0)
+        stutterCount = 0; stutterSince = 0
     }
 
     private fun endStall(left: Boolean) {
         if (stallAt == 0L) return
         if (name.isEmpty()) { stallAt = 0; return }
-        val s = ((clock() - stallAt) / 1000).toInt()
+        val now = clock()
+        val ms = now - stallAt
+        // A stop under a second that starts within 3 s of the last one is part of a stutter, logged once at its end.
+        if (!left && ms < 1_000 && lastStallEnd > 0 && stallAt - lastStallEnd < 3_000) {
+            if (stutterCount == 0) { stutterCount = 1; stutterSince = lastStallEnd }
+            stutterCount++
+            lastStallEnd = now; stallAt = 0
+            return
+        }
+        endStutter()
+        lastStallEnd = now
+        val s = (ms / 1000).toInt()
         val errs = recentLoadErrors.filter { it.first >= stallAt - 15_000 }.map { it.second }
         val why = cause(errs, bufferBefore, (meter.bitrateEstimate / 1000).toInt(), streamKbps())
         note(PlaybackLog.STALL, (if (left) "Waited $s s for data, then left the channel. " else "Froze $s s waiting for data. ") + "Likely: $why.", s)
         stallAt = 0
     }
 
-    private fun note(kind: String, text: String, seconds: Int) {
+    // ---- #25: one channel can't flood the log ----
+    private var minuteAt = 0L
+    private var minuteCount = 0
+    private var minuteSkipped = 0
+    /** Writes to the log, at most [MAX_PER_MINUTE] entries a minute for a channel; the rest are counted, then noted once. */
+    private fun put(kind: String, text: String) {
+        val now = clock()
+        if (now - minuteAt >= 60_000) {
+            if (minuteSkipped > 0) log.add(PlaybackLog.STALL, name, "…and $minuteSkipped more entries in that minute, left out.")
+            minuteAt = now; minuteCount = 0; minuteSkipped = 0
+        }
+        if (++minuteCount > MAX_PER_MINUTE) { minuteSkipped++; return }
         log.add(kind, name, text)
+    }
+
+    private fun note(kind: String, text: String, seconds: Int) {
+        put(kind, text)
         stats = stats.copy(freezes = stats.freezes + 1, longestFreezeS = maxOf(stats.longestFreezeS, seconds), lastProblem = text)
     }
 
@@ -194,7 +246,7 @@ class PlaybackMonitor(
         val what = describe(error)
         recentLoadErrors.addLast(clock() to what)
         while (recentLoadErrors.size > 20) recentLoadErrors.removeFirst()
-        log.add(PlaybackLog.LOAD, name, what)
+        put(PlaybackLog.LOAD, what)
     }
 
     override fun onPlayerError(eventTime: AnalyticsListener.EventTime, error: PlaybackException) {
@@ -204,7 +256,7 @@ class PlaybackMonitor(
     }
 
     override fun onVideoInputFormatChanged(eventTime: AnalyticsListener.EventTime, format: Format, decoderReuseEvaluation: DecoderReuseEvaluation?) {
-        log.add(PlaybackLog.FORMAT, name, formatText(format))
+        put(PlaybackLog.FORMAT, formatText(format))
     }
 
     override fun onDroppedVideoFrames(eventTime: AnalyticsListener.EventTime, droppedFrames: Int, elapsedMs: Long) {
@@ -224,6 +276,8 @@ class PlaybackMonitor(
     companion object {
         /** After 3 reconnects in 3 minutes, the shortest gap between reconnects (BUG-058). */
         const val SLOW_RECONNECT_MS = 30_000L
+        /** #25: at most this many log entries a minute for one channel. */
+        const val MAX_PER_MINUTE = 20
 
         /** [recent]: reconnects in the last 3 minutes, oldest first. Up to 3 at once, then one every [SLOW_RECONNECT_MS]. */
         fun mayReconnect(now: Long, recent: Collection<Long>): Boolean = recent.size < 3 || now - recent.last() >= SLOW_RECONNECT_MS
@@ -231,11 +285,16 @@ class PlaybackMonitor(
          * Why the stream should be reconnected now, or null (see checkReconnect): the picture still for 5 s, or no
          * data for 4 s with under 8 s buffered; never in the first 10 s of a channel or of a reconnect.
          */
-        fun reconnectReason(now: Long, startedAt: Long, reconnectAt: Long, picStuckSince: Long, lastBytesAt: Long, bufferedMs: Long, everReady: Boolean): String? {
+        fun reconnectReason(now: Long, startedAt: Long, reconnectAt: Long, picStuckSince: Long, lastBytesAt: Long, bufferedMs: Long, everReady: Boolean,
+                            stallingSince: Long = 0L, bufferGrewAt: Long = now, stopsIn30s: Int = 0): String? {
             if (now - startedAt < 10_000 || (reconnectAt > 0 && now - reconnectAt < 10_000)) return null
             if (picStuckSince > 0 && now - picStuckSince >= 5_000) return "the picture stood still for ${(now - picStuckSince) / 1000} s"
             val quiet = now - lastBytesAt
             if (everReady && quiet >= 4_000 && bufferedMs < 8_000) return "no data for ${quiet / 1000} s with ${bufferedMs / 1000} s left in the buffer"
+            // #23: waiting 6 s with the buffer not growing, though a few bytes keep arriving (the provider trickling).
+            if (everReady && stallingSince > 0 && now - stallingSince >= 6_000 && now - bufferGrewAt >= 6_000) return "waiting ${(now - stallingSince) / 1000} s with the buffer not growing"
+            // #25: the picture keeps stopping for a moment.
+            if (everReady && stopsIn30s > 5) return "stuttering ($stopsIn30s stops in 30 s)"
             return null
         }
 

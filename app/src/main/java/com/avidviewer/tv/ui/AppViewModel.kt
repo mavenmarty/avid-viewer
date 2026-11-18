@@ -95,6 +95,8 @@ const val SORT_PROVIDER = "provider"
 const val SPORTS_PRELOAD_AFTER = 120_000L
 /** After hiding or showing channels, how long to wait for more changes before the guide is downloaded again. */
 const val GUIDE_WANTED_SETTLE = 20_000L
+/** #29: how long a channel the provider refused stays marked in the guide. */
+const val FAILED_MARK_MS = 24 * 3600_000L
 const val SORT_AZ = "az"
 const val SORT_MANUAL = "manual"
 const val LIVE_PREFIX = "live|"
@@ -923,7 +925,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         if (prefs.clearCacheOnExit) store.clearCache() // catches exits Android didn't report
         // Memory in use, every 30 s while on screen, so a hard close shows what it was just before (CrashLog).
         if (android.os.Build.FINGERPRINT != "robolectric") viewModelScope.launch {
-            while (true) { delay(30_000); com.avidviewer.tv.data.CrashLog.tick(getApplication()) }
+            // #20: every 5 s for the first 2 minutes (when most hard closes happened), then every 30 s.
+            while (true) { delay(if (System.currentTimeMillis() - startedAt < 120_000L) 5_000 else 30_000); com.avidviewer.tv.data.CrashLog.tick(getApplication()) }
         }
         viewModelScope.launch {
             // Playlists sent from avidviewer.app/playlists: once a minute while the app is on screen (1.14.0).
@@ -957,7 +960,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
         player.addAnalyticsListener(playback)
         // Nov 15: the stream is reopened when the picture sticks or the data stops (PlaybackMonitor.checkReconnect).
-        playback.onReconnect = { live -> reconnectStream(live) }
+        playback.onReconnect = { live, full -> reconnectStream(live, full) }
         viewModelScope.launch {
             var tick = 0
             while (true) {
@@ -973,12 +976,15 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         player.addListener(object : Player.Listener {
             override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) { paused = !playWhenReady }
             override fun onPlayerError(error: PlaybackException) {
-                playerError = "Can't play this channel (${error.errorCodeName}). Try another channel, or switch Stream format in Settings."
+                val (text, refused) = playErrorText(error)
+                playerError = text
+                // #29: a live channel the provider refused (or whose server can't be found) is marked in the guide.
+                if (refused && vodPlaying == null) currentKey?.let { noteFailedChannel(it, true) }
             }
 
             override fun onIsPlayingChanged(isPlaying: Boolean) {
                 playing = isPlaying
-                if (isPlaying) playerError = null
+                if (isPlaying) { playerError = null; if (vodPlaying == null) currentKey?.let { noteFailedChannel(it, false) } }
             }
 
             override fun onTracksChanged(tracks: androidx.media3.common.Tracks) { tracksChanged(tracks) }
@@ -1869,6 +1875,37 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
     private var guideWantedJob: Job? = null
+
+    // ---------------- #29: channels that didn't play ----------------
+    /**
+     * What to tell the viewer when a stream won't play, and whether the provider refused it (an HTTP 4xx answer, or
+     * its server can't be found), which marks the channel in the guide for a day.
+     */
+    fun playErrorText(error: PlaybackException): Pair<String, Boolean> {
+        val chain = generateSequence<Throwable>(error) { it.cause }.toList()
+        val http = chain.firstNotNullOfOrNull { it as? androidx.media3.datasource.HttpDataSource.InvalidResponseCodeException }?.responseCode
+        return when {
+            http != null && http in 400..499 -> "The provider refused this channel (HTTP $http). It may not be part of your subscription, or it's off the air. Try another channel." to true
+            http != null -> "The provider's server had a problem with this channel (HTTP $http). Try again in a moment." to false
+            chain.any { it is java.net.UnknownHostException } -> "Can't find the provider's server. Check the TV's internet connection (or DNS) and try again." to true
+            chain.any { it is java.net.SocketTimeoutException || it is java.net.ConnectException } -> "The provider's server isn't answering. Try again in a moment." to false
+            else -> "Can't play this channel (${error.errorCodeName}). Try another channel, or switch Stream format in Settings." to false
+        }
+    }
+
+    /** Channel key → when it last failed to play; kept a day, cleared when it plays. */
+    private val failedPrefs by lazy { getApplication<Application>().getSharedPreferences("failed_channels", android.content.Context.MODE_PRIVATE) }
+    var failedChannels by mutableStateOf<Map<String, Long>>(runCatching {
+        val now = System.currentTimeMillis()
+        failedPrefs.all.mapNotNull { (k, v) -> (v as? Long)?.takeIf { now - it < FAILED_MARK_MS }?.let { k to it } }.toMap()
+    }.getOrDefault(emptyMap())); private set
+    internal fun noteFailedChannel(key: String, failed: Boolean) {
+        if (!failed && key !in failedChannels) return
+        failedChannels = if (failed) failedChannels + (key to System.currentTimeMillis()) else failedChannels - key
+        failedPrefs.edit().apply { if (failed) putLong(key, System.currentTimeMillis()) else remove(key) }.apply()
+    }
+    /** [key] didn't play the last time it was tried, in the last day. */
+    fun failedRecently(key: String): Boolean = failedChannels[key]?.let { System.currentTimeMillis() - it < FAILED_MARK_MS } == true
     internal suspend fun guideIdsForTests(pid: String): Set<String> = guideIdsFor(playlists.first { it.id == pid })
     internal fun guideKeptSigForTests(pid: String): String? = validatorPrefs.getString("kept|$pid", null)
 
@@ -4255,6 +4292,11 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             r to live.channelsByKeys(keys).associateBy { it.key }
         }
 
+    /** [games] in the order the Sports list shows them: live, then upcoming by start, then finals newest first (#24). */
+    fun sportsListOrder(games: List<SportGame>): List<SportGame> =
+        games.filter { it.game.live } + games.filter { !it.game.live && it.game.state == "pre" }.sortedBy { it.game.start } +
+            games.filter { !it.game.live && it.game.final }.sortedByDescending { it.game.start }
+
     /** The games the Sports screen lists (league filter, and the "no channel found" setting). */
     fun sportsVisibleGames(): List<SportGame> = sportGames.filter { g ->
         (sportLeague == null || g.game.league == sportLeague) && (prefs.sportsShowUnmatched || g.channels.isNotEmpty() || g.game.id !in sportsMatchedIds)
@@ -4991,9 +5033,11 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
      * Reopens the stream: a live channel at the live point, a movie or episode where it was. The picture is back
      * in a second or two, instead of staying frozen.
      */
-    private fun reconnectStream(live: Boolean) {
+    private fun reconnectStream(live: Boolean, full: Boolean = false) {
         val pos = player.currentPosition
         player.stop()
+        // #23: a second reconnect within a minute starts the player afresh with the same stream (decoders and all).
+        if (full) player.currentMediaItem?.let { item -> player.clearMediaItems(); player.setMediaItem(item) }
         player.prepare()
         if (live) player.seekToDefaultPosition() else player.seekTo(pos)
         player.playWhenReady = true
