@@ -398,7 +398,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     var busy by mutableStateOf(false); private set
     var playerError by mutableStateOf<String?>(null); private set
     /** Screenshots for the user guide: the stand-in stream never plays, so its error would cover the picture. */
-    internal fun clearPlayerErrorForTests() { playerError = null }
+    internal fun clearPlayerErrorForTests() { player.stop(); player.clearMediaItems(); playerError = null }
     var now by mutableLongStateOf(System.currentTimeMillis()); private set
     var weather by mutableStateOf<Weather?>(null); private set
     var vod by mutableStateOf<List<VodItem>>(emptyList()); private set
@@ -1772,7 +1772,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         val from = guideFrom()
         val to = guideKeepTo()
         val directory = ArrayList<GuideChannel>()
-        val statuses = HashMap(guideSourceStatus)
+        // This playlist's lines only: downloads of other playlists run at the same time, and copying the whole map
+        // here would let one finishing later put back what another had replaced (a source's status vanished).
+        val statuses = HashMap<String, String>()
         val covered = HashSet<String>()
         // DATA-05: when every source says it hasn't changed since the last download (and the same channels are
         // wanted), the saved guide is kept and nothing is downloaded again.
@@ -1783,7 +1785,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             if (same) {
                 withContext(Dispatchers.IO) { live.guideChecked(p.id) }
                 sources.forEach { statuses[p.id + "|" + it.id] = "Checked ${fmtTime(System.currentTimeMillis())} · unchanged" }
-                guideSourceStatus = statuses
+                putGuideStatus(p.id, statuses)
                 return known.first()!!.third
             }
         }
@@ -1811,7 +1813,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 anyOk
             }
         }
-        guideSourceStatus = statuses
+        putGuideStatus(p.id, statuses)
         if (!done.committed) throw java.io.IOException("no guide source could be downloaded")
         // Remember what each source said, for asking "changed?" next time (only when every source was read).
         sources.forEach { src -> saveGuideValidators(p.id, src.url, got[src.url]?.takeIf { got.size == sources.size }, wantedSig, covered.size) }
@@ -1819,6 +1821,11 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         withContext(Dispatchers.IO) { store.saveGuideChannels(p.id, directory.distinctBy { it.id }) }
         guideChannelCache.remove(p.id)
         return covered.size
+    }
+
+    /** Replaces one playlist's guide source lines in [guideSourceStatus], leaving the other playlists' alone. */
+    private fun putGuideStatus(pid: String, lines: Map<String, String>) {
+        guideSourceStatus = guideSourceStatus.filterKeys { !it.startsWith("$pid|") } + lines
     }
 
     private val validatorPrefs by lazy { getApplication<Application>().getSharedPreferences("guide_validators", android.content.Context.MODE_PRIVATE) }
