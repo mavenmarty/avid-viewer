@@ -416,7 +416,7 @@ fun GuideScreen(vm: AppViewModel) {
                             Label(if (isMoving) "⇅" else "${numbers[c.key] ?: ""}", size = 12.sp, color = if (isMoving) C.Accent else C.Muted, modifier = Modifier.width(30.dp).padding(start = 6.dp))
                             ChannelBadge(vm.channelName(c), c.logo, 28.dp)
                             Label(
-                                vm.channelName(c) + if (vm.isFavorite(c.key)) " ★" else "",
+                                vm.channelName(c) + (if (vm.isFavorite(c.key)) " ★" else "") + if (vm.failedRecently(c.key)) "  ⚠ didn't play" else "",
                                 size = 13.sp, color = C.Text, weight = FontWeight.SemiBold,
                                 lines = 2,
                                 modifier = Modifier.padding(start = 7.dp, end = 6.dp),

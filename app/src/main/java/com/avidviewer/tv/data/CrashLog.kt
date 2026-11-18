@@ -91,6 +91,37 @@ object CrashLog {
         save(context)
     }
 
+    // ---------------------------------------------------------------- #20: main-thread watchdog
+    private var watch: Thread? = null
+    @Volatile private var beatAt = 0L
+
+    /**
+     * While the app is on screen: every second a beat is posted to the main thread. If it hasn't run for 4 s, "Main
+     * thread blocked N s on <screen>" goes into the marker (at 4, 10 and 30 s), so a close while the app had stopped
+     * responding says so. [screen] is read on the watchdog's thread.
+     */
+    fun watchMainThread(context: Context, screen: () -> String) {
+        if (watch?.isAlive == true) return
+        val app = context.applicationContext
+        val main = android.os.Handler(android.os.Looper.getMainLooper())
+        beatAt = android.os.SystemClock.uptimeMillis()
+        watch = Thread({
+            var noted = 0
+            var blockedOn = ""
+            while (active && !Thread.currentThread().isInterrupted) {
+                try { Thread.sleep(1_000) } catch (_: InterruptedException) { break }
+                main.post { beatAt = android.os.SystemClock.uptimeMillis() }
+                val late = android.os.SystemClock.uptimeMillis() - beatAt
+                if (late >= 4_000) {
+                    if (noted == 0) blockedOn = runCatching(screen).getOrDefault("?")
+                    val mark = listOf(4_000L, 10_000L, 30_000L).count { late >= it }
+                    if (mark > noted) { noted = mark; note(app, "Main thread blocked ${late / 1000} s on $blockedOn") }
+                } else if (noted > 0) noted = 0
+            }
+        }, "avid-watchdog").apply { isDaemon = true; start() }
+    }
+    fun stopWatching() { watch?.interrupt(); watch = null }
+
     /** Refreshes the memory figures in the marker (every 30 s while on screen). */
     fun tick(context: Context) = save(context)
 
@@ -138,7 +169,7 @@ object CrashLog {
         val was = Regex("^Avid Viewer (\\S+) ·").find(marker.lineSequence().firstOrNull().orEmpty())?.groupValues?.get(1)
         if (was != null && now.isNotEmpty() && was != now) return false
         if (updatedAfter(context, markerAt)) return false
-        val reason = exitReason(context)
+        val reason = exitReason(context, markerAt)
         if (reason?.userStopped == true) return false // force-stopped in Settings: not a crash
         val text = marker.lineSequence().firstOrNull().orEmpty().ifBlank { "Avid Viewer" } + "\n" +
             deviceLine() + "\n\n" +
@@ -162,11 +193,13 @@ object CrashLog {
     private class Exit(val text: String, val detail: String?, val userStopped: Boolean)
 
     /** Why Android ended the app last time (Android 11 / Fire OS 8 and later). */
-    private fun exitReason(context: Context): Exit? {
+    private fun exitReason(context: Context, markerAt: Long = 0L): Exit? {
         if (Build.VERSION.SDK_INT < 30) return null
         return runCatching {
             val am = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
             val e = am.getHistoricalProcessExitReasons(context.packageName, 0, 1).firstOrNull() ?: return null
+            // #20 (AVR-4b1a6270): only the exit of the run that left the marker, not an earlier process's.
+            if (markerAt > 0 && e.timestamp < markerAt - 5_000) return null
             val text = when (e.reason) {
                 android.app.ApplicationExitInfo.REASON_LOW_MEMORY -> "the TV closed it to free memory"
                 android.app.ApplicationExitInfo.REASON_EXCESSIVE_RESOURCE_USAGE -> "the TV closed it for using too much memory or power"
