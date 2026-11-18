@@ -76,6 +76,28 @@ fun ListPickerDialog(vm: AppViewModel) {
 @Composable
 fun ListOptionsDialog(vm: AppViewModel) {
     val group = vm.listMenu ?: return
+    var sorting by remember(group) { mutableStateOf(false) }
+    if (sorting) {
+        SortDialog("Sort " + (vm.userList(group)?.name ?: "Favorites"), "Channels from every playlist, mixed together. Just for this profile.", listOf(SORT_AZ, SORT_MANUAL), vm.listSortOf(group), vm,
+            onDismiss = { sorting = false }) { vm.setListSort(group, it); sorting = false; vm.listMenu = null }
+        return
+    }
+    if (group == FAV_GROUP) {
+        // ★ Favorites: only sorting (it can't be renamed, moved or deleted).
+        AlertDialog(
+            onDismissRequest = { vm.listMenu = null },
+            containerColor = C.Surface,
+            title = { Text("★ Favorites", color = C.Text, fontWeight = FontWeight.Bold) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Label("${vm.prefs.favorites.size} channels · from any playlist", size = 13.sp, color = C.Soft)
+                    OptionRow("↕  Sort: " + vm.sortLabel(vm.listSortOf(group))) { sorting = true }
+                }
+            },
+            confirmButton = { TvButton("Done", primary = true) { vm.listMenu = null } },
+        )
+        return
+    }
     val lst = vm.userList(group) ?: run { vm.listMenu = null; return }
     var renaming by remember(group) { mutableStateOf(false) }
     var deleting by remember(group) { mutableStateOf(false) }
@@ -106,6 +128,7 @@ fun ListOptionsDialog(vm: AppViewModel) {
                 OptionRow("✎  Rename") { renaming = true }
                 OptionRow("▲  Move up") { vm.moveList(group, -1) }
                 OptionRow("▼  Move down") { vm.moveList(group, 1) }
+                OptionRow("↕  Sort: " + vm.sortLabel(vm.listSortOf(group))) { sorting = true }
                 OptionRow("✕  Delete list") { deleting = true }
             }
         },

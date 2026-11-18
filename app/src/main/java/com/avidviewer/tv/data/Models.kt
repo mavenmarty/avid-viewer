@@ -129,6 +129,10 @@ data class Prefs(
     val favorites: List<String> = emptyList(),
     val groupNames: Map<String, String> = emptyMap(),
     val channelNames: Map<String, String> = emptyMap(),
+    /** 1.18.0: how each playlist's channels are sorted: "provider", "az" or "manual" (absent: manual if it has an order). */
+    val channelSort: Map<String, String> = emptyMap(),
+    /** 1.18.0: ★ Favorites sorted "manual" or "az" (per profile). */
+    val favSort: String = "manual",
     val groupOrder: List<String> = emptyList(),
     val channelOrder: Map<String, List<String>> = emptyMap(),
     val hiddenGroups: Set<String> = emptySet(),
@@ -198,6 +202,7 @@ data class Prefs(
         o.put("favorites", JSONArray(favorites))
         o.put("groupNames", JSONObject(groupNames))
         o.put("channelNames", JSONObject(channelNames))
+        o.put("channelSort", JSONObject(channelSort)).put("favSort", favSort)
         o.put("groupOrder", JSONArray(groupOrder))
         o.put("channelOrder", JSONObject().apply { channelOrder.forEach { (g, l) -> put(g, JSONArray(l)) } })
         o.put("hiddenGroups", JSONArray(hiddenGroups.toList()))
@@ -247,6 +252,8 @@ data class Prefs(
                 favorites = strList(o.optJSONArray("favorites")),
                 groupNames = strMap(o.optJSONObject("groupNames")),
                 channelNames = strMap(o.optJSONObject("channelNames")),
+                channelSort = strMap(o.optJSONObject("channelSort")),
+                favSort = if (o.optString("favSort") == "az") "az" else "manual",
                 groupOrder = strList(o.optJSONArray("groupOrder")),
                 channelOrder = if (co == null) emptyMap() else co.keys().asSequence().associateWith { strList(co.getJSONArray(it)) },
                 hiddenGroups = strList(o.optJSONArray("hiddenGroups")).toSet(),
@@ -297,14 +304,16 @@ data class Prefs(
 }
 
 /** A channel collection the user made, like Favorites. [keys] can come from any playlist. */
-data class ChannelList(val id: String, val name: String, val keys: List<String> = emptyList(), val hidden: Boolean = false) {
-    fun toJson(): JSONObject = JSONObject().put("id", id).put("name", name).put("keys", JSONArray(keys)).put("hidden", hidden)
+/** [sort]: "manual" (the order set) or "az" (1.18.0: by the name shown, channels of every playlist together). */
+data class ChannelList(val id: String, val name: String, val keys: List<String> = emptyList(), val hidden: Boolean = false, val sort: String = "manual") {
+    fun toJson(): JSONObject = JSONObject().put("id", id).put("name", name).put("keys", JSONArray(keys)).put("hidden", hidden).put("sort", sort)
 
     companion object {
         fun fromJson(o: JSONObject) = ChannelList(
             o.getString("id"), o.optString("name"),
             o.optJSONArray("keys")?.let { a -> List(a.length()) { a.getString(it) } } ?: emptyList(),
             o.optBoolean("hidden", false),
+            if (o.optString("sort") == "az") "az" else "manual",
         )
     }
 }

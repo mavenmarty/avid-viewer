@@ -672,8 +672,15 @@ private fun LocalSuggestions(vm: AppViewModel) {
 fun GroupOptionsDialog(vm: AppViewModel) {
     val raw = vm.groupMenu ?: return
     var renaming by remember(raw) { mutableStateOf(false) }
+    var sorting by remember(raw) { mutableStateOf(false) }
     if (renaming) {
         RenameDialog("Rename category", vm.groupName(raw), onDismiss = { renaming = false }) { vm.renameGroup(raw, it); renaming = false; vm.groupMenu = null }
+        return
+    }
+    val pl = vm.activePlaylist()
+    if (sorting && pl != null) {
+        SortDialog("Sort channels", "For every category in ${pl.name}, on every profile and TV.", listOf(SORT_PROVIDER, SORT_AZ, SORT_MANUAL), vm.channelSortOf(pl.id), vm,
+            onDismiss = { sorting = false }) { vm.setChannelSort(pl.id, it); sorting = false; vm.groupMenu = null }
         return
     }
     val all = vm.groups(includeHidden = true)
@@ -687,11 +694,35 @@ fun GroupOptionsDialog(vm: AppViewModel) {
                 Label("Category ${pos + 1} of ${all.size} · ${all.getOrNull(pos)?.count ?: 0} channels", size = 13.sp, lines = Int.MAX_VALUE, color = C.Soft)
                 OptionRow("✎  Rename") { renaming = true }
                 OptionRow("⇅  Re-order") { vm.groupMenu = null; vm.movingGroup = raw }
+                if (pl != null) OptionRow("↕  Sort channels: " + vm.sortLabel(vm.channelSortOf(pl.id))) { sorting = true }
                 OptionRow("⊘  Hide category") { vm.toggleHidden(raw); vm.groupMenu = null }
             }
         },
         confirmButton = { TvButton("Done", primary = true) { vm.groupMenu = null } },
     )
+}
+
+/** Pick how channels (or a list) are sorted; ✓ marks the current choice. */
+@Composable
+fun SortDialog(title: String, note: String, modes: List<String>, current: String, vm: AppViewModel, onDismiss: () -> Unit, onPick: (String) -> Unit) {
+    val first = remember { androidx.compose.ui.focus.FocusRequester() }
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = C.Surface,
+        title = { Text(title, color = C.Text, fontWeight = FontWeight.Bold) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Label(note, size = 13.sp, lines = Int.MAX_VALUE, color = C.Soft)
+                modes.forEach { m ->
+                    Box(if (m == current) Modifier.focusRequester(first) else Modifier) {
+                        OptionRow((if (m == current) "✓  " else "     ") + vm.sortLabel(m) + when (m) { SORT_AZ -> " (by the name shown)"; SORT_MANUAL -> " (your order)"; else -> "" }) { onPick(m) }
+                    }
+                }
+            }
+        },
+        confirmButton = { TvButton("Cancel") { onDismiss() } },
+    )
+    LaunchedEffect(Unit) { focusWhenReady(vm) { runCatching { first.requestFocus() }.isSuccess } }
 }
 
 @Composable

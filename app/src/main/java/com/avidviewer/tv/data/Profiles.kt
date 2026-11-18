@@ -90,7 +90,7 @@ data class ProfileSet(
     val startMode: String = "ask",
     /** 1.15.0: profiles come from the avidviewer.app account (managed there; this device only shows them). */
     val managed: Boolean = false,
-    /** The last Kids profile used on this device (it opens at start while the device has a Kids profile). */
+    /** The last Kids profile used on this device (focused on Who's watching? at start while the device has a Kids profile). */
     val lastKids: String = "",
 ) {
     val activeProfile: Profile get() = list.firstOrNull { it.id == active } ?: list.first()
@@ -119,17 +119,17 @@ data class ProfileSet(
         else copy(list = list.map { if (it.theme.isEmpty()) it.copy(theme = if (existingInstall) THEME_LEGACY else THEME_DEFAULT) else it })
 
     /**
-     * Which profile opens when the app starts (1.15.0, decided Nov 16):
+     * Which profile opens when the app starts (1.15.0; changed in 1.18.0, Nov 18):
      *  - 0 or 1 profile: that one, and no profiles anywhere;
-     *  - a Kids profile on the device: the last Kids profile used here, else the first in the list (the account's order),
-     *    with a 5-second splash ([Launch.splash]);
-     *  - otherwise the last profile used, no splash (Who's watching? only when that one is locked with its own PIN).
+     *  - a Kids profile on the device: Who's watching?, with the last Kids profile used here (else the first Kids
+     *    profile in the account's order) behind it and focused, so nothing grown-up shows before a choice;
+     *  - otherwise the last profile used (Who's watching? only when that one is locked with its own PIN).
      */
     fun launch(): Launch {
         if (!multiple) return Launch(activeProfile.id)
         if (hasKids) {
             val kid = list.firstOrNull { it.id == lastKids && it.kids } ?: list.first { it.kids }
-            return Launch(kid.id, splash = true)
+            return Launch(kid.id, choose = true)
         }
         val last = activeProfile
         return Launch(last.id, choose = last.hasPin)
@@ -171,7 +171,7 @@ val PROFILE_COLORS = listOf(
 
 /** The fields of [Prefs] (in its JSON) that belong to one profile. */
 val PERSONAL_KEYS = listOf(
-    "favorites", "lists", "hiddenGroups", "hiddenChannels", "vodHiddenCats", "vodHiddenTitles",
+    "favorites", "favSort", "lists", "hiddenGroups", "hiddenChannels", "vodHiddenCats", "vodHiddenTitles",
     "myList", "lastChannel", "dismissedSuggestions", "historyPaused",
     // 1.17.0: Discover settings belong to the profile (decision 17).
     "myServices", "discoverStart", "discoverGrownUps",

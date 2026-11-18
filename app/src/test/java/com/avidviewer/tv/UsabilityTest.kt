@@ -36,6 +36,9 @@ import com.avidviewer.tv.ui.FAV_GROUP
 import com.avidviewer.tv.ui.LIVE_KIND
 import com.avidviewer.tv.ui.LIVE_MATCH
 import com.avidviewer.tv.ui.LIVE_PREFIX
+import com.avidviewer.tv.ui.SORT_AZ
+import com.avidviewer.tv.ui.SORT_MANUAL
+import com.avidviewer.tv.ui.SORT_PROVIDER
 import com.avidviewer.tv.data.VodItem
 import com.avidviewer.tv.ui.NavMode
 import com.avidviewer.tv.ui.Screen
@@ -834,8 +837,8 @@ class UsabilityTest {
             // What the account hides for Dad (the profile in use) is hidden here, on top of what Dad hid himself.
             assertTrue(vm.isGroupHidden(TestData.P1, "SPORTS | NFL"))
             assertTrue(newsKey in vm.prefs.hiddenChannels)
-            // A Kids profile is on the device: the next start opens Kids, with the splash.
-            assertEquals(com.avidviewer.tv.data.ProfileSet.Launch("acctKids", splash = true), vm.profiles.launch())
+            // A Kids profile is on the device: the next start shows Who's watching?, Kids behind it.
+            assertEquals(com.avidviewer.tv.data.ProfileSet.Launch("acctKids", choose = true), vm.profiles.launch())
             // The website shows SPORTS again and takes Kids off this device: one profile, so no profiles at all.
             site.profiles = org.json.JSONArray()
                 .put(org.json.JSONObject().put("id", "acctDad").put("name", "Dad").put("parent", true).put("color", 0).put("pin", pinHash("1234"))
@@ -2442,4 +2445,57 @@ class UsabilityTest {
         }
     }
 
+
+    @Test
+    fun channelsSortByProviderAzOrManualAndListsMixPlaylists() {
+        FakeAvidSite().use { site ->
+            restartWith { st -> st.savePlaylists(st.loadPlaylists().map { if (it.id == TestData.P1) it.copy(remoteId = "acctP1") else it }) }
+            rule.runOnIdle { vm.chooseGroup(TestData.P1, "NEWS") }
+            waitFor("channels") { vm.channelsIn("NEWS").size == 12 }
+            val provider = vm.channelsIn("NEWS").map { it.key }
+            assertEquals("no setting, no order of its own: the provider's order", SORT_PROVIDER, vm.channelSortOf(TestData.P1))
+            assertEquals("${TestData.P1}:c1-1", provider.first())
+
+            // A–Z by the name as shown: a renamed channel sorts by its new name; case doesn't matter.
+            rule.runOnIdle { vm.updatePrefs { it.copy(channelNames = it.channelNames + ("${TestData.P1}:c1-5" to "aardvark news")) }; vm.setChannelSort(TestData.P1, SORT_AZ) }
+            waitFor("sorted") { vm.channelsIn("NEWS").first().key == "${TestData.P1}:c1-5" }
+            val az = vm.channelsIn("NEWS").map { it.key }
+            assertEquals(az.drop(1).map { k -> vm.channelName(vm.channel(k)!!) }, az.drop(1).map { k -> vm.channelName(vm.channel(k)!!) }.sortedWith(String.CASE_INSENSITIVE_ORDER))
+            assertEquals("every category of the playlist", vm.channelsIn("KIDS").map { vm.channelName(it) }, vm.channelsIn("KIDS").map { vm.channelName(it) }.sortedWith(String.CASE_INSENSITIVE_ORDER))
+
+            // Re-ordering switches the playlist to Manual, starting from the A–Z order shown.
+            rule.runOnIdle { vm.moveChannel(az[2], -1) }
+            waitFor("manual") { vm.channelSortOf(TestData.P1) == SORT_MANUAL }
+            assertEquals(listOf(az[0], az[2], az[1]) + az.drop(3), vm.channelsIn("NEWS").map { it.key })
+            assertEquals("other categories keep the A–Z order too", vm.channelsIn("KIDS").map { vm.channelName(it) }.sortedWith(String.CASE_INSENSITIVE_ORDER), vm.channelsIn("KIDS").map { vm.channelName(it) })
+            // The provider's order again: the playlist as sent, the manual order kept for later.
+            rule.runOnIdle { vm.setChannelSort(TestData.P1, SORT_PROVIDER) }
+            waitFor("provider") { vm.channelsIn("NEWS").map { it.key } == provider }
+            assertTrue(vm.prefs.channelOrder["NEWS"].orEmpty().isNotEmpty())
+
+            // ★ Favorites A–Z mixes playlists by name; Manual starts from that order.
+            rule.runOnIdle { vm.updatePrefs { it.copy(favorites = listOf("${TestData.P1}:c1-2", "${TestData.P2}:f3")) } }
+            rule.runOnIdle { vm.ensureFavoriteData() }
+            waitFor("the other playlist's favorite") { vm.channel("${TestData.P2}:f3") != null }
+            assertEquals(listOf("${TestData.P1}:c1-2", "${TestData.P2}:f3"), vm.channelsIn(FAV_GROUP).map { it.key })
+            rule.runOnIdle { vm.setListSort(FAV_GROUP, SORT_AZ) }
+            waitFor("fav az") { vm.channelsIn(FAV_GROUP).first().key == "${TestData.P2}:f3" }
+            rule.runOnIdle { vm.setListSort(FAV_GROUP, SORT_MANUAL) }
+            assertEquals(listOf("${TestData.P2}:f3", "${TestData.P1}:c1-2"), vm.prefs.favorites)
+
+            // Sent to the account: the playlist's sort with its order, Favorites' sort with the profile's lists.
+            rule.runOnIdle { vm.setChannelSort(TestData.P1, SORT_AZ) }
+            linkForTest(site)
+            site.profileMap = mapOf("main" to "acctDad")
+            site.profiles = org.json.JSONArray().put(org.json.JSONObject().put("id", "acctDad").put("name", "Dad").put("parent", true).put("color", 0).put("pin", "")
+                .put("playlists", org.json.JSONArray().put("acctP1")).put("visibility", org.json.JSONObject()))
+            rule.runOnIdle { vm.syncAccountPlaylists() }
+            waitFor("order sent") { site.syncs.any { s -> s.getJSONArray("playlists").length() > 0 } }
+            val order = site.syncs.last { it.getJSONArray("playlists").length() > 0 }.getJSONArray("playlists").getJSONObject(0).getJSONObject("data")
+            assertEquals(SORT_AZ, order.getString("channelSort"))
+            waitFor("lists sent") { site.syncs.any { s -> s.getJSONArray("profiles").length() > 0 } }
+            val lists = site.syncs.last { it.getJSONArray("profiles").length() > 0 }.getJSONArray("profiles").getJSONObject(0).getJSONObject("data")
+            assertEquals(SORT_MANUAL, lists.getString("favSort"))
+        }
+    }
 }
