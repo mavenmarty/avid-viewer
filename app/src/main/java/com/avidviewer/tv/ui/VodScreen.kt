@@ -170,14 +170,17 @@ fun VodScreen(vm: AppViewModel, kind: String) {
         val shown = hero ?: items.firstOrNull()
         Box(Modifier.weight(1f).fillMaxHeight()) {
         if (layout == "showcase" && items.isNotEmpty()) VodHero(vm, shown, full = true, modifier = Modifier.fillMaxSize())
+        // Nov 18, 2026: the Grid carries the highlighted title's artwork, filling the screen behind the posters and
+        // fading into the page, with its name and details above them (Featured is retired).
+        if (layout == "grid" && items.isNotEmpty()) GridArt(vm, shown, Modifier.fillMaxSize())
         Column(Modifier.fillMaxSize().padding(start = 12.dp, end = 16.dp, top = 14.dp).onFocusChanged { if (it.hasFocus) vm.vodOnPoster = true }) {
+            if (layout == "grid" && items.isNotEmpty()) GridDetails(vm, shown, Modifier.fillMaxWidth().height(176.dp).padding(start = 8.dp, bottom = 6.dp))
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(bottom = 10.dp)) {
                 Label(if (vq.isNotBlank()) "Results for “$vq”  ·  ${items.size} titles" else "${vm.vodCatName(kind, current)}  ·  ${items.size} titles", size = 14.sp, color = if (layout == "showcase") Color.White.copy(alpha = 0.85f) else C.Soft, weight = FontWeight.Bold, modifier = Modifier.weight(1f))
-                listOf("grid" to "▦  Grid", "featured" to "▭  Featured", "showcase" to "▣  Showcase").forEach { (id, label) ->
+                listOf("grid" to "▦  Grid", "showcase" to "▣  Showcase").forEach { (id, label) ->
                     TvButton(label, selected = layout == id, modifier = Modifier.testTag("vod-layout-$id")) { if (layout != id) vm.setVodLayout(id) }
                 }
             }
-            if (layout == "featured" && items.isNotEmpty()) VodHero(vm, shown, full = false, modifier = Modifier.fillMaxWidth().height(190.dp).padding(bottom = 8.dp))
             if (items.isEmpty()) {
                 Label(
                     when (current) {
@@ -212,7 +215,7 @@ fun VodScreen(vm: AppViewModel, kind: String) {
                     if (vis.isEmpty() || idx < vis.first() || idx > vis.last()) gridState.scrollToItem(idx)
                     focusWhenReady(vm) { runCatching { backFr.requestFocus() }.isSuccess }
                 }
-                val cols = if (layout == "featured") 7 else 6
+                val cols = 7
                 val posters: androidx.compose.foundation.lazy.grid.LazyGridScope.() -> Unit = {
                     itemsIndexed(items, key = { i, v -> "$i-${v.key}" }) { i, v ->
                         Poster(vm, v, Modifier.then(if (v.key == backKey) Modifier.focusRequester(backFr) else Modifier)
@@ -248,7 +251,7 @@ fun VodScreen(vm: AppViewModel, kind: String) {
                     state = gridState,
                     columns = GridCells.Fixed(cols),
                     // Room round the edges for the highlighted poster, which grows a little.
-                    horizontalArrangement = Arrangement.spacedBy(if (layout == "featured") 14.dp else 16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(14.dp),
                     verticalArrangement = Arrangement.spacedBy(16.dp),
                     contentPadding = PaddingValues(start = 8.dp, end = 8.dp, top = 8.dp, bottom = 24.dp),
                     content = posters,
@@ -256,6 +259,51 @@ fun VodScreen(vm: AppViewModel, kind: String) {
             }
         }
         }
+    }
+}
+
+/**
+ * Grid: the highlighted title's artwork (TMDB's wide picture, else the provider's poster) fills the top right of the
+ * screen and fades into the page to the left and below, so the posters sit on it. Moving the highlight cross-fades
+ * to the next title's picture.
+ */
+@Composable
+private fun GridArt(vm: AppViewModel, v: VodItem?, modifier: Modifier) {
+    if (v == null) return
+    // Looked up once the highlight rests on a title (holding a direction key doesn't send a lookup per poster).
+    LaunchedEffect(v.key) { kotlinx.coroutines.delay(350); vm.wantArt(v) }
+    val img = vm.artOf(v)?.backdrop ?: v.logo
+    androidx.compose.animation.Crossfade(targetState = img, animationSpec = androidx.compose.animation.core.tween(300), modifier = modifier, label = "grid-art") { url ->
+        Box(Modifier.fillMaxSize()) {
+            if (url != null) Box(Modifier.align(Alignment.TopEnd).fillMaxWidth(0.74f).fillMaxHeight(0.68f)) {
+                TvImage(model = url, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize().testTag("grid-art"))
+                Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(0f to C.Bg, 0.32f to C.Bg.copy(alpha = 0.62f), 0.7f to C.Bg.copy(alpha = 0.12f), 1f to Color.Transparent)))
+                Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0f to Color.Transparent, 0.4f to C.Bg.copy(alpha = 0.25f), 0.75f to C.Bg.copy(alpha = 0.85f), 1f to C.Bg)))
+            }
+        }
+    }
+}
+
+/** Grid: the highlighted title's name and details, above the posters. A fixed height, so the grid never moves. */
+@Composable
+private fun GridDetails(vm: AppViewModel, v: VodItem?, modifier: Modifier) {
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        if (v == null) return@Column
+        val a = vm.artOf(v)
+        val genre = a?.genres?.firstNotNullOfOrNull { com.avidviewer.tv.data.Art.genreName(it) }
+        val meta = listOfNotNull(v.year.ifBlank { null }, if (v.kind == "series") "Series" else "Movie", genre).joinToString("  ·  ")
+        Text(v.name, color = C.Text, fontSize = 30.sp, fontWeight = FontWeight.Bold, maxLines = 1,
+            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, modifier = Modifier.testTag("vod-hero-title"))
+        Row(horizontalArrangement = Arrangement.spacedBy(18.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(meta, color = C.Text.copy(alpha = 0.85f), fontSize = 14.sp, maxLines = 1)
+            a?.ratingText?.let { r ->
+                Text("★ $r TMDB  ·  ${a.votesText}", color = C.Accent, fontSize = 14.sp, fontWeight = FontWeight.Bold, maxLines = 1, modifier = Modifier.testTag("grid-rating"))
+            }
+        }
+        a?.overview?.takeIf { it.isNotBlank() }?.let {
+            Text(it, color = C.Soft, fontSize = 14.sp, maxLines = 2, lineHeight = 19.sp, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, modifier = Modifier.fillMaxWidth(0.62f))
+        }
+        Text("OK  Open" + if (vm.inMyList(v.key)) "   ·   ✓ In My List" else "   ·   Menu  ＋ My List", color = C.Muted, fontSize = 12.sp, maxLines = 1)
     }
 }
 

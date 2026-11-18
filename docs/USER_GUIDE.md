@@ -2,7 +2,7 @@
 
 <!-- The version below and the Release notes section are updated automatically after each published build
      (.github/workflows/user-guide.yml). Feature descriptions are written by hand. -->
-This guide covers **Avid Viewer 1.20.0**, the current public release. Avid Viewer is an IPTV player for Android TV and Fire TV. You bring your own provider (an Xtream Codes login or an M3U link); the app doesn't include any channels.
+This guide covers **Avid Viewer 1.20.1**, the current public release. Avid Viewer is an IPTV player for Android TV and Fire TV. You bring your own provider (an Xtream Codes login or an M3U link); the app doesn't include any channels.
 
 **Contents:** [Getting started](#1-getting-started) · [Main menu](#2-main-menu) · [TV Guide](#3-tv-guide) · [Full-screen playback](#4-full-screen-playback) · [Search](#5-search) · [Discover](#6-discover) · [Sports](#7-sports) · [Movies and Series](#8-movies-and-series) · [Settings](#9-settings) ([Profiles](#profiles)) · [Privacy](#10-privacy) · [Troubleshooting](#11-troubleshooting) · [Control4](#12-control4) · [Supplemental services](#13-supplemental-services) · [Cable & satellite](#14-using-your-cable-or-satellite-subscription) · [Release notes](#release-notes)
 
@@ -131,7 +131,7 @@ When the TV has a Kids profile, the app first asks **Who's watching?**; otherwis
 
 ## 3. TV Guide
 
-![The TV Guide: preview and details at the top, categories on the left, the grid on the right](images/tv-guide.jpg)
+![The TV Guide: preview and details at the top, and the guide across the full width, 2 hours at a time](images/tv-guide.jpg)
 
 The TV Guide is the home screen for live TV. Next to the main menu it has:
 
@@ -763,7 +763,15 @@ Every public release since 1.0.35, newest first. From 1.1.0, versions are number
 
 <!-- new-releases: entries for new builds are added automatically below this line -->
 
-### 1.20.0 — November 18, 2026, 11:47 AM CT (current)
+### 1.20.1 — November 18, 2026, 1:05 PM CT (current)
+
+**Release notes**
+
+- **Welcome screen:** it links the device to your account and then points you to avidviewer.app/playlists. **Restore a backup** is no longer on it, and linking no longer pops up your account's backups; to copy another device's own settings, use **Restore from your account** in Settings › Updates & about.
+- **Guide sources keep their status:** a source's "Updated…" line no longer disappears when two playlists' guides download at the same time.
+- **User guide:** written for the latest version throughout, with new screenshots, and Troubleshooting starts with making sure the app is up to date.
+
+### 1.20.0 — November 18, 2026, 11:47 AM CT
 
 **Release notes**
 

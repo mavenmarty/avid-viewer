@@ -157,9 +157,13 @@ class ScreenshotTest {
         waitFor { vm.vodOf("movie").isNotEmpty() }
         highlightPoster()
         shot("13-movies-poster-grid")
-        rule.runOnIdle { vm.setVodLayout("featured") }
+        // Nov 18, 2026: Featured is retired; the Grid shows the highlighted title's artwork and TMDB details.
+        rule.runOnIdle {
+            vm.vodOf("movie").take(40).forEach { vm.putArtForTests(it, com.avidviewer.tv.data.Art(null,
+                "A lone engineer on a silent research station picks up a signal that seems to come from her own future.", 7.9, 4213, listOf(878))) }
+        }
         highlightPoster()
-        shot("15-movies-featured")
+        shot("15-movies-grid-art")
         rule.runOnIdle { vm.setVodLayout("showcase") }
         highlightPoster()
         shot("16-movies-showcase")

@@ -154,7 +154,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     init { C.source = { theme } }
     fun setTheme(id: String, p: Profile = profile) = profiles.get(p.id)?.let { updateProfile(it.copy(theme = id)) }
     /** Movies and Series layout for the profile: "grid", "featured" or "showcase". */
-    val vodLayout: String get() = profile.vodLayout
+    // Nov 18, 2026: Featured is retired; the Grid now carries the highlighted title's artwork. A profile set to
+    // Featured shows the Grid.
+    val vodLayout: String get() = profile.vodLayout.let { if (it == "featured") "grid" else it }
     fun setVodLayout(l: String) = updateProfile(profile.copy(vodLayout = l))
     /** The profile in use is a Kids profile: only its categories, no Settings, Discover or Sports. */
     val kidsMode: Boolean get() = profile.kids
@@ -398,7 +400,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     var busy by mutableStateOf(false); private set
     var playerError by mutableStateOf<String?>(null); private set
     /** Screenshots for the user guide: the stand-in stream never plays, so its error would cover the picture. */
-    internal fun clearPlayerErrorForTests() { playerError = null }
+    internal fun clearPlayerErrorForTests() { player.stop(); player.clearMediaItems(); playerError = null }
     var now by mutableLongStateOf(System.currentTimeMillis()); private set
     var weather by mutableStateOf<Weather?>(null); private set
     var vod by mutableStateOf<List<VodItem>>(emptyList()); private set
@@ -1772,7 +1774,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         val from = guideFrom()
         val to = guideKeepTo()
         val directory = ArrayList<GuideChannel>()
-        val statuses = HashMap(guideSourceStatus)
+        // This playlist's lines only: downloads of other playlists run at the same time, and copying the whole map
+        // here would let one finishing later put back what another had replaced (a source's status vanished).
+        val statuses = HashMap<String, String>()
         val covered = HashSet<String>()
         // DATA-05: when every source says it hasn't changed since the last download (and the same channels are
         // wanted), the saved guide is kept and nothing is downloaded again.
@@ -1783,7 +1787,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             if (same) {
                 withContext(Dispatchers.IO) { live.guideChecked(p.id) }
                 sources.forEach { statuses[p.id + "|" + it.id] = "Checked ${fmtTime(System.currentTimeMillis())} · unchanged" }
-                guideSourceStatus = statuses
+                putGuideStatus(p.id, statuses)
                 return known.first()!!.third
             }
         }
@@ -1811,7 +1815,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 anyOk
             }
         }
-        guideSourceStatus = statuses
+        putGuideStatus(p.id, statuses)
         if (!done.committed) throw java.io.IOException("no guide source could be downloaded")
         // Remember what each source said, for asking "changed?" next time (only when every source was read).
         sources.forEach { src -> saveGuideValidators(p.id, src.url, got[src.url]?.takeIf { got.size == sources.size }, wantedSig, covered.size) }
@@ -1819,6 +1823,11 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         withContext(Dispatchers.IO) { store.saveGuideChannels(p.id, directory.distinctBy { it.id }) }
         guideChannelCache.remove(p.id)
         return covered.size
+    }
+
+    /** Replaces one playlist's guide source lines in [guideSourceStatus], leaving the other playlists' alone. */
+    private fun putGuideStatus(pid: String, lines: Map<String, String>) {
+        guideSourceStatus = guideSourceStatus.filterKeys { !it.startsWith("$pid|") } + lines
     }
 
     private val validatorPrefs by lazy { getApplication<Application>().getSharedPreferences("guide_validators", android.content.Context.MODE_PRIVATE) }
@@ -4058,6 +4067,43 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     /** A guide source's id: the time plus a random part, so two added in the same millisecond never share one. */
     private fun newSourceId() = "src-" + System.currentTimeMillis().toString(36) + java.util.UUID.randomUUID().toString().take(4)
+
+    // ---------------- artwork and details from TMDB (Nov 18, 2026: the hero style) ----------------
+    private val artStore by lazy { com.avidviewer.tv.data.ArtStore(app.filesDir) }
+    /** Looked-up artwork by [com.avidviewer.tv.data.ArtStore.key]; a key with a null value has no TMDB match. */
+    var art by mutableStateOf<Map<String, com.avidviewer.tv.data.Art?>>(emptyMap()); private set
+    private var artJob: Job? = null
+
+    /** The title's TMDB artwork and details, if looked up. */
+    fun artOf(v: VodItem): com.avidviewer.tv.data.Art? = art[artStore.key(v)] ?: artStore.get(artStore.key(v))?.second
+
+    /**
+     * Looks up a title on TMDB once (the highlighted poster, a title page). Needs the profile's TMDB key; never for a
+     * Kids profile, whose titles aren't sent anywhere. One lookup at a time: a newer title replaces a waiting one.
+     */
+    fun wantArt(v: VodItem) {
+        val k = artStore.key(v)
+        if (art.containsKey(k)) return
+        artStore.get(k)?.let { art = art + (k to it.second); return }
+        if (kidsMode) return
+        val key = tmdbKey(); if (key.isBlank()) return
+        artJob?.cancel()
+        artJob = viewModelScope.launch {
+            val found = withContext(Dispatchers.IO) {
+                runCatching {
+                    val name = if (v.year.isNotBlank() && !v.name.contains("(" + v.year + ")")) v.name + " (" + v.year + ")" else v.name
+                    com.avidviewer.tv.data.Tmdb.find(key, name, if (v.kind == "series") "tv" else "movie")
+                }
+            }
+            if (found.isFailure) return@launch // offline or refused: try again next time
+            val a = found.getOrNull()?.let { com.avidviewer.tv.data.Art.from(it) }
+            withContext(Dispatchers.IO) { artStore.put(k, a) }
+            art = art + (k to a)
+        }
+    }
+
+    /** Tests: puts artwork in place without TMDB. */
+    internal fun putArtForTests(v: VodItem, a: com.avidviewer.tv.data.Art?) { artStore.put(artStore.key(v), a); art = art + (artStore.key(v) to a) }
 
     // ---------------- app updates ----------------
     fun checkForUpdate(quiet: Boolean = false) {

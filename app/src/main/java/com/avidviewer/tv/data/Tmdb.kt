@@ -18,6 +18,8 @@ data class Title(
     val rating: Double,
     val genres: List<Int>,
     val date: String,
+    /** How many people rated it on TMDB. */
+    val votes: Int = 0,
 ) {
     val key get() = "$type:$id"
 }
@@ -66,6 +68,7 @@ object Tmdb {
                 id = o.getInt("id"), type = type, name = name, year = date.take(4), overview = o.optString("overview"),
                 poster = o.optString("poster_path").ifBlank { null }?.let { IMG + "w342" + it },
                 backdrop = o.optString("backdrop_path").ifBlank { null }?.let { IMG + "w780" + it },
+                votes = o.optInt("vote_count"),
                 rating = o.optDouble("vote_average", 0.0),
                 genres = if (g == null) emptyList() else List(g.length()) { g.getInt(it) },
                 date = date,
