@@ -30,6 +30,7 @@ import com.avidviewer.tv.ui.PlayContext
 import com.avidviewer.tv.ui.Screen
 import org.junit.Before
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
