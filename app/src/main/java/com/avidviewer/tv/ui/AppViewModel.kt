@@ -91,6 +91,8 @@ const val GUIDE_DAYS = 7
 const val LIVE_KIND = "live"
 /** 1.18.0: how channels and lists are sorted. */
 const val SORT_PROVIDER = "provider"
+/** How long after start Sports' schedules and channels are loaded in the background. */
+const val SPORTS_PRELOAD_AFTER = 120_000L
 const val SORT_AZ = "az"
 const val SORT_MANUAL = "manual"
 const val LIVE_PREFIX = "live|"
@@ -1001,6 +1003,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 val age = System.currentTimeMillis() - sportsFetchedAt
                 val due = if (sportsVisible) (if (sportGames.any { it.game.live }) 60_000L else 5 * 60_000L) else 30 * 60_000L
                 if (sportsFetchedAt > 0 && age >= due) refreshSports()
+                // Nov 18: Sports is ready before it's opened: 2 minutes after start (channels and guide in), on every
+                // TV with live TV and a league switched on; not for a Kids profile (it has no Sports).
+                else if (sportsFetchedAt == 0L && System.currentTimeMillis() - startedAt > SPORTS_PRELOAD_AFTER && !profile.kids &&
+                    livePlaylists.any { it.enabled } && leaguesOn().isNotEmpty() && onScreen) refreshSports()
             }
         }
         viewModelScope.launch {
@@ -4188,10 +4194,12 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             val from = kept.minOf { it.start } - 2 * 3600_000L
             val to = kept.maxOf { it.likelyEnd() } + 3600_000L
             for (p in pls) {
+                // Hidden channels and channels in hidden categories are left out from the start, and only the guide
+                // listings of channels that can be shown are looked at (Nov 18: most of the time went on the rest).
                 live.forEachChannel(p.id) { key, name, group, epg ->
-                    if (!isGroupHidden(p.id, group)) m.addChannel(p.id, key, name, epg, epgMap[key], group)
+                    if (key !in hiddenKeys && !isGroupHidden(p.id, group)) m.addChannel(p.id, key, name, epg, epgMap[key], group)
                 }
-                live.forEachProgram(p.id, from, to) { e, s0, e0, title, sub -> m.addProgram(p.id, e, s0, e0, title, sub) }
+                if (m.anyGuide()) live.forEachProgram(p.id, from, to) { e, s0, e0, title, sub -> if (m.wantsGuide(p.id, e)) m.addProgram(p.id, e, s0, e0, title, sub) }
                 m.nextPlaylist()
             }
             val r = m.result()
