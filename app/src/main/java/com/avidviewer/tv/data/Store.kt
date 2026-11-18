@@ -359,6 +359,13 @@ class Store(private val context: Context) {
     fun saveHistorySync(o: JSONObject, id: String) = writeAtomic(personalFile("historysync.json", id), o.toString())
 
     /**
+     * 1.18.0: the profile's last live channel. "mine": this TV's own (sent to the account, locked); "other": the
+     * newest one from another TV (for the live card in Continue watching). Each: {pl, ch, name, epg, tv, at, until}.
+     */
+    fun loadLive(id: String): JSONObject = runCatching { JSONObject(personalFile("live.json", id).readText()) }.getOrDefault(JSONObject())
+    fun saveLive(o: JSONObject, id: String) = writeAtomic(personalFile("live.json", id), o.toString())
+
+    /**
      * Every profile other than the owner, with its own files, for a backup: id → {"personal", "history",
      * "resume", "watched"} (raw JSON text of each file that exists).
      */
