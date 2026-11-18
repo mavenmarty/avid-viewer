@@ -306,7 +306,8 @@ private fun Poster(vm: AppViewModel, v: VodItem, modifier: Modifier = Modifier, 
             .zIndex(if (focused) 1f else 0f)
             .graphicsLayer { val k = if (focused) 1.07f else 1f; scaleX = k; scaleY = k }
             // TalkBack: the title is read from the art when it isn't written on it.
-            .semantics { if (v.logo != null && !focused) contentDescription = listOf(v.name, meta).filter { it.isNotBlank() }.joinToString(", ") },
+            .semantics { if (v.kind == LIVE_KIND) contentDescription = listOf("Live: " + v.name, v.category.takeIf { it.isNotBlank() }?.let { "now $it" }, note).filterNotNull().joinToString(", ")
+                else if (v.logo != null && !focused) contentDescription = listOf(v.name, meta).filter { it.isNotBlank() }.joinToString(", ") },
         onFocus = onFocus,
         shape = RoundedCornerShape(8.dp),
         color = badgeColor(v.name),
@@ -315,7 +316,22 @@ private fun Poster(vm: AppViewModel, v: VodItem, modifier: Modifier = Modifier, 
         onMenu = onMenu,
         onClick = { vm.openVodDetail(v) },
     ) {
-        Box(Modifier.fillMaxSize()) {
+        Box(Modifier.fillMaxSize().then(if (v.kind == LIVE_KIND) Modifier.testTag("live-card") else Modifier)) {
+            if (v.kind == LIVE_KIND) {
+                // 1.18.0: the live channel this profile was watching on another TV. What's on comes from this TV's guide.
+                if (v.logo != null) TvImage(model = v.logo, contentDescription = null, contentScale = ContentScale.Fit,
+                    modifier = Modifier.align(Alignment.Center).fillMaxWidth(0.7f).aspectRatio(16f / 9f))
+                Text("LIVE", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold,
+                    modifier = Modifier.align(Alignment.TopEnd).padding(6.dp).clip(RoundedCornerShape(4.dp)).background(Color(0xFFC8402F)).padding(horizontal = 6.dp, vertical = 1.dp))
+                Column(Modifier.align(Alignment.BottomStart).fillMaxWidth().background(Color.Black.copy(alpha = 0.72f)).padding(start = 10.dp, end = 10.dp, top = 6.dp, bottom = 9.dp)) {
+                    Text(v.name, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold, maxLines = 2,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, lineHeight = 16.sp)
+                    if (v.category.isNotBlank()) Text("Now: " + v.category, color = Color.White.copy(alpha = 0.85f), fontSize = 11.sp, maxLines = 2, modifier = Modifier.padding(top = 2.dp))
+                }
+                if (note != null) Text(note, color = Color(0xFFF5C77E), fontSize = 11.sp, maxLines = 1,
+                    modifier = Modifier.align(Alignment.TopStart).padding(6.dp).clip(RoundedCornerShape(4.dp)).background(Color.Black.copy(alpha = 0.7f)).padding(horizontal = 5.dp).testTag("poster-from"))
+                return@Box
+            }
             if (v.logo != null) TvImage(model = v.logo, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
             if (focused || v.logo == null) {
                 Box(Modifier.fillMaxSize().background(Brush.verticalGradient(

@@ -2,7 +2,7 @@
 
 <!-- The version below and the Release notes section are updated automatically after each published build
      (.github/workflows/user-guide.yml). Feature descriptions are written by hand. -->
-This guide covers **Avid Viewer 1.17.1**, the current public release. Avid Viewer is an IPTV player for Android TV and Fire TV. You bring your own provider (an Xtream Codes login or an M3U link); the app doesn't include any channels.
+This guide covers **Avid Viewer 1.17.2**, the current public release. Avid Viewer is an IPTV player for Android TV and Fire TV. You bring your own provider (an Xtream Codes login or an M3U link); the app doesn't include any channels.
 
 **Contents:** [Getting started](#1-getting-started) · [Main menu](#2-main-menu) · [TV Guide](#3-tv-guide) · [Full-screen playback](#4-full-screen-playback) · [Search](#5-search) · [Discover](#6-discover) · [Sports](#7-sports) · [Movies and Series](#8-movies-and-series) · [Settings](#9-settings) ([Profiles](#profiles)) · [Privacy](#10-privacy) · [Troubleshooting](#11-troubleshooting) · [Control4](#12-control4) · [Supplemental services](#13-supplemental-services) · [Cable & satellite](#14-using-your-cable-or-satellite-subscription) · [Release notes](#release-notes)
 
@@ -76,7 +76,7 @@ From 1.17.0, where a profile stopped in each movie and episode, and the episodes
 
 From 1.16.0, **favorites and lists belong to a profile** and follow it to every TV, and **the order and names of a playlist's live categories and channels** belong to the playlist, for every profile and device. Change them on the website or on a TV (Add to List, Re-order, Rename): the change reaches the account and the other TVs within a minute while Avid Viewer is open, and **the most recent change wins**, wherever it was made. The first time a TV syncs a profile, its favorites and lists are combined with the account's (lists with the same name become one).
 
-- **Favorites & lists** (a profile's page): pick ★ Favorites or a list on the left. **＋ Add channels** searches all of the profile's playlists or lets you browse a playlist's categories; tick channels and choose **Add**. Each channel has **⤒** (top), **▲ ▼** (one step), **⤓** (bottom) and **✕** (remove from the list). **＋ New list**, and for a list: **Rename**, **Hide on the TV**, **Delete list**. Drag lists to change their order on the TV; ★ Favorites is always first. Channels the profile can't see aren't offered.
+- **Favorites & lists** (a profile's page): pick ★ Favorites or a list on the left. **＋ Add channels** searches all of the profile's playlists or lets you browse a playlist's categories, listing every channel; tick channels, or use **Select all** / **Select none** for the channels shown (1.17.2), and choose **Add**. Each channel has **⤒** (top), **▲ ▼** (one step), **⤓** (bottom) and **✕** (remove from the list). **＋ New list**, and for a list: **Rename**, **Hide on the TV**, **Delete list**. Drag lists to change their order on the TV; ★ Favorites is always first. Channels the profile can't see aren't offered.
 - **Order & names** (a playlist's page): categories on the left, the chosen category's channels on the right. **Rename** in place (the provider's name shows underneath; empty = the provider's name; Enter saves, Esc cancels). **Arrange:** A–Z or the provider's order. **Undo last change**, and **Reset all to the provider's order and names**.
 - **Drag and drop:** drag a row by **⋮⋮** with a mouse or finger; the page scrolls at the top and bottom edges. With a keyboard: Tab to ⋮⋮, **Space** to pick it up, **↑ ↓** to move, **Space** to drop, **Esc** to cancel.
 - Live TV only for now: movie and series category order is still set on each TV.
@@ -394,7 +394,7 @@ Each profile also has its own **theme** (colours) and its own Movies and Series 
 
 - **New profile:** a name and colour; **Parent** (its PIN unlocks any profile on the TV); a 4-digit **PIN** (optional unless your account has a Kids profile).
 - **Kids profile:** sees only the categories you allow (everything starts hidden; adult categories can never be shown). Before a Kids profile is created, every grown-up profile needs a PIN, so a child can't switch to it; the page asks for any that are missing. A Kids profile that came from a device whose grown-ups have no PIN stays unfinished (not sent to devices) until you choose **Finish setting up** and set them (1.15.1). A grown-up's PIN can't be removed while a Kids profile exists. PINs are saved only as a salted one-way hash and reach devices the same way.
-- **What a profile can see:** pick a playlist, then **Live TV**, **Movies** or **Series**: each category is **Shown** or **Hidden**; open a live category to hide single channels. Hidden items disappear from the guide, search, Favorites and Sports for that profile on every device it's on. The names come from the playlist as a device last downloaded it.
+- **What a profile can see:** pick a playlist, then **Live TV**, **Movies** or **Series**: each category is **Shown** or **Hidden**; open a live category to hide single channels. Hidden items disappear from the guide, search, Favorites and Sports for that profile on every device it's on. The names come from the playlist as a device last downloaded it. The page says whose choices you're editing, for which playlist, and when they were last saved; each profile keeps its own (1.17.2).
 
 **On a device that isn't linked,** Settings › Profiles works as before: **＋ Add profile**, **＋ Add Kids profile** (if no grown-up has a PIN yet, the app asks you to set the first profile's PIN), and for each profile **Edit** (name, colour, theme; a Kids profile's categories), **Set PIN / Change PIN**, **Parent**, **Delete…**. In a profile that isn't a parent, changing profiles asks for a parent's PIN.
 
@@ -621,7 +621,7 @@ The next time it starts, the app says **Avid Viewer closed unexpectedly**:
 - If it can't be sent (no connection, for example), the message says so and the details stay in **Settings › Updates & about › Last crash**, where **Report issue** can try again.
 - **Cancel** closes the message. Nothing is sent, and the details stay in Last crash.
 
-**If the app vanished to the Fire TV home screen.** Sometimes the TV closes the app itself, usually to free memory, and the app gets no chance to save anything. From 1.7.0 the app notices at its next start and shows the same message, so **Report issue** covers this too. The report says the app **closed while in use**, with the last few steps (screen names such as "Screen: search", or "Search: 2 words"; never what you searched or watched) and the memory in use. On Fire OS 8 and later it also includes the reason the TV gives (low memory, not responding, or a crash in the video code). Leaving the app with Home or Back is never reported, nor is force-stopping it in the TV's settings.
+**If the app vanished to the Fire TV home screen.** Sometimes the TV closes the app itself, usually to free memory, and the app gets no chance to save anything. From 1.7.0 the app notices at its next start and shows the same message, so **Report issue** covers this too. The report says the app **closed while in use**, with the last few steps (screen names such as "Screen: search", or "Search: 2 words"; never what you searched or watched) and the memory in use. On Fire OS 8 and later it also includes the reason the TV gives (low memory, not responding, or a crash in the video code). Leaving the app with Home or Back is never reported, nor is force-stopping it in the TV's settings, nor is installing an update while the app is on screen (1.17.2).
 
 ### Backup questions
 
@@ -762,7 +762,19 @@ Every public release since 1.0.35, newest first. From 1.1.0, versions are number
 
 <!-- new-releases: entries for new builds are added automatically below this line -->
 
-### 1.17.1 — November 17, 2026, 2:48 PM CT (current)
+### 1.17.2 — November 17, 2026, 5:48 PM CT (current)
+
+- **One profile's settings stay with that profile.** From 1.17.0, a sync finishing just after you switched profiles on a TV could copy the previous profile's hidden categories, Discover settings and My List onto the new one. Fixed; the first sync after updating also sets each profile's hidden categories in your account's playlists back to exactly what the website says for it.
+- **No crash report after an update.** The 1.17.0 check never ran. (The update to 1.17.2 itself may still show one, made by 1.17.1.)
+- **Website, Add channels:** **Select all** / **Select none**, and every channel in a category is listed (before: the first 300). Published on its own before the app.
+- **Website, What a profile can see:** says whose choices you're editing and when they were saved, and always loads that profile's own.
+
+**Change log**
+
+- An update while on screen is no longer reported as a crash (version read at start)
+- One profile's settings can no longer land on another during a sync
+
+### 1.17.1 — November 17, 2026, 2:48 PM CT
 
 **Release notes**
 

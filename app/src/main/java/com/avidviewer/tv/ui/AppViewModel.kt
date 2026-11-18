@@ -87,6 +87,13 @@ enum class GuideFocus {
 
 /** How many days of guide a download keeps (the guide scrolls as far as its data goes, up to this). */
 const val GUIDE_DAYS = 7
+/** 1.18.0: the live card in Continue watching is a [VodItem] of this kind, keyed [LIVE_PREFIX] + channel key. */
+const val LIVE_KIND = "live"
+const val LIVE_PREFIX = "live|"
+/** A live channel is shared with the profile's other TVs after this long on it. */
+const val LIVE_AFTER = 2 * 60_000L
+/** What the live entry's item id is made from: one entry per profile. */
+const val LIVE_MATCH = "l|live"
 
 const val FAV_GROUP = "\u2605favorites"
 /** Group id prefix for the user's own channel lists: LIST_PREFIX + list id. */
@@ -918,7 +925,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             // Watching now (1.15.0): which playlist and profile are playing, every 15 s, and a Stop from the account.
             delay(3_000)
-            while (true) { if (account.linked) runCatching { reportPlaying() }; delay(15_000) }
+            while (true) { if (account.linked) runCatching { reportPlaying() }; runCatching { noteLive() }; delay(15_000) }
         }
         viewModelScope.launch {
             while (true) { delay(10_000); runCatching { idleToFullScreen() } }
@@ -2251,7 +2258,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         channelIndexMemo.get(channels) { channels.associateBy { it.key } }[key]?.let { return it }
         val pid = key.substringBefore(':')
         if (livePlaylists.none { it.id == pid }) return null
-        return otherLive[pid]?.first?.firstOrNull { it.key == key } ?: searchLive[pid]?.first?.firstOrNull { it.key == key } ?: sportsChannels[key]
+        return otherLive[pid]?.first?.firstOrNull { it.key == key } ?: searchLive[pid]?.first?.firstOrNull { it.key == key } ?: sportsChannels[key] ?: liveCardChannels[key]
     }
 
     fun playlistName(c: Channel?): String = c?.let { ch -> playlists.firstOrNull { ch.key.startsWith(it.id + ":") }?.name } ?: ""
@@ -2830,7 +2837,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         return placeLine(k)?.let { "S${m.groupValues[1]} E${m.groupValues[2]} · $it" }
     }
     /** For Continue watching: "from Living room" when the latest place for this title came from another TV. */
-    fun continueFrom(item: VodItem): String? =
+    fun continueFrom(item: VodItem): String? = if (item.kind == LIVE_KIND) liveOther?.let { o -> "from ${o.optString("tv", "another TV")} · " + clockText(o.optLong("at")) } else
         resume.keys.filter { it == item.key || it.startsWith(item.key + ":") }.maxByOrNull { placeInfo[it]?.at ?: 0 }
             ?.let { placeInfo[it]?.tv }?.let { "from $it" }
     private fun fmtClock(ms: Long): String {
@@ -2866,6 +2873,116 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         act.keys.toList().forEach { k -> seriesLatest[k]?.newAt?.let { bump(k, it) } }
         return act.entries.filter { (k, t) -> (placeInfo["hide|$k"]?.at ?: 0L) < t }.sortedByDescending { it.value }.map { it.key }
     }
+
+    // ---------------- live TV in pick up where you left off (1.18.0, design boards 23–24) ----------------
+    /** The newest live channel this profile watched on another TV (from the account), for the live card. */
+    private var liveOther: org.json.JSONObject? = null
+    private var liveOtherFor: String? = null
+    /** Channels the live card found in a playlist not loaded in memory, so they can be played. */
+    private val liveCardChannels = HashMap<String, Channel>()
+
+    private fun liveState(): org.json.JSONObject = store.loadLive(profile.id)
+    private fun clockText(t: Long) = java.text.SimpleDateFormat("h:mm a", java.util.Locale.US).format(java.util.Date(t))
+
+    /**
+     * Every 15 s: after 2 minutes on a live channel, the profile's last live channel is saved here and sent locked
+     * with the next history sync: the playlist, the channel, its guide id, and when the program on now ends (a time,
+     * never its name; the next one's end when under 10 minutes remain; 1 hour on when the channel has no guide).
+     * One entry per profile, overwritten. Never for Kids profiles, or while history is paused.
+     */
+    internal fun noteLive(now: Long = System.currentTimeMillis()) {
+        if (profile.kids || prefs.historyPaused || vodPlaying != null || !onScreen || !isStreaming()) return
+        val key = currentKey ?: return
+        if (watchKey != key || now - watchStart < LIVE_AFTER) return
+        val c = channel(key) ?: return
+        val st = liveState()
+        val mine = st.optJSONObject("mine")
+        val until = liveUntil(c, now)
+        if (mine != null && mine.optString("key") == key && mine.optLong("until") == until && now - mine.optLong("at") < 10 * 60_000L) return
+        val pl = playlists.firstOrNull { it.id == key.substringBefore(':') }
+        val o = org.json.JSONObject().put("key", key).put("pl", pl?.remoteId ?: "").put("ch", key.substringAfter(':'))
+            .put("name", c.name).put("epg", epgIdOf(c) ?: "").put("at", now).put("until", until)
+        st.put("mine", o)
+        store.saveLive(st, profile.id)
+    }
+
+    private fun liveUntil(c: Channel, now: Long): Long {
+        val (cur, next) = nowNext(c).let { (a, b) -> if (a != null) a to b else liveGuideNow(c, now) }
+        val end = cur?.end ?: return now + 3600_000L
+        return if (end - now < 10 * 60_000L) next?.end ?: end else end
+    }
+
+    /** What's on [c] at [now] and next, read from the saved guide (the channel's playlist may not be in memory). */
+    private fun liveGuideNow(c: Channel, now: Long): Pair<Program?, Program?> {
+        val id = epgIdOf(c) ?: return null to null
+        val list = runCatching { live.guide(c.key.substringBefore(':'), listOf(id), now - 6 * 3600_000L, now + 12 * 3600_000L)[id] }.getOrNull().orEmpty().sortedBy { it.start }
+        val i = list.indexOfFirst { now >= it.start && now < it.end }
+        return if (i < 0) null to list.firstOrNull { it.start > now } else list[i] to list.getOrNull(i + 1)
+    }
+
+    /** Words providers add round a channel's name ("US|", "HD", "ᴿᴬᵂ 60fps"…) are ignored when names are matched. */
+    private fun liveName(n: String): String = n.lowercase()
+        .replace(Regex("^[a-z]{2,3}\\s*[|:\\-]\\s*"), "")
+        .replace(Regex("[\\u1d00-\\u1dbf\\u2070-\\u209f\\u1d2c-\\u1d6a]+"), " ")
+        .replace(Regex("\\b(uhd|fhd|hd|sd|4k|8k|hevc|h265|raw|60fps|50fps|backup|vip)\\b"), " ")
+        .replace(Regex("[^a-z0-9]"), "")
+
+    /** This TV's copy of the channel in [o]: the same playlist and channel, else the same guide id, else the same name. */
+    private fun liveMatch(o: org.json.JSONObject): Channel? {
+        fun ok(c: Channel?) = c?.takeIf { channelAllowed(it) && it.key !in prefs.hiddenChannels && !isGroupHidden(it.key.substringBefore(':'), it.group) }
+        val pids = livePlaylists.map { it.id }
+        playlists.firstOrNull { it.remoteId.isNotEmpty() && it.remoteId == o.optString("pl") && it.id in pids }?.let { p ->
+            ok(runCatching { live.channelsByKeys(listOf(p.id + ":" + o.optString("ch"))) }.getOrNull()?.firstOrNull())?.let { return it }
+        }
+        val epg = o.optString("epg")
+        if (epg.isNotBlank()) for (pid in pids) ok(runCatching { live.channelsWithEpg(pid, listOf(epg)) }.getOrNull()?.firstOrNull())?.let { return it }
+        val want = liveName(o.optString("name")); if (want.length < 2) return null
+        val word = o.optString("name").split(Regex("[^A-Za-z0-9]+")).filter { it.length >= 3 && it.uppercase() !in setOf("HD", "FHD", "UHD", "RAW", "FPS") }.maxByOrNull { it.length } ?: return null
+        for (pid in pids) runCatching { live.searchChannels(pid, word, 200) }.getOrNull().orEmpty().firstOrNull { liveName(it.name) == want }?.let { c -> ok(c)?.let { return it } }
+        return null
+    }
+
+    /** The live card for Continue watching, or null: from another TV, until the program ends, never for Kids. */
+    private fun liveCard(now: Long = System.currentTimeMillis()): Pair<VodItem, Boolean>? {
+        if (profile.kids || prefs.historyPaused || !account.linked) return null
+        val st = liveState()
+        val o = st.optJSONObject("other") ?: return null
+        if (now >= o.optLong("until")) return null
+        val c = liveMatch(o) ?: return null
+        liveCardChannels[c.key] = c
+        liveOther = o; liveOtherFor = c.key
+        val on = liveGuideNow(c, now).first?.title
+        val item = VodItem(LIVE_PREFIX + c.key, c.key.substringBefore(':'), LIVE_KIND, c.name, c.logo, "", category = on ?: "",
+            added = o.optLong("at"))
+        // If this TV's own last channel is newer, the card stays but comes second.
+        val second = (st.optJSONObject("mine")?.optLong("at") ?: 0L) > o.optLong("at")
+        return item to second
+    }
+
+    private fun withLiveCard(list: List<VodItem>): List<VodItem> {
+        val (card, second) = runCatching { liveCard() }.getOrNull() ?: return list
+        return if (second && list.isNotEmpty()) listOf(list[0], card) + list.drop(1) else listOf(card) + list
+    }
+
+    /** OK on the live card: the channel, full screen, on this TV. */
+    private fun watchLiveCard(item: VodItem) {
+        val key = item.key.removePrefix(LIVE_PREFIX)
+        trail("live card: watching")
+        openFullScreen(key, PlayContext.GROUP)
+    }
+
+    /** Menu on the live card: off Continue watching here and, through the account, on every TV. */
+    private fun removeLiveCard() {
+        val st = liveState()
+        st.remove("other"); st.remove("mine"); st.put("removedAt", System.currentTimeMillis())
+        store.saveLive(st, profile.id)
+        liveOther = null
+        vodVersion++
+        status = "Removed the live channel from Continue watching" + if (account.token != null) " on every TV." else "."
+    }
+
+    /** For tests: the live card's channel key and whether it comes second, or null. */
+    internal fun liveCardForTests(): Pair<String, Boolean>? = liveCard()?.let { (it.first.key.removePrefix(LIVE_PREFIX)) to it.second }
 
     /** For tests: Continue watching's titles, newest first. */
     internal fun continueKeysForTests() = continueKeys()
@@ -2917,6 +3034,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Menu on a poster in Continue watching: off the list here and, through the account, on every TV. */
     fun removeFromContinue(item: VodItem) {
+        if (item.kind == LIVE_KIND) { removeLiveCard(); return }
         val gone = resume.keys.filter { it == item.key || it.startsWith(item.key + ":") }.toSet()
         resume = resume - gone; store.saveResume(resume)
         // A series also stays off until something new happens to it (a new place, or a new episode found).
@@ -3062,8 +3180,24 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                         sigs[id] = e.key + "\u0001" + sig
                         if (items.optJSONObject(id)?.optString("s") != sig) put.put(org.json.JSONObject().put("item", id).put("blob", com.avidviewer.tv.data.History.lock(hk, e.v)).put("at", e.at))
                     }
+                    // 1.18.0: the profile's last live channel, one entry overwritten; Menu on the live card removes it everywhere.
+                    val ls = withContext(Dispatchers.IO) { store.loadLive(p.id) }
+                    val lid = com.avidviewer.tv.data.History.itemId(hk, LIVE_MATCH); seen.add(lid)
+                    val mine = ls.optJSONObject("mine"); val gone = ls.optLong("removedAt")
+                    if (mine != null && mine.optLong("at") > gone) {
+                        val v = org.json.JSONObject().put("t", "l").put("pl", mine.optString("pl")).put("ch", mine.optString("ch"))
+                            .put("name", mine.optString("name")).put("epg", mine.optString("epg")).put("until", mine.optLong("until"))
+                            .put("tv", accountTvName.ifBlank { "A TV" })
+                        val sig = "l" + mine.optLong("at") + ":" + mine.optLong("until")
+                        sigs[lid] = LIVE_PREFIX + "\u0001" + sig
+                        if (items.optJSONObject(lid)?.optString("s") != sig) put.put(org.json.JSONObject().put("item", lid).put("blob", com.avidviewer.tv.data.History.lock(hk, v)).put("at", mine.optLong("at")))
+                    } else if (gone > 0) {
+                        val sig = "x$gone"
+                        sigs[lid] = LIVE_PREFIX + "\u0001" + sig
+                        if (items.optJSONObject(lid)?.optString("s") != sig) put.put(org.json.JSONObject().put("item", lid).put("blob", org.json.JSONObject.NULL).put("at", gone))
+                    }
                     // Removed here (Continue watching › Menu): removed everywhere.
-                    items.keys().forEach { id -> val k = items.optJSONObject(id)?.optString("k").orEmpty(); if (id !in seen && k.isNotEmpty() && !k.startsWith("hide|") && k !in rm && k !in ws) put.put(org.json.JSONObject().put("item", id).put("blob", org.json.JSONObject.NULL).put("at", System.currentTimeMillis())) }
+                    items.keys().forEach { id -> val k = items.optJSONObject(id)?.optString("k").orEmpty(); if (id !in seen && k.isNotEmpty() && !k.startsWith("hide|") && !k.startsWith(LIVE_PREFIX) && k !in rm && k !in ws) put.put(org.json.JSONObject().put("item", id).put("blob", org.json.JSONObject.NULL).put("at", System.currentTimeMillis())) }
                 }
                 if (put.length() > 0) o.put("put", put)
                 sent[p.id] = sigs
@@ -3094,6 +3228,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             }
         }
         val onMain = ArrayList<() -> Unit>()
+        var liveChanged = false
         withContext(Dispatchers.IO) { for (i in 0 until res.profiles.length()) {
             val o = res.profiles.getJSONObject(i)
             val p = acc.firstOrNull { it.remoteId == o.optString("id") } ?: continue
@@ -3110,6 +3245,12 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 val got = o.optJSONArray("items") ?: org.json.JSONArray()
                 for (j in 0 until got.length()) {
                     val it = got.getJSONObject(j); val id = it.optString("item"); val at = it.optLong("at")
+                    if (it.isNull("blob") && items.optJSONObject(id)?.optString("k") == LIVE_PREFIX) {
+                        // The live card was removed on another TV (or on the website).
+                        val ls = store.loadLive(p.id)
+                        if ((ls.optJSONObject("other")?.optLong("at") ?: 0L) <= at) { ls.remove("other"); store.saveLive(ls, p.id); liveChanged = true }
+                        continue
+                    }
                     if (it.isNull("blob")) {
                         val k = items.optJSONObject(id)?.optString("k")
                         if (!k.isNullOrEmpty() && (inf[k]?.at ?: 0) <= at) { rm.remove(k); inf.remove(k); changed = true }
@@ -3117,6 +3258,15 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                         continue
                     }
                     val v = runCatching { com.avidviewer.tv.data.History.open(HK, it.optString("blob")) }.getOrNull() ?: continue
+                    if (v.optString("t") == "l") {
+                        // Another TV's live channel: kept for the live card (this TV's own comes back too: ignored).
+                        items.put(id, org.json.JSONObject().put("k", LIVE_PREFIX).put("s", "l" + at + ":" + v.optLong("until")))
+                        val ls = store.loadLive(p.id)
+                        if (v.optString("tv") != accountTvName && at > (ls.optJSONObject("other")?.optLong("at") ?: 0L) && at > ls.optLong("removedAt")) {
+                            ls.put("other", org.json.JSONObject(v.toString()).put("at", at)); store.saveLive(ls, p.id); liveChanged = true
+                        }
+                        continue
+                    }
                     val k = resolveEntry(v) ?: continue
                     if ((inf[k]?.at ?: 0) > at) continue // changed here since: this TV's is newer
                     val tvName = v.optString("tv").takeIf { n -> n.isNotBlank() && n != accountTvName }
@@ -3174,6 +3324,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             store.saveHistorySync(st, p.id)
         } }
         onMain.forEach { it() }
+        if (liveChanged) vodVersion++
         historyProblem = ""
     }
 
@@ -4460,7 +4611,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             "Recently added" -> titles(com.avidviewer.tv.data.Catalog.Query(g, vodPids(), newestFirst = true, limit = 200, grouped = true))
             "My List" -> prefs.myList.filter { if (kind == "series") it.kind == "series" else it.kind != "series" }
             "Continue watching" -> continueKeys().let { ks -> val at = ks.withIndex().associate { it.value to it.index }
-                catalog.byKeys(ks).filter { Catalog.group(it.kind) == g && !isVodHidden(it) }.sortedBy { at[it.key] ?: Int.MAX_VALUE } }
+                withLiveCard(catalog.byKeys(ks).filter { Catalog.group(it.kind) == g && !isVodHidden(it) }.sortedBy { at[it.key] ?: Int.MAX_VALUE }) }
             else -> vodPrefetched.remove(prefetchKey(kind, c)) ?: titles(com.avidviewer.tv.data.Catalog.Query(g, vodPids(), category = c, grouped = true))
         }
     }
@@ -4489,6 +4640,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     internal fun vodPrefetchedFor(kind: String, cat: String) = prefetchKey(kind, cat) in vodPrefetched
 
     fun openVodDetail(item: VodItem) {
+        if (item.kind == LIVE_KIND) { watchLiveCard(item); return }
         screen = if (item.kind == "series") Screen.SERIES else Screen.MOVIES
         if (navMode == NavMode.FULL || navMode == NavMode.GROUPS) navMode = NavMode.COLLAPSED
         vodDetail = item; vodInfo = null; detailEpisodes = null; detailSeason = null
