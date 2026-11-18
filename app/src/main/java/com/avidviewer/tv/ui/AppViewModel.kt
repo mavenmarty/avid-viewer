@@ -154,7 +154,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     init { C.source = { theme } }
     fun setTheme(id: String, p: Profile = profile) = profiles.get(p.id)?.let { updateProfile(it.copy(theme = id)) }
     /** Movies and Series layout for the profile: "grid", "featured" or "showcase". */
-    val vodLayout: String get() = profile.vodLayout
+    // Nov 18, 2026: Featured is retired; the Grid now carries the highlighted title's artwork. A profile set to
+    // Featured shows the Grid.
+    val vodLayout: String get() = profile.vodLayout.let { if (it == "featured") "grid" else it }
     fun setVodLayout(l: String) = updateProfile(profile.copy(vodLayout = l))
     /** The profile in use is a Kids profile: only its categories, no Settings, Discover or Sports. */
     val kidsMode: Boolean get() = profile.kids
@@ -4065,6 +4067,46 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     /** A guide source's id: the time plus a random part, so two added in the same millisecond never share one. */
     private fun newSourceId() = "src-" + System.currentTimeMillis().toString(36) + java.util.UUID.randomUUID().toString().take(4)
+
+    // ---------------- artwork and details from TMDB (Nov 18, 2026: the hero style) ----------------
+    /** ▶ from the Movies/Series categories: a poster takes the highlight (the Grid's details sit above the posters). */
+    var vodPosterFocus by mutableStateOf(0)
+
+    private val artStore by lazy { com.avidviewer.tv.data.ArtStore(app.filesDir) }
+    /** Looked-up artwork by [com.avidviewer.tv.data.ArtStore.key]; a key with a null value has no TMDB match. */
+    var art by mutableStateOf<Map<String, com.avidviewer.tv.data.Art?>>(emptyMap()); private set
+    private var artJob: Job? = null
+
+    /** The title's TMDB artwork and details, if looked up. */
+    fun artOf(v: VodItem): com.avidviewer.tv.data.Art? = art[artStore.key(v)] ?: artStore.get(artStore.key(v))?.second
+
+    /**
+     * Looks up a title on TMDB once (the highlighted poster, a title page). Needs the profile's TMDB key; never for a
+     * Kids profile, whose titles aren't sent anywhere. One lookup at a time: a newer title replaces a waiting one.
+     */
+    fun wantArt(v: VodItem) {
+        val k = artStore.key(v)
+        if (art.containsKey(k)) return
+        artStore.get(k)?.let { art = art + (k to it.second); return }
+        if (kidsMode) return
+        val key = tmdbKey(); if (key.isBlank()) return
+        artJob?.cancel()
+        artJob = viewModelScope.launch {
+            val found = withContext(Dispatchers.IO) {
+                runCatching {
+                    val name = if (v.year.isNotBlank() && !v.name.contains("(" + v.year + ")")) v.name + " (" + v.year + ")" else v.name
+                    com.avidviewer.tv.data.Tmdb.find(key, name, if (v.kind == "series") "tv" else "movie")
+                }
+            }
+            if (found.isFailure) return@launch // offline or refused: try again next time
+            val a = found.getOrNull()?.let { com.avidviewer.tv.data.Art.from(it) }
+            withContext(Dispatchers.IO) { artStore.put(k, a) }
+            art = art + (k to a)
+        }
+    }
+
+    /** Tests: puts artwork in place without TMDB. */
+    internal fun putArtForTests(v: VodItem, a: com.avidviewer.tv.data.Art?) { artStore.put(artStore.key(v), a); art = art + (artStore.key(v) to a) }
 
     // ---------------- app updates ----------------
     fun checkForUpdate(quiet: Boolean = false) {

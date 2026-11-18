@@ -23,6 +23,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -115,7 +117,10 @@ fun VodScreen(vm: AppViewModel, kind: String) {
                         .then(if (name == "All") Modifier.entryFocus(vm, if (kind == "series") Screen.SERIES else Screen.MOVIES) else Modifier)
                         .then(if (isMoving) Modifier.border(2.dp, C.AccentFocus, androidx.compose.foundation.shape.RoundedCornerShape(8.dp)) else Modifier)
                         .onPreviewKeyEvent { e ->
-                            if (!isMoving) false
+                            // ▶ goes to a poster (the details above the Grid's posters would otherwise catch it).
+                            if (!isMoving) {
+                                if (e.type == androidx.compose.ui.input.key.KeyEventType.KeyDown && e.key == androidx.compose.ui.input.key.Key.DirectionRight && vm.vodLayout == "grid" && items.isNotEmpty()) { vm.vodPosterFocus++; true } else false
+                            }
                             else reorderKeys(e, onMove = { vm.moveVodCatBy(kind, name, it) }, onTop = { vm.moveVodCatTo(kind, name, 0) },
                                 onBottom = { vm.moveVodCatTo(kind, name, Int.MAX_VALUE) }, onDone = { vm.vodMovingCat = null })
                         },
@@ -170,14 +175,17 @@ fun VodScreen(vm: AppViewModel, kind: String) {
         val shown = hero ?: items.firstOrNull()
         Box(Modifier.weight(1f).fillMaxHeight()) {
         if (layout == "showcase" && items.isNotEmpty()) VodHero(vm, shown, full = true, modifier = Modifier.fillMaxSize())
+        // Nov 18, 2026: the Grid carries the highlighted title's artwork, filling the screen behind the posters and
+        // fading into the page, with its name and details above them (Featured is retired).
+        if (layout == "grid" && items.isNotEmpty()) GridArt(vm, shown, Modifier.fillMaxSize())
         Column(Modifier.fillMaxSize().padding(start = 12.dp, end = 16.dp, top = 14.dp).onFocusChanged { if (it.hasFocus) vm.vodOnPoster = true }) {
+            if (layout == "grid" && items.isNotEmpty()) GridDetails(vm, shown, Modifier.fillMaxWidth().height(176.dp).padding(start = 8.dp, bottom = 6.dp))
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(bottom = 10.dp)) {
                 Label(if (vq.isNotBlank()) "Results for “$vq”  ·  ${items.size} titles" else "${vm.vodCatName(kind, current)}  ·  ${items.size} titles", size = 14.sp, color = if (layout == "showcase") Color.White.copy(alpha = 0.85f) else C.Soft, weight = FontWeight.Bold, modifier = Modifier.weight(1f))
-                listOf("grid" to "▦  Grid", "featured" to "▭  Featured", "showcase" to "▣  Showcase").forEach { (id, label) ->
+                listOf("grid" to "▦  Grid", "showcase" to "▣  Showcase").forEach { (id, label) ->
                     TvButton(label, selected = layout == id, modifier = Modifier.testTag("vod-layout-$id")) { if (layout != id) vm.setVodLayout(id) }
                 }
             }
-            if (layout == "featured" && items.isNotEmpty()) VodHero(vm, shown, full = false, modifier = Modifier.fillMaxWidth().height(190.dp).padding(bottom = 8.dp))
             if (items.isEmpty()) {
                 Label(
                     when (current) {
@@ -212,10 +220,21 @@ fun VodScreen(vm: AppViewModel, kind: String) {
                     if (vis.isEmpty() || idx < vis.first() || idx > vis.last()) gridState.scrollToItem(idx)
                     focusWhenReady(vm) { runCatching { backFr.requestFocus() }.isSuccess }
                 }
-                val cols = if (layout == "featured") 7 else 6
+                val cols = 7
+                // ▶ from the categories: the poster you were on if it's on screen, else the first one on screen.
+                val posterFr = remember(path) { FocusRequester() }
+                var posterIdx by remember(path) { mutableStateOf(-1) }
+                LaunchedEffect(vm.vodPosterFocus) {
+                    if (vm.vodPosterFocus == 0) return@LaunchedEffect
+                    val vis = gridState.layoutInfo.visibleItemsInfo.map { it.index }
+                    val was = vm.nav[path]?.let { findTitle(it.key, it.index) } ?: -1
+                    posterIdx = if (was >= 0 && was in vis) was else (vis.firstOrNull() ?: 0)
+                    focusWhenReady(vm) { runCatching { posterFr.requestFocus() }.isSuccess }
+                }
                 val posters: androidx.compose.foundation.lazy.grid.LazyGridScope.() -> Unit = {
                     itemsIndexed(items, key = { i, v -> "$i-${v.key}" }) { i, v ->
                         Poster(vm, v, Modifier.then(if (v.key == backKey) Modifier.focusRequester(backFr) else Modifier)
+                            .then(if (i == posterIdx) Modifier.focusRequester(posterFr) else Modifier)
                             // Left from the first column: the current category, not the one level with this poster.
                             .then(if ((layout == "showcase" && i == 0) || (layout != "showcase" && i % cols == 0)) Modifier.onPreviewKeyEvent { e ->
                                 if (e.type == androidx.compose.ui.input.key.KeyEventType.KeyDown && e.key == androidx.compose.ui.input.key.Key.DirectionLeft) { vm.vodCatFocus++; true } else false
@@ -248,7 +267,7 @@ fun VodScreen(vm: AppViewModel, kind: String) {
                     state = gridState,
                     columns = GridCells.Fixed(cols),
                     // Room round the edges for the highlighted poster, which grows a little.
-                    horizontalArrangement = Arrangement.spacedBy(if (layout == "featured") 14.dp else 16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(14.dp),
                     verticalArrangement = Arrangement.spacedBy(16.dp),
                     contentPadding = PaddingValues(start = 8.dp, end = 8.dp, top = 8.dp, bottom = 24.dp),
                     content = posters,
@@ -256,6 +275,51 @@ fun VodScreen(vm: AppViewModel, kind: String) {
             }
         }
         }
+    }
+}
+
+/**
+ * Grid: the highlighted title's artwork (TMDB's wide picture, else the provider's poster) fills the top right of the
+ * screen and fades into the page to the left and below, so the posters sit on it. Moving the highlight cross-fades
+ * to the next title's picture.
+ */
+@Composable
+private fun GridArt(vm: AppViewModel, v: VodItem?, modifier: Modifier) {
+    if (v == null) return
+    // Looked up once the highlight rests on a title (holding a direction key doesn't send a lookup per poster).
+    LaunchedEffect(v.key) { kotlinx.coroutines.delay(350); vm.wantArt(v) }
+    val img = vm.artOf(v)?.backdrop ?: v.logo
+    androidx.compose.animation.Crossfade(targetState = img, animationSpec = androidx.compose.animation.core.tween(300), modifier = modifier, label = "grid-art") { url ->
+        Box(Modifier.fillMaxSize()) {
+            if (url != null) Box(Modifier.align(Alignment.TopEnd).fillMaxWidth(0.74f).fillMaxHeight(0.68f)) {
+                TvImage(model = url, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize().testTag("grid-art"))
+                Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(0f to C.Bg, 0.32f to C.Bg.copy(alpha = 0.62f), 0.7f to C.Bg.copy(alpha = 0.12f), 1f to Color.Transparent)))
+                Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0f to Color.Transparent, 0.4f to C.Bg.copy(alpha = 0.25f), 0.75f to C.Bg.copy(alpha = 0.85f), 1f to C.Bg)))
+            }
+        }
+    }
+}
+
+/** Grid: the highlighted title's name and details, above the posters. A fixed height, so the grid never moves. */
+@Composable
+private fun GridDetails(vm: AppViewModel, v: VodItem?, modifier: Modifier) {
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        if (v == null) return@Column
+        val a = vm.artOf(v)
+        val genre = a?.genres?.firstNotNullOfOrNull { com.avidviewer.tv.data.Art.genreName(it) }
+        val meta = listOfNotNull(v.year.ifBlank { null }, if (v.kind == "series") "Series" else "Movie", genre).joinToString("  ·  ")
+        Text(v.name, color = C.Text, fontSize = 30.sp, fontWeight = FontWeight.Bold, maxLines = 1,
+            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, modifier = Modifier.testTag("vod-hero-title"))
+        Row(horizontalArrangement = Arrangement.spacedBy(18.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(meta, color = C.Text.copy(alpha = 0.85f), fontSize = 14.sp, maxLines = 1)
+            a?.ratingText?.let { r ->
+                Text("★ $r TMDB  ·  ${a.votesText}", color = C.Accent, fontSize = 14.sp, fontWeight = FontWeight.Bold, maxLines = 1, modifier = Modifier.testTag("grid-rating"))
+            }
+        }
+        a?.overview?.takeIf { it.isNotBlank() }?.let {
+            Text(it, color = C.Soft, fontSize = 14.sp, maxLines = 2, lineHeight = 19.sp, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, modifier = Modifier.fillMaxWidth(0.62f))
+        }
+        Text("OK  Open" + if (vm.inMyList(v.key)) "   ·   ✓ In My List" else "   ·   Menu  ＋ My List", color = C.Muted, fontSize = 12.sp, maxLines = 1)
     }
 }
 
@@ -395,11 +459,17 @@ private fun VodDetail(vm: AppViewModel, v: VodItem) {
             if (frame % 20 == 0) vm.trail("vod f$frame ep=$wantEpisode in=$inside onEp=$onEpisode")
         }
     }
-    Row(Modifier.fillMaxSize().padding(24.dp).onFocusChanged { inside = it.hasFocus }, horizontalArrangement = Arrangement.spacedBy(24.dp)) {
-        Box(Modifier.width(200.dp).aspectRatio(2f / 3f).clip(RoundedCornerShape(10.dp)).background(badgeColor(v.name))) {
-            Text(v.name, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold, modifier = Modifier.align(Alignment.BottomStart).padding(10.dp))
-            val img = v.logo ?: info?.image
-            if (img != null) TvImage(model = img, contentDescription = v.name, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+    // Nov 18, 2026 (hero style, design boards 32–34): the title's artwork fills the screen and fades into the page
+    // to the left and below; the name, facts, buttons and ratings sit on it, then the seasons and episodes.
+    LaunchedEffect(v.key) { vm.wantArt(v) }
+    val art = vm.artOf(v)
+    Box(Modifier.fillMaxSize().onFocusChanged { inside = it.hasFocus }) {
+        val img = art?.backdrop ?: info?.image ?: v.logo
+        Box(Modifier.fillMaxSize().background(C.Bg))
+        if (img != null) Box(Modifier.align(Alignment.TopEnd).fillMaxWidth(0.8f).fillMaxHeight(0.86f)) {
+            TvImage(model = img, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize().testTag("detail-art"))
+            Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(0f to C.Bg, 0.3f to C.Bg.copy(alpha = 0.78f), 0.62f to C.Bg.copy(alpha = 0.2f), 1f to Color.Transparent)))
+            Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0f to Color.Transparent, 0.45f to C.Bg.copy(alpha = 0.3f), 0.8f to C.Bg.copy(alpha = 0.9f), 1f to C.Bg)))
         }
         // One scrolling list: the details, then the seasons and every episode, so Down always reaches
         // them. (Given only the height left under the text, the episodes could get none: a long
@@ -407,18 +477,23 @@ private fun VodDetail(vm: AppViewModel, v: VodItem) {
         val seasonFr = remember { FocusRequester() }
         /** #22: whether the selected season's button is on screen (▲ from the first episode only aims at it then). */
         val seasonOn = remember { mutableStateOf(false) }
-        LazyColumn(Modifier.weight(1f).fillMaxHeight().testTag("vod-detail"), verticalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(bottom = 20.dp)) {
-          item(key = "head") { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(v.name, color = C.Text, fontSize = 26.sp, fontWeight = FontWeight.Bold, maxLines = 2)
-            val meta = listOf(
-                (info?.year?.ifBlank { null } ?: v.year),
-                info?.duration ?: "",
-                (info?.rating?.ifBlank { null } ?: v.rating).takeIf { it.isNotBlank() && it != "0" }?.let { "★ $it" } ?: "",
-                info?.genre ?: "",
-                v.category,
-                vm.playlists.firstOrNull { it.id == v.playlistId }?.name.orEmpty(),
-            ).filter { it.isNotBlank() }.joinToString("  ·  ")
-            if (meta.isNotBlank()) Label(meta, size = 14.sp, color = C.Soft, lines = 1)
+        LazyColumn(Modifier.fillMaxSize().testTag("vod-detail"), verticalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(start = 48.dp, end = 48.dp, top = 56.dp, bottom = 20.dp)) {
+          item(key = "head") { Column(Modifier.fillMaxWidth(0.62f), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text(v.name, color = C.Text, fontSize = 44.sp, fontWeight = FontWeight.Bold, maxLines = 2, lineHeight = 48.sp,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, modifier = Modifier.testTag("detail-title"))
+            val meta = listOf((info?.year?.ifBlank { null } ?: v.year), info?.duration ?: "", if (isSeries) "Series" else "Movie")
+                .filter { it.isNotBlank() }.joinToString("  ·  ")
+            if (meta.isNotBlank()) Label(meta, size = 15.sp, color = C.Text, lines = 1)
+            // Three facts, as on the design: the genre, where it's on, and its rating from the provider.
+            val genre = info?.genre?.split(',', '/')?.firstOrNull()?.trim()?.ifBlank { null }
+                ?: art?.genres?.firstNotNullOfOrNull { com.avidviewer.tv.data.Art.genreName(it) } ?: v.category.ifBlank { null }
+            val on = vm.playlists.firstOrNull { it.id == v.playlistId }?.name
+            val stars = (info?.rating?.ifBlank { null } ?: v.rating).takeIf { it.isNotBlank() && it != "0" }
+            Row(horizontalArrangement = Arrangement.spacedBy(32.dp), modifier = Modifier.padding(vertical = 4.dp)) {
+                genre?.let { DetailFact("Genre", it, v.category.takeIf { c -> c.isNotBlank() && !c.equals(it, true) }) }
+                on?.let { DetailFact("On", it, if (versions.size > 1) "and ${versions.size - 1} more copies" else null) }
+                stars?.let { DetailFact("Rating", "★ $it", "provider") }
+            }
             // 1.17.0: where this profile stopped on another TV.
             (if (isSeries) vm.seriesPlaceLine(v) else vm.placeLine(v.key))?.let { Label(it, size = 15.sp, color = C.Accent, lines = 2, modifier = Modifier.testTag("place-line")) }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -439,12 +514,34 @@ private fun VodDetail(vm: AppViewModel, v: VodItem) {
             // Movies and Series list each title once; this says which copy the page is on.
             if (versions.size > 1) Label("This version: " + versionLabel(vm, v), size = 13.sp, color = C.Accent, lines = 1)
             if (info == null) Label("Loading details…", size = 13.sp)
-            info?.plot?.takeIf { it.isNotBlank() }?.let { Label(it, size = 14.sp, color = C.Text, lines = if (isSeries) 3 else 7) }
-            info?.cast?.takeIf { it.isNotBlank() }?.let { Label("Cast: $it", size = 13.sp, lines = if (isSeries) 1 else 2) }
+            (info?.plot?.takeIf { it.isNotBlank() } ?: art?.overview?.takeIf { it.isNotBlank() })?.let { Label(it, size = 16.sp, color = C.Text, lines = if (isSeries) 3 else 5) }
+            info?.cast?.takeIf { it.isNotBlank() }?.let { Label("Cast: $it", size = 13.sp, lines = 1) }
             info?.director?.takeIf { it.isNotBlank() }?.let { Label("Director: $it", size = 13.sp, lines = 1) }
+            // Ratings (TMDB only, decided Nov 18): the score and how many people rated it.
+            art?.ratingText?.let { r ->
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.padding(top = 6.dp)) {
+                    Label("Ratings", size = 13.sp, color = C.Muted, weight = FontWeight.Bold)
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.testTag("detail-rating")) {
+                        Box(Modifier.size(40.dp).clip(RoundedCornerShape(8.dp)).background(C.Surface2), contentAlignment = Alignment.Center) {
+                            Text("TMDB", color = C.Accent, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                        }
+                        Column { Text(r, color = C.Text, fontSize = 20.sp, fontWeight = FontWeight.Bold); Text(art.votesText, color = C.Muted, fontSize = 12.sp) }
+                    }
+                }
+            }
           } }
           if (isSeries) seasonsAndEpisodes(vm, v, seasonFr, seasonOn, episodeFocus) { onEpisode = it }
         }
+    }
+}
+
+/** One of the title page's facts: a small label, the value, and a line under it. */
+@Composable
+private fun DetailFact(label: String, value: String, sub: String?) {
+    Column(horizontalAlignment = Alignment.Start, verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Text(label, color = C.Muted, fontSize = 12.sp)
+        Text(value, color = C.Text, fontSize = 19.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 260.dp))
+        if (sub != null) Text(sub, color = C.Soft, fontSize = 12.sp, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 260.dp))
     }
 }
 
