@@ -397,6 +397,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     var status by mutableStateOf<String?>(null)
     var busy by mutableStateOf(false); private set
     var playerError by mutableStateOf<String?>(null); private set
+    /** Screenshots for the user guide: the stand-in stream never plays, so its error would cover the picture. */
+    internal fun clearPlayerErrorForTests() { playerError = null }
     var now by mutableLongStateOf(System.currentTimeMillis()); private set
     var weather by mutableStateOf<Weather?>(null); private set
     var vod by mutableStateOf<List<VodItem>>(emptyList()); private set
@@ -511,9 +513,6 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         if (linkReminder) { linkReminder = false; status = "This device is linked to ${l.email}. Manage its playlists at avidviewer.app." }
         trail("account linked")
         syncAccountPlaylists()
-        if (welcomeAccountOpen) loadCloudBackups()
-        // Linked from the welcome screen's code: offer the account's backups straight away.
-        else if (showWelcome) { welcomeAccountOpen = true; backupStatus = null; loadCloudBackups() }
     }
 
     /** Settings › Account › Link this TV: shows a code + QR code and waits (polling) for approval on the phone. */
@@ -668,21 +667,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * The welcome screen (1.6.0): shown at start while the app has no playlists. It has the user guide's QR code,
-     * Add a playlist (Settings › Playlists, on the add form) and Restore a backup (Settings › Updates & about).
+     * The welcome screen: shown at start while the app has no playlists. It links the device to an account; playlists
+     * are then added at avidviewer.app. Restoring a backup is in Settings › Updates & about, not here.
      */
     var showWelcome by mutableStateOf(false)
-
-    /** Welcome screen › Sign in to your account: link this TV, then offer the account's backups (1.12.0). */
-    var welcomeAccountOpen by mutableStateOf(false); private set
-    fun welcomeSignIn() {
-        backupStatus = null; cloudBackups = null; welcomeAccountOpen = true
-        if (account.linked) loadCloudBackups() else startLinking()
-    }
-    fun closeWelcomeAccount() {
-        if (linkCode != null) cancelLinking()
-        welcomeAccountOpen = false; cloudBackups = null; pendingRestore = null
-    }
 
     private var osdJob: Job? = null
     private var watchStart = 0L
@@ -845,7 +833,6 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             if (account.linked && account.backupPin == null) { account.backupPin = pin; backupPinSet = true }
             backupBusy = false
             backupStatus = "Restored ${c.playlists.size} playlist(s) and your settings. Channels and guides are downloading again now."
-            if (welcomeAccountOpen) { welcomeAccountOpen = false; showWelcome = false }
             done(true)
             reloadAfterActiveChange()
             if (prefs.postalCode.isNotBlank()) refreshWeather()
@@ -3858,7 +3845,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         val key = currentKey ?: return
         if (player.mediaItemCount == 0 || !player.playWhenReady || playerError != null) return
         if (player.playbackState == Player.STATE_IDLE || player.playbackState == Player.STATE_ENDED) return
-        if (welcomeAccountOpen || pendingRestore != null) return
+        if (pendingRestore != null) return
         if (nowUptime - maxOf(lastKeyAt, idleFrom) < idleFullScreenMs) return
         trail("menus idle: full screen")
         openFullScreen(key, if (screen == Screen.SPORTS) PlayContext.SPORTS else PlayContext.GROUP)

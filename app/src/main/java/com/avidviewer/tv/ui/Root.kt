@@ -95,7 +95,6 @@ fun AppRoot(vm: AppViewModel) {
             KidsSplash(vm)
         } else if (vm.showWelcome) {
             WelcomeScreen(vm)
-            if (vm.welcomeAccountOpen) WelcomeAccountDialog(vm)
         } else if (vm.screen == Screen.PLAYER) {
             PlayerScreen(vm)
         } else {

@@ -217,7 +217,9 @@ class ScreenshotTest {
             settle(400)
             shot("g-channel-options")
             rule.runOnIdle { vm.channelMenu = null; vm.navSelect(Screen.SEARCH); vm.searchQuery = "news"; vm.search("news") }
-            settle(1500)
+            // The results, not "Searching…".
+            waitFor { !vm.searching && !vm.searchResults.isNullOrEmpty() }
+            settle(800)
             shot("g-search")
             rule.runOnIdle { vm.navSelect(Screen.DISCOVER) }
             settle(400)
@@ -239,6 +241,9 @@ class ScreenshotTest {
             settle(400)
             rule.runOnIdle { vm.navSelect(Screen.PLAYER); vm.avPanel = true }
             settle(800)
+            // The stand-in stream can't play: leave its error off the picture.
+            rule.runOnIdle { vm.clearPlayerErrorForTests() }
+            settle(300)
             shot("g-picture-sound")
             rule.runOnIdle { vm.avPanel = false }
             // The crash message (Troubleshooting).
