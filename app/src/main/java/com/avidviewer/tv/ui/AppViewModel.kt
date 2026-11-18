@@ -93,6 +93,8 @@ const val LIVE_KIND = "live"
 const val SORT_PROVIDER = "provider"
 /** How long after start Sports' schedules and channels are loaded in the background. */
 const val SPORTS_PRELOAD_AFTER = 120_000L
+/** After hiding or showing channels, how long to wait for more changes before the guide is downloaded again. */
+const val GUIDE_WANTED_SETTLE = 20_000L
 const val SORT_AZ = "az"
 const val SORT_MANUAL = "manual"
 const val LIVE_PREFIX = "live|"
@@ -1501,7 +1503,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     private suspend fun refreshGuide(p: Playlist) {
         status = "Loading TV guide…"
         try {
-            val n = downloadGuide(p, channels.mapNotNull { epgIdOf(it) }.toHashSet()) ?: return
+            val n = downloadGuide(p, guideIdsFor(p)) ?: return
             guide = withContext(Dispatchers.IO) { guideWindow(p.id, null) }
             refreshGuideEnd()
             rematchSports()
@@ -1803,6 +1805,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         if (!done.committed) throw java.io.IOException("no guide source could be downloaded")
         // Remember what each source said, for asking "changed?" next time (only when every source was read).
         sources.forEach { src -> saveGuideValidators(p.id, src.url, got[src.url]?.takeIf { got.size == sources.size }, wantedSig, covered.size) }
+        validatorPrefs.edit().putString("kept|${p.id}", wantedSig).apply()
         withContext(Dispatchers.IO) { store.saveGuideChannels(p.id, directory.distinctBy { it.id }) }
         guideChannelCache.remove(p.id)
         return covered.size
@@ -1821,12 +1824,53 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** The guide ids a playlist needs: its channels' own, plus any matched by hand. */
-    private suspend fun guideIdsFor(p: Playlist): Set<String> {
-        if (p.id == activePlaylist()?.id) return channels.mapNotNull { epgIdOf(it) }.toHashSet()
-        val ids = withContext(Dispatchers.IO) { liveReady(); live.epgIds(p.id) }.toHashSet()
-        prefs.epgMap.forEach { (k, v) -> if (k.startsWith(p.id + ":") && v.isNotBlank()) ids.add(v) }
-        return ids
+    /**
+     * The guide ids whose programmes [p]'s guide keeps (Nov 18): the channels some profile on this TV can see, plus
+     * any channel in a profile's favorites or lists or its last channel. Channels hidden on every profile (or in a
+     * category hidden on every profile) aren't kept, so the guide is smaller and searching it and Sports are quicker.
+     * Showing them again downloads the guide again ([guideWantedChanged]).
+     */
+    private suspend fun guideIdsFor(p: Playlist): Set<String> = withContext(Dispatchers.IO) {
+        liveReady()
+        val pid = p.id
+        val views = profiles.list.map { prof -> prof to (if (prof.id == profile.id) prefs else runCatching { store.loadPrefs(prof.id) }.getOrDefault(prefs)) }
+        val kept = HashSet<String>()
+        views.forEach { (_, pr) -> (pr.favorites + pr.lists.flatMap { it.keys } + listOfNotNull(pr.lastChannel)).forEach { if (it.startsWith("$pid:")) kept.add(it) } }
+        fun seen(key: String, raw: String) = views.any { (prof, pr) ->
+            key !in pr.hiddenChannels && raw !in pr.hiddenGroups && hiddenId(pid, raw) !in pr.hiddenGroups &&
+                (!prof.kids || (hiddenId(pid, raw) in prof.allowedGroups && !com.avidviewer.tv.data.Kids.isAdult(raw)))
+        }
+        val ids = HashSet<String>()
+        live.forEachChannel(pid) { key, _, raw, epg ->
+            if (key in kept || seen(key, raw)) {
+                val e = prefs.epgMap[key]?.let { m -> m.ifBlank { null } } ?: epg
+                if (!e.isNullOrBlank()) ids.add(e)
+            }
+        }
+        ids
     }
+
+    /**
+     * Hidden channels or categories, favorites or lists changed (here or from the account): once things settle, each
+     * playlist whose kept guide ids changed downloads its guide again (a different set never counts as "unchanged").
+     */
+    fun guideWantedChanged() {
+        guideWantedJob?.cancel()
+        guideWantedJob = viewModelScope.launch {
+            delay(GUIDE_WANTED_SETTLE)
+            for (p in livePlaylists.filter { it.enabled && it.liveOn }) {
+                val ids = guideIdsFor(p)
+                val sig = ids.sorted().hashCode().toString()
+                // What the saved guide was downloaded for (none yet: a download now uses the new set anyway).
+                if (validatorPrefs.getString("kept|${p.id}", null) == sig) continue
+                trail("guide: the channels kept changed, downloading again")
+                if (p.id == activePlaylist()?.id) refreshGuide(p) else runCatching { downloadGuide(p, ids) }
+            }
+        }
+    }
+    private var guideWantedJob: Job? = null
+    internal suspend fun guideIdsForTests(pid: String): Set<String> = guideIdsFor(playlists.first { it.id == pid })
+    internal fun guideKeptSigForTests(pid: String): String? = validatorPrefs.getString("kept|$pid", null)
 
     fun setGuideRefreshHours(h: Int) {
         if (h !in listOf(4, 8, 12, 24)) return
@@ -2149,6 +2193,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         val before = prefs
         prefs = f(prefs)
         store.savePrefs(prefs)
+        if (before.hiddenGroups != prefs.hiddenGroups || before.hiddenChannels != prefs.hiddenChannels ||
+            before.favorites != prefs.favorites || before.lists != prefs.lists) guideWantedChanged()
         if (before.vodHiddenCats !== prefs.vodHiddenCats || before.vodHiddenTitles !== prefs.vodHiddenTitles) {
             // Right away, so the lists on screen (and the next one read) are already correct.
             runCatching { catalog.applyHiddenChange(before.vodHiddenCats, prefs.vodHiddenCats, before.vodHiddenTitles, prefs.vodHiddenTitles) }
@@ -2813,6 +2859,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         val set = profiles.copy(list = out, active = active ?: out.first().id, managed = true)
         saveProfiles(set)
         if (repair) { account.hidesRepaired = true; trail("hidden items matched to the account") }
+        // Another profile's hidden items (or a Kids profile's categories) may have changed what the guide keeps.
+        guideWantedChanged()
         val now = profile
         when {
             active == null -> { splashProfile = null; val l = set.launch(); openProfile(l.id); if (l.choose) askWhoIsWatching() }
