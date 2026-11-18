@@ -521,6 +521,7 @@ Everything here stays on the device; nothing is uploaded or backed up to the clo
   - The **Update available** dialog (**Update now** / **Later**) opens by itself only once the newest version has been out for **24 hours** and isn't installed yet. If an even newer version comes out in the meantime, the 24 hours start again. **Later** waits another 24 hours. It never opens over full-screen video. A TV left running checks for new versions every 6 hours (when **Check for updates automatically** is on).
   - The download shows its progress. If the connection stalls, the app waits 15 seconds and continues from where it stopped (up to 8 tries). The finished file is checked before installing, and a damaged download is refused.
   - If Android's installer doesn't appear within about 25 seconds, an **Open installer** button opens Android's own install screen for the same file.
+- **Beta versions (1.20.0):** to try new versions before everyone else, turn on **Offer this device beta builds** for the device at **avidviewer.app/devices**. Its status says **Offered · waiting to be chosen** until it's chosen for the beta (you get an email), then **In the beta**. A device in the beta is offered beta versions here and in the main menu, named like **1.20.0 beta 2**, and this section shows a **Beta** block. Beta versions can have rough edges; their crash reports and playback logs say beta. To leave, turn the switch off: the device keeps its beta version until a public version is newer, then updates as usual.
 - **Last crash**: if the app closed unexpectedly, the details are kept here on the device, with **Report issue** and **Clear crash report** (asks first). **Report issue** sends them to **bugs@avidviewer.app** and then clears them (see *If the app closes unexpectedly* below).
 - **Playback log**: a summary ("Playback log: 3 freezes (longest 12 s), 1 error today") and the latest problems, each with its likely cause. Channels and titles appear as short codes ("Live channel 4F2A", "Title 9C01"), never by name. **Send playback log** sends it to bugs@avidviewer.app; **Clear log** asks first. **Send it automatically** (on by default) sends it at most once a day, and only when there were freezes or errors since the last send.
 - **Report a bug**: email **bugs@avidviewer.app** with what happened and the steps that lead to it. The section lists the details to include, read from the TV (app version, device model, Android and Fire OS versions, and the last crash's error). Scan the **QR code** with a phone camera to start that email with the details filled in; **Open email app** appears only on TVs that have one. No playlists, logins or provider addresses are included.
@@ -770,9 +771,10 @@ Every public release since 1.0.35, newest first. From 1.1.0, versions are number
 
 ### 1.20.0 — November 18, 2026, 11:47 AM CT (current)
 
-**Change log**
+**Release notes**
 
-- Beta channel: chosen devices get beta builds (GitHub pre-releases) early
+- **Beta versions for chosen devices:** turn on **Offer this device beta builds** at avidviewer.app/devices. Devices chosen for the beta (their owner gets an email) are offered new versions first, named like **1.20.0 beta 2**, with a **Beta** block in Settings › Updates & about. Leaving keeps the beta version until a public version is newer.
+- **Fix:** two guide sources added at the same moment no longer clash.
 
 ### 1.19.0 — November 18, 2026, 10:16 AM CT
 
