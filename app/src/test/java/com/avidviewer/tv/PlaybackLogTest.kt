@@ -141,7 +141,7 @@ class PlaybackLogTest {
     @Test
     fun aTrickleAndStutteringAreReasonsToReconnect() {
         fun r(now: Long, stalling: Long = 0, grew: Long = now, stops: Int = 0) =
-            com.avidviewer.tv.ui.PlaybackMonitor.reconnectReason(now, 0, 0, 0, now, 20_000, true, stalling, grew, stops)
+            com.avidviewer.tv.ui.PlaybackMonitor.reconnectReason(now, 0, 0, 0, now, 5_000, true, stalling, grew, stops)
         // #23: waiting 6 s while a few bytes arrive (so "no data" never fires) but the buffer doesn't grow.
         assertTrue(r(60_000, stalling = 54_000, grew = 50_000)!!.startsWith("waiting 6 s with the buffer not growing"))
         assertEquals("still growing: not yet", null, r(60_000, stalling = 54_000, grew = 59_000))

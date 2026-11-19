@@ -2,7 +2,7 @@
 
 <!-- The version below and the Release notes section are updated automatically after each published build
      (.github/workflows/user-guide.yml). Feature descriptions are written by hand. -->
-This guide covers **Avid Viewer 1.20.1**, the current public release. Avid Viewer is an IPTV player for Android TV and Fire TV. You bring your own provider (an Xtream Codes login or an M3U link); the app doesn't include any channels.
+This guide covers **Avid Viewer 1.21.0**, the current public release. Avid Viewer is an IPTV player for Android TV and Fire TV. You bring your own provider (an Xtream Codes login or an M3U link); the app doesn't include any channels.
 
 **Contents:** [Getting started](#1-getting-started) · [Main menu](#2-main-menu) · [TV Guide](#3-tv-guide) · [Full-screen playback](#4-full-screen-playback) · [Search](#5-search) · [Discover](#6-discover) · [Sports](#7-sports) · [Movies and Series](#8-movies-and-series) · [Settings](#9-settings) ([Profiles](#profiles)) · [Privacy](#10-privacy) · [Troubleshooting](#11-troubleshooting) · [Control4](#12-control4) · [Supplemental services](#13-supplemental-services) · [Cable & satellite](#14-using-your-cable-or-satellite-subscription) · [Release notes](#release-notes)
 
@@ -290,6 +290,7 @@ Discover shows what's new and popular, and where to watch it, using TMDB and Jus
 - Titles your provider carries are tagged **▶ ON YOUR PROVIDER** (with a large catalog, the tag may appear a moment after the posters). Open one to play it (**▶ Play**, or **▶ Episodes** for a series), add it to **My List**, or **Search my playlists**.
 - **Every version on your provider:** when your playlists have the title more than once (other languages, qualities or playlists), its page lists **N versions on your provider**, English first, each with its language, category and playlist. The page scrolls as one: **Down** from the buttons moves through the versions and then **Where to watch**. **OK** on a version plays that movie or opens that series. The main button plays the first and says which ("Plays: English · EN | Drama · My provider").
 - **Where to watch** lists Stream, Free, Rent and Buy options for your region.
+- **A title's page:** its artwork fills the screen, with the name in large type, the year, and **Genre**, **On** (your provider, or not on it) and its TMDB rating with how many people rated it.
 
 Discover needs a free **TMDB API key**. Enter it in **Settings › Discover**; it's stored encrypted on the device. How to get one: [TMDB](#tmdb-discover) in Supplemental services.
 
@@ -325,14 +326,10 @@ Sports lists real games from **ESPN's schedules** for today and the next 2 days,
 - **Left side**: Playlists, then categories: **All**, **Recently added**, **Continue watching** (movies part-way, and series until their latest episode is watched), **My List**, and your provider's categories.
 - **Right side**: posters for the chosen category. A category you pause on is read ahead, so OK shows it at once.
 - **Posters fill their tiles.** The title and year appear on a dark fade only on the highlighted poster, and on titles that have no artwork (most posters already show their title). The highlighted poster grows a little and gets a ring. **✓** in a corner means the title is in My List.
-- **Layouts**: the buttons above the posters switch between three ways of browsing. Each profile remembers its choice; **Up** from the top row of posters reaches them.
-  - **▦ Grid**: rows of posters.
+- **Layouts**: the buttons above the posters switch between two ways of browsing. Each profile remembers its choice; **Up** from the top row of posters reaches them.
+  - **▦ Grid**: rows of posters, with the highlighted title's artwork filling the screen behind them and fading into the page. Above the posters: its name, year, genre, TMDB rating (with how many people rated it) and a short description. Moving the highlight fades to the next title's picture. **Right** from the categories goes to the poster you were on.
 
-    ![Movies in the Grid layout](images/movies-grid.jpg)
-
-  - **▭ Featured**: the highlighted title's artwork, name, year and rating above the posters.
-
-    ![Movies in the Featured layout](images/movies-featured.jpg)
+    ![Movies in the Grid layout: the highlighted title's artwork and details above the posters](images/movies-grid.jpg)
 
   - **▣ Showcase**: the highlighted title's artwork fills the screen, with one row of posters along the bottom (**Left/Right** to move along it).
 
@@ -340,7 +337,11 @@ Sports lists real games from **ESPN's schedules** for today and the next 2 days,
 
 - **Each title is listed once.** When your playlists have the same title several times (other languages, qualities such as 4K or HD, provider tags such as "NF -" in front of the name, or other playlists), it appears once, shown by its English copy (else one with no language marked). This applies to All, Recently added, every category and the search.
 - **🔍 Search movies / 🔍 Search series** is in the category list, below My List. Results replace the poster grid; **✕ Clear search** ends the search. When fewer than 30 titles hold every word you typed, near matches (a small typo, or a word left out) are added after them.
-- **OK on a poster** opens its page: plot, cast, director, **▶ Play**, or **▶ Resume from [time]** and **Start over**, plus **+ My List**.
+- **OK on a poster** opens its page. The title's artwork fills the screen; on it are the name in large type, the year and length, three facts (**Genre**, **On**: the playlist, and **Rating**: your provider's), **▶ Play**, or **▶ Resume from [time]** and **Start over**, plus **+ My List**, the plot, cast and director, and **Ratings** (the TMDB score and how many people rated it).
+
+  ![A movie's page](images/movie-page.jpg)
+
+- **Artwork, descriptions and TMDB ratings** come from TMDB, using the TMDB key (see [TMDB](#tmdb-discover)). Each title is looked up once, when you highlight or open it, and remembered on the TV. Without a key, the provider's own pictures and details are used. Kids profiles never look titles up.
 - **⇄ N versions** (on a title with several copies) lists each copy with its language, name, category and playlist; ✓ marks the one shown, and the line **This version: …** under the buttons says which one you're on. **OK** on another copy shows that one, with its own episodes, resume point and My List button. The language comes from codes on the name or category ("EN |", "FR -", "VF", "MULTI"…); copies without one show "Language not marked". Series pages list episodes by **Season**, with resume points; episodes you've played to the end say **✓ Watched**. **A series page opens on the next episode to watch**, with its season chosen: Season 1, Episode 1 for a series you haven't started, otherwise the episode after the last one you finished (or the one you stopped part-way through). The page scrolls as one: **Up** from the episode goes to the season buttons, then the title's buttons; from the buttons, **Down** goes to the season buttons, then through every episode, however long the description. After you watch an episode and press **Back**, that episode is highlighted.
 - **Each category (and each search) keeps its own place.**
 - **Back** goes one step at a time: from a title's page to its poster, from a poster to the category you're in (highlighted), then to the main menu, on **Movies** or **Series**.
@@ -763,7 +764,16 @@ Every public release since 1.0.35, newest first. From 1.1.0, versions are number
 
 <!-- new-releases: entries for new builds are added automatically below this line -->
 
-### 1.20.1 — November 18, 2026, 1:05 PM CT (current)
+### 1.21.0 — November 18, 2026, 5:35 PM CT (current)
+
+**Release notes**
+
+- **Grid with artwork:** the highlighted title's picture fills the screen behind the posters and fades into the page, with its name, year, genre, TMDB rating and a short description above them. Featured is gone (a profile set to it gets the Grid); Showcase stays.
+- **Movie and series pages:** the artwork fills the screen, with the name in large type, **Genre · On · Rating**, the buttons, the plot and **Ratings** from TMDB.
+- **Discover's title pages** in the same style.
+- Artwork and details come from TMDB with your TMDB key, once per title; without a key the provider's pictures are used. Kids profiles never look titles up.
+
+### 1.20.1 — November 18, 2026, 1:05 PM CT
 
 **Release notes**
 

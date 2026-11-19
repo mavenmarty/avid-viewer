@@ -128,12 +128,14 @@ class Store(private val context: Context) {
     private fun personalFile(name: String, id: String = profileId) = if (id == Profile.OWNER) File(dir, name) else File(profileDir(id), name)
 
     /** A profile's personal prefs (favorites, lists, hidden items…), or null if it has none yet. */
-    fun loadPersonal(id: String): JSONObject? = runCatching {
-        if (id == Profile.OWNER) personalOf(loadPrefsFile())
-        else File(profileDir(id), "personal.json").takeIf { it.exists() }?.let { JSONObject(it.readText()) }
-    }.getOrNull()
+    fun loadPersonal(id: String): JSONObject? = onPrefsThread {
+        runCatching {
+            if (id == Profile.OWNER) personalOf(loadPrefsFile())
+            else File(profileDir(id), "personal.json").takeIf { it.exists() }?.let { JSONObject(it.readText()) }
+        }.getOrNull()
+    }
 
-    fun savePersonal(id: String, personal: JSONObject) {
+    fun savePersonal(id: String, personal: JSONObject) = onPrefsThread {
         if (id == Profile.OWNER) savePrefsFile(loadPrefsFile().withPersonal(personal))
         else writeAtomic(File(profileDir(id), "personal.json"), personal.toString())
     }
@@ -144,10 +146,24 @@ class Store(private val context: Context) {
         set(v) { runCatching { File(dir, "catalog_profile.txt").writeText(v) } }
 
     /** Removes a profile's own files (not the owner's). */
-    fun deleteProfileData(id: String) { if (id != Profile.OWNER) File(dir, "profiles/$id").deleteRecursively() }
+    fun deleteProfileData(id: String) { if (id != Profile.OWNER) onPrefsThread { File(dir, "profiles/$id").deleteRecursively() } }
 
     // ---- prefs ----
-    private fun loadPrefsFile(): Prefs {
+    /**
+     * #20: settings were encoded and written to flash on the screen's thread at every change (several a minute while
+     * syncing), and the guide stopped answering for 4-10 s on Fire TV Sticks. Now every read and write of the
+     * settings files runs on one background thread, in order: [savePrefs] only queues the write, and a read waits
+     * for the writes queued before it, so it never sees older settings.
+     */
+    private fun <T> onPrefsThread(f: () -> T): T =
+        if (Thread.currentThread() === prefsThread) f() else prefsIo.submit<T> { f() }.get()
+
+    /** Waits until every queued settings write is on disk. */
+    fun flushPrefs() { onPrefsThread { } }
+
+    private fun loadPrefsFile(): Prefs = onPrefsThread { readPrefsFile() }
+
+    private fun readPrefsFile(): Prefs {
         val f = File(dir, "prefs.json")
         return try {
             if (f.exists()) Prefs.fromJson(JSONObject(f.readText())) else Prefs()
@@ -159,20 +175,32 @@ class Store(private val context: Context) {
     private fun savePrefsFile(p: Prefs) = writeAtomic(File(dir, "prefs.json"), p.toJson().toString())
 
     /** The shared settings with profile [id]'s own (the current profile by default) in place of the owner's. */
-    fun loadPrefs(id: String = profileId): Prefs {
+    fun loadPrefs(id: String = profileId): Prefs = onPrefsThread {
         val base = loadPrefsFile()
-        if (id == Profile.OWNER) return base
-        return base.withPersonal(loadPersonal(id) ?: JSONObject())
+        if (id == Profile.OWNER) base else base.withPersonal(loadPersonal(id) ?: JSONObject())
     }
 
-    /** Saves the shared settings for everyone, and the personal ones for the current profile only. */
+    /** Saves the shared settings for everyone, and the personal ones for the current profile only (queued, see [onPrefsThread]). */
     fun savePrefs(p: Prefs) {
         val id = profileId
-        if (id == Profile.OWNER) { savePrefsFile(p); return }
-        val owner = runCatching { personalOf(loadPrefsFile()) }.getOrDefault(JSONObject())
-        savePrefsFile(p.withPersonal(owner))
-        writeAtomic(File(profileDir(id), "personal.json"), personalOf(p).toString())
+        synchronized(pending) {
+            // Saves in a row for the same profile (the guide saves the last channel at every move) write only the newest.
+            if (pending.lastOrNull()?.first == id) { pending[pending.lastIndex] = id to p; return }
+            pending.addLast(id to p)
+        }
+        prefsIo.execute {
+            val (who, latest) = synchronized(pending) { pending.removeFirstOrNull() } ?: return@execute
+            runCatching {
+                if (who == Profile.OWNER) savePrefsFile(latest)
+                else {
+                    val owner = runCatching { personalOf(readPrefsFile()) }.getOrDefault(JSONObject())
+                    savePrefsFile(latest.withPersonal(owner))
+                    writeAtomic(File(profileDir(who), "personal.json"), personalOf(latest).toString())
+                }
+            }
+        }
     }
+    private val pending = ArrayDeque<Pair<String, Prefs>>()
 
     /** When a playlist's saved "channels", "guide" or "vod" file was written; 0 if it's missing or empty. */
     fun savedAt(kind: String, playlistId: String): Long {
@@ -394,4 +422,13 @@ class Store(private val context: Context) {
     }
 
     fun cacheSizeBytes(): Long = context.cacheDir.walkTopDown().filter { it.isFile }.sumOf { it.length() }
+
+    companion object {
+        /** The one thread that reads and writes the settings files, for every Store (see [onPrefsThread]). */
+        @Volatile private var prefsThread: Thread? = null
+        private val prefsIo: java.util.concurrent.ExecutorService = java.util.concurrent.Executors.newSingleThreadExecutor { r ->
+            Thread(r, "avid-prefs").apply { isDaemon = true; prefsThread = this }
+        }
+    }
+
 }

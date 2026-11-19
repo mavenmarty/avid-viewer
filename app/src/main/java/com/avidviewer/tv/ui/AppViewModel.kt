@@ -599,8 +599,17 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** Download speed while streaming, for Stream info and the playback log. */
     private val bandwidth = androidx.media3.exoplayer.upstream.DefaultBandwidthMeter.Builder(app).build()
 
+    /** #30, #32: which video decoder each stream uses (the TV's own, or Android's software one after trouble). */
+    internal val decoders = com.avidviewer.tv.data.Decoders(app.getSharedPreferences("decoders", android.content.Context.MODE_PRIVATE))
+
     val player: ExoPlayer = ExoPlayer.Builder(app)
         .setBandwidthMeter(bandwidth)
+        .setRenderersFactory(
+            androidx.media3.exoplayer.DefaultRenderersFactory(app)
+                .setMediaCodecSelector(decoders.selector)
+                // A decoder that can't start hands over to the next one on the list instead of failing.
+                .setEnableDecoderFallback(true)
+        )
         .setMediaSourceFactory(
             DefaultMediaSourceFactory(app).setDataSourceFactory(
                 DefaultHttpDataSource.Factory().setUserAgent(USER_AGENT).setAllowCrossProtocolRedirects(true)
@@ -918,6 +927,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     private val groupsAllMemo = Memo<List<GroupInfo>>()
     private val numbersMemo = Memo<Map<String, Int>>()
     private val channelIndexMemo = Memo<Map<String, Channel>>()
+    private val channelsByGroupMemo = Memo<Map<String, List<Channel>>>()
     private val channelsInMemo = Memo<HashMap<String, List<Channel>>>()
     private val vodOfMemo = HashMap<String, Memo<List<VodItem>>>()
     private val vodCatsMemo = HashMap<String, Memo<List<Pair<String, Int>>>>()
@@ -966,7 +976,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
         player.addAnalyticsListener(playback)
         // Nov 15: the stream is reopened when the picture sticks or the data stops (PlaybackMonitor.checkReconnect).
-        playback.onReconnect = { live, full -> reconnectStream(live, full) }
+        playback.onReconnect = { live, full, other -> reconnectStream(live, full, other) }
         viewModelScope.launch {
             var tick = 0
             while (true) {
@@ -981,16 +991,11 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
         player.addListener(object : Player.Listener {
             override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) { paused = !playWhenReady }
-            override fun onPlayerError(error: PlaybackException) {
-                val (text, refused) = playErrorText(error)
-                playerError = text
-                // #29: a live channel the provider refused (or whose server can't be found) is marked in the guide.
-                if (refused && vodPlaying == null) currentKey?.let { noteFailedChannel(it, true) }
-            }
+            override fun onPlayerError(error: PlaybackException) = playerFailed(error)
 
             override fun onIsPlayingChanged(isPlaying: Boolean) {
                 playing = isPlaying
-                if (isPlaying) { playerError = null; if (vodPlaying == null) currentKey?.let { noteFailedChannel(it, false) } }
+                if (isPlaying) { playerError = null; decoderRetried = null; if (vodPlaying == null) currentKey?.let { noteFailedChannel(it, false) } }
             }
 
             override fun onTracksChanged(tracks: androidx.media3.common.Tracks) { tracksChanged(tracks) }
@@ -2283,7 +2288,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     private fun computeGroups(includeHidden: Boolean): List<GroupInfo> {
         val counts = LinkedHashMap<String, Int>()
         channels.forEach { counts[it.group] = (counts[it.group] ?: 0) + 1 }
-        val ordered = prefs.groupOrder.filter { it in counts } + counts.keys.filterNot { it in prefs.groupOrder }
+        val inOrder = prefs.groupOrder.toHashSet()
+        val ordered = prefs.groupOrder.filter { it in counts } + counts.keys.filterNot { it in inOrder }
         val pid = activePlaylist()?.id ?: ""
         return ordered.map { GroupInfo(it, groupName(it), counts[it] ?: 0, isGroupHidden(pid, it)) }
             .filter { includeHidden || !it.hidden }
@@ -2329,7 +2335,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun editorGroups(chs: List<Channel>): List<Pair<String, Int>> {
         val counts = LinkedHashMap<String, Int>()
         chs.forEach { counts[it.group] = (counts[it.group] ?: 0) + 1 }
-        val ordered = prefs.groupOrder.filter { it in counts } + counts.keys.filterNot { it in prefs.groupOrder }
+        val inOrder = prefs.groupOrder.toHashSet()
+        val ordered = prefs.groupOrder.filter { it in counts } + counts.keys.filterNot { it in inOrder }
         return ordered.map { it to (counts[it] ?: 0) }
     }
 
@@ -2350,7 +2357,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         return when (channelSortOf(pid)) {
             SORT_AZ -> list.sortedWith(byShownName)
             SORT_PROVIDER -> list
-            else -> { val order = prefs.channelOrder[group] ?: return list; val byKey = list.associateBy { it.key }; order.mapNotNull { byKey[it] } + list.filterNot { it.key in order } }
+            else -> { val order = prefs.channelOrder[group] ?: return list; val byKey = list.associateBy { it.key }; val inOrder = order.toHashSet(); order.mapNotNull { byKey[it] } + list.filterNot { it.key in inOrder } }
         }
     }
 
@@ -2404,7 +2411,12 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     private fun computeChannelsIn(group: String): List<Channel> {
         if (isListGroup(group)) return listKeys(group).mapNotNull { channel(it) }.let { l -> if (listSortOf(group) == SORT_AZ) l.sortedWith(byShownName) else l }
-        return sortedIn(channels.filter { it.group == group && it.key !in prefs.hiddenChannels && channelAllowed(it) }, group)
+        // #20: this used to go through every channel of the playlist for each category, so numbering the channels
+        // (every category in turn) after any settings change went through the whole list once per category on the
+        // screen's thread: millions of checks with a big playlist, and the guide stopped answering for seconds.
+        val inGroup = channelsByGroupMemo.get(channels) { channels.groupBy { it.group } }[group] ?: return emptyList()
+        val hidden = prefs.hiddenChannels
+        return sortedIn(inGroup.filter { it.key !in hidden && channelAllowed(it) }, group)
     }
 
     /** Looks in the active playlist first, then in other playlists' saved channels (for combined Favorites). */
@@ -4690,6 +4702,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         vodPlaying = item
         playerError = null
         playback.started(item.key, live = false)
+        decoders.startingNow(item.key); decoderRetried = null
         player.setMediaItem(MediaItem.fromUri(item.url), if (fromStart) 0L else resumeOf(item.key))
         tracksChanged(androidx.media3.common.Tracks.EMPTY)
         player.prepare()
@@ -4968,6 +4981,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             if (c.url.contains(".m3u8", ignoreCase = true)) setMimeType(MimeTypes.APPLICATION_M3U8)
         }.build()
         playback.started(c.key, live = true)
+        decoders.startingNow(c.key); decoderRetried = null
         player.setMediaItem(item)
         tracksChanged(androidx.media3.common.Tracks.EMPTY) // this channel's own choices (captions on/off) from the start
         player.prepare()
@@ -5097,7 +5111,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
      * Reopens the stream: a live channel at the live point, a movie or episode where it was. The picture is back
      * in a second or two, instead of staying frozen.
      */
-    private fun reconnectStream(live: Boolean, full: Boolean = false) {
+    private fun reconnectStream(live: Boolean, full: Boolean = false, otherDecoder: Boolean = false) {
+        if (otherDecoder) playingKey()?.let { decoders.switch(it) }
         val pos = player.currentPosition
         player.stop()
         // #23: a second reconnect within a minute starts the player afresh with the same stream (decoders and all).
@@ -5106,6 +5121,37 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         if (live) player.seekToDefaultPosition() else player.seekTo(pos)
         player.playWhenReady = true
         showNotice("Reconnecting…", 2000)
+    }
+
+    private fun playerFailed(error: PlaybackException) {
+        if (recoverFromDecoderError(error)) return
+        val (text, refused) = playErrorText(error)
+        playerError = text
+        // #29: a live channel the provider refused (or whose server can't be found) is marked in the guide.
+        if (refused && vodPlaying == null) currentKey?.let { noteFailedChannel(it, true) }
+    }
+    internal fun playerFailedForTests(error: PlaybackException) = playerFailed(error)
+
+    /** The key of what's playing: the movie or episode, else the channel. */
+    private fun playingKey(): String? = vodPlaying?.key ?: currentKey
+
+    /** #32: the stream that a decoding error was already retried for (with the other decoder) since it started. */
+    private var decoderRetried: String? = null
+
+    /**
+     * #32: a decoding error (ERROR_CODE_DECODING_FAILED and the like) used to stop the channel for good: every start
+     * failed the same way, for 12 hours in one log. Now the stream restarts once on the TV's other video decoder,
+     * which is kept for it. If that fails too, the error shows, and the next try starts on the decoder it began with.
+     */
+    private fun recoverFromDecoderError(error: PlaybackException): Boolean {
+        if (!com.avidviewer.tv.data.Decoders.isDecoderError(error.errorCode)) return false
+        val key = playingKey() ?: return false
+        if (decoderRetried == key) { decoders.switch(key); decoderRetried = null; return false }
+        decoderRetried = key
+        val other = decoders.switch(key)
+        playback.decoderError(error.errorCodeName, other)
+        reconnectStream(live = vodPlaying == null, full = true)
+        return true
     }
 
     fun stop() {
