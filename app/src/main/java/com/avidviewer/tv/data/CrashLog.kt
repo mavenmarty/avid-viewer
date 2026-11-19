@@ -115,12 +115,28 @@ object CrashLog {
                 if (late >= 4_000) {
                     if (noted == 0) blockedOn = runCatching(screen).getOrDefault("?")
                     val mark = listOf(4_000L, 10_000L, 30_000L).count { late >= it }
-                    if (mark > noted) { noted = mark; note(app, "Main thread blocked ${late / 1000} s on $blockedOn") }
+                    if (mark > noted) {
+                        noted = mark
+                        note(app, "Main thread blocked ${late / 1000} s on $blockedOn")
+                        // #20: where it's stuck (release builds are obfuscated: read with the build's R8 mapping).
+                        if (mark == 1) runCatching { note(app, "  at " + stackLine(android.os.Looper.getMainLooper().thread.stackTrace)) }
+                    }
                 } else if (noted > 0) noted = 0
             }
         }, "avid-watchdog").apply { isDaemon = true; start() }
     }
     fun stopWatching() { watch?.interrupt(); watch = null }
+
+    /**
+     * The top of a stack in one line: the first 4 frames, then up to 6 of the app's own (com.avidviewer, or the
+     * obfuscated short names R8 gives them), so the step list stays short.
+     */
+    fun stackLine(stack: Array<StackTraceElement>): String {
+        fun f(e: StackTraceElement) = e.className.substringAfterLast('.') + "." + e.methodName + ":" + e.lineNumber
+        val top = stack.take(4)
+        val own = stack.drop(4).filter { it.className.startsWith("com.avidviewer") || !it.className.contains('.') }.take(6)
+        return (top.map(::f) + (if (own.isEmpty()) emptyList() else listOf("…") + own.map(::f))).joinToString(" < ").take(600)
+    }
 
     /** Refreshes the memory figures in the marker (every 30 s while on screen). */
     fun tick(context: Context) = save(context)
@@ -207,14 +223,38 @@ object CrashLog {
                 android.app.ApplicationExitInfo.REASON_CRASH_NATIVE -> "a crash in the video or graphics code"
                 android.app.ApplicationExitInfo.REASON_CRASH -> "a crash"
                 android.app.ApplicationExitInfo.REASON_SIGNALED -> "the system stopped it"
+                android.app.ApplicationExitInfo.REASON_OTHER -> "the system closed it without saying why (Fire OS often does this to free memory for the app in front)"
                 else -> "closed by the system (reason ${e.reason})"
             }
             val user = e.reason == 15 /* REASON_PACKAGE_STATE_CHANGE */ ||
                 e.reason == 16 /* REASON_PACKAGE_UPDATED (Android 14) */ ||
                 e.reason == android.app.ApplicationExitInfo.REASON_USER_REQUESTED ||
                 e.reason == android.app.ApplicationExitInfo.REASON_USER_STOPPED
-            val detail = "Exit: ${stamp(e.timestamp)}, memory at exit ${e.pss / 1024} MB" + (e.description?.let { " · " + it.take(200) } ?: "")
+            // #33: whether the app was on screen when it was closed, and (when it had stopped responding) where the
+            // screen's thread was stuck, from Android's own record.
+            val where = when {
+                e.importance <= android.app.ActivityManager.RunningAppProcessInfo.IMPORTANCE_FOREGROUND -> "on screen"
+                e.importance <= android.app.ActivityManager.RunningAppProcessInfo.IMPORTANCE_VISIBLE -> "visible behind another app"
+                e.importance <= android.app.ActivityManager.RunningAppProcessInfo.IMPORTANCE_PERCEPTIBLE -> "behind another app"
+                else -> "in the background (importance ${e.importance})"
+            }
+            val trace = if (e.reason == android.app.ApplicationExitInfo.REASON_ANR) runCatching {
+                e.traceInputStream?.bufferedReader()?.use { anrMainThread(it.readText()) }
+            }.getOrNull() else null
+            val detail = "Exit: ${stamp(e.timestamp)}, $where, memory at exit ${e.pss / 1024} MB, reason ${e.reason}, status ${e.status}" +
+                (e.description?.let { " · " + it.take(200) } ?: "") +
+                (trace?.let { "\nScreen thread when it stopped responding:\n$it" } ?: "")
             Exit(text, detail, user)
         }.getOrNull()
     }
+
+    /** From an ANR trace file: the "main" thread's first 25 lines (the stack where the screen's thread was stuck). */
+    fun anrMainThread(trace: String): String? {
+        val lines = trace.lines()
+        val start = lines.indexOfFirst { it.startsWith("\"main\"") }.takeIf { it >= 0 } ?: return null
+        val out = ArrayList<String>()
+        for (l in lines.drop(start)) { if (out.isNotEmpty() && l.isBlank()) break; out.add(l.trimEnd()) ; if (out.size >= 25) break }
+        return out.joinToString("\n") { "  " + it.trim() }.take(3_000)
+    }
+
 }

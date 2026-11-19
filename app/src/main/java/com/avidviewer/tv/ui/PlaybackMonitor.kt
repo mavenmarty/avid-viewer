@@ -66,7 +66,7 @@ class PlaybackMonitor(
 
     // ---- Reconnecting (Nov 15) ----
     /** Reconnects the stream ([live]: at the live point; else where it was). Set by AppViewModel. */
-    var onReconnect: ((live: Boolean, full: Boolean) -> Unit)? = null
+    var onReconnect: ((live: Boolean, full: Boolean, otherDecoder: Boolean) -> Unit)? = null
     private val reconnects = ArrayDeque<Long>()
     private var reconnectAt = 0L
     private var reconnectWhy = ""
@@ -74,13 +74,18 @@ class PlaybackMonitor(
     private var bufferGrewAt = 0L
     /** 3 reconnects in 3 minutes: from then on at most one every [SLOW_RECONNECT_MS]. */
     private var slowReconnect = false
+    /** #30: reconnects for a still picture on this channel, and whether it was switched to the other decoder. */
+    private var pictureReconnects = 0
+    private var decoderSwitched = false
+    /** The video decoder in use ("" until one starts), e.g. "OMX.MTK.VIDEO.DECODER.AVC" or "c2.android.avc.decoder". */
+    var decoderName = ""; private set
 
     /** A channel or title is starting ([key]: its key, never shown; the log gets a code instead of the name). */
     fun started(key: String, live: Boolean) {
         endStall(left = true)
         endPicture()
         this.live = live
-        startedAt = clock(); reconnects.clear(); reconnectAt = 0; slowReconnect = false
+        startedAt = clock(); reconnects.clear(); reconnectAt = 0; slowReconnect = false; pictureReconnects = 0; decoderSwitched = false
         stallStarts.clear(); lastStallEnd = 0; stutterCount = 0; stutterSince = 0; lastBufferEnd = 0; bufferGrewAt = startedAt; minuteAt = 0
         DataFlow.lastBytesAt = startedAt
         name = log.label(key, live)
@@ -143,21 +148,48 @@ class PlaybackMonitor(
         val stops = stallStarts.count { now - it <= 30_000 }
         val why = reconnectReason(now, startedAt, reconnectAt, picStuckSince, DataFlow.lastBytesAt, buffered, everReady,
             stallingSince = stallAt, bufferGrewAt = bufferGrewAt, stopsIn30s = stops) ?: return
+        val picture = why.startsWith("the picture")
+        // #31: stops with a full buffer are the TV's decoder falling behind, not the download: reconnecting throws the
+        // buffer away and doesn't help. The only thing worth trying is the other decoder, once.
+        val decoderBehind = why.startsWith(DECODER_BEHIND)
+        if (decoderBehind && (decoderSwitched || !mayUseOtherDecoder())) return
         if (reconnects.size < 3) slowReconnect = false
         if (reconnects.size >= 3) {
             // BUG-058: after 3 in 3 minutes the app used to stop trying, and a channel could sit frozen for minutes
-            // (295 s in one log) until the viewer changed it. Now it keeps trying, every 30 s, while it stays stuck.
-            if (!slowReconnect) { slowReconnect = true; put(PlaybackLog.RECOVER, "Reconnecting less often: 3 reconnects in 3 minutes ($why); trying every 30 s while it stays stuck.") }
-            if (!mayReconnect(now, reconnects)) return
+            // (295 s in one log) until the viewer changed it. Now it keeps trying while it stays stuck: every 30 s,
+            // or every 15 s for a still picture (#30: the sound goes on, so a frozen picture is all the viewer sees).
+            if (!slowReconnect) { slowReconnect = true; put(PlaybackLog.RECOVER, "Reconnecting less often: 3 reconnects in 3 minutes ($why); trying every ${(if (picture) SLOW_PICTURE_MS else SLOW_RECONNECT_MS) / 1000} s while it stays stuck.") }
+            if (!mayReconnect(now, reconnects, if (picture) SLOW_PICTURE_MS else SLOW_RECONNECT_MS)) return
         }
+        if (picture) pictureReconnects++
+        // #30: a second still picture on a channel (a reconnect didn't cure it): the TV's other video decoder.
+        val otherDecoder = !decoderSwitched && (decoderBehind || (picture && pictureReconnects >= 2 && mayUseOtherDecoder()))
+        if (otherDecoder) decoderSwitched = true
         reconnects.addLast(now)
-        if (why.startsWith("the picture")) endPicture() else endStall(left = false)
-        put(PlaybackLog.RECOVER, "Reconnected: $why.")
+        if (picture) endPicture() else endStall(left = false)
+        put(PlaybackLog.RECOVER, "Reconnected: $why." + if (otherDecoder) " Trying the TV's other video decoder for this stream." else "")
         reconnectAt = now; reconnectWhy = why
         DataFlow.lastBytesAt = now; bufferGrewAt = now; stallStarts.clear()
         // #23: a reconnect within a minute of the last one rebuilds the player (a restart alone rarely helped again).
-        val full = reconnects.size >= 2 && now - reconnects[reconnects.size - 2] < 60_000
-        onReconnect?.invoke(live, full)
+        val full = otherDecoder || (reconnects.size >= 2 && now - reconnects[reconnects.size - 2] < 60_000)
+        onReconnect?.invoke(live, full, otherDecoder)
+    }
+
+    /**
+     * Whether this stream may change decoder for a freeze: back to the TV's own decoder at any time, or to the software
+     * one when it can keep up with the stream ([com.avidviewer.tv.data.Decoders.softwareCanKeepUp]).
+     */
+    private fun mayUseOtherDecoder(): Boolean {
+        if (decoderName.isNotEmpty() && com.avidviewer.tv.data.Decoders.isSoftware(decoderName)) return true
+        val f = player.videoFormat ?: return false
+        return com.avidviewer.tv.data.Decoders.softwareCanKeepUp(f.width, f.height, f.frameRate, f.sampleMimeType ?: f.codecs)
+    }
+
+    /** #32: a decoding error made the app restart the stream on the other decoder ([other]: software; else the TV's own). */
+    fun decoderError(error: String, other: Boolean) {
+        endStall(left = false); endPicture()
+        put(PlaybackLog.RECOVER, "Restarted after a decoding error ($error) with " + (if (other) "the TV's other (software) video decoder." else "the TV's own video decoder again."))
+        reconnectAt = clock(); reconnectWhy = "decoding error"
     }
 
     /** Playback stopped (leaving full screen or the app). (The temporary buffer log of 1.10.0 was removed in 1.17.1.) */
@@ -205,19 +237,22 @@ class PlaybackMonitor(
         if (name.isEmpty()) { stallAt = 0; return }
         val now = clock()
         val ms = now - stallAt
-        // A stop under a second that starts within 3 s of the last one is part of a stutter, logged once at its end.
-        if (!left && ms < 1_000 && lastStallEnd > 0 && stallAt - lastStallEnd < 3_000) {
-            if (stutterCount == 0) { stutterCount = 1; stutterSince = lastStallEnd }
-            stutterCount++
+        // A stop under a second is never a freeze on its own (#34: 398 "Froze 0 s" entries in 2 minutes): it starts or
+        // joins a stutter (stops within 3 s of each other), logged once at its end if there were at least 2.
+        if (ms < 1_000) {
+            if (stutterCount > 0 && stallAt - lastStallEnd < 3_000) stutterCount++
+            else { endStutter(); stutterCount = 1; stutterSince = stallAt }
             lastStallEnd = now; stallAt = 0
+            if (left) endStutter()
             return
         }
         endStutter()
         lastStallEnd = now
         val s = (ms / 1000).toInt()
         val errs = recentLoadErrors.filter { it.first >= stallAt - 15_000 }.map { it.second }
-        val why = cause(errs, bufferBefore, (meter.bitrateEstimate / 1000).toInt(), streamKbps())
-        note(PlaybackLog.STALL, (if (left) "Waited $s s for data, then left the channel. " else "Froze $s s waiting for data. ") + "Likely: $why.", s)
+        val why = cause(errs, bufferBefore, (meter.bitrateEstimate / 1000).toInt(), streamKbps(), droppedWindow)
+        val decoder = why.startsWith("the TV's video decoder")
+        note(PlaybackLog.STALL, (if (left) "Waited $s s for data, then left the channel. " else if (decoder) "Froze $s s. " else "Froze $s s waiting for data. ") + "Likely: $why.", s)
         stallAt = 0
     }
 
@@ -255,6 +290,12 @@ class PlaybackMonitor(
         note(PlaybackLog.ERROR, "Player stopped: ${error.errorCodeName}" + (cause?.let { " ($it)" } ?: "") + ".", 0)
     }
 
+    override fun onVideoDecoderInitialized(eventTime: AnalyticsListener.EventTime, decoderName: String, initializedTimestampMs: Long, initializationDurationMs: Long) {
+        if (decoderName == this.decoderName) return
+        this.decoderName = decoderName
+        put(PlaybackLog.FORMAT, "Video decoder: $decoderName" + if (com.avidviewer.tv.data.Decoders.isSoftware(decoderName)) " (software)" else "")
+    }
+
     override fun onVideoInputFormatChanged(eventTime: AnalyticsListener.EventTime, format: Format, decoderReuseEvaluation: DecoderReuseEvaluation?) {
         put(PlaybackLog.FORMAT, formatText(format))
     }
@@ -276,11 +317,15 @@ class PlaybackMonitor(
     companion object {
         /** After 3 reconnects in 3 minutes, the shortest gap between reconnects (BUG-058). */
         const val SLOW_RECONNECT_MS = 30_000L
+        /** #30: the same for a still picture. */
+        const val SLOW_PICTURE_MS = 15_000L
+        /** #31: how a stutter with a full buffer is named ([reconnectReason]). */
+        const val DECODER_BEHIND = "the TV's decoder falling behind"
         /** #25: at most this many log entries a minute for one channel. */
         const val MAX_PER_MINUTE = 20
 
         /** [recent]: reconnects in the last 3 minutes, oldest first. Up to 3 at once, then one every [SLOW_RECONNECT_MS]. */
-        fun mayReconnect(now: Long, recent: Collection<Long>): Boolean = recent.size < 3 || now - recent.last() >= SLOW_RECONNECT_MS
+        fun mayReconnect(now: Long, recent: Collection<Long>, gap: Long = SLOW_RECONNECT_MS): Boolean = recent.size < 3 || now - recent.last() >= gap
         /**
          * Why the stream should be reconnected now, or null (see checkReconnect): the picture still for 5 s, or no
          * data for 4 s with under 8 s buffered; never in the first 10 s of a channel or of a reconnect.
@@ -292,9 +337,10 @@ class PlaybackMonitor(
             val quiet = now - lastBytesAt
             if (everReady && quiet >= 4_000 && bufferedMs < 8_000) return "no data for ${quiet / 1000} s with ${bufferedMs / 1000} s left in the buffer"
             // #23: waiting 6 s with the buffer not growing, though a few bytes keep arriving (the provider trickling).
-            if (everReady && stallingSince > 0 && now - stallingSince >= 6_000 && now - bufferGrewAt >= 6_000) return "waiting ${(now - stallingSince) / 1000} s with the buffer not growing"
-            // #25: the picture keeps stopping for a moment.
-            if (everReady && stopsIn30s > 5) return "stuttering ($stopsIn30s stops in 30 s)"
+            // (#31: not with 8 s or more buffered: a full buffer doesn't grow because it's full.)
+            if (everReady && stallingSince > 0 && now - stallingSince >= 6_000 && now - bufferGrewAt >= 6_000 && bufferedMs < 8_000) return "waiting ${(now - stallingSince) / 1000} s with the buffer not growing"
+            // #25: the picture keeps stopping for a moment. #31: with 20 s or more buffered it isn't the data.
+            if (everReady && stopsIn30s > 5) return if (bufferedMs >= 20_000) "$DECODER_BEHIND ($stopsIn30s stops in 30 s with ${bufferedMs / 1000} s buffered)" else "stuttering ($stopsIn30s stops in 30 s)"
             return null
         }
 
@@ -351,13 +397,16 @@ class PlaybackMonitor(
          * The likely cause of a freeze, from the download errors around it, how much was buffered just before,
          * and the download speed against the stream's bitrate (0 = unknown).
          */
-        fun cause(loadErrors: List<String>, bufferBeforeMs: Long, downloadKbps: Int, streamKbps: Int): String {
+        fun cause(loadErrors: List<String>, bufferBeforeMs: Long, downloadKbps: Int, streamKbps: Int, droppedFrames: Int = 0): String {
             val http = loadErrors.filter { it.startsWith("provider answered HTTP") }
             val net = loadErrors.filter { it.contains("timed out") || it.contains("dropped") || it.contains("connect") || it.contains("DNS") }
             return when {
                 http.isNotEmpty() -> "the provider (" + http.groupingBy { it.removePrefix("provider answered ") }.eachCount().entries.joinToString(", ") { "${it.key} ×${it.value}" } + ")"
                 net.isNotEmpty() -> "the network or the provider's server (" + net.groupingBy { it }.eachCount().entries.joinToString(", ") { "${it.key} ×${it.value}" } + ")"
                 streamKbps > 0 && downloadKbps in 1 until streamKbps -> "the network or provider is too slow (getting ${mbps(downloadKbps)}, the stream needs ${mbps(streamKbps)})"
+                // #31: a stop with plenty buffered and nothing failing to download is the TV's video player, not the data.
+                bufferBeforeMs >= 10_000 && loadErrors.isEmpty() -> "the TV's video decoder fell behind, not the download (${bufferBeforeMs / 1000} s was buffered, no download errors" +
+                    (if (droppedFrames > 0) ", $droppedFrames frames dropped" else "") + ")"
                 bufferBeforeMs < 1_500 -> "data stopped arriving: the buffer ran out with no download error" + (if (downloadKbps > 0) " (download speed ${mbps(downloadKbps)})" else "") + ", which usually means the provider's server paused the stream"
                 else -> "unclear (${bufferBeforeMs / 1000} s was buffered, no download errors)"
             }
