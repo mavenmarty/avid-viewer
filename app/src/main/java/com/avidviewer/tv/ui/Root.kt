@@ -176,6 +176,8 @@ fun AppRoot(vm: AppViewModel) {
         }
         // A report sent from a device that isn't linked can't be followed on avidviewer.app: say so, and offer to link it.
         if (vm.reportUnlinkedNotice && !((vm.lastCrash != null || vm.crashReportSent) && !vm.crashNoticeSeen) && vm.screen != Screen.PLAYER) ReportUnlinkedDialog(vm)
+        // 1.22.0: a device that isn't linked can't be used until it is (covers everything, the player included).
+        if (vm.linkRequired) LinkRequiredScreen(vm)
         // New version found: ask before updating (never interrupts full-screen viewing).
         val rel = vm.update
         // Opens by itself only once the latest release has been out 24 hours (see updatePromptAllowed).

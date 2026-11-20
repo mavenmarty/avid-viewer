@@ -1207,6 +1207,27 @@ class UsabilityTest {
         assertTrue("two profiles: the chip", rule.onAllNodesWithTag("osd-profile", useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty())
     }
 
+    /** 1.22.0 (owner, Nov 20): a device that isn't linked can't be used: full screen, nothing plays, closes once linked. */
+    @Test
+    fun aDeviceThatIsNotLinkedMustBeLinkedFirst() {
+        FakeAvidSite().use { site ->
+            rule.runOnIdle { vm.accountApi = site.base; vm.requireLink = true }
+            waitFor("Link this device covers the app") { rule.onAllNodesWithTag("link-required").fetchSemanticsNodes().isNotEmpty() }
+            waitFor("its code") { rule.onAllNodesWithText("K7M2-QX9P").fetchSemanticsNodes().isNotEmpty() }
+            assertTrue("no Not now", rule.onAllNodesWithText("Not now").fetchSemanticsNodes().isEmpty())
+            assertTrue(rule.onAllNodesWithTag("link-required-exit").fetchSemanticsNodes().isNotEmpty())
+            waitFor("playback stopped") { !vm.player.playWhenReady }
+            // Nothing can start while it's up.
+            rule.runOnIdle { vm.channels.firstOrNull()?.let { vm.preview(it.key) } }
+            settle()
+            assertTrue("nothing plays", !vm.player.playWhenReady)
+            site.approved = true
+            waitFor("linked") { vm.account.linked }
+            waitFor("the screen is gone") { rule.onAllNodesWithTag("link-required").fetchSemanticsNodes().isEmpty() }
+            assertTrue(!vm.linkRequired)
+        }
+    }
+
     /** Nov 20: the Report a bug QR code opens avidviewer.app/report/?c=… for this device; email only when the site can't be reached. */
     @Test
     fun reportABugQrOpensTheWebsitesFormForThisDevice() {
