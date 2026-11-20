@@ -9,7 +9,7 @@ object Links {
     const val CONTROL4_DRIVER = "https://drive.google.com/file/d/10XxPywvX456lPTmou6xsqERmbTfhOJul/view"
 
     /**
-     * The crash relay (tools/crash-relay/Code.gs, a Google Apps Script web app) that emails "Report issue"
+     * The crash relay (tools/crash-relay/Code.gs, a Google Apps Script web app) that passes "Report issue"
      * crash reports on to avidviewer.app (it emailed them until Nov 20, 2026). Deployed from the avidviewer.app account (Nov 13, 2026).
      */
     const val CRASH_RELAY = "https://script.google.com/macros/s/AKfycbz2Tiz4sWy9Orxw5YeQ8FDKA5Zl3tKcQwu9IUlYIxlRoshPCgYeJItM8zU2HIi5sWHIZw/exec"
