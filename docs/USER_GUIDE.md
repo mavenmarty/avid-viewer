@@ -8,19 +8,34 @@ This guide covers **Avid Viewer 1.21.1**, the current public release. Avid Viewe
 
 ## 1. Getting started
 
-### Installing the Downloader app
+### Preparing your device
 
-1. Install the **Downloader** app from the Google Play Store or the Amazon Appstore.
-2. Put the device into Developer Mode: go to **Settings › My Fire TV › About**, highlight your device's name and press **OK** 7 times.
-3. Press **Back** and choose **Developer Options**.
-4. Turn on **ADB debugging**.
-5. Turn on **Install unknown apps** for Downloader.
+Avid Viewer isn't in the Amazon Appstore or Google Play, so the device needs to allow one app, **Downloader**, to install it. You do this once.
+
+#### Fire TV (Fire TV Stick, Fire TV Cube, Fire TV smart TVs)
+
+1. Install **Downloader** from the Amazon Appstore: search for "Downloader" on the home screen and choose the orange app by AFTVnews.
+2. Turn on Developer Options: open **Settings › My Fire TV › About**, highlight your device's name (the first line, for example **Fire TV Stick 4K**) and press **OK** 7 times, until it says you're a developer.
+3. Press **Back** once. **Developer Options** is now in the **My Fire TV** menu; open it.
+4. Choose **Install unknown apps** and turn on **Downloader**. (On older Fire TVs this is a single switch called **Apps from Unknown Sources**: turn it on.)
+
+The newest Fire TV Stick HD runs Amazon's Vega OS instead of Fire OS; it can't install apps from outside the Appstore, so Avid Viewer can't be installed on it.
+
+#### Android TV and Google TV (Chromecast with Google TV, Google TV Streamer, NVIDIA Shield, Sony, TCL, Hisense and others)
+
+1. Install **Downloader** from Google Play: search for "Downloader" and choose the app by AFTVnews.
+2. Turn on Developer options: open **Settings › System › About**, highlight **Android TV OS build** (on some TVs **Build**) and press **OK** 7 times, until it says you're a developer. Some devices, such as the NVIDIA Shield, don't need this step, but it does no harm.
+3. Allow Downloader to install apps. On most Google TV devices: **Settings › Apps › Security & restrictions › Unknown sources**, then turn on **Downloader**. On older Android TVs the same list is under **Settings › Device Preferences › Security & restrictions › Unknown sources**. On the newest models it can be under **Settings › Apps › Downloader › Install unknown apps**.
+4. Can't find the setting? Skip it: when Downloader first tries to install Avid Viewer, it shows a **Settings** button that goes straight to the right switch. Turn it on, press **Back**, and choose **Install** again.
+
+Menu names differ a little between brands; if a path above doesn't match, search the TV's settings for "unknown".
 
 ### Install
 
-1. Download **AvidViewer.apk**: on your TV box, open the Downloader app and enter the code **2895338** in the URL box, or download it directly from `github.com/mavenmarty/avid-viewer/releases/latest`.
-2. Open the file and install it. You may need to allow installs from unknown sources for your browser or file manager.
-3. Every version is signed with the same key, so a new version installs over the old one and keeps your playlists, favorites and settings.
+1. Open **Downloader**, select the URL box and enter the code **2895338**, then choose **Go**. (On a phone or computer, the same file is at `github.com/mavenmarty/avid-viewer/releases/latest`.)
+2. When the download finishes, choose **Install**, then **Open** (or **Done** and open Avid Viewer from your apps).
+3. Downloader offers to delete the installation file; choose **Delete** to free up space. You don't need it again: Avid Viewer updates itself (**Settings › Updates & about**).
+4. Every version is signed with the same key, so a new version installs over the old one and keeps your playlists, favorites and settings.
 
 ### First start: the welcome screen
 
