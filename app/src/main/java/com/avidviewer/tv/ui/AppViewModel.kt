@@ -538,7 +538,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                     if (System.currentTimeMillis() > (linkCode?.expiresAt ?: 0L)) {
                         linkCode = null
                         // The welcome screen always shows a working code: an expired one is replaced.
-                        if (showWelcome) { startLinking(); return@launch }
+                        if (showWelcome || linkRequired) { startLinking(); return@launch }
                         accountStatus = e.message; return@launch
                     }
                     continue // a network blip: keep trying until the code runs out
@@ -1151,10 +1151,24 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
      * start it shows "Link this device to your account" with its code, which Not now puts off for 7 days.
      */
     var linkReminder by mutableStateOf(false); private set
+
+    /**
+     * 1.22.0 (owner, Nov 20): a device that isn't linked can't be used until it is. A full-screen "Link this device"
+     * covers everything (no Not now; Back leaves the app) and nothing plays. New installs link from the welcome screen.
+     * A device removed from its account, or signed out, gets it again. Off in tests, which turn it on where they check it.
+     */
+    var requireLink by mutableStateOf(android.os.Build.FINGERPRINT != "robolectric")
+    val linkRequired: Boolean get() = requireLink && accountEmail == null && !showWelcome
+
+    /** Shown with Link this device: stops what's playing and keeps a code on screen. */
+    fun linkRequiredShown() {
+        if (player.isPlaying || player.playWhenReady) { player.playWhenReady = false; player.stop() }
+        if (linkCode == null && linkJob?.isActive != true) startLinking()
+    }
     /** Off in tests, which turn it on where they check it. */
     var remindToLink = android.os.Build.FINGERPRINT != "robolectric"
     internal fun maybeRemindToLink(wait: Long = 4000) {
-        if (!remindToLink || account.linked || playlists.isEmpty()) return
+        if (!remindToLink || requireLink || account.linked || playlists.isEmpty()) return
         if (System.currentTimeMillis() - account.linkReminderAt < LINK_REMINDER_EVERY) return
         viewModelScope.launch {
             delay(wait)
@@ -4773,6 +4787,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun playVod(item: VodItem, fromStart: Boolean = false) {
+        if (linkRequired) return // nothing plays until the device is linked (1.22.0)
         recordWatch()
         if (screen != Screen.PLAYER) lastScreen = screen
         vodPlaying = item
@@ -5047,7 +5062,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     private fun start(c: Channel) {
-        if (choosingProfile) { currentKey = c.key; return } // nothing plays behind Who's watching?
+        if (choosingProfile || linkRequired) { currentKey = c.key; return } // nothing plays behind Who's watching? or Link this device
         if (!channelAllowed(c)) return
         recordWatch()
         vodPlaying = null

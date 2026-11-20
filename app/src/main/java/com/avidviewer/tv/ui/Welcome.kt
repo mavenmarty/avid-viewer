@@ -3,6 +3,7 @@ package com.avidviewer.tv.ui
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -156,4 +157,50 @@ fun ReportUnlinkedDialog(vm: AppViewModel) {
         confirmButton = {},
         dismissButton = { TvButton("Not now", modifier = Modifier.testTag("report-unlinked-later")) { vm.closeReportUnlinkedNotice() } },
     )
+}
+
+/**
+ * 1.22.0 (owner, Nov 20): a device that isn't linked can't be used until it is. Covers the whole app; no Not now.
+ * Back (or Exit) leaves the app. Disappears by itself once the code is approved on avidviewer.app/link.
+ */
+@Composable
+fun LinkRequiredScreen(vm: AppViewModel) {
+    val activity = androidx.compose.ui.platform.LocalContext.current as? android.app.Activity
+    LaunchedEffect(Unit) { vm.linkRequiredShown() }
+    androidx.compose.ui.window.Dialog(
+        onDismissRequest = { activity?.finish() },
+        properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false, dismissOnBackPress = true, dismissOnClickOutside = false),
+    ) {
+        val exit = remember { FocusRequester() }
+        androidx.compose.foundation.layout.Box(Modifier.fillMaxSize().background(C.Bg).testTag("link-required"), contentAlignment = Alignment.Center) {
+            Row(Modifier.padding(horizontal = 72.dp), horizontalArrangement = Arrangement.spacedBy(64.dp), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(18.dp)) {
+                    Label("Link this device to keep watching", size = 40.sp, color = C.Text, weight = FontWeight.Bold, lines = 3)
+                    Label("Avid Viewer now works with an avidviewer.app account. Link this device once: your playlists, favorites and settings on it stay as they are, and you manage them, profiles and backups at avidviewer.app.", size = 18.sp, color = C.Soft, lines = Int.MAX_VALUE)
+                    Label("1. On your phone or computer, scan the QR code, or go to avidviewer.app/link.", size = 18.sp, color = C.Text, lines = 3)
+                    Label("2. Sign in (or make a free account) and approve this device.", size = 18.sp, color = C.Text, lines = 3)
+                    Label("This screen closes by itself once it's linked.", size = 15.sp, color = C.Muted, lines = 2)
+                    Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                        if (vm.linkCode == null && vm.accountStatus != null && vm.accountStatus != "Getting a code…")
+                            TvButton("Try again", primary = true, modifier = Modifier.testTag("link-required-retry")) { vm.startLinking() }
+                        TvButton("Exit Avid Viewer", modifier = Modifier.focusRequester(exit).testTag("link-required-exit")) { activity?.finish() }
+                    }
+                }
+                Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                    val code = vm.linkCode
+                    if (code != null) {
+                        QrCode(code.qrUrl, Modifier.size(300.dp).testTag("link-required-qr"))
+                        Label(com.avidviewer.tv.data.AccountApi.pretty(code.code), size = 56.sp, color = C.Accent, weight = FontWeight.Bold, modifier = Modifier.testTag("link-required-code"))
+                        val mins = ((code.expiresAt - vm.now) / 60_000L + 1).coerceAtLeast(1)
+                        Label("New code in $mins min", size = 14.sp, color = C.Muted)
+                    } else {
+                        Box(Modifier.size(300.dp).clip(RoundedCornerShape(12.dp)).background(C.Surface), contentAlignment = Alignment.Center) {
+                            Label(vm.accountStatus ?: "Getting a code…", size = 16.sp, color = C.Soft, lines = 6, modifier = Modifier.padding(24.dp))
+                        }
+                    }
+                }
+            }
+        }
+        LaunchedEffect(Unit) { runCatching { exit.requestFocus() } }
+    }
 }
