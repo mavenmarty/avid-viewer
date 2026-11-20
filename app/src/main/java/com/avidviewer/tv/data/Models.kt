@@ -156,7 +156,7 @@ data class Prefs(
     val sportsFinalHours: Int = 12,
     val sportsShowScores: Boolean = true,
     val autoUpdateCheck: Boolean = true,
-    /** Send the playback log (freezes and errors) to bugs@avidviewer.app automatically, at most once a day (1.5.0). */
+    /** Send the playback log (freezes and errors) to avidviewer.app automatically, at most once a day (1.5.0). */
     val autoSendPlaybackLog: Boolean = true,
     val myList: List<VodItem> = emptyList(),
     val tmdbKeyEnc: String = "",

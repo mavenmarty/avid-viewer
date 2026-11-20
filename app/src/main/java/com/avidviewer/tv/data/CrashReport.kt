@@ -6,9 +6,9 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
 
 /**
- * "Report issue" after a crash: sends the saved crash report to the crash relay ([Links.CRASH_RELAY],
- * a small web app that emails it to bugs@avidviewer.app), so a crash reaches the daily bug workflow
- * without the viewer writing an email.
+ * "Report issue" after a crash: sends the saved crash report to avidviewer.app (Admin › Reports), or through the
+ * crash relay ([Links.CRASH_RELAY], which only passes it on to the website) when the site can't be reached directly.
+ * Nothing is emailed (Nov 20, 2026).
  *
  * Sent: the app version, the device ([BugReport.device]) and the crash report, with web addresses,
  * host names, user names, passwords and tokens removed ([redact]). Never playlists, logins or keys.
