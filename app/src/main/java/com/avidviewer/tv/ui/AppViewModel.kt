@@ -515,6 +515,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         if (linkReminder) { linkReminder = false; status = "This device is linked to ${l.email}. Manage its playlists at avidviewer.app." }
         trail("account linked")
         syncAccountPlaylists()
+        claimReports()
+        if (reportUnlinkedNotice) { reportUnlinkedNotice = false; status = "This device is linked. Its reports show at avidviewer.app › Reports." }
     }
 
     /** Settings › Account › Link this TV: shows a code + QR code and waits (polling) for approval on the phone. */
@@ -565,7 +567,12 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 if (m == null) {
                     account.clear(); backupPinSet = false; lastBackupAt = 0L; cloudBackups = null; accountEmail = null; accountTvName = ""; noteBeta(null)
                     accountStatus = "This device was removed from your account on avidviewer.app. Link it again any time."
-                } else { account.update(m); accountEmail = m.email; accountTvName = m.name; noteBeta(m) }
+                } else {
+                    account.update(m); accountEmail = m.email; accountTvName = m.name; noteBeta(m)
+                    // "It's still happening" on one of this device's reports: send a new playback log now.
+                    if (m.sendLog && playbackLog.entries().isNotEmpty()) sendPlaybackLog(auto = true)
+                    if (unclaimedReports().isNotEmpty()) claimReports()
+                }
             }
         }
     }
@@ -629,20 +636,60 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     var playbackLogRev by mutableStateOf(0); private set
     internal var playbackRelay: String = com.avidviewer.tv.data.Links.CRASH_RELAY
 
-    /** Sends the playback log to bugs@avidviewer.app through the crash relay ([auto]: the once-a-day send). */
+    /**
+     * Sends the playback log to avidviewer.app (else through the email relay) ([auto]: the once-a-day send, or the one the
+     * account asked for after "It's still happening").
+     */
     fun sendPlaybackLog(auto: Boolean = false) {
         if (playbackLogBusy) return
         val newest = playbackLog.entries().lastOrNull()?.time ?: return
         playbackLogBusy = true
         if (!auto) playbackLogStatus = "Sending…"
         viewModelScope.launch {
-            val ok = withContext(Dispatchers.IO) {
-                com.avidviewer.tv.data.CrashReport.sendLog(installed.second, playbackLog.summary(), playbackLog.text(), playbackRelay)
+            val sent = withContext(Dispatchers.IO) {
+                val c = com.avidviewer.tv.data.CrashReport
+                c.deliver(c.logPayload(installed.second, playbackLog.summary(), playbackLog.text()), reportsSite, account.token, playbackRelay)
             }
             playbackLogBusy = false
-            if (ok) playbackLog.markSent(newest, auto)
-            if (!auto) playbackLogStatus = if (ok) "Sent to bugs@avidviewer.app. Thanks." else "Couldn't send the log. Check the connection and try again."
+            if (sent.ok) { playbackLog.markSent(newest, auto); noteReportSent(sent, show = !auto) }
+            if (!auto) playbackLogStatus = if (!sent.ok) "Couldn't send the log. Check the connection and try again."
+                else if (sent.viaSite && sent.linked) "Sent. Follow it at avidviewer.app › Reports. Thanks."
+                else "Sent. Thanks."
             playbackLogRev++
+        }
+    }
+
+    /** Where reports go first (avidviewer.app; nowhere in tests, so they use the relay as before). */
+    internal var reportsSite: String = if (android.os.Build.FINGERPRINT == "robolectric") "" else com.avidviewer.tv.data.AccountApi.BASE
+
+    /**
+     * Shown after a report is sent from a device that isn't linked: it can't be followed on avidviewer.app until the
+     * device is linked (owner, Nov 20), with the link code and QR code to do it now.
+     */
+    var reportUnlinkedNotice by mutableStateOf(false); private set
+    private val reportPrefs by lazy { app.getSharedPreferences("reports", android.content.Context.MODE_PRIVATE) }
+
+    /** Reports this device sent before it was linked, to hand to the account once it is (see [claimReports]). */
+    internal fun unclaimedReports(): List<String> = reportPrefs.getString("unclaimed", "").orEmpty().split(',').filter { it.startsWith("AVR-") }
+
+    private fun noteReportSent(sent: com.avidviewer.tv.data.CrashReport.Sent, show: Boolean) {
+        if (!sent.viaSite || sent.linked || sent.id == null) return
+        reportPrefs.edit().putString("unclaimed", (unclaimedReports() + sent.id).takeLast(50).joinToString(",")).apply()
+        if (show && !account.linked) { reportUnlinkedNotice = true; if (linkCode == null) startLinking() }
+    }
+
+    fun closeReportUnlinkedNotice() {
+        reportUnlinkedNotice = false
+        if (!account.linked) cancelLinking()
+    }
+
+    /** After linking: the reports sent before now show on the account's Reports page. */
+    private fun claimReports() {
+        val token = account.token ?: return
+        val ids = unclaimedReports().ifEmpty { return }
+        viewModelScope.launch(Dispatchers.IO) {
+            runCatching { com.avidviewer.tv.data.AccountApi.claimReports(token, ids, accountApi) }
+                .onSuccess { reportPrefs.edit().remove("unclaimed").apply() }
         }
     }
 
@@ -661,7 +708,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         securityBusy = true
         viewModelScope.launch {
             val ok = withContext(Dispatchers.IO) {
-                com.avidviewer.tv.data.CrashReport.sendSecurity(installed.second, log.summary(kinds), log.text())
+                val c = com.avidviewer.tv.data.CrashReport
+                c.deliver(c.securityPayload(installed.second, log.summary(kinds), log.text()), reportsSite, account.token, com.avidviewer.tv.data.Links.CRASH_RELAY).ok
             }
             if (ok) log.markSent(kinds)
             securityBusy = false
@@ -882,12 +930,17 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         crashReportBusy = true
         crashReportStatus = "Sending…"
         viewModelScope.launch {
-            val ok = withContext(Dispatchers.IO) { com.avidviewer.tv.data.CrashReport.send(installed.second, crash, crashRelay) }
+            val sent = withContext(Dispatchers.IO) {
+                val c = com.avidviewer.tv.data.CrashReport
+                c.deliver(c.payload(installed.second, crash), reportsSite, account.token, crashRelay)
+            }
+            val ok = sent.ok
             crashReportBusy = false
             if (ok) {
                 clearCrash()
                 crashReportSent = true
-                crashReportStatus = "Thanks. The report was sent to bugs@avidviewer.app."
+                crashReportStatus = if (sent.viaSite && sent.linked) "Thanks. The report was sent; follow it at avidviewer.app › Reports." else "Thanks. The report was sent."
+                noteReportSent(sent, show = true)
                 kotlinx.coroutines.delay(2500)
                 if (crashReportSent) closeCrashNotice()
             } else {

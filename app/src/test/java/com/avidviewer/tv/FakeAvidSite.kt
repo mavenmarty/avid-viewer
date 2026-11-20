@@ -18,6 +18,10 @@ class FakeAvidSite : AutoCloseable {
     /** Beta channel: what /api/tv/me says (null: the "beta" field is left out, as before Nov 18, 2026). */
     @Volatile var beta: String? = null
     @Volatile var removed = false
+    /** Reports sent to /api/tv/reports (with "auth" added), ids claimed, and whether /api/tv/me asks for a playback log. */
+    val reports = mutableListOf<org.json.JSONObject>()
+    val claimed = mutableListOf<String>()
+    @Volatile var sendLog = false
     /** Setup codes it serves: fingerprint → data. */
     /** 1.14.0 playlists from the account: what the device last reported, what it should do, and its answers. */
     @Volatile var report: org.json.JSONObject? = null
@@ -82,8 +86,19 @@ class FakeAvidSite : AutoCloseable {
             path == "/api/tv/link/start" -> 200 to """{"userCode":"K7M2QX9P","deviceCode":"DEVICECODE","interval":1,"expiresIn":600,"qrUrl":"$base/link/?c=K7M2QX9P"}"""
             path == "/api/tv/link/poll" -> 200 to (if (approved) """{"status":"approved","token":"TVTOKEN_abcdefghijklmnopqrstuvwxyz","email":"viewer@example.com","name":"Living room","deviceId":"d1"}""" else """{"status":"pending"}""")
             path == "/api/tv/link/claim" -> 200 to """{"status":"approved","token":"TVTOKEN_claimedabcdefghijklmnopqrst","email":"viewer@example.com","name":"Den TV","deviceId":"d2"}"""
-            path == "/api/tv/me" -> if (removed || !auth.startsWith("Bearer TVTOKEN_")) 401 to """{"error":"This TV is not linked."}""" else 200 to """{"email":"viewer@example.com","name":"Living room"""" + (beta?.let { ""","beta":$it""" } ?: "") + "}"
+            path == "/api/tv/me" -> if (removed || !auth.startsWith("Bearer TVTOKEN_")) 401 to """{"error":"This TV is not linked."}""" else 200 to """{"email":"viewer@example.com","name":"Living room"""" + (beta?.let { ""","beta":$it""" } ?: "") + (if (sendLog) ""","sendLog":true""" else "") + "}"
             path == "/api/tv/signout" -> 200 to """{"ok":true}"""
+            path == "/api/tv/reports" -> {
+                val linked = auth.startsWith("Bearer TVTOKEN_")
+                synchronized(reports) { reports += org.json.JSONObject(body).put("auth", auth) }
+                if (org.json.JSONObject(body).optString("kind") == "playback") sendLog = false
+                200 to """{"ok":true,"id":"AVR-${"%08x".format(reports.size)}","linked":$linked}"""
+            }
+            path == "/api/tv/reports/claim" -> {
+                val ids = org.json.JSONObject(body).getJSONArray("ids")
+                synchronized(claimed) { for (i in 0 until ids.length()) claimed += ids.getString(i) }
+                200 to """{"ok":true}"""
+            }
             path == "/api/tv/backup" && method == "POST" -> {
                 val o = org.json.JSONObject(body)
                 val d = deviceOf(auth)
