@@ -1247,9 +1247,9 @@ class UsabilityTest {
         }
     }
 
-    /** Nov 20: no email. When avidviewer.app can't be reached, Report a bug says so and offers Try again (no QR, no address). */
+    /** Nov 20: no email. When avidviewer.app can't be reached, Report a bug says so and keeps trying (no QR, no address). */
     @Test
-    fun reportABugWithoutTheWebsiteSaysSoAndOffersTryAgain() {
+    fun reportABugWithoutTheWebsiteSaysSoAndKeepsTrying() {
         rule.runOnIdle { vm.accountApi = "http://127.0.0.1:9" }
         go(Screen.SETTINGS)
         rule.runOnIdle { vm.settingsSection = "about" }
@@ -1258,7 +1258,7 @@ class UsabilityTest {
         assertTrue(rule.onAllNodesWithText("Report a bug").fetchSemanticsNodes().isNotEmpty())
         assertTrue(rule.onAllNodesWithText("App version:", substring = true).fetchSemanticsNodes().isNotEmpty())
         assertTrue(rule.onAllNodesWithText("Device:", substring = true).fetchSemanticsNodes().isNotEmpty())
-        assertTrue(rule.onAllNodesWithTag("bug-retry").fetchSemanticsNodes().isNotEmpty())
+        assertTrue(rule.onAllNodesWithText("can't be reached", substring = true).fetchSemanticsNodes().isNotEmpty())
         assertTrue("no QR without the website", rule.onAllNodesWithTag("bug-qr").fetchSemanticsNodes().isEmpty())
         assertTrue("no email address", rule.onAllNodesWithText("bugs@avidviewer.app", substring = true).fetchSemanticsNodes().isEmpty())
     }
@@ -1371,7 +1371,7 @@ class UsabilityTest {
         press(listOf(Key.DirectionCenter))
         fun focusedTag(): String = rule.onAllNodes(androidx.compose.ui.test.isFocused()).fetchSemanticsNodes()
             .joinToString { it.config.getOrNull(androidx.compose.ui.semantics.SemanticsProperties.TestTag) ?: focused() }
-        waitFor("OK opens Updates & about on its first block (focus: ${focusedTag()})") { vm.settingsSection == "about" && (focusedTag() == "block-Report a bug" || focusedTag() == "bug-retry") }
+        waitFor("OK opens Updates & about on its first block (focus: ${focusedTag()})") { vm.settingsSection == "about" && (focusedTag() == "block-Report a bug") }
         fun shownWhole(text: String) {
             val root = rule.onRoot().fetchSemanticsNode().boundsInRoot
             val b = rule.onAllNodesWithText(text).onFirst().fetchSemanticsNode().boundsInRoot

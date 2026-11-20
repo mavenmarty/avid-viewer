@@ -1066,18 +1066,18 @@ private fun BugReportBlock(vm: AppViewModel) {
     val crash = vm.lastCrash
     val details = remember(version, crash) { com.avidviewer.tv.data.BugReport.details(version, crash) }
     // Nov 20: the QR code opens avidviewer.app's Report a problem page for this device. No email: when the site can't be
-    // reached, say so and offer Try again.
-    androidx.compose.runtime.LaunchedEffect(Unit) { vm.loadBugForm() }
+    // reached, say so and keep trying every 30 seconds while this is on screen.
+    androidx.compose.runtime.LaunchedEffect(Unit) { while (true) { if (vm.bugFormUrl == null) vm.loadBugForm(); kotlinx.coroutines.delay(30_000) } }
     val form = vm.bugFormUrl
     SettingBlock(
         "Report a bug",
         when {
             form != null -> "Something not working? Scan the code with your phone to tell us on avidviewer.app: this device's details are sent with it." +
                 (if (vm.account.linked) " Follow it afterwards at avidviewer.app › Reports." else "")
-            vm.bugFormFailed -> "avidviewer.app can't be reached right now, so the Report a problem page isn't ready. Check this device's internet connection and try again in a few minutes."
+            vm.bugFormFailed -> "avidviewer.app can't be reached right now, so the Report a problem page isn't ready. Check this device's internet connection; it tries again by itself."
             else -> "Getting the Report a problem page ready…"
         },
-        focusable = form != null || !vm.bugFormFailed, // with Try again, that button takes the highlight instead
+        focusable = true,
     ) {
         Row(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
             if (form != null) QrCode(form, Modifier.size(132.dp).testTag("bug-qr"))
@@ -1088,7 +1088,6 @@ private fun BugReportBlock(vm: AppViewModel) {
                 }
                 details.forEach { (k, v) -> Label("$k: $v", size = 12.sp, color = C.Text, lines = Int.MAX_VALUE) }
                 Label("No playlists, logins or provider addresses are included.", size = 11.sp, color = C.Muted, lines = Int.MAX_VALUE)
-                if (form == null && vm.bugFormFailed) TvButton("Try again", modifier = Modifier.testTag("bug-retry")) { vm.loadBugForm() }
             }
         }
     }
