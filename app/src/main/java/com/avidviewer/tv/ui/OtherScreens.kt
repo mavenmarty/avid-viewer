@@ -987,6 +987,17 @@ private fun androidx.compose.foundation.lazy.LazyListScope.displaySettings(vm: A
  * Settings › Account (1.11.0): link this TV to an avidviewer.app account with a code shown here (and a QR code for
  * avidviewer.app/link), or sign it out. Linking sends only the TV's name, model and app version.
  */
+/** Nov 20, 2026: this device's code was entered on an account that already has the most devices it can have. */
+@Composable
+internal fun LinkFullNotice(vm: AppViewModel, size: androidx.compose.ui.unit.TextUnit = 14.sp) {
+    val n = vm.linkFull
+    if (n <= 0) return
+    Label(
+        "That account already has $n devices, the most it can have. Remove one you no longer use at avidviewer.app/devices, then choose Add this device again. This code keeps working.",
+        size = size, color = C.Live, weight = FontWeight.SemiBold, lines = Int.MAX_VALUE, modifier = Modifier.testTag("link-full"),
+    )
+}
+
 /** The code and QR code for linking this TV at avidviewer.app/link (Settings › Account and the welcome screen). */
 @Composable
 internal fun LinkCodePanel(vm: AppViewModel, code: AppViewModel.LinkCode) {
@@ -999,6 +1010,7 @@ internal fun LinkCodePanel(vm: AppViewModel, code: AppViewModel.LinkCode) {
             Label(com.avidviewer.tv.data.AccountApi.pretty(code.code), size = 40.sp, color = C.Accent, weight = FontWeight.Bold, modifier = Modifier.testTag("account-code"))
             val mins = ((code.expiresAt - vm.now) / 60_000L + 1).coerceAtLeast(1)
             Label("The code works for $mins more minute${if (mins == 1L) "" else "s"}. This screen updates by itself once you've approved it.", size = 13.sp, color = C.Muted, lines = 2)
+            LinkFullNotice(vm)
             TvButton("Cancel") { vm.cancelLinking() }
         }
     }

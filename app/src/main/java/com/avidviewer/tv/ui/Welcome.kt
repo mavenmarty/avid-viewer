@@ -103,6 +103,7 @@ private fun WelcomeLinkPanel(vm: AppViewModel) {
                 Label("and enter", size = 13.sp, color = C.Soft)
                 Label(com.avidviewer.tv.data.AccountApi.pretty(code.code), size = 34.sp, color = C.Accent, weight = FontWeight.Bold, modifier = Modifier.testTag("welcome-link-code"))
                 Label("No account yet? You can make one there.", size = 12.sp, color = C.Muted, lines = 2)
+                LinkFullNotice(vm, 13.sp)
             }
             else -> Label(vm.accountStatus ?: "Getting a code…", size = 14.sp, color = C.Soft, lines = Int.MAX_VALUE)
         }
@@ -180,6 +181,7 @@ fun LinkRequiredScreen(vm: AppViewModel) {
                     Label("1. On your phone or computer, scan the QR code, or go to avidviewer.app/link.", size = 18.sp, color = C.Text, lines = 3)
                     Label("2. Sign in (or make a free account) and approve this device.", size = 18.sp, color = C.Text, lines = 3)
                     Label("This screen closes by itself once it's linked.", size = 15.sp, color = C.Muted, lines = 2)
+                    LinkFullNotice(vm, 17.sp)
                     Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                         if (vm.linkCode == null && vm.accountStatus != null && vm.accountStatus != "Getting a code…")
                             TvButton("Try again", primary = true, modifier = Modifier.testTag("link-required-retry")) { vm.startLinking() }

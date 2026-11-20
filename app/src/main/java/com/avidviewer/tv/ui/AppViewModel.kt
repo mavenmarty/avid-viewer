@@ -510,7 +510,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     private fun linkedNow(l: com.avidviewer.tv.data.AccountApi.Linked) {
         account.save(l)
-        accountEmail = l.email; accountTvName = l.name; linkCode = null
+        accountEmail = l.email; accountTvName = l.name; linkCode = null; linkFull = 0
         accountStatus = "Linked to ${l.email} as \"${l.name}\"."
         if (linkReminder) { linkReminder = false; status = "This device is linked to ${l.email}. Manage its playlists at avidviewer.app." }
         trail("account linked")
@@ -523,6 +523,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** Settings › Account › Link this TV: shows a code + QR code and waits (polling) for approval on the phone. */
     fun startLinking() {
         linkJob?.cancel()
+        linkFull = 0
         accountStatus = "Getting a code…"
         linkJob = viewModelScope.launch {
             val start = try {
@@ -543,12 +544,19 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                     }
                     continue // a network blip: keep trying until the code runs out
                 }
-                if (l != null) { linkedNow(l); return@launch }
+                linkFull = l.full
+                l.linked?.let { linkedNow(it); return@launch }
             }
         }
     }
 
-    fun cancelLinking() { linkJob?.cancel(); linkJob = null; linkCode = null; accountStatus = null }
+    fun cancelLinking() { linkJob?.cancel(); linkJob = null; linkCode = null; accountStatus = null; linkFull = 0 }
+
+    /**
+     * Nov 20, 2026: an account can have at most 4 devices. When this device's code was entered on a full account,
+     * the website says so on the next poll and every link screen shows [LinkFullNotice]; 0 when it isn't.
+     */
+    var linkFull by mutableStateOf(0); private set
 
     /** Settings › Account › Sign out of this TV: forgets the link here and tells the account (best effort). */
     fun signOutOfAccount() {
