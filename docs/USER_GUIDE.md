@@ -4,7 +4,7 @@
      (.github/workflows/user-guide.yml). Feature descriptions are written by hand. -->
 This guide covers **Avid Viewer 1.21.1**, the current public release. Avid Viewer is an IPTV player for Android TV and Fire TV. You bring your own provider (an Xtream Codes login or an M3U link); the app doesn't include any channels.
 
-**Contents:** [Getting started](#1-getting-started) · [Main menu](#2-main-menu) · [TV Guide](#3-tv-guide) · [Full-screen playback](#4-full-screen-playback) · [Search](#5-search) · [Discover](#6-discover) · [Sports](#7-sports) · [Movies and Series](#8-movies-and-series) · [Settings](#9-settings) ([Profiles](#profiles)) · [Privacy](#10-privacy) · [Troubleshooting](#11-troubleshooting) · [Control4](#12-control4) · [Supplemental services](#13-supplemental-services) · [Cable & satellite](#14-using-your-cable-or-satellite-subscription) · [Release notes](#release-notes)
+**Contents:** [Getting started](#1-getting-started) · [Main menu](#2-main-menu) · [TV Guide](#3-tv-guide) · [Full-screen playback](#4-full-screen-playback) · [Search](#5-search) · [Discover](#6-discover) · [Sports](#7-sports) · [Movies and Series](#8-movies-and-series) · [Settings](#9-settings) ([Profiles](#profiles)) · [Privacy](#10-privacy) · [Troubleshooting](#11-troubleshooting) · [Control4](#12-control4) · [Supplemental services](#13-supplemental-services) · [Cable & satellite](#14-using-your-cable-or-satellite-subscription) · [Free services](#15-free-services) · [Release notes](#release-notes)
 
 ## 1. Getting started
 
@@ -759,6 +759,136 @@ An HDHomeRun network tuner with a TV antenna picks up free over-the-air channels
 - **The playlist won't load:** make sure the Fire TV and the server are on the same home network, and that the address and port are right. Open the M3U link in a web browser on a computer at home; it should download a file.
 - **A channel shows "not available" or won't play:** the network may not offer TV Everywhere for your provider or package, or the channel uses copy protection.
 - **No guide listings:** check the TV guide link, then use **Download the guide now** in Settings › TV guide. For a single channel, press Menu on it and choose **Match guide…**.
+
+## 15. Free services
+
+Free TV channels you can add like any other M3U playlist. Avid Viewer doesn't run, check or vouch for these lists; they're maintained by other people, and channels come and go.
+
+### Free-TV
+
+Source: **[Free-TV/IPTV](https://github.com/Free-TV/IPTV)** on GitHub, a community-maintained list of free TV channels from around the world. Its rules: only channels that broadcasters make available for free (over the air, satellite or their own websites), no paid channels, mainstream channels only, and one good stream per channel, HD where there is one. The lists below are theirs; Avid Viewer only shows where to find them. To suggest a channel, or report one that's gone, use the Free-TV project on GitHub, not Avid Viewer's bug report.
+
+**How to add one**
+
+1. Pick a country (or a theme) from the table below.
+2. At [avidviewer.app/playlists](https://avidviewer.app/playlists/), choose **Add a playlist › M3U link**. On the TV: **Settings › Playlists › Add playlist › M3U link**.
+3. Name it as in the **Service** column, paste the **M3U link**, and paste the **EPG link** into **Guide (XMLTV) link** (on the TV: **TV guide (XMLTV) link**). Where there's no EPG link, leave it empty.
+4. On the TV, open the playlist's **▤ Guide sources** and turn **Provider's guide** off. Free-TV's playlists name about a hundred guide files in one line, which Avid Viewer can't use; the EPG link you added is the one to keep.
+
+**Good to know**
+
+- **Some channels only play in their own country.** Free-TV marks them with Ⓖ in its lists. Outside that country they won't start; that's the broadcaster's choice, not a problem with the app.
+- **Some channels are live YouTube streams** (marked Ⓨ by Free-TV). They don't play in Avid Viewer.
+- **Guide coverage varies.** The EPG links are free guide files from epgshare01.online. They cover most channels for the larger countries but not all; to connect a channel to its listings yourself, see [Matching a channel to the guide](#matching-a-channel-to-the-guide).
+- **Lists change.** Free-TV updates its lists often, and Avid Viewer downloads the playlist again every day, so new channels appear and dead ones disappear by themselves.
+- **Everything at once:** `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlist.m3u8` has every country (over 2,000 channels). It's slow to load and hard to browse on a TV; one or two countries work better.
+
+**By country**
+
+| Service | M3U link | EPG link |
+|---|---|---|
+| Free-TV: Albania | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_albania.m3u8` | `https://epgshare01.online/epgshare01/epg_ripper_AL1.xml.gz` |
+| Free-TV: Andorra | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_andorra.m3u8` | — |
+| Free-TV: Argentina | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_argentina.m3u8` | `https://epgshare01.online/epgshare01/epg_ripper_AR1.xml.gz` |
+| Free-TV: Armenia | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_armenia.m3u8` | — |
+| Free-TV: Australia | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_australia.m3u8` | `https://epgshare01.online/epgshare01/epg_ripper_AU1.xml.gz` |
+| Free-TV: Austria | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_austria.m3u8` | `https://epgshare01.online/epgshare01/epg_ripper_AT1.xml.gz` |
+| Free-TV: Azerbaijan | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_azerbaijan.m3u8` | — |
+| Free-TV: Belarus | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_belarus.m3u8` | — |
+| Free-TV: Belgium | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_belgium.m3u8` | `https://epgshare01.online/epgshare01/epg_ripper_BE2.xml.gz` |
+| Free-TV: Bosnia and Herzegovina | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_bosnia_and_herzegovina.m3u8` | `https://epgshare01.online/epgshare01/epg_ripper_BA1.xml.gz` |
+| Free-TV: Brazil | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_brazil.m3u8` | `https://epgshare01.online/epgshare01/epg_ripper_BR1.xml.gz` |
+| Free-TV: Bulgaria | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_bulgaria.m3u8` | `https://epgshare01.online/epgshare01/epg_ripper_BG1.xml.gz` |
+| Free-TV: Canada | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_canada.m3u8` | `https://epgshare01.online/epgshare01/epg_ripper_CA1.xml.gz` |
+| Free-TV: Chad | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_chad.m3u8` | — |
+| Free-TV: Chile | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_chile.m3u8` | `https://epgshare01.online/epgshare01/epg_ripper_CL1.xml.gz` |
+| Free-TV: China | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_china.m3u8` | — |
+| Free-TV: Costa Rica | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_costa_rica.m3u8` | `https://epgshare01.online/epgshare01/epg_ripper_CR1.xml.gz` |
+| Free-TV: Croatia | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_croatia.m3u8` | `https://epgshare01.online/epgshare01/epg_ripper_HR1.xml.gz` |
+| Free-TV: Cyprus | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_cyprus.m3u8` | `https://epgshare01.online/epgshare01/epg_ripper_CY1.xml.gz` |
+| Free-TV: Czech Republic | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_czech_republic.m3u8` | `https://epgshare01.online/epgshare01/epg_ripper_CZ1.xml.gz` |
+| Free-TV: Denmark | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_denmark.m3u8` | `https://epgshare01.online/epgshare01/epg_ripper_DK1.xml.gz` |
+| Free-TV: Dominican Republic | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_dominican_republic.m3u8` | `https://epgshare01.online/epgshare01/epg_ripper_DO1.xml.gz` |
+| Free-TV: Egypt | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_egypt.m3u8` | `https://epgshare01.online/epgshare01/epg_ripper_EG1.xml.gz` |
+| Free-TV: Estonia | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_estonia.m3u8` | — |
+| Free-TV: Faroe Islands | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_faroe_islands.m3u8` | — |
+| Free-TV: Finland | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_finland.m3u8` | `https://epgshare01.online/epgshare01/epg_ripper_FI1.xml.gz` |
+| Free-TV: France | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_france.m3u8` | `https://epgshare01.online/epgshare01/epg_ripper_FR1.xml.gz` |
+| Free-TV: Georgia | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_georgia.m3u8` | — |
+| Free-TV: Germany | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_germany.m3u8` | `https://epgshare01.online/epgshare01/epg_ripper_DE1.xml.gz` |
+| Free-TV: Greece | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_greece.m3u8` | `https://epgshare01.online/epgshare01/epg_ripper_GR1.xml.gz` |
+| Free-TV: Greenland | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_greenland.m3u8` | — |
+| Free-TV: Hong Kong | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_hong_kong.m3u8` | `https://epgshare01.online/epgshare01/epg_ripper_HK1.xml.gz` |
+| Free-TV: Hungary | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_hungary.m3u8` | `https://epgshare01.online/epgshare01/epg_ripper_HU1.xml.gz` |
+| Free-TV: Iceland | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_iceland.m3u8` | — |
+| Free-TV: India | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_india.m3u8` | `https://epgshare01.online/epgshare01/epg_ripper_IN1.xml.gz` |
+| Free-TV: Indonesia | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_indonesia.m3u8` | `https://epgshare01.online/epgshare01/epg_ripper_ID1.xml.gz` |
+| Free-TV: Iran | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_iran.m3u8` | — |
+| Free-TV: Iraq | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_iraq.m3u8` | — |
+| Free-TV: Ireland | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_ireland.m3u8` | `https://epgshare01.online/epgshare01/epg_ripper_IE1.xml.gz` |
+| Free-TV: Israel | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_israel.m3u8` | `https://epgshare01.online/epgshare01/epg_ripper_IL1.xml.gz` |
+| Free-TV: Italy | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_italy.m3u8` | `https://epgshare01.online/epgshare01/epg_ripper_IT1.xml.gz` |
+| Free-TV: Japan | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_japan.m3u8` | `https://epgshare01.online/epgshare01/epg_ripper_JP1.xml.gz` |
+| Free-TV: Kazakhstan | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_kazakhstan.m3u8` | — |
+| Free-TV: Kenya | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_kenya.m3u8` | `https://epgshare01.online/epgshare01/epg_ripper_KE1.xml.gz` |
+| Free-TV: South Korea | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_korea.m3u8` | `https://epgshare01.online/epgshare01/epg_ripper_KR1.xml.gz` |
+| Free-TV: Kosovo | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_kosovo.m3u8` | — |
+| Free-TV: Latvia | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_latvia.m3u8` | `https://epgshare01.online/epgshare01/epg_ripper_LV1.xml.gz` |
+| Free-TV: Lebanon | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_lebanon.m3u8` | — |
+| Free-TV: Lithuania | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_lithuania.m3u8` | `https://epgshare01.online/epgshare01/epg_ripper_LT1.xml.gz` |
+| Free-TV: Luxembourg | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_luxembourg.m3u8` | — |
+| Free-TV: Macau | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_macau.m3u8` | — |
+| Free-TV: Malta | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_malta.m3u8` | `https://epgshare01.online/epgshare01/epg_ripper_MT1.xml.gz` |
+| Free-TV: Mexico | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_mexico.m3u8` | `https://epgshare01.online/epgshare01/epg_ripper_MX1.xml.gz` |
+| Free-TV: Moldova | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_moldova.m3u8` | — |
+| Free-TV: Monaco | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_monaco.m3u8` | — |
+| Free-TV: Mongolia | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_mongolia.m3u8` | — |
+| Free-TV: Montenegro | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_montenegro.m3u8` | — |
+| Free-TV: Netherlands | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_netherlands.m3u8` | `https://epgshare01.online/epgshare01/epg_ripper_NL1.xml.gz` |
+| Free-TV: Nigeria | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_nigeria.m3u8` | `https://epgshare01.online/epgshare01/epg_ripper_NG1.xml.gz` |
+| Free-TV: North Korea | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_north_korea.m3u8` | — |
+| Free-TV: North Macedonia | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_north_macedonia.m3u8` | — |
+| Free-TV: Norway | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_norway.m3u8` | `https://epgshare01.online/epgshare01/epg_ripper_NO1.xml.gz` |
+| Free-TV: Paraguay | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_paraguay.m3u8` | — |
+| Free-TV: Peru | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_peru.m3u8` | `https://epgshare01.online/epgshare01/epg_ripper_PE1.xml.gz` |
+| Free-TV: Poland | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_poland.m3u8` | `https://epgshare01.online/epgshare01/epg_ripper_PL1.xml.gz` |
+| Free-TV: Portugal | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_portugal.m3u8` | `https://epgshare01.online/epgshare01/epg_ripper_PT1.xml.gz` |
+| Free-TV: Qatar | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_qatar.m3u8` | — |
+| Free-TV: Romania | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_romania.m3u8` | `https://epgshare01.online/epgshare01/epg_ripper_RO1.xml.gz` |
+| Free-TV: Russia | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_russia.m3u8` | — |
+| Free-TV: San Marino | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_san_marino.m3u8` | — |
+| Free-TV: Saudi Arabia | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_saudi_arabia.m3u8` | `https://epgshare01.online/epgshare01/epg_ripper_SA1.xml.gz` |
+| Free-TV: Serbia | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_serbia.m3u8` | `https://epgshare01.online/epgshare01/epg_ripper_RS1.xml.gz` |
+| Free-TV: Slovakia | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_slovakia.m3u8` | `https://epgshare01.online/epgshare01/epg_ripper_SK1.xml.gz` |
+| Free-TV: Slovenia | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_slovenia.m3u8` | — |
+| Free-TV: Somalia | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_somalia.m3u8` | — |
+| Free-TV: Spain | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_spain.m3u8` | `https://epgshare01.online/epgshare01/epg_ripper_ES1.xml.gz` |
+| Free-TV: Sweden | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_sweden.m3u8` | `https://epgshare01.online/epgshare01/epg_ripper_SE1.xml.gz` |
+| Free-TV: Switzerland | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_switzerland.m3u8` | `https://epgshare01.online/epgshare01/epg_ripper_CH1.xml.gz` |
+| Free-TV: Taiwan | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_taiwan.m3u8` | — |
+| Free-TV: Trinidad and Tobago | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_trinidad.m3u8` | — |
+| Free-TV: Turkey | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_turkey.m3u8` | `https://epgshare01.online/epgshare01/epg_ripper_TR1.xml.gz` |
+| Free-TV: Turkmenistan | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_turkmenistan.m3u8` | — |
+| Free-TV: United Kingdom | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_uk.m3u8` | `https://epgshare01.online/epgshare01/epg_ripper_UK1.xml.gz` |
+| Free-TV: Ukraine | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_ukraine.m3u8` | — |
+| Free-TV: United Arab Emirates | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_united_arab_emirates.m3u8` | — |
+| Free-TV: United States | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_usa.m3u8` | `https://epgshare01.online/epgshare01/epg_ripper_US1.xml.gz` |
+| Free-TV: Venezuela | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_venezuela.m3u8` | — |
+
+**By theme**
+
+| Service | M3U link | EPG link |
+|---|---|---|
+| Free-TV: Documentaries (Arabic) | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_zz_documentaries_ar.m3u8` | — |
+| Free-TV: Documentaries (English) | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_zz_documentaries_en.m3u8` | — |
+| Free-TV: Movies | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_zz_movies.m3u8` | — |
+| Free-TV: Music (English) | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_zz_music_en.m3u8` | — |
+| Free-TV: News (Arabic) | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_zz_news_ar.m3u8` | `https://epgshare01.online/epgshare01/epg_ripper_ALJAZEERA1.xml.gz` |
+| Free-TV: News (English) | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_zz_news_en.m3u8` | — |
+| Free-TV: News (Spanish) | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_zz_news_es.m3u8` | — |
+| Free-TV: On demand (Italian) | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_zz_vod_it.m3u8` | — |
+
+Channel lists from [Free-TV/IPTV](https://github.com/Free-TV/IPTV) (checked November 20, 2026). Guide files from [epgshare01.online](https://epgshare01.online/), as listed in Free-TV's `epglist.txt`.
 
 ## Release notes
 
