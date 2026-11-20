@@ -1229,6 +1229,40 @@ class UsabilityTest {
      * then clears it; Cancel keeps it and sends nothing; a report that can't be sent is kept.
      * The relay here is a stand-in that answers like Apps Script: a redirect to the result.
      */
+    /**
+     * 1.22.0 (owner, Nov 20): reports go to avidviewer.app, not the email relay. A device that isn't linked is told it
+     * can't follow the report and is offered the link code; once linked, the report is handed to the account. A device
+     * asked for a new playback log ("It's still happening" on the website) sends one at its next check-in.
+     */
+    @Test
+    fun reportsGoToTheWebsiteAndAnUnlinkedDeviceLinksAndClaimsThem() {
+        val app = ApplicationProvider.getApplicationContext<Application>()
+        FakeAvidSite().use { site ->
+            FakeRelay().use { relay ->
+                java.io.File(app.filesDir, "last_crash.txt").writeText("Avid Viewer 1.22.0 · 2026-11-20 05:00:00\nDevice: Amazon AFTKRT · Android 11\n\nError: Avid Viewer closed while in use; no error reached the app.")
+                rule.runOnIdle { vm.accountApi = site.base; vm.reportsSite = site.base; vm.crashRelay = relay.url; vm.reloadCrash(); vm.crashNoticeSeen = false; vm.crashReportStatus = null }
+                settle()
+                rule.onNodeWithTag("crash-report").performClick()
+                waitFor("sent to the website") { site.reports.size == 1 && vm.lastCrash == null }
+                assertEquals("nothing through the relay", 0, relay.posts.size)
+                assertEquals("no token from a device that isn't linked", "", site.reports[0].getString("auth"))
+                waitFor("the not-linked notice with a code") { vm.reportUnlinkedNotice && rule.onAllNodesWithTag("report-unlinked").fetchSemanticsNodes().isNotEmpty() && rule.onAllNodesWithText("K7M2-QX9P").fetchSemanticsNodes().isNotEmpty() }
+                assertEquals(listOf("AVR-00000001"), vm.unclaimedReports())
+                site.approved = true
+                waitFor("linked, and the report handed to the account") { vm.account.linked && synchronized(site.claimed) { site.claimed.toList() } == listOf("AVR-00000001") }
+                waitFor("notice closed") { !vm.reportUnlinkedNotice && vm.unclaimedReports().isEmpty() }
+                // "It's still happening" on the website: the next check-in sends a new playback log, with the token.
+                rule.runOnIdle { vm.playbackLog.add(com.avidviewer.tv.data.PlaybackLog.STALL, "Live channel 4F2A", "Froze 3 s waiting for data.") }
+                site.sendLog = true
+                rule.runOnIdle { vm.checkAccount() }
+                waitFor("a playback log sent") { site.reports.size == 2 }
+                assertEquals("playback", site.reports[1].getString("kind"))
+                assertTrue(site.reports[1].getString("auth").startsWith("Bearer TVTOKEN_"))
+                assertEquals(0, relay.posts.size)
+            }
+        }
+    }
+
     @Test
     fun crashDialogReportIssueSendsAndClearsAndCancelKeeps() {
         val app = ApplicationProvider.getApplicationContext<Application>()

@@ -159,7 +159,7 @@ fun AppRoot(vm: AppViewModel) {
                 text = {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         if (!vm.crashReportSent) Label(
-                            "Sorry about that. The details were saved on this device. Report issue sends them to bugs@avidviewer.app so the problem can be found and fixed: the app version, the TV model and the error, with no playlists, addresses or logins.",
+                            "Sorry about that. The details were saved on this device. Report issue sends them to Avid Viewer so the problem can be found and fixed: the app version, the TV model and the error, with no playlists, addresses or logins.",
                             size = 14.sp, color = C.Soft, lines = Int.MAX_VALUE,
                         )
                         vm.crashReportStatus?.let { Label(it, size = 13.sp, color = if (vm.crashReportSent) C.Text else C.Accent, lines = 3, modifier = Modifier.testTag("crash-report-status")) }
@@ -174,6 +174,8 @@ fun AppRoot(vm: AppViewModel) {
                 },
             )
         }
+        // A report sent from a device that isn't linked can't be followed on avidviewer.app: say so, and offer to link it.
+        if (vm.reportUnlinkedNotice && !((vm.lastCrash != null || vm.crashReportSent) && !vm.crashNoticeSeen) && vm.screen != Screen.PLAYER) ReportUnlinkedDialog(vm)
         // New version found: ask before updating (never interrupts full-screen viewing).
         val rel = vm.update
         // Opens by itself only once the latest release has been out 24 hours (see updatePromptAllowed).

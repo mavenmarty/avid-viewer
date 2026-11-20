@@ -132,3 +132,28 @@ fun LinkReminderDialog(vm: AppViewModel) {
         dismissButton = { TvButton("Not now", modifier = Modifier.testTag("link-reminder-later")) { vm.remindLinkLater() } },
     )
 }
+
+/**
+ * After a crash report or playback log is sent from a device that isn't linked (owner, Nov 20): it can't be followed on
+ * avidviewer.app › Reports until the device is linked. Shows the link code and QR code; linking claims the report.
+ */
+@Composable
+fun ReportUnlinkedDialog(vm: AppViewModel) {
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = { vm.closeReportUnlinkedNotice() },
+        containerColor = C.Surface,
+        modifier = Modifier.testTag("report-unlinked"),
+        title = { androidx.compose.material3.Text("Report sent", color = C.Text, fontWeight = FontWeight.Bold) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Label("Thanks. This device isn't linked to an Avid Viewer account, so you can't follow what happens to this report.", size = 14.sp, color = C.Soft, lines = Int.MAX_VALUE)
+                Label("Link it, and this report and any you send later show at avidviewer.app › Reports.", size = 14.sp, color = C.Soft, lines = Int.MAX_VALUE)
+                val code = vm.linkCode
+                if (code != null) LinkCodePanel(vm, code)
+                else Label(vm.accountStatus ?: "Getting a code…", size = 14.sp, color = C.Soft, lines = Int.MAX_VALUE)
+            }
+        },
+        confirmButton = {},
+        dismissButton = { TvButton("Not now", modifier = Modifier.testTag("report-unlinked-later")) { vm.closeReportUnlinkedNotice() } },
+    )
+}

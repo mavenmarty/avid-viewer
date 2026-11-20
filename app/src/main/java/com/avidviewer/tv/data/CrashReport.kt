@@ -14,6 +14,12 @@ import org.json.JSONObject
  * host names, user names, passwords and tokens removed ([redact]). Never playlists, logins or keys.
  */
 object CrashReport {
+    /**
+     * What happened to a report. [id]: the report id avidviewer.app gave it (AVR-…); [linked]: the site knows which
+     * account it belongs to; [viaSite]: false when it went through the email relay instead.
+     */
+    data class Sent(val ok: Boolean, val id: String? = null, val linked: Boolean = false, val viaSite: Boolean = false)
+
     /** What is sent, as JSON (the relay checks "app" and the size of each field). */
     fun payload(appVersion: String, crash: String): JSONObject {
         val clean = redact(crash)
@@ -46,6 +52,31 @@ object CrashReport {
      * redirect to the result, which OkHttp follows (as a GET).
      */
     fun send(appVersion: String, crash: String, relay: String = Links.CRASH_RELAY): Boolean = post(payload(appVersion, crash), relay)
+
+    /**
+     * From 1.22.0 reports go to avidviewer.app ([site] + /api/tv/reports, with the device's [token] when it's linked), where
+     * the account follows them on its Reports page and the owner sorts them. The email relay is used only when the site
+     * can't be reached (no answer, or a server error); a report the site turns down (too many, too big) isn't retried.
+     */
+    fun deliver(json: JSONObject, site: String, token: String?, relay: String): Sent {
+        toSite(json, site, token)?.let { return it }
+        return Sent(post(json, relay))
+    }
+
+    private fun toSite(json: JSONObject, site: String, token: String?): Sent? {
+        if (site.isBlank()) return null
+        val b = Request.Builder().url(site.trimEnd('/') + "/api/tv/reports").header("User-Agent", USER_AGENT)
+            .post(json.toString().toRequestBody("application/json; charset=utf-8".toMediaType()))
+        token?.let { b.header("Authorization", "Bearer $it") }
+        return try {
+            Net.client.newCall(b.build()).execute().use { r ->
+                if (r.code >= 500) return null
+                val o = runCatching { JSONObject(r.body?.string().orEmpty()) }.getOrDefault(JSONObject())
+                if (r.isSuccessful && o.optBoolean("ok")) Sent(true, o.optString("id").takeIf { it.startsWith("AVR-") }, o.optBoolean("linked"), true)
+                else Sent(false, viaSite = true)
+            }
+        } catch (_: Exception) { null }
+    }
 
     /**
      * The playback log (1.5.0) for the same relay: "kind" = "playback" (the relay titles the email "playback log";

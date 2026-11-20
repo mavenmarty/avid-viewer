@@ -2,7 +2,7 @@
 
 <!-- The version below and the Release notes section are updated automatically after each published build
      (.github/workflows/user-guide.yml). Feature descriptions are written by hand. -->
-This guide covers **Avid Viewer 1.21.0**, the current public release. Avid Viewer is an IPTV player for Android TV and Fire TV. You bring your own provider (an Xtream Codes login or an M3U link); the app doesn't include any channels.
+This guide covers **Avid Viewer 1.21.1**, the current public release. Avid Viewer is an IPTV player for Android TV and Fire TV. You bring your own provider (an Xtream Codes login or an M3U link); the app doesn't include any channels.
 
 **Contents:** [Getting started](#1-getting-started) · [Main menu](#2-main-menu) · [TV Guide](#3-tv-guide) · [Full-screen playback](#4-full-screen-playback) · [Search](#5-search) · [Discover](#6-discover) · [Sports](#7-sports) · [Movies and Series](#8-movies-and-series) · [Settings](#9-settings) ([Profiles](#profiles)) · [Privacy](#10-privacy) · [Troubleshooting](#11-troubleshooting) · [Control4](#12-control4) · [Supplemental services](#13-supplemental-services) · [Cable & satellite](#14-using-your-cable-or-satellite-subscription) · [Release notes](#release-notes)
 
@@ -593,9 +593,11 @@ The app notes every freeze in the playback log, with its likely cause. Open **Me
 - **"the network or the provider's server (connection timed out…)"**: the connection dropped. Check Wi-Fi (a wired connection or a closer router helps), or the provider may be overloaded.
 - **"too slow (getting 3.1 Mb/s, the stream needs 8 Mb/s)"**: the stream needs more than the TV is getting. Try an HD instead of a 4K channel, or improve the connection.
 - **"data stopped arriving… the provider's server paused the stream"**: no error, but nothing came. Usually the provider.
-- **"the TV's video decoder"** (picture stopped while the sound went on, or many dropped frames): the TV struggled with the video, often 4K or HEVC on a Fire TV Stick. Try the HD version of the channel.
+- **"the TV's video decoder"** (picture stopped while the sound went on, or many dropped frames), or **"the TV's video decoder fell behind, not the download"** (a stop with plenty buffered): the TV struggled with the video, often 4K or HEVC on a Fire TV Stick. The app tries the TV's other video decoder for that channel by itself (see below); if it keeps happening, try the HD version of the channel.
 
-**Automatic reconnect.** When the picture stands still for 5 seconds while the sound plays, or no data has arrived for 4 seconds with less than 8 seconds left in the buffer, the app reopens the stream by itself and shows "Reconnecting…". Live channels come back at the live point, movies and episodes where they were. It doesn't reconnect in a channel's first 10 seconds. A second reconnect within a minute restarts the player completely; after 3 reconnects in 3 minutes it keeps trying every 30 seconds while the picture stays stuck; it also reconnects when the picture has waited 6 seconds while the provider only trickles data, and when the picture keeps stopping for a moment (more than 5 times in 30 seconds, logged once as "Stuttered N times"). Each reconnect is in the playback log, with whether the picture came back.
+**Automatic reconnect.** When the picture stands still for 5 seconds while the sound plays, or no data has arrived for 4 seconds with less than 8 seconds left in the buffer, the app reopens the stream by itself and shows "Reconnecting…". Live channels come back at the live point, movies and episodes where they were. It doesn't reconnect in a channel's first 10 seconds. A second reconnect within a minute restarts the player completely; after 3 reconnects in 3 minutes it keeps trying while the channel stays stuck, every 15 seconds for a still picture and every 30 seconds otherwise. It also reconnects when the picture has waited 6 seconds while the provider only trickles data (with little buffered), and when the picture keeps stopping for a moment (more than 5 times in 30 seconds, logged once as "Stuttered N times"). With 20 seconds or more buffered, short stops come from the TV's decoder, so the app doesn't throw the buffer away. Each reconnect is in the playback log, with whether the picture came back. Stops shorter than a second are never logged as freezes on their own.
+
+**The TV's other video decoder.** If a channel's picture stops a second time, or it stops with a decoding error, the app restarts it on the TV's other video decoder (Android's software one) and keeps using it for that channel for a week. This applies to streams the TV can decode in software, up to 1080p at 30 fps or 720p at 60. If the other decoder has trouble too, the channel goes back to the usual one. The playback log names the decoder each channel uses.
 
 **Channels that won't play.** The message says why: "The provider refused this channel (HTTP 405)…" (often a channel that isn't in your subscription or is off the air), "Can't find the provider's server…" (check the internet connection or DNS), or "The provider's server isn't answering…". A channel the provider refused is marked **⚠ didn't play** in the guide for a day; the mark goes as soon as it plays. To take it out of the guide, use Menu › Hide channel.
 
@@ -764,7 +766,18 @@ Every public release since 1.0.35, newest first. From 1.1.0, versions are number
 
 <!-- new-releases: entries for new builds are added automatically below this line -->
 
-### 1.21.0 — November 18, 2026, 5:35 PM CT (current)
+### 1.21.1 — November 19, 2026, 9:03 AM CT (current)
+
+**Release notes**
+
+- **A channel that stops with a decoding error plays again.** The app restarts it on the TV's other video decoder and keeps that decoder for the channel for a week. Before, such a channel could fail every time for hours.
+- **Frozen pictures recover sooner:** a second still picture on a channel tries the TV's other video decoder, and a still picture is retried every 15 seconds once reconnects pile up.
+- **No reconnect with a full buffer:** short stops with plenty buffered come from the TV's decoder. The playback log now says so, and the buffer isn't thrown away.
+- **Cleaner playback log:** stops shorter than a second are no longer logged as freezes.
+- **A more responsive TV Guide with big playlists:** settings are saved in the background, and channel lists no longer scan the whole playlist for every category.
+- **Better crash reports:** when the app stops answering, the report says where it was stuck. On Fire OS 8 it also includes Android's own record of the hang.
+
+### 1.21.0 — November 18, 2026, 5:35 PM CT
 
 **Release notes**
 

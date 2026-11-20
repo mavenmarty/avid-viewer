@@ -28,7 +28,7 @@ object AccountApi {
     data class Start(val userCode: String, val deviceCode: String, val interval: Int, val expiresIn: Int, val qrUrl: String)
     data class Linked(val token: String, val email: String, val name: String, val deviceId: String)
     /** [beta]: this device is in the beta (chosen at avidviewer.app/admin); [betaTag]: the beta build offered to it. */
-    data class Me(val email: String, val name: String, val beta: Boolean = false, val betaTag: String? = null)
+    data class Me(val email: String, val name: String, val beta: Boolean = false, val betaTag: String? = null, val sendLog: Boolean = false)
     /** One TV's backup in the account (each TV keeps only its most recent). */
     data class CloudBackup(
         val deviceId: String, val name: String, val model: String, val appVersion: String, val createdAt: Long,
@@ -87,7 +87,7 @@ object AccountApi {
         val (code, o) = call(base, "/api/tv/me", null, token, appVersion)
         return when (code) {
             200 -> o.optJSONObject("beta").let { b ->
-                Me(o.optString("email"), o.optString("name"), b?.optBoolean("in") == true, b?.optString("tag")?.takeIf { it.isNotBlank() && it != "null" })
+                Me(o.optString("email"), o.optString("name"), b?.optBoolean("in") == true, b?.optString("tag")?.takeIf { it.isNotBlank() && it != "null" }, o.optBoolean("sendLog"))
             }
             401 -> null
             else -> throw Problem("avidviewer.app answered $code.")
@@ -99,6 +99,12 @@ object AccountApi {
         403 -> "Your Avid Viewer account is suspended. Email support@avidviewer.app for help."
         else -> o.optString("error").ifBlank { "avidviewer.app answered $code. Try again in a moment." }
     })
+
+    /** After linking: the reports this device sent before it was linked now belong to the account (shown on its Reports page). */
+    fun claimReports(token: String, ids: List<String>, base: String = BASE) {
+        val (code, o) = call(base, "/api/tv/reports/claim", JSONObject().put("ids", org.json.JSONArray(ids)), token)
+        if (code != 200) failed(code, o)
+    }
 
     /** Sends this TV's backup, replacing the one it sent before, with its PIN (kept so the Account page can show it). */
     fun uploadBackup(token: String, data: String, pin: String, base: String = BASE) {
