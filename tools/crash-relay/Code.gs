@@ -65,6 +65,7 @@ function doPost(e) {
       name: security ? 'Avid Viewer security alerts' : playback ? 'Avid Viewer playback logs' : 'Avid Viewer crash reports',
     });
     toInbox_(id);
+    forward_(r, id, version, device, summary, crash);
     return reply_(200, 'sent');
   } catch (err) {
     return reply_(500, String(err));
@@ -86,4 +87,17 @@ function clip_(v, n) { return typeof v === 'string' ? v.slice(0, n) : ''; }
 function reply_(code, message) {
   return ContentService.createTextOutput(JSON.stringify({ ok: code === 200, code: code, message: message }))
     .setMimeType(ContentService.MimeType.JSON);
+}
+
+/**
+ * Nov 20, 2026: a copy of each report goes to avidviewer.app, so reports from versions older than 1.22.0 (which still
+ * send here) land in Admin › Reports with the same id as the email. Best effort: the email is already sent.
+ */
+function forward_(r, id, version, device, summary, crash) {
+  try {
+    UrlFetchApp.fetch('https://avidviewer.app/api/tv/reports', {
+      method: 'post', contentType: 'application/json', muteHttpExceptions: true,
+      payload: JSON.stringify({ app: 'avid-viewer', relay: true, id: id, kind: r.kind || 'crash', version: version, device: device, summary: summary, crash: crash }),
+    });
+  } catch (e) { /* the email went out; the website copy is a bonus */ }
 }
