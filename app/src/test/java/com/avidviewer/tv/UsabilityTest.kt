@@ -1371,7 +1371,7 @@ class UsabilityTest {
         press(listOf(Key.DirectionCenter))
         fun focusedTag(): String = rule.onAllNodes(androidx.compose.ui.test.isFocused()).fetchSemanticsNodes()
             .joinToString { it.config.getOrNull(androidx.compose.ui.semantics.SemanticsProperties.TestTag) ?: focused() }
-        waitFor("OK opens Updates & about on its first block (focus: ${focusedTag()})") { vm.settingsSection == "about" && (focusedTag() == "block-Report a bug" || focused().contains("Open email app")) }
+        waitFor("OK opens Updates & about on its first block (focus: ${focusedTag()})") { vm.settingsSection == "about" && (focusedTag() == "block-Report a bug" || focusedTag() == "bug-retry") }
         fun shownWhole(text: String) {
             val root = rule.onRoot().fetchSemanticsNode().boundsInRoot
             val b = rule.onAllNodesWithText(text).onFirst().fetchSemanticsNode().boundsInRoot
