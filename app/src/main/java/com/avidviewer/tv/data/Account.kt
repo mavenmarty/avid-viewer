@@ -67,11 +67,17 @@ object AccountApi {
     }
 
     /** null while waiting for approval; throws [Problem] when the code has expired. */
-    fun poll(deviceCode: String, base: String = BASE): Linked? {
+    /**
+     * [linked]: approved. [full]: still waiting, and someone tried to approve this code on an account that already has
+     * that many devices (the most it can have, from Nov 20, 2026); 0 otherwise.
+     */
+    data class Poll(val linked: Linked?, val full: Int = 0)
+
+    fun poll(deviceCode: String, base: String = BASE): Poll {
         val (code, o) = call(base, "/api/tv/link/poll", JSONObject().put("deviceCode", deviceCode))
         return when (o.optString("status")) {
-            "approved" -> linked(o)
-            "pending" -> null
+            "approved" -> Poll(linked(o))
+            "pending" -> Poll(null, if (o.optBoolean("full")) o.optInt("limit", 4).coerceAtLeast(1) else 0)
             else -> throw Problem(if (code == 200) "The code expired before it was used. Choose Link this device for a new one." else "avidviewer.app answered $code.")
         }
     }

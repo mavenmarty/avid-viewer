@@ -14,6 +14,8 @@ class FakeAvidSite : AutoCloseable {
     private val server = ServerSocket(0, 50, InetAddress.getByName("127.0.0.1"))
     val base get() = "http://127.0.0.1:${server.localPort}"
     val calls = java.util.Collections.synchronizedList(ArrayList<String>())
+    /** Nov 20: the code was entered on an account that already has 4 devices. */
+    @Volatile var full = false
     @Volatile var approved = false
     /** Beta channel: what /api/tv/me says (null: the "beta" field is left out, as before Nov 18, 2026). */
     @Volatile var beta: String? = null
@@ -84,7 +86,7 @@ class FakeAvidSite : AutoCloseable {
         calls += "$method $path $body"
         val (code, json) = when {
             path == "/api/tv/link/start" -> 200 to """{"userCode":"K7M2QX9P","deviceCode":"DEVICECODE","interval":1,"expiresIn":600,"qrUrl":"$base/link/?c=K7M2QX9P"}"""
-            path == "/api/tv/link/poll" -> 200 to (if (approved) """{"status":"approved","token":"TVTOKEN_abcdefghijklmnopqrstuvwxyz","email":"viewer@example.com","name":"Living room","deviceId":"d1"}""" else """{"status":"pending"}""")
+            path == "/api/tv/link/poll" -> 200 to (if (approved) """{"status":"approved","token":"TVTOKEN_abcdefghijklmnopqrstuvwxyz","email":"viewer@example.com","name":"Living room","deviceId":"d1"}""" else if (full) """{"status":"pending","full":true,"limit":4}""" else """{"status":"pending"}""")
             path == "/api/tv/link/claim" -> 200 to """{"status":"approved","token":"TVTOKEN_claimedabcdefghijklmnopqrst","email":"viewer@example.com","name":"Den TV","deviceId":"d2"}"""
             path == "/api/tv/me" -> if (removed || !auth.startsWith("Bearer TVTOKEN_")) 401 to """{"error":"This TV is not linked."}""" else 200 to """{"email":"viewer@example.com","name":"Living room"""" + (beta?.let { ""","beta":$it""" } ?: "") + (if (sendLog) ""","sendLog":true""" else "") + "}"
             path == "/api/tv/signout" -> 200 to """{"ok":true}"""

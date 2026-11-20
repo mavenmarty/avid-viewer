@@ -1221,8 +1221,15 @@ class UsabilityTest {
             rule.runOnIdle { vm.channels.firstOrNull()?.let { vm.preview(it.key) } }
             settle()
             assertTrue("nothing plays", !vm.player.playWhenReady)
+            // Nov 20: the code was entered on an account that already has 4 devices: the screen says so and keeps the code.
+            site.full = true
+            waitFor("told the account is full") { rule.onAllNodesWithTag("link-full").fetchSemanticsNodes().isNotEmpty() }
+            assertTrue(rule.onAllNodesWithText("already has 4 devices", substring = true).fetchSemanticsNodes().isNotEmpty())
+            assertTrue("the code stays", rule.onAllNodesWithText("K7M2-QX9P").fetchSemanticsNodes().isNotEmpty())
+            site.full = false
             site.approved = true
             waitFor("linked") { vm.account.linked }
+            assertEquals(0, vm.linkFull)
             waitFor("the screen is gone") { rule.onAllNodesWithTag("link-required").fetchSemanticsNodes().isEmpty() }
             assertTrue(!vm.linkRequired)
         }
