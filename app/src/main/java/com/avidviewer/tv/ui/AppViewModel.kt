@@ -516,6 +516,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         trail("account linked")
         syncAccountPlaylists()
         claimReports()
+        bugFormUrl = null; bugFormExpires = 0L
         if (reportUnlinkedNotice) { reportUnlinkedNotice = false; status = "This device is linked. Its reports show at avidviewer.app › Reports." }
     }
 
@@ -681,6 +682,28 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun closeReportUnlinkedNotice() {
         reportUnlinkedNotice = false
         if (!account.linked) cancelLinking()
+    }
+
+    /**
+     * Report a bug (Settings › Updates & about): the QR code opens avidviewer.app/report/?c=… (owner, Nov 20), where the
+     * problem is written on a phone; the code tells the site which device it's about. Null until the site answers (or
+     * when it can't be reached): the block then shows the email QR code as before.
+     */
+    var bugFormUrl by mutableStateOf<String?>(null); private set
+    private var bugFormExpires = 0L
+    private var bugFormBusy = false
+
+    fun loadBugForm() {
+        if (bugFormBusy || (bugFormUrl != null && System.currentTimeMillis() < bugFormExpires - 3_600_000L)) return
+        bugFormBusy = true
+        val token = account.token
+        val info = accountInfo()
+        val crash = com.avidviewer.tv.data.BugReport.crashSummary(lastCrash)
+        viewModelScope.launch {
+            val form = runCatching { withContext(Dispatchers.IO) { com.avidviewer.tv.data.AccountApi.reportForm(token, info, com.avidviewer.tv.data.BugReport.device(), crash, accountApi) } }.getOrNull()
+            bugFormBusy = false
+            if (form != null) { bugFormUrl = form.url; bugFormExpires = form.expiresAt }
+        }
     }
 
     /** After linking: the reports sent before now show on the account's Reports page. */

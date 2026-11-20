@@ -100,6 +100,17 @@ object AccountApi {
         else -> o.optString("error").ifBlank { "avidviewer.app answered $code. Try again in a moment." }
     })
 
+    /** A code for the Report a bug QR code: avidviewer.app/report/?c=… knows which device it's from (no sign-in). */
+    data class ReportForm(val url: String, val expiresAt: Long)
+
+    fun reportForm(token: String?, info: Info, device: String, crash: String?, base: String = BASE): ReportForm {
+        val body = JSONObject().put("app", "avid-viewer").put("version", info.appVersion).put("device", device).put("name", info.name)
+        crash?.let { body.put("crash", it.take(400)) }
+        val (code, o) = call(base, "/api/tv/reports/form", body, token)
+        if (code != 200 || !o.optString("url").contains("/report/?c=")) failed(code, o)
+        return ReportForm(o.getString("url"), o.optLong("expiresAt", System.currentTimeMillis() + 3_600_000L))
+    }
+
     /** After linking: the reports this device sent before it was linked now belong to the account (shown on its Reports page). */
     fun claimReports(token: String, ids: List<String>, base: String = BASE) {
         val (code, o) = call(base, "/api/tv/reports/claim", JSONObject().put("ids", org.json.JSONArray(ids)), token)

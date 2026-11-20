@@ -1207,6 +1207,25 @@ class UsabilityTest {
         assertTrue("two profiles: the chip", rule.onAllNodesWithTag("osd-profile", useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty())
     }
 
+    /** Nov 20: the Report a bug QR code opens avidviewer.app/report/?c=… for this device; email only when the site can't be reached. */
+    @Test
+    fun reportABugQrOpensTheWebsitesFormForThisDevice() {
+        FakeAvidSite().use { site ->
+            rule.runOnIdle { vm.accountApi = site.base }
+            go(Screen.SETTINGS)
+            rule.runOnIdle { vm.settingsSection = "about" }
+            waitFor("the form's address") { vm.bugFormUrl != null }
+            assertEquals(site.base + "/report/?c=ABCDE23456", vm.bugFormUrl)
+            val asked = synchronized(site.reports) { site.reports.first { it.optBoolean("form") } }
+            assertEquals("avid-viewer", asked.getString("app"))
+            assertTrue(asked.getString("device").isNotBlank())
+            for (p in vm.playlists) assertTrue("leaks ${p.name}", !asked.toString().contains(p.name))
+            waitFor("the website text") { rule.onAllNodesWithText("Report a problem").fetchSemanticsNodes().isNotEmpty() }
+            assertTrue(rule.onAllNodesWithTag("bug-qr").fetchSemanticsNodes().isNotEmpty())
+            assertTrue("no email address once the site answers", rule.onAllNodesWithText("bugs@avidviewer.app").fetchSemanticsNodes().isEmpty())
+        }
+    }
+
     @Test
     fun reportABugShowsTheAddressDetailsAndQrCode() {
         go(Screen.SETTINGS)

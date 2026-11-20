@@ -94,6 +94,10 @@ class FakeAvidSite : AutoCloseable {
                 if (org.json.JSONObject(body).optString("kind") == "playback") sendLog = false
                 200 to """{"ok":true,"id":"AVR-${"%08x".format(reports.size)}","linked":$linked}"""
             }
+            path == "/api/tv/reports/form" -> {
+                synchronized(reports) { reports += org.json.JSONObject(body).put("auth", auth).put("form", true) }
+                200 to """{"code":"ABCDE23456","url":"$base/report/?c=ABCDE23456","expiresAt":${System.currentTimeMillis() + 86_400_000L}}"""
+            }
             path == "/api/tv/reports/claim" -> {
                 val ids = org.json.JSONObject(body).getJSONArray("ids")
                 synchronized(claimed) { for (i in 0 until ids.length()) claimed += ids.getString(i) }

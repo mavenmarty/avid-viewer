@@ -1066,22 +1066,32 @@ private fun BugReportBlock(vm: AppViewModel) {
     val version = appVersion(vm)
     val crash = vm.lastCrash
     val details = remember(version, crash) { com.avidviewer.tv.data.BugReport.details(version, crash) }
-    val link = remember(version, crash) { com.avidviewer.tv.data.BugReport.mailto(version, crash) }
+    val mail = remember(version, crash) { com.avidviewer.tv.data.BugReport.mailto(version, crash) }
     val canEmail = remember { com.avidviewer.tv.data.BugReport.canEmail(ctx) }
+    // Nov 20: the QR code opens avidviewer.app's Report a problem page for this device; email only when the site can't be reached.
+    androidx.compose.runtime.LaunchedEffect(Unit) { vm.loadBugForm() }
+    val form = vm.bugFormUrl
     SettingBlock(
         "Report a bug",
-        "Something not working? Email ${com.avidviewer.tv.data.BugReport.ADDRESS}. Say what happened and the steps that lead to it, and include the details below." +
+        if (form != null) "Something not working? Scan the code with your phone to tell us on avidviewer.app: this device's details are sent with it." +
+            (if (vm.account.linked) " Follow it afterwards at avidviewer.app › Reports." else "")
+        else "Something not working? Email ${com.avidviewer.tv.data.BugReport.ADDRESS}. Say what happened and the steps that lead to it, and include the details below." +
             if (crash != null) " If the app closed unexpectedly, a photo of the crash report above helps too." else "",
-        focusable = !canEmail, // with an email button, that button takes the highlight instead
+        focusable = !(canEmail && form == null), // with an email button, that button takes the highlight instead
     ) {
         Row(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
-            QrCode(link, Modifier.size(132.dp).testTag("bug-qr"))
+            QrCode(form ?: mail, Modifier.size(132.dp).testTag("bug-qr"))
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Label(com.avidviewer.tv.data.BugReport.ADDRESS, size = 16.sp, color = C.Accent, weight = FontWeight.Bold)
-                Label("Scan with your phone's camera to start the email with these details filled in.", size = 12.sp, color = C.Soft, lines = Int.MAX_VALUE)
+                if (form != null) {
+                    Label("Report a problem", size = 16.sp, color = C.Accent, weight = FontWeight.Bold)
+                    Label("Scan with your phone's camera. The page knows it's this device; no sign-in needed.", size = 12.sp, color = C.Soft, lines = Int.MAX_VALUE)
+                } else {
+                    Label(com.avidviewer.tv.data.BugReport.ADDRESS, size = 16.sp, color = C.Accent, weight = FontWeight.Bold)
+                    Label("Scan with your phone's camera to start the email with these details filled in.", size = 12.sp, color = C.Soft, lines = Int.MAX_VALUE)
+                }
                 details.forEach { (k, v) -> Label("$k: $v", size = 12.sp, color = C.Text, lines = Int.MAX_VALUE) }
                 Label("No playlists, logins or provider addresses are included.", size = 11.sp, color = C.Muted, lines = Int.MAX_VALUE)
-                if (canEmail) TvButton("Open email app", modifier = Modifier.testTag("bug-email")) {
+                if (canEmail && form == null) TvButton("Open email app", modifier = Modifier.testTag("bug-email")) {
                     runCatching { ctx.startActivity(com.avidviewer.tv.data.BugReport.emailIntent(version, crash)) }
                 }
             }
