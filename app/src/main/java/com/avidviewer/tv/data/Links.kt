@@ -10,7 +10,7 @@ object Links {
 
     /**
      * The crash relay (tools/crash-relay/Code.gs, a Google Apps Script web app) that emails "Report issue"
-     * crash reports to bugs@avidviewer.app. Deployed from the avidviewer.app account (Nov 13, 2026).
+     * crash reports on to avidviewer.app (it emailed them until Nov 20, 2026). Deployed from the avidviewer.app account (Nov 13, 2026).
      */
     const val CRASH_RELAY = "https://script.google.com/macros/s/AKfycbz2Tiz4sWy9Orxw5YeQ8FDKA5Zl3tKcQwu9IUlYIxlRoshPCgYeJItM8zU2HIi5sWHIZw/exec"
 }

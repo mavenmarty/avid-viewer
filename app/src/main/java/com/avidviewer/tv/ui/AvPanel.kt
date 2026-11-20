@@ -99,7 +99,7 @@ fun BoxScope.AvPanel(vm: AppViewModel) {
             InfoLine("Freezes here", if (st.freezes == 0) "None so far" else "${st.freezes}" + (if (st.longestFreezeS > 0) " · longest ${st.longestFreezeS} s" else ""))
             InfoLine("Dropped frames", "${st.droppedFrames}")
             st.lastProblem?.let { Label(it, size = 12.sp, color = C.Soft, lines = 4, modifier = Modifier.testTag("stream-last-problem")) }
-            PanelButton("send-playback-log", if (vm.playbackLogBusy) "Sending…" else "Send playback log to bugs@avidviewer.app") { vm.sendPlaybackLog() }
+            PanelButton("send-playback-log", if (vm.playbackLogBusy) "Sending…" else "Send playback log to avidviewer.app") { vm.sendPlaybackLog() }
             vm.playbackLogStatus?.let { Label(it, size = 12.sp, color = C.Accent, lines = 2) }
         }
         Label("◀ ▶ change  ·  Back close", size = 12.sp)

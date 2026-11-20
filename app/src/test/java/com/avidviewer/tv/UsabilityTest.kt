@@ -1247,21 +1247,20 @@ class UsabilityTest {
         }
     }
 
+    /** Nov 20: no email. When avidviewer.app can't be reached, Report a bug says so and offers Try again (no QR, no address). */
     @Test
-    fun reportABugShowsTheAddressDetailsAndQrCode() {
+    fun reportABugWithoutTheWebsiteSaysSoAndOffersTryAgain() {
+        rule.runOnIdle { vm.accountApi = "http://127.0.0.1:9" }
         go(Screen.SETTINGS)
         rule.runOnIdle { vm.settingsSection = "about" }
+        waitFor("can't reach") { vm.bugFormFailed }
         settle()
         assertTrue(rule.onAllNodesWithText("Report a bug").fetchSemanticsNodes().isNotEmpty())
-        assertTrue(rule.onAllNodesWithText("bugs@avidviewer.app").fetchSemanticsNodes().isNotEmpty())
         assertTrue(rule.onAllNodesWithText("App version:", substring = true).fetchSemanticsNodes().isNotEmpty())
         assertTrue(rule.onAllNodesWithText("Device:", substring = true).fetchSemanticsNodes().isNotEmpty())
-        assertTrue(rule.onAllNodesWithTag("bug-qr").fetchSemanticsNodes().isNotEmpty())
-        // The email link carries the details but nothing about the user's playlists.
-        val link = android.net.Uri.decode(com.avidviewer.tv.data.BugReport.mailto("1.0.test", "java.lang.IllegalStateException: boom\n at x.y(Z.kt:1)"))
-        assertTrue(link, link.startsWith("mailto:bugs@avidviewer.app?subject="))
-        assertTrue(link, link.contains("App version: 1.0.test") && link.contains("Last crash: java.lang.IllegalStateException: boom"))
-        vm.playlists.forEach { p -> assertTrue("leaks ${p.name}", !link.contains(p.name) && (p.server.isBlank() || !link.contains(p.server))) }
+        assertTrue(rule.onAllNodesWithTag("bug-retry").fetchSemanticsNodes().isNotEmpty())
+        assertTrue("no QR without the website", rule.onAllNodesWithTag("bug-qr").fetchSemanticsNodes().isEmpty())
+        assertTrue("no email address", rule.onAllNodesWithText("bugs@avidviewer.app", substring = true).fetchSemanticsNodes().isEmpty())
     }
 
     /**

@@ -692,17 +692,19 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     var bugFormUrl by mutableStateOf<String?>(null); private set
     private var bugFormExpires = 0L
     private var bugFormBusy = false
+    /** Nov 20: avidviewer.app couldn't be reached for the Report a problem page (no email fallback any more). */
+    var bugFormFailed by mutableStateOf(false); private set
 
     fun loadBugForm() {
         if (bugFormBusy || (bugFormUrl != null && System.currentTimeMillis() < bugFormExpires - 3_600_000L)) return
-        bugFormBusy = true
+        bugFormBusy = true; bugFormFailed = false
         val token = account.token
         val info = accountInfo()
         val crash = com.avidviewer.tv.data.BugReport.crashSummary(lastCrash)
         viewModelScope.launch {
             val form = runCatching { withContext(Dispatchers.IO) { com.avidviewer.tv.data.AccountApi.reportForm(token, info, com.avidviewer.tv.data.BugReport.device(), crash, accountApi) } }.getOrNull()
             bugFormBusy = false
-            if (form != null) { bugFormUrl = form.url; bugFormExpires = form.expiresAt }
+            if (form != null) { bugFormUrl = form.url; bugFormExpires = form.expiresAt } else if (bugFormUrl == null) bugFormFailed = true
         }
     }
 
@@ -719,8 +721,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun clearPlaybackLog() { playbackLog.clear(); playbackLogStatus = null; playbackLogRev++ }
 
     /**
-     * freeRASP alerts (a rooted TV, hooking, a tampered copy…; see SecurityMonitor) go to bugs@avidviewer.app through the
-     * crash relay: each kind once, at most one email a day.
+     * freeRASP alerts (a rooted TV, hooking, a tampered copy…; see SecurityMonitor) go to avidviewer.app (Admin › Reports):
+     * each kind once, at most one a day.
      */
     private var securityBusy = false
     private fun maybeSendSecurityAlert() {
@@ -943,7 +945,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     internal var crashRelay: String = com.avidviewer.tv.data.Links.CRASH_RELAY
 
     /**
-     * "Report issue": sends the saved crash report to bugs@avidviewer.app through the crash relay and,
+     * "Report issue": sends the saved crash report to avidviewer.app (the relay only passes it on there) and,
      * once it's sent, clears it. If it can't be sent, the report stays (Settings › Updates & about) and
      * the reason is shown; Cancel leaves it as it is.
      */

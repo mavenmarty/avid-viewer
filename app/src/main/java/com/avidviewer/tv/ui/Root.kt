@@ -148,7 +148,7 @@ fun AppRoot(vm: AppViewModel) {
         ReorderHelp(vm)
         ListOptionsDialog(vm)
         VodCategoryOptionsDialog(vm)
-        // The app closed unexpectedly last time: say so once, and offer to send the report to bugs@avidviewer.app
+        // The app closed unexpectedly last time: say so once, and offer to send the report to avidviewer.app
         // (Report issue sends it and clears it; Cancel keeps it in Settings › Updates & about).
         if ((vm.lastCrash != null || vm.crashReportSent) && !vm.crashNoticeSeen && vm.screen != Screen.PLAYER) {
             androidx.compose.material3.AlertDialog(

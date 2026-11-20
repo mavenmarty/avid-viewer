@@ -1,17 +1,12 @@
 package com.avidviewer.tv.data
 
-import android.content.Context
-import android.content.Intent
-import android.net.Uri
 import android.os.Build
 
 /**
- * "Report a bug": the address, plus the details worth including, read from this TV.
+ * "Report a bug": the details worth including, read from this TV. Reports go to avidviewer.app (no email since Nov 20, 2026).
  * Never includes playlists, provider addresses, logins or keys.
  */
 object BugReport {
-    const val ADDRESS = "bugs@avidviewer.app"
-
     fun device(): String {
         val maker = Build.MANUFACTURER.orEmpty().replaceFirstChar { it.uppercase() }
         val model = Build.MODEL.orEmpty()
@@ -38,22 +33,4 @@ object BugReport {
         "Device" to device(),
         crashSummary(crash)?.let { "Last crash" to it },
     )
-
-    fun subject(appVersion: String) = "Avid Viewer bug report ($appVersion)"
-
-    fun body(appVersion: String, crash: String?): String =
-        "What happened:\n\n\nSteps to reproduce:\n1. \n\n" +
-            details(appVersion, crash).joinToString("\n") { (k, v) -> "$k: $v" }
-
-    /** A mailto link with the subject and details filled in (used for the QR code and the email button). */
-    fun mailto(appVersion: String, crash: String?): String =
-        "mailto:$ADDRESS?subject=" + Uri.encode(subject(appVersion)) + "&body=" + Uri.encode(body(appVersion, crash))
-
-    fun emailIntent(appVersion: String, crash: String?): Intent =
-        Intent(Intent.ACTION_SENDTO, Uri.parse(mailto(appVersion, crash))).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-
-    /** Most TVs have no email app; the button only shows when one is installed. */
-    fun canEmail(context: Context): Boolean = runCatching {
-        Intent(Intent.ACTION_SENDTO, Uri.parse("mailto:$ADDRESS")).resolveActivity(context.packageManager) != null
-    }.getOrDefault(false)
 }

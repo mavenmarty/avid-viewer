@@ -1,33 +1,24 @@
 /**
  * Avid Viewer crash relay (Google Apps Script web app).
  *
- * The app's "Report issue" button (in the "Avid Viewer closed unexpectedly" dialog and in
- * Settings › Updates & about › Last crash) POSTs the saved crash report here as JSON; this script
- * emails it to bugs@avidviewer.app from the account that deployed it, so it lands in the usual
- * bug-report workflow. Fire TVs have no email app, and the app can't hold a mail password (the
- * repository is public), so this is the only piece that sends mail.
+ * Nov 20, 2026: reports go to avidviewer.app only; nothing is emailed any more. Since 1.22.0 the app sends crash reports,
+ * playback logs and security alerts straight to avidviewer.app (Admin › Reports). Versions before 1.22.0 still POST them
+ * here, so this script passes each one on to https://avidviewer.app/api/tv/reports and answers with what the site said.
+ * When the site doesn't take it, the answer is ok:false and the app keeps the report to send again later.
  *
- * Deploy (once, signed in to the avidviewer.app Google account):
- *   1. script.google.com › New project › paste this file as Code.gs › Save.
- *   2. Deploy › New deployment › type "Web app": Execute as "Me", Who has access "Anyone".
- *   3. Authorize (it needs "Send email as you"), then copy the web app URL (…/exec).
- *   4. Put that URL in Links.CRASH_RELAY (app/src/main/java/com/avidviewer/tv/data/Links.kt).
- * After editing this script, use Deploy › Manage deployments › Edit › New version, so the URL stays.
+ * Deploy (signed in to the avidviewer.app Google account):
+ *   1. script.google.com › the crash relay project › replace Code.gs with this file.
+ *   2. Project Settings › Show "appsscript.json" › replace it with appsscript.json from this folder
+ *      (only the "Connect to an external service" permission is left; mail and Gmail are gone).
+ *   3. Run doPost once in the editor and allow it, if asked.
+ *   4. Deploy › Manage deployments › Edit › New version › Deploy, so the URL (Links.CRASH_RELAY) stays the same.
  *
  * What it accepts: {"app":"avid-viewer","version","device","crash","summary","kind"?} with size limits
  * ("kind":"playback" = the playback log, from 1.5.0; "kind":"security" = a freeRASP alert, from 1.11.0;
- * anything else is a crash report).
- * The app removes web addresses, user names and passwords from the crash text before sending.
- * At most 30 reports an hour are mailed (Apps Script also caps mail per day).
- *
- * Inbox (1.5.2): the script sends from the same mailbox that bugs@ delivers to, and Gmail files mail you send to
- * your own address under Sent only, so reports never reached the Inbox (or the bug-report tasks that read it).
- * Each email now carries a report id; the script finds the sent copy and moves it to the Inbox, unread.
- * This uses GmailApp (gmail.modify). Apps Script may not ask for that by itself, so the project manifest
- * (appsscript.json, next to this file) lists both scopes: paste it in too (Project Settings › Show
- * "appsscript.json"), then Run doPost once in the editor to grant them, then deploy a new version.
+ * anything else is a crash report). The app removes web addresses, user names and passwords before sending.
+ * At most 30 reports an hour are passed on.
  */
-var TO = 'bugs@avidviewer.app';
+var SITE = 'https://avidviewer.app/api/tv/reports';
 var MAX_PER_HOUR = 30;
 
 function doPost(e) {
@@ -44,60 +35,26 @@ function doPost(e) {
     if (n >= MAX_PER_HOUR) return reply_(429, 'too many reports');
     cache.put(hour, String(n + 1), 3600);
 
-    var first = (summary || crash).split('\n')[0];
-    var id = 'AVR-' + Utilities.getUuid().slice(0, 8);
-    // "kind": "playback" (from 1.5.0) is the playback log: freezes and errors with their likely causes.
-    var playback = r.kind === 'playback';
-    // "kind": "security" (from 1.11.0): a freeRASP alert (rooted TV, hooking, tampered copy…).
-    var security = r.kind === 'security';
-    var what = security ? 'security alert' : playback ? 'playback log' : 'crash report';
-    MailApp.sendEmail({
-      to: TO,
-      subject: 'Avid Viewer ' + what + ' (' + version + ') · ' + first.slice(0, 120),
-      body: (security ? 'Sent automatically from the app (freeRASP found something on this TV; each kind once, at most one email a day).\n\n'
-          : playback ? 'Sent from the app (Settings › Updates & about › Playback log, or automatically once a day).\n\n'
-          : 'Sent automatically from the app ("Report issue" after a crash).\n\n') +
-        'App version: ' + version + '\n' +
-        'Device: ' + device + '\n' +
-        (summary ? (playback || security ? 'Summary: ' : 'Error: ') + summary + '\n' : '') +
-        '\n--- ' + (security ? 'Findings' : playback ? 'Playback log' : 'Crash report') + ' ---\n' + crash +
-        '\n\nReport id: ' + id,
-      name: security ? 'Avid Viewer security alerts' : playback ? 'Avid Viewer playback logs' : 'Avid Viewer crash reports',
+    // The site recognises the relay by its own id (AVR- and 8 hex digits), and a repeat of the same id isn't stored twice.
+    var id = 'AVR-' + Utilities.getUuid().replace(/-/g, '').slice(0, 8);
+    var kind = r.kind === 'playback' || r.kind === 'security' ? r.kind : 'crash';
+    var res = UrlFetchApp.fetch(SITE, {
+      method: 'post', contentType: 'application/json', muteHttpExceptions: true,
+      payload: JSON.stringify({ app: 'avid-viewer', relay: true, id: id, kind: kind, version: version, device: device, summary: summary, crash: crash }),
     });
-    toInbox_(id);
-    forward_(r, id, version, device, summary, crash);
-    return reply_(200, 'sent');
+    var code = res.getResponseCode(), o = {};
+    try { o = JSON.parse(res.getContentText() || '{}'); } catch (x) { o = {}; }
+    if (code >= 200 && code < 300 && o.ok) return reply_(200, 'sent', o.id || id);
+    return reply_(502, 'avidviewer.app answered ' + code);
   } catch (err) {
     return reply_(500, String(err));
   }
 }
 
-/** Moves the sent copy (found by its report id) into the Inbox, unread. Search can lag a few seconds. */
-function toInbox_(id) {
-  for (var i = 0; i < 8; i++) {
-    Utilities.sleep(1500);
-    var found = GmailApp.search('"' + id + '"', 0, 1);
-    if (found.length) { found[0].moveToInbox(); found[0].markUnread(); return true; }
-  }
-  return false;
-}
-
 function clip_(v, n) { return typeof v === 'string' ? v.slice(0, n) : ''; }
 
-function reply_(code, message) {
-  return ContentService.createTextOutput(JSON.stringify({ ok: code === 200, code: code, message: message }))
-    .setMimeType(ContentService.MimeType.JSON);
-}
-
-/**
- * Nov 20, 2026: a copy of each report goes to avidviewer.app, so reports from versions older than 1.22.0 (which still
- * send here) land in Admin › Reports with the same id as the email. Best effort: the email is already sent.
- */
-function forward_(r, id, version, device, summary, crash) {
-  try {
-    UrlFetchApp.fetch('https://avidviewer.app/api/tv/reports', {
-      method: 'post', contentType: 'application/json', muteHttpExceptions: true,
-      payload: JSON.stringify({ app: 'avid-viewer', relay: true, id: id, kind: r.kind || 'crash', version: version, device: device, summary: summary, crash: crash }),
-    });
-  } catch (e) { /* the email went out; the website copy is a bonus */ }
+function reply_(code, message, id) {
+  var o = { ok: code === 200, code: code, message: message };
+  if (id) o.id = id;
+  return ContentService.createTextOutput(JSON.stringify(o)).setMimeType(ContentService.MimeType.JSON);
 }
