@@ -2,7 +2,7 @@
 
 <!-- The version below and the Release notes section are updated automatically after each published build
      (.github/workflows/user-guide.yml). Feature descriptions are written by hand. -->
-This guide covers **Avid Viewer 1.21.1**, the current public release. Avid Viewer is an IPTV player for Android TV and Fire TV. You bring your own provider (an Xtream Codes login or an M3U link); the app doesn't include any channels.
+This guide covers **Avid Viewer 1.22.0**, the current public release. Avid Viewer is an IPTV player for Android TV and Fire TV. You bring your own provider (an Xtream Codes login or an M3U link); the app doesn't include any channels.
 
 **Contents:** [Getting started](#1-getting-started) · [Main menu](#2-main-menu) · [TV Guide](#3-tv-guide) · [Full-screen playback](#4-full-screen-playback) · [Search](#5-search) · [Discover](#6-discover) · [Sports](#7-sports) · [Movies and Series](#8-movies-and-series) · [Settings](#9-settings) ([Profiles](#profiles)) · [Privacy](#10-privacy) · [Troubleshooting](#11-troubleshooting) · [Control4](#12-control4) · [Supplemental services](#13-supplemental-services) · [Cable & satellite](#14-using-your-cable-or-satellite-subscription) · [Free services](#15-free-services) · [Release notes](#release-notes)
 
@@ -911,7 +911,19 @@ Every public release since 1.0.35, newest first. From 1.1.0, versions are number
 
 <!-- new-releases: entries for new builds are added automatically below this line -->
 
-### 1.21.1 — November 19, 2026, 9:03 AM CT (current)
+### 1.22.0 — November 20, 2026, 8:25 AM CT (current)
+
+**Change log**
+
+- Reports go to avidviewer.app; a device that isn't linked is told and can link
+- Report a bug's QR code opens avidviewer.app's Report a problem page for this device
+- A device that isn't linked must be linked before it can be used
+- Crash and freeze reports no longer use email
+- Report a bug keeps its highlight and retries by itself when the website can't be reached
+- Tell the TV when its account already has 4 devices
+- Release 1.22.0
+
+### 1.21.1 — November 19, 2026, 9:03 AM CT
 
 **Release notes**
 
