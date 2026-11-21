@@ -298,7 +298,7 @@ class Store(private val context: Context) {
         (0 until a.length()).map { a.getString(it) }.toSet()
     }.getOrDefault(emptySet())
 
-    /** Each playlist's last channel load (for the website's Troubleshooting), and when Strong 8K lines were last checked. */
+    /** Each playlist's last channel load (for the website's Troubleshooting), and when reseller lines were last checked. */
     fun saveLoadStatus(o: JSONObject) = writeAtomic(File(dir, "load-status.json"), o.toString())
     fun loadLoadStatus(): JSONObject = runCatching { JSONObject(File(dir, "load-status.json").readText()) }.getOrDefault(JSONObject())
 

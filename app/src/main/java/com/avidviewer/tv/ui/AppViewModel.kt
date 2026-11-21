@@ -511,7 +511,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     // Declared up here: start-up (init) already uses them. Nov 21, 2026.
     /** Per playlist: categories left out of the last download because every profile hides them. */
     var skippedGroups by mutableStateOf<Map<String, Set<String>>>(emptyMap()); private set
-    /** Each playlist's last channel load (website Troubleshooting) and when Strong 8K lines were last checked. */
+    /** Each playlist's last channel load (website Troubleshooting) and when reseller lines were last checked. */
     private val loadStatus: JSONObject by lazy { store.loadLoadStatus() }
     private var loadReportJob: Job? = null
     private var loadsReported = false
@@ -592,7 +592,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                     if (m.sendLog && playbackLog.entries().isNotEmpty()) sendPlaybackLog(auto = true)
                     if (unclaimedReports().isNotEmpty()) claimReports()
                     if (m.reloadChannels) reloadAllLive()
-                    strong8kAfterCheckIn(token, m)
+                    resellerAfterCheckIn(token, m)
                     // Once per run (playlists may have changed while it was off); after that, each download reports itself.
                     if (!loadsReported) { loadsReported = true; reportLoadsLater() }
                 }
@@ -1845,9 +1845,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    // ---------------- Strong 8K lines (Nov 21, 2026) ----------------
-    /** [p]'s server and login, when it's on one of the Strong 8K addresses: (server, username, password). */
-    private fun strong8kLogin(p: Playlist, hosts: List<String>): Triple<String, String, String>? {
+    // ---------------- reseller lines (Nov 21, 2026) ----------------
+    /** [p]'s server and login, when it's on one of the reseller addresses: (server, username, password). */
+    private fun resellerLogin(p: Playlist, hosts: List<String>): Triple<String, String, String>? {
         if (hosts.isEmpty()) return null
         val (server, u, pw) = if (p.isXtream) Triple(p.xtreamBase(), p.username, p.password) else {
             val uri = runCatching { android.net.Uri.parse(p.m3uUrl.trim()) }.getOrNull() ?: return null
@@ -1859,29 +1859,29 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * After a check-in: confirms this device's Strong 8K playlists with the website every 12 hours (or when asked on
+     * After a check-in: confirms this device's reseller playlists with the website every 12 hours (or when asked on
      * the website), then carries out renewals the owner asked for. Logins go to the website for that one call only.
      */
-    private suspend fun strong8kAfterCheckIn(token: String, m: com.avidviewer.tv.data.AccountApi.Me) {
-        if (m.strong8kHosts.isEmpty()) return
+    private suspend fun resellerAfterCheckIn(token: String, m: com.avidviewer.tv.data.AccountApi.Me) {
+        if (m.resellerHosts.isEmpty()) return
         val now = System.currentTimeMillis()
-        val checked = synchronized(loadStatus) { loadStatus.optJSONObject("strong8k") ?: JSONObject().also { loadStatus.put("strong8k", it) } }
+        val checked = synchronized(loadStatus) { loadStatus.optJSONObject("reseller") ?: JSONObject().also { loadStatus.put("reseller", it) } }
         val due = JSONArray()
         playlists.forEach { p ->
-            val l = strong8kLogin(p, m.strong8kHosts) ?: return@forEach
+            val l = resellerLogin(p, m.resellerHosts) ?: return@forEach
             if (m.checkSubscription || now - checked.optLong(p.id) > 12 * 3600 * 1000L) {
                 due.put(JSONObject().put("localId", p.id).put("name", p.name).put("server", l.first).put("username", l.second).put("password", l.third))
             }
         }
         if (due.length() > 0) {
-            val res = withContext(Dispatchers.IO) { runCatching { com.avidviewer.tv.data.AccountApi.strong8kCheck(token, due, accountApi) }.getOrDefault(emptyMap()) }
+            val res = withContext(Dispatchers.IO) { runCatching { com.avidviewer.tv.data.AccountApi.resellerCheck(token, due, accountApi) }.getOrDefault(emptyMap()) }
             withContext(Dispatchers.IO) { synchronized(loadStatus) { res.keys.forEach { checked.put(it, now) }; store.saveLoadStatus(loadStatus) } }
         }
         for ((id, localId) in m.renewals) {
             val p = playlists.firstOrNull { it.id == localId } ?: continue
-            val l = strong8kLogin(p, m.strong8kHosts) ?: continue
-            val ok = withContext(Dispatchers.IO) { runCatching { com.avidviewer.tv.data.AccountApi.strong8kRenew(token, id, localId, l.second, l.third, accountApi) }.getOrDefault(false) }
-            com.avidviewer.tv.data.CrashLog.note(getApplication(), if (ok) "Strong 8K: renewed from the website" else "Strong 8K: renewal not done")
+            val l = resellerLogin(p, m.resellerHosts) ?: continue
+            val ok = withContext(Dispatchers.IO) { runCatching { com.avidviewer.tv.data.AccountApi.resellerRenew(token, id, localId, l.second, l.third, accountApi) }.getOrDefault(false) }
+            com.avidviewer.tv.data.CrashLog.note(getApplication(), if (ok) "Reseller line renewed from the website" else "Reseller line renewal not done")
         }
     }
 

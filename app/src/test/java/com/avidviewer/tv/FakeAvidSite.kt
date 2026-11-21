@@ -24,13 +24,13 @@ class FakeAvidSite : AutoCloseable {
     val reports = mutableListOf<org.json.JSONObject>()
     val claimed = mutableListOf<String>()
     @Volatile var sendLog = false
-    /** Nov 21, 2026: Strong 8K addresses and renewals /api/tv/me hands out, website requests, and what devices sent. */
-    @Volatile var strong8kHosts: List<String> = emptyList()
+    /** Nov 21, 2026: reseller addresses and renewals /api/tv/me hands out, website requests, and what devices sent. */
+    @Volatile var resellerHosts: List<String> = emptyList()
     @Volatile var renew: List<Pair<String, String>> = emptyList()
     @Volatile var reloadChannels = false
     @Volatile var checkSubscription = false
-    val strong8kChecks = java.util.Collections.synchronizedList(mutableListOf<org.json.JSONObject>())
-    val strong8kRenews = java.util.Collections.synchronizedList(mutableListOf<org.json.JSONObject>())
+    val resellerChecks = java.util.Collections.synchronizedList(mutableListOf<org.json.JSONObject>())
+    val resellerRenews = java.util.Collections.synchronizedList(mutableListOf<org.json.JSONObject>())
     val loadStatuses = java.util.Collections.synchronizedList(mutableListOf<org.json.JSONObject>())
     /** Setup codes it serves: fingerprint → data. */
     /** 1.14.0 playlists from the account: what the device last reported, what it should do, and its answers. */
@@ -66,7 +66,7 @@ class FakeAvidSite : AutoCloseable {
     val backups = java.util.concurrent.ConcurrentHashMap<String, Triple<String, String, String>>()
     private fun meExtras(): String {
         val o = org.json.JSONObject()
-        if (strong8kHosts.isNotEmpty()) o.put("strong8k", org.json.JSONObject().put("hosts", org.json.JSONArray(strong8kHosts))
+        if (resellerHosts.isNotEmpty()) o.put("reseller", org.json.JSONObject().put("hosts", org.json.JSONArray(resellerHosts))
             .put("renew", org.json.JSONArray().apply { renew.forEach { put(org.json.JSONObject().put("id", it.first).put("localId", it.second)) } }))
         if (reloadChannels) { o.put("reloadChannels", true); reloadChannels = false }
         if (checkSubscription) { o.put("checkSubscription", true); checkSubscription = false }
@@ -106,12 +106,12 @@ class FakeAvidSite : AutoCloseable {
             path == "/api/tv/link/claim" -> 200 to """{"status":"approved","token":"TVTOKEN_claimedabcdefghijklmnopqrst","email":"viewer@example.com","name":"Den TV","deviceId":"d2"}"""
             path == "/api/tv/me" -> if (removed || !auth.startsWith("Bearer TVTOKEN_")) 401 to """{"error":"This TV is not linked."}""" else 200 to """{"email":"viewer@example.com","name":"Living room"""" + (beta?.let { ""","beta":$it""" } ?: "") + (if (sendLog) ""","sendLog":true""" else "") + meExtras() + "}"
             path == "/api/tv/signout" -> 200 to """{"ok":true}"""
-            path == "/api/tv/strong8k/check" -> {
-                val o = org.json.JSONObject(body); strong8kChecks += o
+            path == "/api/tv/reseller/check" -> {
+                val o = org.json.JSONObject(body); resellerChecks += o
                 val a = o.getJSONArray("playlists")
                 200 to org.json.JSONObject().put("results", org.json.JSONArray().apply { for (i in 0 until a.length()) put(org.json.JSONObject().put("localId", a.getJSONObject(i).getString("localId")).put("confirmed", true)) }).toString()
             }
-            path == "/api/tv/strong8k/renew" -> { strong8kRenews += org.json.JSONObject(body); renew = emptyList(); 200 to """{"ok":true,"expiresAt":1}""" }
+            path == "/api/tv/reseller/renew" -> { resellerRenews += org.json.JSONObject(body); renew = emptyList(); 200 to """{"ok":true,"expiresAt":1}""" }
             path == "/api/tv/load-status" -> { loadStatuses += org.json.JSONObject(body); 200 to """{"ok":true}""" }
             path == "/api/tv/reports" -> {
                 val linked = auth.startsWith("Bearer TVTOKEN_")

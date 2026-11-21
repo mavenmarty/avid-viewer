@@ -23,14 +23,18 @@ import kotlin.concurrent.thread
 
 /**
  * Nov 21, 2026: categories nobody sees aren't downloaded (Xtream, one category at a time), each playlist's last
- * load is reported to the website, and Strong 8K lines are checked and renewed through the website.
+ * load is reported to the website, and reseller lines are checked and renewed through the website.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], application = Application::class)
-class Strong8kTest {
+class ResellerLinesTest {
     private val app: Application = ApplicationProvider.getApplicationContext()
     private val made = ArrayList<AppViewModel>()
     private fun newVm() = AppViewModel(app).also { made.add(it) }
+
+    /** Uncaught coroutine exceptions (a crash on a device) fail these tests with their stack (RecordingHandler). */
+    @org.junit.Before
+    fun clearUncaught() { RecordingHandler.seen.clear() }
 
     @After
     fun stop() {
@@ -139,37 +143,37 @@ class Strong8kTest {
     }
 
     @Test
-    fun strong8kLinesAreCheckedAndRenewedThroughTheWebsite() {
+    fun resellerLinesAreCheckedAndRenewedThroughTheWebsite() {
         Provider().use { prov ->
             FakeAvidSite().use { site ->
                 setUp(
                     Playlist("px", "Strong", "xtream", server = prov.base, username = "alice", password = "pw1", vodOn = false),
                     Playlist("po", "Other", "m3u", m3uUrl = "http://other.example/get.php?username=bob&password=pw2", vodOn = false, enabled = false),
                 )
-                site.strong8kHosts = listOf("127.0.0.1")
+                site.resellerHosts = listOf("127.0.0.1")
                 val vm = newVm()
                 idleUntil("channels") { vm.channels.isNotEmpty() }
                 vm.accountApi = site.base
                 vm.account.save(AccountApi.Linked("TVTOKEN_abcdefghijklmnopqrstuvwxyz", "viewer@example.com", "Living room", "d1"))
                 vm.checkAccount()
-                idleUntil("Strong 8K playlist checked") { site.strong8kChecks.isNotEmpty() }
-                val sent = site.strong8kChecks[0].getJSONArray("playlists")
-                assertEquals(1, sent.length()) // only the playlist on the Strong 8K address; the other login never leaves
+                idleUntil("reseller playlist checked") { site.resellerChecks.isNotEmpty() }
+                val sent = site.resellerChecks[0].getJSONArray("playlists")
+                assertEquals(1, sent.length()) // only the playlist on the reseller address; the other login never leaves
                 assertEquals("px", sent.getJSONObject(0).getString("localId"))
                 assertEquals("alice", sent.getJSONObject(0).getString("username"))
                 // Checked again only after 12 hours, or when asked on the website.
                 vm.checkAccount(); idleUntil("check-in") { site.calls.count { it.contains("/api/tv/me") } >= 2 }
                 shadowOf(android.os.Looper.getMainLooper()).idleFor(java.time.Duration.ofSeconds(1))
-                assertEquals(1, site.strong8kChecks.size)
+                assertEquals(1, site.resellerChecks.size)
                 site.checkSubscription = true
                 vm.checkAccount()
-                idleUntil("checked when asked") { site.strong8kChecks.size == 2 }
+                idleUntil("checked when asked") { site.resellerChecks.size == 2 }
                 // A renewal the owner asked for on the website.
                 site.renew = listOf("r1" to "px")
                 vm.checkAccount()
-                idleUntil("renewed") { site.strong8kRenews.isNotEmpty() }
-                assertEquals("r1", site.strong8kRenews[0].getString("id"))
-                assertEquals("pw1", site.strong8kRenews[0].getString("password"))
+                idleUntil("renewed") { site.resellerRenews.isNotEmpty() }
+                assertEquals("r1", site.resellerRenews[0].getString("id"))
+                assertEquals("pw1", site.resellerRenews[0].getString("password"))
                 // Reload channels now: the playlist downloads again and its load is reported (count, no names).
                 prov.requests.clear()
                 site.reloadChannels = true

@@ -30,9 +30,9 @@ object AccountApi {
     /** [beta]: this device is in the beta (chosen at avidviewer.app/admin); [betaTag]: the beta build offered to it. */
     data class Me(
         val email: String, val name: String, val beta: Boolean = false, val betaTag: String? = null, val sendLog: Boolean = false,
-        /** Nov 21, 2026: server addresses that are Strong 8K (set by the owner); empty when that isn't set up. */
-        val strong8kHosts: List<String> = emptyList(),
-        /** Strong 8K renewals this device should carry out: (renewal id, this device's playlist id). */
+        /** Nov 21, 2026: server addresses that are reseller (set by the owner); empty when that isn't set up. */
+        val resellerHosts: List<String> = emptyList(),
+        /** reseller renewals this device should carry out: (renewal id, this device's playlist id). */
         val renewals: List<Pair<String, String>> = emptyList(),
         /** Asked on the website's Account › Troubleshooting. */
         val reloadChannels: Boolean = false,
@@ -102,7 +102,7 @@ object AccountApi {
         val (code, o) = call(base, "/api/tv/me", null, token, appVersion)
         return when (code) {
             200 -> o.optJSONObject("beta").let { b ->
-                val s8 = o.optJSONObject("strong8k")
+                val s8 = o.optJSONObject("reseller")
                 val hosts = s8?.optJSONArray("hosts")?.let { a -> (0 until a.length()).map { a.optString(it).lowercase() }.filter { it.isNotBlank() } }.orEmpty()
                 val renew = s8?.optJSONArray("renew")?.let { a -> (0 until a.length()).mapNotNull { i -> a.optJSONObject(i)?.let { it.optString("id") to it.optString("localId") }?.takeIf { it.first.isNotBlank() && it.second.isNotBlank() } } }.orEmpty()
                 Me(o.optString("email"), o.optString("name"), b?.optBoolean("in") == true, b?.optString("tag")?.takeIf { it.isNotBlank() && it != "null" }, o.optBoolean("sendLog"),
@@ -120,20 +120,20 @@ object AccountApi {
     })
 
     /**
-     * Strong 8K (Nov 21, 2026): asks the website to confirm these playlists with Strong 8K's reseller panel. Each
-     * login goes to the website for that one call and is never stored there. Only for playlists on the Strong 8K
+     * reseller (Nov 21, 2026): asks the website to confirm these playlists with the provider's reseller panel. Each
+     * login goes to the website for that one call and is never stored there. Only for playlists on the reseller
      * addresses from [me]. Returns localId -> confirmed.
      */
-    fun strong8kCheck(token: String, playlists: org.json.JSONArray, base: String = BASE): Map<String, Boolean> {
-        val (code, o) = call(base, "/api/tv/strong8k/check", JSONObject().put("playlists", playlists), token)
+    fun resellerCheck(token: String, playlists: org.json.JSONArray, base: String = BASE): Map<String, Boolean> {
+        val (code, o) = call(base, "/api/tv/reseller/check", JSONObject().put("playlists", playlists), token)
         if (code != 200) return emptyMap()
         val a = o.optJSONArray("results") ?: return emptyMap()
         return (0 until a.length()).mapNotNull { a.optJSONObject(it) }.associate { it.optString("localId") to it.optBoolean("confirmed") }
     }
 
     /** Carries out a renewal the owner asked for on the website (paid from the owner's credits). True when renewed. */
-    fun strong8kRenew(token: String, id: String, localId: String, username: String, password: String, base: String = BASE): Boolean {
-        val (code, o) = call(base, "/api/tv/strong8k/renew", JSONObject().put("id", id).put("localId", localId).put("username", username).put("password", password), token)
+    fun resellerRenew(token: String, id: String, localId: String, username: String, password: String, base: String = BASE): Boolean {
+        val (code, o) = call(base, "/api/tv/reseller/renew", JSONObject().put("id", id).put("localId", localId).put("username", username).put("password", password), token)
         return code == 200 && o.optBoolean("ok")
     }
 
