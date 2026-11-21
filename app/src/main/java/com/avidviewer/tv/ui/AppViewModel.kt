@@ -2364,7 +2364,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     internal fun launchPreview(key: String?) {
         if (!lightStart) { preview(key); return }
         val pressedBefore = lastKeyAt
-        com.avidviewer.tv.data.CrashLog.note(app, "Light start-up: preview in ${com.avidviewer.tv.data.DeviceClass.PREVIEW_DELAY_MS / 1000} s")
+        com.avidviewer.tv.data.CrashLog.note(getApplication(), "Light start-up: preview in ${com.avidviewer.tv.data.DeviceClass.PREVIEW_DELAY_MS / 1000} s")
         viewModelScope.launch {
             delay(com.avidviewer.tv.data.DeviceClass.PREVIEW_DELAY_MS)
             if (lastKeyAt != pressedBefore || currentKey != key || screen != Screen.GUIDE || player.mediaItemCount > 0) return@launch
