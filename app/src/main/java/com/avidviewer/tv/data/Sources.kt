@@ -106,29 +106,6 @@ object Xtream {
         "Couldn't reach the server: ${e.message}"
     }
 
-    /**
-     * When the provider says the login's subscription ends (ms), from the login answer's exp_date; null when it doesn't
-     * say (unlimited, or not an Xtream login). Throws when the server can't be reached.
-     */
-    fun expiry(p: Playlist): Long? {
-        val info = JSONObject(Net.text(api(p))).optJSONObject("user_info") ?: return null
-        val v = info.opt("exp_date")
-        val n = when (v) { is Number -> v.toLong(); is String -> v.trim().toLongOrNull(); else -> null } ?: return null
-        return if (n <= 0) null else if (n < 100_000_000_000L) n * 1000 else n
-    }
-
-    /** An Xtream login for [p]: itself, or an M3U link of the get.php?username=…&password=… kind on an Xtream server. */
-    fun loginOf(p: Playlist): Playlist? {
-        if (p.isXtream) return p.takeIf { it.username.isNotBlank() && it.password.isNotBlank() }
-        val uri = runCatching { java.net.URI(p.m3uUrl.trim()) }.getOrNull() ?: return null
-        if (uri.host == null || !uri.path.orEmpty().endsWith("get.php")) return null
-        val q = uri.rawQuery.orEmpty().split('&').mapNotNull { kv -> kv.split('=', limit = 2).takeIf { it.size == 2 }?.let { it[0] to java.net.URLDecoder.decode(it[1], "UTF-8") } }.toMap()
-        val u = q["username"].orEmpty(); val pw = q["password"].orEmpty()
-        if (u.isBlank() || pw.isBlank()) return null
-        val port = if (uri.port > 0) ":${uri.port}" else ""
-        return p.copy(type = "xtream", server = "${uri.scheme ?: "http"}://${uri.host}$port", username = u, password = pw)
-    }
-
     fun liveChannels(p: Playlist, format: String): List<Channel> = ArrayList<Channel>().also { l -> liveChannels(p, format, emptySet(), null) { l.add(it) } }
 
     /** Most separate category downloads [liveChannels] makes instead of one big one. */
