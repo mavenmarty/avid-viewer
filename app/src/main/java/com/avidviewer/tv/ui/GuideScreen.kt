@@ -118,6 +118,8 @@ fun GuideScreen(vm: AppViewModel) {
     /** The channel (by key) whose name cell has the highlight; survives rows being replaced. */
     var focusedKey by remember { mutableStateOf<String?>(null) }
     val previewFr = remember { FocusRequester() }
+    // Up from the top of the guide: the preview, or nowhere while it's hidden (the stream stopped).
+    val upFr = if (vm.streamParked) FocusRequester.Default else previewFr
 
     // The time the highlight is on. Up/Down lands on the program airing at this time in the next row,
     // whatever the run times are; it only changes when you move left or right.
@@ -341,7 +343,9 @@ fun GuideScreen(vm: AppViewModel) {
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         // Preview window + details of the focused show. Up from the top of the screen wraps to the last channel.
-        Row(
+        // Nov 21, 2026: while the stream is stopped (no video was on screen), the guide fills the screen instead.
+        if (vm.streamParked) Label("Choose a channel and press OK to watch", size = 13.sp, color = C.Soft, weight = FontWeight.Bold, modifier = Modifier.testTag("guide-parked"))
+        else Row(
             Modifier.fillMaxWidth().height(195.dp), // Nov 15: preview half again as big (was 130 × 231)
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
@@ -363,7 +367,7 @@ fun GuideScreen(vm: AppViewModel) {
         if (vm.guideQuery.isNotBlank()) {
             GuideSearchResults(vm, Modifier.weight(1f))
         } else {
-        if (days.isNotEmpty()) DayStrip(vm, days, winStart, dayFr, previewFr,
+        if (days.isNotEmpty()) DayStrip(vm, days, winStart, dayFr, upFr,
             onNow = { jumpTo(vm.now, null) },
             onDay = { d -> jumpTo(d + (vm.now - today).coerceIn(0, 24 * 3600 * 1000L - 1), null) })
         // Timeline header: where you are (category · day · zone), then the half-hour marks.
@@ -389,7 +393,7 @@ fun GuideScreen(vm: AppViewModel) {
                         val isMoving = c.key == vm.movingChannel
                         Focusable(
                             modifier = Modifier.width(CH_COL.dp).fillMaxHeight().focusRequester(rowFr(idx)!!)
-                                .then(if (idx == 0) Modifier.focusProperties { up = if (days.isNotEmpty()) dayFr else previewFr } else Modifier)
+                                .then(if (idx == 0) Modifier.focusProperties { up = if (days.isNotEmpty()) dayFr else upFr } else Modifier)
                                 .then(if (isMoving) Modifier.border(2.dp, C.AccentFocus, RoundedCornerShape(8.dp)) else Modifier)
                                 .onFocusChanged {
                                     if (isMoving) movingFocused = it.isFocused

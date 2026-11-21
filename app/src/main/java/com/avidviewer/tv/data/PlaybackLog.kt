@@ -134,6 +134,8 @@ class PlaybackLog(private val file: File, private val max: Int = 400, private va
         const val ERROR = "ERROR"
         const val LOAD = "LOAD"
         const val DROPPED = "DROPPED"
+        /** Nov 21, 2026: how busy the TV is (memory, the app's processor use) while something plays. */
+        const val DEVICE = "DEVICE"
         /** The app reconnected to the stream itself (a stuck picture, or data that stopped arriving). */
         const val RECOVER = "RECOVER"
         val PROBLEMS = setOf(STALL, PICTURE, ERROR, RECOVER)
