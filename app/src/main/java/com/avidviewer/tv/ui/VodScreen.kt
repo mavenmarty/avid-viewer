@@ -86,6 +86,8 @@ fun VodScreen(vm: AppViewModel, kind: String) {
     val current = vm.vodCategory[kind] ?: "All"
     val specials = listOf("All" to all.size, "Recently added" to -1, "Continue watching" to -1, "My List" to -1)
     val cats = vm.vodCategories(kind)
+    // Sorting by genre: titles not looked up yet are looked up while Movies or Series is open (and after).
+    LaunchedEffect(kind, vm.genresOn(), vm.vodVersion) { vm.startGenreLookups() }
     val vq = (vm.vodQuery[kind] ?: "").trim()
     // Near matches (a typo, a word left out) when few titles hold every word; looked up after a short pause.
     LaunchedEffect(kind, vq, vm.vodVersion) { if (vq.length >= 2) { kotlinx.coroutines.delay(300); vm.loadVodNear(kind, vq) } }
@@ -125,7 +127,7 @@ fun VodScreen(vm: AppViewModel, kind: String) {
                                 onBottom = { vm.moveVodCatTo(kind, name, Int.MAX_VALUE) }, onDone = { vm.vodMovingCat = null })
                         },
                     color = if (on || isMoving) C.Surface2 else Color.Transparent,
-                    onMenu = if (special) null else ({ if (!isMoving) vm.vodCatMenu = kind to name }),
+                    onMenu = if (special || name == GENRE_CAT + com.avidviewer.tv.data.Catalog.GENRE_PENDING) null else ({ if (!isMoving) vm.vodCatMenu = kind to name }),
                     onClick = { if (isMoving) vm.vodMovingCat = null else vm.chooseVodCategory(kind, name) },
                 ) {
                     val shown = if (special) name else vm.vodCatName(kind, name)

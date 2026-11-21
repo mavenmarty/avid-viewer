@@ -92,6 +92,10 @@ enum class GuideFocus {
 const val GUIDE_DAYS = 7
 /** 1.18.0: the live card in Continue watching is a [VodItem] of this kind, keyed [LIVE_PREFIX] + channel key. */
 const val LIVE_KIND = "live"
+/** Movies and Series categories that are TMDB genres: "genre:28" (Nov 21, 2026). */
+const val GENRE_CAT = "genre:"
+/** The categories above the provider's (or the genres) in Movies and Series. */
+val VOD_SPECIALS = listOf("All", "Recently added", "Continue watching", "My List")
 /** 1.18.0: how channels and lists are sorted. */
 const val SORT_PROVIDER = "provider"
 /** How long after start Sports' schedules and channels are loaded in the background. */
@@ -3719,7 +3723,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         if (keep != null) for (i in 0 until keep.length()) list.put(keep.getJSONObject(i))
         return org.json.JSONObject().put("myList", list)
             .put("services", org.json.JSONArray().apply { p.myServices.forEach { put(org.json.JSONObject().put("id", it.id).put("name", it.name).put("logo", it.logo ?: "")) } })
-            .put("start", p.discoverStart).put("grownUps", p.discoverGrownUps)
+            .put("start", p.discoverStart).put("grownUps", p.discoverGrownUps).put("genres", p.genreSort)
     }
 
     private fun withDiscoverDoc(p: Prefs, d: org.json.JSONObject): Pair<Prefs, org.json.JSONArray> {
@@ -3737,7 +3741,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
         val sv = d.optJSONArray("services") ?: org.json.JSONArray()
         val services = (0 until sv.length()).map { sv.getJSONObject(it) }.map { WatchProvider(it.optInt("id"), it.optString("name"), it.optString("logo").ifBlank { null }) }
-        return p.copy(myList = list.distinctBy { it.key }, myServices = services, discoverStart = d.optString("start", "all").ifBlank { "all" }, discoverGrownUps = d.optBoolean("grownUps", true)) to keep
+        return p.copy(myList = list.distinctBy { it.key }, myServices = services, discoverStart = d.optString("start", "all").ifBlank { "all" }, discoverGrownUps = d.optBoolean("grownUps", true), genreSort = d.optBoolean("genres", p.genreSort)) to keep
     }
 
     /**
@@ -4309,7 +4313,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     // ---------------- Discover (TMDB) ----------------
-    fun tmdbKey(): String = if (prefs.tmdbKeyEnc.isBlank()) "" else Crypto.decrypt(prefs.tmdbKeyEnc)
+    fun tmdbKey(): String = tmdbKeyForTests ?: if (prefs.tmdbKeyEnc.isBlank()) "" else Crypto.decrypt(prefs.tmdbKeyEnc)
+    /** Tests: a TMDB key without the device's key store. */
+    internal var tmdbKeyForTests: String? = null
 
     /** Country for release dates and streaming services, from the postal code (US by default). */
     fun region(): String = if (Regex("^[A-Za-z]\\d").containsMatchIn(prefs.postalCode)) "CA" else "US"
@@ -5259,7 +5265,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         titles(com.avidviewer.tv.data.Catalog.Query(vodKindKey(kind), vodPids(), grouped = true))
     }
 
-    fun vodCatName(kind: String, cat: String) = prefs.vodCatNames[vodKindKey(kind) + "|" + cat] ?: cat
+    fun vodCatName(kind: String, cat: String) = prefs.vodCatNames[vodKindKey(kind) + "|" + cat] ?: genreOf(cat)?.let { genreCatName(it) } ?: cat
 
     /** Orders category names by the user's order (new ones keep the provider's order, after). */
     fun orderVodCats(kind: String, names: List<String>): List<String> {
@@ -5267,7 +5273,93 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         return ord.filter { it in names } + names.filterNot { it in ord }
     }
 
-    fun vodCategories(kind: String): List<Pair<String, Int>> = vodCatsMemo.getOrPut(kind) { Memo() }.get(vodVersion, vodPids().joinToString(","), prefs) { computeVodCategories(kind) }
+    fun vodCategories(kind: String): List<Pair<String, Int>> = vodCatsMemo.getOrPut(kind) { Memo() }.get(vodVersion, vodPids().joinToString(","), prefs, genreVersion, kidsMode) {
+        if (genresOn()) computeGenreCategories(kind) else computeVodCategories(kind)
+    }
+
+    // ---------------- Movies and Series by TMDB genre (Nov 21, 2026) ----------------
+    /** Whether this profile lists TMDB genres in place of the provider's categories (never on a Kids profile). */
+    fun genresOn(): Boolean = prefs.genreSort && !kidsMode && prefs.tmdbKeyEnc.isNotBlank()
+
+    /** The genre id of a genre category ("genre:28"), or null for a provider category. */
+    fun genreOf(cat: String): Int? = if (cat.startsWith(GENRE_CAT)) cat.removePrefix(GENRE_CAT).toIntOrNull() else null
+
+    private fun genreCatName(id: Int) = when (id) {
+        com.avidviewer.tv.data.Catalog.GENRE_OTHER -> "Other (not on TMDB)"
+        com.avidviewer.tv.data.Catalog.GENRE_PENDING -> "Not sorted yet"
+        else -> com.avidviewer.tv.data.Art.genreLabel(id)
+    }
+
+    /** Genres by name (or the user's order), then Other, then titles not looked up yet. Each title counted once. */
+    private fun computeGenreCategories(kind: String): List<Pair<String, Int>> {
+        val g = vodKindKey(kind)
+        val counts = runCatching { catalog.genreCounts(g, vodPids()) }.getOrDefault(emptyMap())
+        val hidden = prefs.vodHiddenGenres
+        val named = counts.filter { it.key > 0 && it.value > 0 && "$g|${it.key}" !in hidden }
+            .map { GENRE_CAT + it.key }.sortedBy { vodCatName(kind, it).lowercase() }
+        val other = com.avidviewer.tv.data.Catalog.GENRE_OTHER; val pending = com.avidviewer.tv.data.Catalog.GENRE_PENDING
+        val tail = listOfNotNull(
+            (counts[other] ?: 0).takeIf { it > 0 && "$g|$other" !in hidden }?.let { GENRE_CAT + other },
+            (counts[pending] ?: 0).takeIf { it > 0 }?.let { GENRE_CAT + pending },
+        )
+        return (orderVodCats(kind, named) + tail).map { it to (counts[genreOf(it)] ?: 0) }
+    }
+
+    /** Bumped as lookups are saved, so the genre list and counts follow. */
+    var genreVersion by mutableStateOf(0); private set
+    /** (titles sorted, all titles) while genres are being looked up; null when nothing is running. */
+    var genreProgress by mutableStateOf<Pair<Int, Int>?>(null); private set
+    private var genreJob: Job? = null
+    /** Pause between TMDB lookups (tests: 0). */
+    internal var genreDelayMs = 250L
+    /** Looks a title up on TMDB: its genre ids, or null when TMDB has no match. Tests replace it. */
+    internal var genreFinder: (key: String, name: String, type: String) -> List<Int>? = { key, name, type ->
+        com.avidviewer.tv.data.Tmdb.find(key, name, type)?.genres
+    }
+
+    /** Turns sorting by genre on or off for this profile; on starts the lookups. */
+    fun setGenreSort(on: Boolean) {
+        updatePrefs { it.copy(genreSort = on) }
+        vodCategory = vodCategory.mapValues { (_, c) -> if (c in VOD_SPECIALS) c else "All" }
+        if (on) startGenreLookups() else { genreJob?.cancel(); genreProgress = null }
+    }
+
+    fun showHiddenGenres() = updatePrefs { it.copy(vodHiddenGenres = emptySet()) }
+
+    /**
+     * Looks up, newest first, every movie and series not sorted yet: one title at a time with a short pause, each
+     * title once for all its copies. Only the title's name and year are sent, with the profile's own TMDB key; never
+     * from a Kids profile. Stops when offline or refused, and carries on the next time Movies or Series opens.
+     */
+    fun startGenreLookups() {
+        if (genreJob?.isActive == true || !genresOn()) return
+        val key = tmdbKey(); if (key.isBlank()) return
+        val pids = vodPids(); if (pids.isEmpty()) return
+        genreJob = viewModelScope.launch {
+            try {
+                while (isActive && genresOn() && vodPids() == pids) {
+                    val batch = withContext(Dispatchers.IO) { runCatching { catalog.pendingGenres(pids, 40) }.getOrDefault(emptyList()) }
+                    genreProgress = withContext(Dispatchers.IO) { runCatching { catalog.genreProgress(pids) }.getOrNull() }
+                    if (batch.isEmpty()) break
+                    for (t in batch) {
+                        if (!isActive || !genresOn()) return@launch
+                        val name = if (t.year.isNotBlank() && !t.name.contains("(" + t.year.take(4) + ")")) t.name + " (" + t.year.take(4) + ")" else t.name
+                        val found = withContext(Dispatchers.IO) { runCatching { genreFinder(key, name, if (t.group == "series") "tv" else "movie") } }
+                        if (found.isFailure) return@launch // offline, or the key was refused: try again later
+                        withContext(Dispatchers.IO) { runCatching { catalog.saveGenres(t.gk, found.getOrNull()) } }
+                        if (genreDelayMs > 0) delay(genreDelayMs)
+                    }
+                    genreVersion++
+                }
+            } finally {
+                genreVersion++
+                genreProgress = null
+            }
+        }
+    }
+
+    /** Tests: whether lookups are running. */
+    internal fun genreLookupsRunning() = genreJob?.isActive == true
 
     private fun computeVodCategories(kind: String): List<Pair<String, Int>> {
         // Same category name in several playlists: one entry, counts added, first appearance first.
@@ -5301,6 +5393,11 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Hides a category everywhere it appears (in every playlist that has it). */
     fun hideVodCatEverywhere(kind: String, cat: String) {
+        genreOf(cat)?.let { id ->
+            updatePrefs { it.copy(vodHiddenGenres = it.vodHiddenGenres + (vodKindKey(kind) + "|" + id)) }
+            if (vodCategory[kind] == cat) vodCategory = vodCategory + (kind to "All")
+            return
+        }
         val keys = catalog.playlistsWithCategory(vodKindKey(kind), cat).map { vodCatKey(kind, it, cat) }.toSet()
         updatePrefs { it.copy(vodHiddenCats = it.vodHiddenCats + keys) }
         if (vodCategory[kind] == cat) vodCategory = vodCategory + (kind to "All")
@@ -5317,8 +5414,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun vodItems(kind: String): List<VodItem> = vodItemsNow(kind).also { ensureGrouped() }
 
     private fun vodItemsNow(kind: String): List<VodItem> =
-        vodItemsMemo.getOrPut(kind) { Memo() }.get(vodVersion, vodPids().joinToString(","), prefs, vodCategory[kind] ?: "All", resume) { computeVodItems(kind) }
-
+        vodItemsMemo.getOrPut(kind) { Memo() }.get(vodVersion, vodPids().joinToString(","), prefs, vodCategory[kind] ?: "All", resume, genreVersion) { computeVodItems(kind) }
     private fun computeVodItems(kind: String): List<VodItem> {
         val g = vodKindKey(kind)
         return when (val c = vodCategory[kind] ?: "All") {
@@ -5327,7 +5423,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             "My List" -> prefs.myList.filter { if (kind == "series") it.kind == "series" else it.kind != "series" }
             "Continue watching" -> continueKeys().let { ks -> val at = ks.withIndex().associate { it.value to it.index }
                 withLiveCard(catalog.byKeys(ks).filter { Catalog.group(it.kind) == g && !isVodHidden(it) }.sortedBy { at[it.key] ?: Int.MAX_VALUE }) }
-            else -> vodPrefetched.remove(prefetchKey(kind, c)) ?: titles(com.avidviewer.tv.data.Catalog.Query(g, vodPids(), category = c, grouped = true))
+            else -> if (genreOf(c) != null) titles(com.avidviewer.tv.data.Catalog.Query(g, vodPids(), grouped = true, genre = genreOf(c)))
+                else vodPrefetched.remove(prefetchKey(kind, c)) ?: titles(com.avidviewer.tv.data.Catalog.Query(g, vodPids(), category = c, grouped = true))
         }
     }
 
@@ -5341,6 +5438,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     fun prefetchVodCategory(kind: String, cat: String) {
         vodPrefetchJob?.cancel()
+        if (genreOf(cat) != null) return
         val key = prefetchKey(kind, cat)
         if (key in vodPrefetched) return
         val q = com.avidviewer.tv.data.Catalog.Query(vodKindKey(kind), vodPids(), category = cat, grouped = true)

@@ -20,7 +20,7 @@ data class Ingest<T>(val result: T, val added: Int, val committed: Boolean)
  * stream address token (ChannelKeys.token), to follow saved choices when keys change, lr the
  * language rank (Language.rank: 0 English … 3 other), so a title listed once shows its English copy.
  */
-class Catalog(context: Context) : SQLiteOpenHelper(context.applicationContext, "catalog.db", null, 5) {
+class Catalog(context: Context) : SQLiteOpenHelper(context.applicationContext, "catalog.db", null, 6) {
 
     override fun onCreate(db: SQLiteDatabase) {
         db.execSQL(
@@ -37,6 +37,18 @@ class Catalog(context: Context) : SQLiteOpenHelper(context.applicationContext, "
         db.execSQL("CREATE TABLE source (p TEXT PRIMARY KEY, saved INTEGER NOT NULL)")
         db.execSQL("CREATE INDEX title_token ON title (p, tk)")
         LiveDb.create(db)
+        createGenres(db)
+    }
+
+    /**
+     * 6 (Nov 21, 2026): TMDB genres per title, kept apart from the downloaded rows so they survive every download.
+     * Keyed by [GENRE_KEY] (the kind and the name without provider tags, as titles are grouped), so all copies of a
+     * title share one lookup. genre_done: looked up (matched = 0: TMDB had no match).
+     */
+    private fun createGenres(db: SQLiteDatabase) {
+        db.execSQL("CREATE TABLE IF NOT EXISTS genre_done (gk TEXT PRIMARY KEY, at INTEGER NOT NULL, matched INTEGER NOT NULL)")
+        db.execSQL("CREATE TABLE IF NOT EXISTS title_genre (gk TEXT NOT NULL, genre INTEGER NOT NULL, PRIMARY KEY (genre, gk))")
+        db.execSQL("CREATE INDEX IF NOT EXISTS title_genre_gk ON title_genre (gk)")
     }
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
@@ -59,6 +71,7 @@ class Catalog(context: Context) : SQLiteOpenHelper(context.applicationContext, "
             db.execSQL("ALTER TABLE title ADD COLUMN rep INTEGER NOT NULL DEFAULT 1")
             db.execSQL("ALTER TABLE title ADD COLUMN repc INTEGER NOT NULL DEFAULT 1")
         }
+        if (oldVersion < 6) createGenres(db)
     }
 
     /**
@@ -149,6 +162,10 @@ class Catalog(context: Context) : SQLiteOpenHelper(context.applicationContext, "
         private const val PER_PLAYLIST = 10_000_000_000L
         /** What folds copies together: the normalized name (a title with no usable name stays on its own). */
         private const val GROUP_KEY = "(CASE WHEN nn = '' THEN k ELSE nn END)"
+        /** A title's key in the genre tables: its kind group and [GROUP_KEY]. Matches [genreKeyOf]. */
+        private const val GENRE_KEY = "(title.g || '|' || (CASE WHEN title.nn = '' THEN title.k ELSE title.nn END))"
+        const val GENRE_OTHER = -1
+        const val GENRE_PENDING = -2
         private const val COLS = "k, p, t, c, n, l, u, s, a, r, y"
         fun read(c: Cursor) = VodItem(
             key = c.getString(0), playlistId = c.getString(1), kind = c.getString(2), category = c.getString(3),
@@ -333,6 +350,8 @@ class Catalog(context: Context) : SQLiteOpenHelper(context.applicationContext, "
         val kind: String? = null,
         /** Each title once (copies with the same name in other languages, qualities or playlists folded in). */
         val grouped: Boolean = false,
+        /** A TMDB genre id, or [GENRE_OTHER] (looked up, no genre) or [GENRE_PENDING] (not looked up yet). */
+        val genre: Int? = null,
     ) {
         fun where(): Pair<String, Array<String>> {
             val sb = StringBuilder("g = ?")
@@ -342,6 +361,12 @@ class Catalog(context: Context) : SQLiteOpenHelper(context.applicationContext, "
             if (grouped) sb.append(if (category != null) " AND repc = 1" else " AND rep = 1")
             if (category != null) { sb.append(" AND c = ?"); args.add(category) }
             if (kind != null) { sb.append(" AND t = ?"); args.add(kind) }
+            when (genre) {
+                null -> {}
+                GENRE_PENDING -> sb.append(" AND NOT EXISTS (SELECT 1 FROM genre_done d WHERE d.gk = $GENRE_KEY)")
+                GENRE_OTHER -> sb.append(" AND EXISTS (SELECT 1 FROM genre_done d WHERE d.gk = $GENRE_KEY) AND NOT EXISTS (SELECT 1 FROM title_genre x WHERE x.gk = $GENRE_KEY)")
+                else -> { sb.append(" AND EXISTS (SELECT 1 FROM title_genre x WHERE x.genre = ? AND x.gk = $GENRE_KEY)"); args.add(genre.toString()) }
+            }
             sb.append(" AND p IN (${playlists.joinToString(",") { "?" }})"); args.addAll(playlists)
             // Every word typed, in any order ("news fargo" finds "Fargo News").
             nameContains?.takeIf { it.isNotBlank() }?.let { q ->
@@ -403,6 +428,55 @@ class Catalog(context: Context) : SQLiteOpenHelper(context.applicationContext, "
             while (c.moveToNext()) rows.add(Triple(c.getString(0), c.getString(1), c.getInt(2)) to c.getLong(3))
             rows.sortedWith(compareBy({ playlists.indexOf(it.first.first) }, { it.second })).map { it.first }
         }
+    }
+
+    // ---------------- TMDB genres (Nov 21, 2026) ----------------
+    /** A title to look up: its genre key, kind group, name and year (from the copy that stands for it). */
+    data class GenreLookup(val gk: String, val group: String, val name: String, val year: String)
+
+    /** Titles not looked up yet, newest first (one per title, from the copies that stand for them). */
+    fun pendingGenres(playlists: List<String>, limit: Int): List<GenreLookup> {
+        if (playlists.isEmpty()) return emptyList()
+        val inP = playlists.joinToString(",") { "?" }
+        return readableDatabase.rawQuery(
+            "SELECT $GENRE_KEY, g, n, y FROM title WHERE h = 0 AND rep = 1 AND p IN ($inP) AND NOT EXISTS (SELECT 1 FROM genre_done d WHERE d.gk = $GENRE_KEY) ORDER BY a DESC LIMIT $limit",
+            playlists.toTypedArray(),
+        ).use { c -> val out = ArrayList<GenreLookup>(); val seen = HashSet<String>(); while (c.moveToNext()) if (seen.add(c.getString(0))) out.add(GenreLookup(c.getString(0), c.getString(1), c.getString(2), c.getString(3))); out }
+    }
+
+    /** Saves a lookup: [genres] null = TMDB had no match. */
+    fun saveGenres(gk: String, genres: List<Int>?, now: Long = System.currentTimeMillis()) {
+        val db = writableDatabase
+        db.beginTransaction()
+        try {
+            db.execSQL("INSERT OR REPLACE INTO genre_done (gk, at, matched) VALUES (?, ?, ?)", arrayOf<Any>(gk, now, if (genres == null) 0 else 1))
+            db.execSQL("DELETE FROM title_genre WHERE gk = ?", arrayOf(gk))
+            genres?.distinct()?.forEach { db.execSQL("INSERT OR IGNORE INTO title_genre (gk, genre) VALUES (?, ?)", arrayOf<Any>(gk, it)) }
+            db.setTransactionSuccessful()
+        } finally { db.endTransaction() }
+    }
+
+    /** Titles shown in each genre ([GENRE_OTHER], [GENRE_PENDING] included), each title once. */
+    fun genreCounts(group: String, playlists: List<String>): Map<Int, Int> {
+        if (playlists.isEmpty()) return emptyMap()
+        val (w, a) = Query(group, playlists, grouped = true).where()
+        val out = HashMap<Int, Int>()
+        readableDatabase.rawQuery("SELECT x.genre, COUNT(*) FROM title JOIN title_genre x ON x.gk = $GENRE_KEY WHERE $w GROUP BY x.genre", a).use { c ->
+            while (c.moveToNext()) out[c.getInt(0)] = c.getInt(1)
+        }
+        out[GENRE_OTHER] = count(Query(group, playlists, grouped = true, genre = GENRE_OTHER))
+        out[GENRE_PENDING] = count(Query(group, playlists, grouped = true, genre = GENRE_PENDING))
+        return out
+    }
+
+    /** (looked up, all) titles of both kinds, each title once: for "Sorting into genres… 4,200 of 18,000". */
+    fun genreProgress(playlists: List<String>): Pair<Int, Int> {
+        var done = 0; var all = 0
+        for (g in listOf("movie", "series")) {
+            val n = count(Query(g, playlists, grouped = true))
+            all += n; done += n - count(Query(g, playlists, grouped = true, genre = GENRE_PENDING))
+        }
+        return done to all
     }
 
     fun byKeys(keys: Collection<String>): List<VodItem> {

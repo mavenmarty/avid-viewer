@@ -29,6 +29,12 @@ data class Art(val backdrop: String?, val overview: String, val rating: Double, 
             10749 to "Romance", 878 to "Sci-fi", 10770 to "TV movie", 53 to "Thriller", 10752 to "War", 37 to "Western",
             10759 to "Action", 10762 to "Kids", 10763 to "News", 10764 to "Reality", 10765 to "Sci-fi", 10766 to "Soap", 10767 to "Talk", 10768 to "War")
         fun genreName(id: Int): String? = GENRES[id]
+
+        /** The name a genre has as a Movies or Series category (TMDB's TV genres in full). */
+        fun genreLabel(id: Int): String = when (id) {
+            10759 -> "Action & Adventure"; 10765 -> "Sci-fi & Fantasy"; 10768 -> "War & Politics"
+            else -> GENRES[id] ?: "Genre $id"
+        }
     }
 }
 

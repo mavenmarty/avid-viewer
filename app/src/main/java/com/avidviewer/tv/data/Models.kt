@@ -180,6 +180,10 @@ data class Prefs(
     val vodHiddenCats: Set<String> = emptySet(),
     /** Hidden individual movies/series (VodItem.key). */
     val vodHiddenTitles: Set<String> = emptySet(),
+    /** Nov 21, 2026, per profile: Movies and Series list TMDB genres in place of the provider's categories. */
+    val genreSort: Boolean = false,
+    /** Genres hidden while [genreSort] is on: "movie|28" or "series|10759". */
+    val vodHiddenGenres: Set<String> = emptySet(),
     /** Renamed movie/series categories: "movie|Category" → new name. */
     val vodCatNames: Map<String, String> = emptyMap(),
     /** Order of movie/series categories: "movie" or "series" → category names in order. */
@@ -227,6 +231,7 @@ data class Prefs(
         vodPlaylist?.let { o.put("vodPlaylist", it) }
         o.put("vodHiddenCats", JSONArray(vodHiddenCats.toList()))
         o.put("vodHiddenTitles", JSONArray(vodHiddenTitles.toList()))
+        o.put("genreSort", genreSort).put("vodHiddenGenres", JSONArray(vodHiddenGenres.toList()))
         o.put("vodCatNames", JSONObject(vodCatNames))
         o.put("vodCatOrder", JSONObject().apply { vodCatOrder.forEach { (k, l) -> put(k, JSONArray(l)) } })
         o.put("lists", JSONArray().apply { lists.forEach { put(it.toJson()) } })
@@ -284,6 +289,8 @@ data class Prefs(
                 vodPlaylist = o.optString("vodPlaylist").ifBlank { null },
                 vodHiddenCats = strList(o.optJSONArray("vodHiddenCats")).toSet(),
                 vodHiddenTitles = strList(o.optJSONArray("vodHiddenTitles")).toSet(),
+                genreSort = o.optBoolean("genreSort", false),
+                vodHiddenGenres = strList(o.optJSONArray("vodHiddenGenres")).toSet(),
                 vodCatNames = strMap(o.optJSONObject("vodCatNames")),
                 vodCatOrder = o.optJSONObject("vodCatOrder")?.let { vo -> vo.keys().asSequence().associateWith { strList(vo.getJSONArray(it)) } } ?: emptyMap(),
                 lists = o.optJSONArray("lists")?.let { a -> List(a.length()) { ChannelList.fromJson(a.getJSONObject(it)) } } ?: emptyList(),
