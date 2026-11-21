@@ -36,6 +36,9 @@ class Strong8kTest {
     fun stop() {
         made.forEach { it.viewModelScope.cancel() }
         shadowOf(android.os.Looper.getMainLooper()).idle()
+        Thread.sleep(1500); shadowOf(android.os.Looper.getMainLooper()).idle()
+        val seen = synchronized(RecordingHandler.seen) { RecordingHandler.seen.toList().also { RecordingHandler.seen.clear() } }
+        if (seen.isNotEmpty()) throw AssertionError("uncaught: " + seen.joinToString("\n----\n") { it.stackTraceToString().take(3000) })
     }
 
     private fun idleUntil(what: String, ms: Long = 20_000, ok: () -> Boolean) {
