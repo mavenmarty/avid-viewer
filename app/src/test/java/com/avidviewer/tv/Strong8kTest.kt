@@ -114,7 +114,7 @@ class Strong8kTest {
             vm.setGroupsHidden("px", listOf("Adult", "Sports"), true)
             prov.requests.clear()
             vm.refreshPlaylist("px")
-            idleUntil("downloaded again without the hidden categories") { vm.skippedGroups["px"] == setOf("Adult", "Sports") }
+            idleUntil("downloaded again without the hidden categories") { vm.skippedGroups["px"] == setOf("Adult", "Sports") && vm.channels.size == 2 }
             assertEquals(listOf("get_live_categories", "get_live_streams:7"), prov.requests.filter { it.startsWith("get_live") })
             assertEquals(2, vm.channels.size)
             // Still listed (with no channels), so they can be shown again.
