@@ -5332,7 +5332,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
      * from a Kids profile. Stops when offline or refused, and carries on the next time Movies or Series opens.
      */
     fun startGenreLookups() {
-        if (genreJob?.coroutineContext[Job]?.isActive != false == true || !genresOn()) return
+        if (genreJob?.isActive == true || !genresOn()) return
         val key = tmdbKey(); if (key.isBlank()) return
         val pids = vodPids(); if (pids.isEmpty()) return
         genreJob = viewModelScope.launch {
