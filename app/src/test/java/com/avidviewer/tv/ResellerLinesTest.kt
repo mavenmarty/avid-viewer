@@ -66,8 +66,6 @@ class ResellerLinesTest {
     private class Provider : AutoCloseable {
         val s = ServerSocket(0)
         val requests = java.util.Collections.synchronizedList(ArrayList<String>())
-        /** The login answer's exp_date (seconds), or null to leave it out. */
-        @Volatile var expSeconds: Long? = null
         private val streams = mapOf(
             "7" to """{"name":"News 1","stream_id":1,"category_id":"7"},{"name":"News 2","stream_id":2,"category_id":"7"}""",
             "8" to """{"name":"A 1","stream_id":3,"category_id":"8"},{"name":"A 2","stream_id":4,"category_id":"8"},{"name":"A 3","stream_id":5,"category_id":"8"}""",
@@ -87,7 +85,7 @@ class ResellerLinesTest {
                             val cat = Regex("category_id=([0-9]+)").find(q)?.groupValues?.get(1)
                             requests += (action ?: "login") + (cat?.let { ":$it" } ?: "")
                             val body = when (action) {
-                                null -> """{"user_info":{"auth":1,"status":"Active"""" + (expSeconds?.let { ""","exp_date":"$it"""" } ?: "") + "}}"
+                                null -> """{"user_info":{"auth":1,"status":"Active"}}"""
                                 "get_live_categories" -> """[{"category_id":"7","category_name":"News"},{"category_id":"8","category_name":"Adult"},{"category_id":"9","category_name":"Sports"}]"""
                                 "get_live_streams" -> "[" + (if (cat != null) streams[cat] ?: "" else streams.values.joinToString(",")) + "]"
                                 else -> "[]"
@@ -188,52 +186,6 @@ class ResellerLinesTest {
                 assertFalse(site.loadStatuses.last().toString().contains("News 1"))
                 assertFalse(site.loadStatuses.last().toString().contains("pw1"))
             }
-        }
-    }
-
-    /** Nov 21, 2026 (owner): the end date shows, reminders at 30, 14 and 2 days (once each), dismissible. */
-    @Test
-    fun aSubscriptionEndingSoonIsShownAndRemindedOncePerStage() {
-        Provider().use { prov ->
-            prov.expSeconds = System.currentTimeMillis() / 1000 + 10 * 86400
-            setUp(Playlist("px", "Provider", "xtream", server = prov.base, username = "u", password = "p", vodOn = false))
-            val vm = newVm()
-            idleUntil("end date from the provider") { vm.expiries["px"] != null }
-            idleUntil("14-day reminder") { vm.expiryReminder == ("px" to 14) }
-            vm.dismissExpiryReminder()
-            vm.checkExpiryReminders()
-            assertEquals(null, vm.expiryReminder)
-            // A new app start remembers it was dismissed.
-            val vm2 = newVm()
-            idleUntil("dates loaded") { vm2.expiries["px"] != null }
-            vm2.checkExpiryReminders()
-            assertEquals(null, vm2.expiryReminder)
-            // Two days left: the last reminder.
-            vm2.checkExpiryReminders(prov.expSeconds!! * 1000 - 36 * 3600 * 1000L)
-            assertEquals("px" to 2, vm2.expiryReminder)
-        }
-    }
-
-    /** An expired subscription says so instead of playing; renewed at the provider, the channel plays. */
-    @Test
-    fun anExpiredSubscriptionSaysSoAndPlaysOnceRenewed() {
-        Provider().use { prov ->
-            prov.expSeconds = System.currentTimeMillis() / 1000 - 86400
-            setUp(Playlist("px", "Provider", "xtream", server = prov.base, username = "u", password = "p", vodOn = false))
-            val vm = newVm()
-            idleUntil("end date and channels") { vm.expiries["px"] != null && vm.channels.isNotEmpty() }
-            vm.expiredNotice = null
-            vm.stop(); vm.player.clearMediaItems()
-            vm.preview(vm.channels.first().key)
-            assertEquals("px", vm.expiredNotice)
-            shadowOf(android.os.Looper.getMainLooper()).idleFor(java.time.Duration.ofSeconds(2))
-            assertEquals("nothing plays", 0, vm.player.mediaItemCount)
-            assertEquals(null, vm.expiryReminder) // no "expires soon" once it has ended
-            // Renewed: asked again when chosen, the notice closes and it plays.
-            prov.expSeconds = System.currentTimeMillis() / 1000 + 90 * 86400
-            vm.expiredNotice = null
-            vm.preview(vm.channels.first().key)
-            idleUntil("plays once renewed") { vm.expiredNotice == null && vm.player.mediaItemCount > 0 }
         }
     }
 }

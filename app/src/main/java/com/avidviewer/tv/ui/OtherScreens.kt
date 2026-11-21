@@ -450,7 +450,6 @@ fun PlaylistsScreen(vm: AppViewModel) {
                     Column(Modifier.padding(bottom = 4.dp)) {
                         Label(selP.name, size = 17.sp, color = C.Text, weight = FontWeight.Bold, lines = 2)
                         Label(if (selP.isXtream) "Xtream Codes" else "M3U link", size = 12.sp)
-                        vm.expiries[selP.id]?.let { at -> Label(expiryText(at), size = 12.sp, color = if (at - System.currentTimeMillis() < 30 * 86_400_000L) C.Accent else C.Soft, modifier = Modifier.testTag("pl-expiry")) }
                     }
                 }
                 item { TvButton("✎  Edit", modifier = Modifier.fillMaxWidth(), selected = editing) { editing = true; sources = false } }
@@ -506,7 +505,7 @@ fun PlaylistsScreen(vm: AppViewModel) {
                     ) { vm.updatePlaylist(selP.id, f.name, f.type, f.server, f.user, f.pass, f.m3u, f.epg) }
                 }
                 sources && selP != null -> GuideSourcesPane(vm, selP) { t, m, y, r -> confirm = Confirm(t, m, y, r) }
-                else -> PlaylistDetails(selP!!, selP.id == active, vm.expiries[selP.id])
+                else -> PlaylistDetails(selP!!, selP.id == active)
             }
         }
     }
@@ -536,7 +535,7 @@ private fun MiniToggle(title: String, desc: String, on: Boolean, enabled: Boolea
     SettingSwitch(title, if (enabled) desc else "Turn the playlist on first", on, enabled = enabled, compact = true, onToggle = onToggle)
 
 @Composable
-private fun PlaylistDetails(p: com.avidviewer.tv.data.Playlist, active: Boolean, expiresAt: Long? = null) {
+private fun PlaylistDetails(p: com.avidviewer.tv.data.Playlist, active: Boolean) {
     Column(Modifier.fillMaxSize().padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text("Details", color = C.Text, fontSize = 17.sp, fontWeight = FontWeight.Bold)
         DetailLine("Name", p.name)
@@ -550,7 +549,6 @@ private fun PlaylistDetails(p: com.avidviewer.tv.data.Playlist, active: Boolean,
         }
         DetailLine("TV guide", p.epgUrl.ifBlank { if (p.isXtream) "From your login" else "From the playlist, if it lists one" })
         DetailLine("Status", playlistState(p, active).ifBlank { "On" })
-        if (expiresAt != null) DetailLine("Subscription", expiryText(expiresAt))
         Label("Choose Edit to change these details.", size = 12.sp, modifier = Modifier.padding(top = 6.dp))
     }
 }
@@ -1625,10 +1623,4 @@ private fun LinkToAddPane(vm: AppViewModel) {
         if (code != null) LinkCodePanel(vm, code)
         else Label(vm.accountStatus ?: "Getting a code…", size = 14.sp, color = C.Soft, lines = Int.MAX_VALUE)
     }
-}
-
-/** "Subscription ends December 3, 2026" / "Subscription ended …", from the provider (Nov 21, 2026). */
-fun expiryText(at: Long): String {
-    val day = java.text.SimpleDateFormat("MMMM d, yyyy", java.util.Locale.getDefault()).format(java.util.Date(at))
-    return if (at <= System.currentTimeMillis()) "Subscription ended $day" else "Subscription ends $day"
 }
