@@ -1721,7 +1721,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
      * keys. The old list stays if the download fails. Returns how many channels came in.
      */
     private suspend fun downloadLive(p: Playlist): Int {
-        val r = runCatching { downloadLiveNow(p) }
+        // A cancelled download (the app moving on, a newer download) isn't a failed load: nothing is recorded.
+        val r = try { Result.success(downloadLiveNow(p)) } catch (e: kotlinx.coroutines.CancellationException) { throw e } catch (e: Exception) { Result.failure(e) }
         noteLoad(p, r)
         return r.getOrThrow()
     }
