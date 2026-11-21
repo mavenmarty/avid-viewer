@@ -1367,7 +1367,7 @@ private fun EditorColumns(vm: AppViewModel, tab: LeTab, modifier: Modifier) {
     // Sections: one per playlist, with its categories.
     val sections: List<Pair<com.avidviewer.tv.data.Playlist, List<LeCat>>> = vm.playlists.map { p ->
         p to if (live) {
-            liveData[p.id]?.let { chs -> vm.editorGroups(chs, p.id).map { (raw, n) -> LeCat("L|${p.id}|$raw", p.id, raw, vm.groupName(raw), n) } } ?: emptyList()
+            liveData[p.id]?.let { chs -> vm.editorGroups(chs).map { (raw, n) -> LeCat("L|${p.id}|$raw", p.id, raw, vm.groupName(raw), n) } } ?: emptyList()
         } else {
             vm.vodEditorCategories(kind, p.id).map { (c, n) -> LeCat(vm.vodCatKey(kind, p.id, c), p.id, c, vm.vodCatName(kind, c), n) }
         }

@@ -19,7 +19,6 @@ import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import com.avidviewer.tv.data.Channel
-import com.avidviewer.tv.data.EventNames
 import com.avidviewer.tv.data.Catalog
 import com.avidviewer.tv.data.EpgSource
 import com.avidviewer.tv.data.GuideChannel
@@ -56,8 +55,6 @@ import com.avidviewer.tv.data.Xtream
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
-import org.json.JSONArray
-import org.json.JSONObject
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
@@ -508,13 +505,6 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     var accountStatus by mutableStateOf<String?>(null); private set
     private var linkJob: Job? = null
     private var lastAccountCheck = 0L
-    // Declared up here: start-up (init) already uses them. Nov 21, 2026.
-    /** Per playlist: categories left out of the last download because every profile hides them. */
-    var skippedGroups by mutableStateOf<Map<String, Set<String>>>(emptyMap()); private set
-    /** Each playlist's last channel load (website Troubleshooting) and when reseller lines were last checked. */
-    private val loadStatus: JSONObject by lazy { store.loadLoadStatus() }
-    private var loadReportJob: Job? = null
-    private var loadsReported = false
 
     private fun accountInfo() = com.avidviewer.tv.data.AccountApi.info(getApplication(), installed.second.ifBlank { com.avidviewer.tv.BuildConfig.VERSION_NAME })
 
@@ -591,10 +581,6 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                     // "It's still happening" on one of this device's reports: send a new playback log now.
                     if (m.sendLog && playbackLog.entries().isNotEmpty()) sendPlaybackLog(auto = true)
                     if (unclaimedReports().isNotEmpty()) claimReports()
-                    if (m.reloadChannels) reloadAllLive()
-                    resellerAfterCheckIn(token, m)
-                    // Once per run (playlists may have changed while it was off); after that, each download reports itself.
-                    if (!loadsReported) { loadsReported = true; reportLoadsLater() }
                 }
             }
         }
@@ -1120,10 +1106,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 // of new versions (checked every 6 hours when automatic checks are on).
                 if (update != null) onUpdateFound(now)
                 if (prefs.autoUpdateCheck && lastUpdateCheck > 0 && now - lastUpdateCheck > 6 * 60 * 60 * 1000L) checkForUpdate(quiet = true)
-                // Linked to an account: check in a minute after start, then every 10 minutes (removed TVs unlink; Reload
-                // channels and Check my subscription on the website are picked up). Was every 6 hours before Nov 21, 2026.
+                // Linked to an account: check in a minute after start, then every 6 hours (removed TVs unlink).
                 autoBackupIfDue(now)
-                if (account.linked && now - lastAccountCheck > (if (lastAccountCheck == 0L) 60_000L else 10 * 60 * 1000L) && now - startedAt > 60_000L) checkAccount()
+                if (account.linked && now - lastAccountCheck > (if (lastAccountCheck == 0L) 60_000L else 6 * 60 * 60 * 1000L) && now - startedAt > 60_000L) checkAccount()
                 delay(15_000)
             }
         }
@@ -1570,8 +1555,6 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             busy = true
             if (!p.liveOn) { applyChannels(emptyList()); guide = emptyMap() }
-            val skippedNow = withContext(Dispatchers.IO) { store.loadSkippedGroups(p.id) }
-            skippedGroups = skippedGroups + (p.id to skippedNow)
             val cached = if (p.liveOn) withContext(Dispatchers.IO) { liveReady(); live.channels(p.id) } else emptyList()
             if (cached.isNotEmpty()) applyChannels(cached)
             if (p.liveOn && (refresh || download || cached.isEmpty())) {
@@ -1728,33 +1711,20 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
      * keys. The old list stays if the download fails. Returns how many channels came in.
      */
     private suspend fun downloadLive(p: Playlist): Int {
-        // A cancelled download (the app moving on, a newer download) isn't a failed load: nothing is recorded.
-        val r = try { Result.success(downloadLiveNow(p)) } catch (e: kotlinx.coroutines.CancellationException) { throw e } catch (e: Exception) { Result.failure(e) }
-        noteLoad(p, r)
-        return r.getOrThrow()
-    }
-
-    private suspend fun downloadLiveNow(p: Playlist): Int {
         withContext(Dispatchers.IO) { liveReady() }
         val wanted = with(com.avidviewer.tv.data.ChannelKeys) { prefs.referencedKeys(resume, history) }.filter { it.startsWith(p.id + ":") }
         val old = withContext(Dispatchers.IO) {
             live.channelRefs(p.id, wanted) + store.loadKeyRefs(p.id).filter { !it.isVod }
         }
         val fmt = prefs.streamFormat
-        val skip = groupsToSkip(p, wanted)
-        val skipped = HashSet<String>()
         val count = if (!p.isXtream && p.vodOn) {
             // One read of the file fills both (the channels' save sits inside the titles' save).
             ingestVod(p.id) { addVod -> live.replacingChannels(p.id) { addCh -> M3u.read(p, addCh, addVod) }.added }.result
         } else withContext(Dispatchers.IO) {
             // An empty answer (an expired account, a server error page) keeps the saved list.
             live.replacingChannels(p.id, keep = { _: Int, n -> n > 0 }) { add ->
-                if (p.isXtream) Xtream.liveChannels(p, fmt, skip, skipped, add) else M3u.read(p, add, null)
+                if (p.isXtream) Xtream.liveChannels(p, fmt, add) else M3u.read(p, add, null)
             }.added
-        }
-        if (count > 0) {
-            withContext(Dispatchers.IO) { store.saveSkippedGroups(p.id, skipped) }
-            skippedGroups = skippedGroups + (p.id to skipped.toSet())
         }
         val m = withContext(Dispatchers.IO) {
             val map = live.remapChannels(p.id, old)
@@ -1763,138 +1733,6 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
         applyKeyRemap(m)
         return count
-    }
-
-    // ---------------- categories nobody sees aren't downloaded (Nov 21, 2026) ----------------
-
-    /**
-     * Categories of [p] that no profile sees (hidden everywhere, not allowed in any Kids profile) and that hold no
-     * favorite, list channel, last channel or channel in history. Only for Xtream playlists, and only when they hold
-     * at least 40% of the channels (or were already left out last time); otherwise one full download is cheaper.
-     */
-    private suspend fun groupsToSkip(p: Playlist, wanted: Collection<String>): Set<String> = withContext(Dispatchers.IO) {
-        if (!p.isXtream) return@withContext emptySet()
-        val pid = p.id
-        val views = profiles.list.map { prof -> prof to (if (prof.id == profile.id) prefs else runCatching { store.loadPrefs(prof.id) }.getOrDefault(prefs)) }
-        val kept = HashSet<String>(wanted)
-        views.forEach { (_, pr) -> (pr.favorites + pr.lists.flatMap { it.keys } + listOfNotNull(pr.lastChannel)).forEach { if (it.startsWith("$pid:")) kept.add(it) } }
-        fun seen(raw: String) = views.any { (prof, pr) ->
-            raw !in pr.hiddenGroups && hiddenId(pid, raw) !in pr.hiddenGroups &&
-                (!prof.kids || (hiddenId(pid, raw) in prof.allowedGroups && !com.avidviewer.tv.data.Kids.isAdult(raw)))
-        }
-        val counts = HashMap<String, Int>(); val keptIn = HashSet<String>()
-        live.forEachChannel(pid) { key, _, raw, _ -> counts[raw] = (counts[raw] ?: 0) + 1; if (key in kept) keptIn.add(raw) }
-        val before = store.loadSkippedGroups(pid)
-        val skip = (counts.keys + before).filter { it !in keptIn && !seen(it) }.toSet()
-        val total = counts.values.sum()
-        val left = skip.sumOf { counts[it] ?: 0 }
-        if (skip.isEmpty() || (total == 0 && before.isEmpty())) emptySet()
-        else if (before.isNotEmpty() || left * 10 >= total * 4) skip else emptySet()
-    }
-
-    /** Showing a category that wasn't downloaded: download the playlist again so its channels come in. */
-    private fun afterShowing(pid: String, raws: Collection<String>) {
-        if (raws.none { it in skippedGroups[pid].orEmpty() }) return
-        val p = playlists.firstOrNull { it.id == pid } ?: return
-        status = "Loading the category's channels…"
-        if (p.id == activePlaylist()?.id) loadActive(refresh = true)
-        else viewModelScope.launch { runCatching { downloadLive(p) }; otherLive.remove(p.id); playlistGroups = playlistGroups - p.id }
-    }
-
-    // ---------------- each playlist's last channel load, for the website (Nov 21, 2026) ----------------
-
-    /** Records how [p]'s download went (no channel names, no addresses) and tells the website a little later. */
-    private suspend fun noteLoad(p: Playlist, r: Result<Int>) {
-        val n = r.getOrNull() ?: 0
-        val problem = if (n > 0) null else withContext(Dispatchers.IO) {
-            val m = if (p.isXtream) Xtream.checkLogin(p) else r.exceptionOrNull()?.let { "Couldn't reach the server" }
-            when {
-                m == null -> if (r.isSuccess) "empty" else "other"
-                m.contains("not accepted", true) || m.contains("didn't recognise", true) -> "login"
-                m.contains("expired", true) -> "expired"
-                m.contains("Couldn't reach", true) -> "unreachable"
-                else -> "other"
-            }
-        }
-        withContext(Dispatchers.IO) {
-            synchronized(loadStatus) {
-                val loads = loadStatus.optJSONObject("loads") ?: JSONObject().also { loadStatus.put("loads", it) }
-                loads.put(p.id, JSONObject().put("ok", problem == null).put("channels", n).put("problem", problem ?: JSONObject.NULL).put("at", System.currentTimeMillis()))
-                store.saveLoadStatus(loadStatus)
-            }
-        }
-        reportLoadsLater()
-    }
-
-    private fun reportLoadsLater() {
-        val token = account.token ?: return
-        loadReportJob?.cancel()
-        loadReportJob = viewModelScope.launch {
-            delay(20_000)
-            val arr = JSONArray()
-            synchronized(loadStatus) {
-                val loads = loadStatus.optJSONObject("loads") ?: JSONObject()
-                playlists.forEach { p ->
-                    loads.optJSONObject(p.id)?.let { o ->
-                        arr.put(JSONObject().put("localId", p.id).put("name", p.name).put("ok", o.optBoolean("ok")).put("channels", o.optInt("channels"))
-                            .put("problem", o.opt("problem") ?: JSONObject.NULL).put("at", o.optLong("at")))
-                    }
-                }
-            }
-            withContext(Dispatchers.IO) { runCatching { com.avidviewer.tv.data.AccountApi.loadStatus(token, arr, accountApi) } }
-        }
-    }
-
-    // ---------------- reseller lines (Nov 21, 2026) ----------------
-    /** [p]'s server and login, when it's on one of the reseller addresses: (server, username, password). */
-    private fun resellerLogin(p: Playlist, hosts: List<String>): Triple<String, String, String>? {
-        if (hosts.isEmpty()) return null
-        val (server, u, pw) = if (p.isXtream) Triple(p.xtreamBase(), p.username, p.password) else {
-            val uri = runCatching { android.net.Uri.parse(p.m3uUrl.trim()) }.getOrNull() ?: return null
-            Triple(p.m3uUrl.trim(), uri.getQueryParameter("username").orEmpty(), uri.getQueryParameter("password").orEmpty())
-        }
-        val host = runCatching { java.net.URI(if (server.contains("://")) server else "http://$server").host?.lowercase() }.getOrNull() ?: return null
-        if (host !in hosts || u.isBlank() || pw.isBlank()) return null
-        return Triple(server, u, pw)
-    }
-
-    /**
-     * After a check-in: confirms this device's reseller playlists with the website every 12 hours (or when asked on
-     * the website), then carries out renewals the owner asked for. Logins go to the website for that one call only.
-     */
-    private suspend fun resellerAfterCheckIn(token: String, m: com.avidviewer.tv.data.AccountApi.Me) {
-        if (m.resellerHosts.isEmpty()) return
-        val now = System.currentTimeMillis()
-        val checked = synchronized(loadStatus) { loadStatus.optJSONObject("reseller") ?: JSONObject().also { loadStatus.put("reseller", it) } }
-        val due = JSONArray()
-        playlists.forEach { p ->
-            val l = resellerLogin(p, m.resellerHosts) ?: return@forEach
-            if (m.checkSubscription || now - checked.optLong(p.id) > 12 * 3600 * 1000L) {
-                due.put(JSONObject().put("localId", p.id).put("name", p.name).put("server", l.first).put("username", l.second).put("password", l.third))
-            }
-        }
-        if (due.length() > 0) {
-            val res = withContext(Dispatchers.IO) { runCatching { com.avidviewer.tv.data.AccountApi.resellerCheck(token, due, accountApi) }.getOrDefault(emptyMap()) }
-            withContext(Dispatchers.IO) { synchronized(loadStatus) { res.keys.forEach { checked.put(it, now) }; store.saveLoadStatus(loadStatus) } }
-        }
-        for ((id, localId) in m.renewals) {
-            val p = playlists.firstOrNull { it.id == localId } ?: continue
-            val l = resellerLogin(p, m.resellerHosts) ?: continue
-            val ok = withContext(Dispatchers.IO) { runCatching { com.avidviewer.tv.data.AccountApi.resellerRenew(token, id, localId, l.second, l.third, accountApi) }.getOrDefault(false) }
-            com.avidviewer.tv.data.CrashLog.note(getApplication(), if (ok) "Reseller line renewed from the website" else "Reseller line renewal not done")
-        }
-    }
-
-    /** Account › Troubleshooting › Reload channels now: every switched-on live playlist downloads its channels again. */
-    private fun reloadAllLive() {
-        if (activePlaylist()?.liveOn == true) loadActive(refresh = true)
-        viewModelScope.launch {
-            for (p in shownPlaylists) {
-                if (!p.liveOn || p.id == activePlaylist()?.id) continue
-                runCatching { downloadLive(p) }
-                otherLive.remove(p.id); playlistGroups = playlistGroups - p.id
-            }
-        }
     }
 
     /** The same for a playlist's movies & series (resume points, My List, hidden titles, history). */
@@ -2014,15 +1852,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     // ---------------- guide sources, matching and refresh ----------------
     fun guideMs() = prefs.guideRefreshHours * 3600 * 1000L
 
-    /**
-     * The guide channel a channel uses: the one matched by hand, else the provider's, else (an event
-     * slot without a guide id) listings read from its name, see [EventNames] (null = no guide).
-     */
+    /** The guide channel a channel uses: the one matched by hand, else the provider's (null = no guide). */
     fun epgIdOf(c: Channel): String? {
         val m = prefs.epgMap[c.key]
-        if (m != null) return m.ifBlank { null }
-        if (!c.epgId.isNullOrEmpty()) return c.epgId
-        return if (EventNames.parse(c.name, c.group) != null) EventNames.ID_PREFIX + c.key else null
+        return if (m != null) m.ifBlank { null } else c.epgId
     }
 
     /** Result of the last download of each guide source: "playlistId|sourceId" → message. */
@@ -2584,8 +2417,6 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     private fun computeGroups(includeHidden: Boolean): List<GroupInfo> {
         val counts = LinkedHashMap<String, Int>()
         channels.forEach { counts[it.group] = (counts[it.group] ?: 0) + 1 }
-        // Categories left out of the download (hidden everywhere) are still listed, so they can be shown again.
-        if (includeHidden) skippedGroups[activePlaylist()?.id].orEmpty().forEach { if (it !in counts) counts[it] = 0 }
         val inOrder = prefs.groupOrder.toHashSet()
         val ordered = prefs.groupOrder.filter { it in counts } + counts.keys.filterNot { it in inOrder }
         val pid = activePlaylist()?.id ?: ""
@@ -2607,7 +2438,6 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             p.copy(hiddenGroups = if (hidden) p.hiddenGroups + ids else p.hiddenGroups - ids.toSet() - raws.toSet())
         }
         afterHidingChanged(pid)
-        if (!hidden) afterShowing(pid, raws)
     }
 
     /** Shows or hides many channels at once. */
@@ -2627,16 +2457,13 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         val p = playlists.firstOrNull { it.id == pid } ?: return emptyList()
         if (!p.liveOn) return emptyList()
         if (p.id == activePlaylist()?.id) return channels
-        val skippedNow = withContext(Dispatchers.IO) { store.loadSkippedGroups(p.id) }
-        skippedGroups = skippedGroups + (p.id to skippedNow)
         return withContext(Dispatchers.IO) { liveReady(); live.channels(p.id) }
     }
 
     /** Categories of [chs] in the user's order: (name, channel count). */
-    fun editorGroups(chs: List<Channel>, pid: String? = null): List<Pair<String, Int>> {
+    fun editorGroups(chs: List<Channel>): List<Pair<String, Int>> {
         val counts = LinkedHashMap<String, Int>()
         chs.forEach { counts[it.group] = (counts[it.group] ?: 0) + 1 }
-        if (pid != null) skippedGroups[pid].orEmpty().forEach { if (it !in counts) counts[it] = 0 }
         val inOrder = prefs.groupOrder.toHashSet()
         val ordered = prefs.groupOrder.filter { it in counts } + counts.keys.filterNot { it in inOrder }
         return ordered.map { it to (counts[it] ?: 0) }
@@ -2833,14 +2660,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         updatePrefs { it.copy(channelNames = if (name.isBlank() || name == c.name) it.channelNames - key else it.channelNames + (key to name.trim())) }
     }
 
-    fun toggleHidden(raw: String) {
-        val pid = activePlaylist()?.id ?: ""
-        val wasHidden = raw in prefs.hiddenGroups || hiddenId(pid, raw) in prefs.hiddenGroups
-        updatePrefs {
-            val id = hiddenId(pid, raw)
-            it.copy(hiddenGroups = if (raw in it.hiddenGroups || id in it.hiddenGroups) it.hiddenGroups - raw - id else it.hiddenGroups + id)
-        }
-        if (wasHidden) afterShowing(pid, listOf(raw))
+    fun toggleHidden(raw: String) = updatePrefs {
+        val id = hiddenId(activePlaylist()?.id ?: "", raw)
+        it.copy(hiddenGroups = if (raw in it.hiddenGroups || id in it.hiddenGroups) it.hiddenGroups - raw - id else it.hiddenGroups + id)
     }
 
     fun isFavorite(key: String?) = key != null && key in prefs.favorites

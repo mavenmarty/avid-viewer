@@ -34,7 +34,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.avidviewer.tv.data.EpgSource
-import com.avidviewer.tv.data.EventNames
 import com.avidviewer.tv.data.GuideChannel
 import com.avidviewer.tv.data.Playlist
 import com.avidviewer.tv.data.Tmdb
@@ -249,13 +248,8 @@ fun MatchGuideDialog(vm: AppViewModel) {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Label("Now: " + when {
                     current == null -> "no guide"
-                    current.startsWith(EventNames.ID_PREFIX) -> "event listings from the channel's name"
                     else -> (all?.firstOrNull { it.id == current }?.let { "${it.name} (${it.id})" } ?: current)
-                } + when {
-                    manual -> " · matched by hand"
-                    current?.startsWith(EventNames.ID_PREFIX) == true -> ""
-                    else -> " · from your provider"
-                }, size = 13.sp, color = C.Soft, lines = 2)
+                } + if (manual) " · matched by hand" else " · from your provider", size = 13.sp, color = C.Soft, lines = 2)
                 TvField("Search guide channels", query, modifier = Modifier.testTag("match-search")) { query = it }
                 when {
                     all == null -> Label("Loading guide channels…", size = 12.sp)

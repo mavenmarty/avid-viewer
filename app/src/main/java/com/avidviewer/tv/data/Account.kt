@@ -28,16 +28,7 @@ object AccountApi {
     data class Start(val userCode: String, val deviceCode: String, val interval: Int, val expiresIn: Int, val qrUrl: String)
     data class Linked(val token: String, val email: String, val name: String, val deviceId: String)
     /** [beta]: this device is in the beta (chosen at avidviewer.app/admin); [betaTag]: the beta build offered to it. */
-    data class Me(
-        val email: String, val name: String, val beta: Boolean = false, val betaTag: String? = null, val sendLog: Boolean = false,
-        /** Nov 21, 2026: server addresses that are reseller (set by the owner); empty when that isn't set up. */
-        val resellerHosts: List<String> = emptyList(),
-        /** reseller renewals this device should carry out: (renewal id, this device's playlist id). */
-        val renewals: List<Pair<String, String>> = emptyList(),
-        /** Asked on the website's Account › Troubleshooting. */
-        val reloadChannels: Boolean = false,
-        val checkSubscription: Boolean = false,
-    )
+    data class Me(val email: String, val name: String, val beta: Boolean = false, val betaTag: String? = null, val sendLog: Boolean = false)
     /** One TV's backup in the account (each TV keeps only its most recent). */
     data class CloudBackup(
         val deviceId: String, val name: String, val model: String, val appVersion: String, val createdAt: Long,
@@ -102,11 +93,7 @@ object AccountApi {
         val (code, o) = call(base, "/api/tv/me", null, token, appVersion)
         return when (code) {
             200 -> o.optJSONObject("beta").let { b ->
-                val s8 = o.optJSONObject("reseller")
-                val hosts = s8?.optJSONArray("hosts")?.let { a -> (0 until a.length()).map { a.optString(it).lowercase() }.filter { it.isNotBlank() } }.orEmpty()
-                val renew = s8?.optJSONArray("renew")?.let { a -> (0 until a.length()).mapNotNull { i -> a.optJSONObject(i)?.let { it.optString("id") to it.optString("localId") }?.takeIf { it.first.isNotBlank() && it.second.isNotBlank() } } }.orEmpty()
-                Me(o.optString("email"), o.optString("name"), b?.optBoolean("in") == true, b?.optString("tag")?.takeIf { it.isNotBlank() && it != "null" }, o.optBoolean("sendLog"),
-                    hosts, renew, o.optBoolean("reloadChannels"), o.optBoolean("checkSubscription"))
+                Me(o.optString("email"), o.optString("name"), b?.optBoolean("in") == true, b?.optString("tag")?.takeIf { it.isNotBlank() && it != "null" }, o.optBoolean("sendLog"))
             }
             401 -> null
             else -> throw Problem("avidviewer.app answered $code.")
@@ -118,28 +105,6 @@ object AccountApi {
         403 -> "Your Avid Viewer account is suspended. Email support@avidviewer.app for help."
         else -> o.optString("error").ifBlank { "avidviewer.app answered $code. Try again in a moment." }
     })
-
-    /**
-     * reseller (Nov 21, 2026): asks the website to confirm these playlists with the provider's reseller panel. Each
-     * login goes to the website for that one call and is never stored there. Only for playlists on the reseller
-     * addresses from [me]. Returns localId -> confirmed.
-     */
-    fun resellerCheck(token: String, playlists: org.json.JSONArray, base: String = BASE): Map<String, Boolean> {
-        val (code, o) = call(base, "/api/tv/reseller/check", JSONObject().put("playlists", playlists), token)
-        if (code != 200) return emptyMap()
-        val a = o.optJSONArray("results") ?: return emptyMap()
-        return (0 until a.length()).mapNotNull { a.optJSONObject(it) }.associate { it.optString("localId") to it.optBoolean("confirmed") }
-    }
-
-    /** Carries out a renewal the owner asked for on the website (paid from the owner's credits). True when renewed. */
-    fun resellerRenew(token: String, id: String, localId: String, username: String, password: String, base: String = BASE): Boolean {
-        val (code, o) = call(base, "/api/tv/reseller/renew", JSONObject().put("id", id).put("localId", localId).put("username", username).put("password", password), token)
-        return code == 200 && o.optBoolean("ok")
-    }
-
-    /** Each playlist's last channel load, for the website's Troubleshooting (no channel names, no addresses). */
-    fun loadStatus(token: String, playlists: org.json.JSONArray, base: String = BASE): Boolean =
-        call(base, "/api/tv/load-status", JSONObject().put("playlists", playlists), token).first == 200
 
     /** A code for the Report a bug QR code: avidviewer.app/report/?c=… knows which device it's from (no sign-in). */
     data class ReportForm(val url: String, val expiresAt: Long)

@@ -106,41 +106,22 @@ object Xtream {
         "Couldn't reach the server: ${e.message}"
     }
 
-    fun liveChannels(p: Playlist, format: String): List<Channel> = ArrayList<Channel>().also { l -> liveChannels(p, format, emptySet(), null) { l.add(it) } }
+    fun liveChannels(p: Playlist, format: String): List<Channel> = ArrayList<Channel>().also { l -> liveChannels(p, format) { l.add(it) } }
 
-    /** Most separate category downloads [liveChannels] makes instead of one big one. */
-    const val MAX_CATEGORY_CALLS = 60
-
-    /**
-     * Hands each live channel to [emit] as it's read; returns how many. Categories named in [skip] (hidden in every
-     * profile) are left out when at most [MAX_CATEGORY_CALLS] categories remain: each remaining category is then
-     * downloaded on its own, so a big provider's full list is never read (the caller passes [skip] only when those
-     * categories hold a large share of the channels). [skipped] gets the names actually left out (none when
-     * everything was downloaded in one go).
-     */
-    fun liveChannels(p: Playlist, format: String, skip: Set<String> = emptySet(), skipped: MutableSet<String>? = null, emit: (Channel) -> Unit): Int {
+    /** Hands each live channel to [emit] as it's read; returns how many. */
+    fun liveChannels(p: Playlist, format: String, emit: (Channel) -> Unit): Int {
         val cats = JSONArray(Net.text(api(p, "get_live_categories")))
-        val catNames = LinkedHashMap<String, String>()
+        val catNames = HashMap<String, String>()
         for (i in 0 until cats.length()) {
-            val c = cats.optJSONObject(i) ?: continue
+            val c = cats.getJSONObject(i)
             catNames[c.optString("category_id")] = c.optString("category_name", "Uncategorized")
         }
         val ext = if (format == "m3u8") "m3u8" else "ts"
         val base = p.xtreamBase()
         val u = p.username; val pw = p.password
-        val keepIds = catNames.filterValues { it !in skip }.keys
-        val perCategory = skip.isNotEmpty() && catNames.isNotEmpty() && keepIds.size < catNames.size && keepIds.size <= MAX_CATEGORY_CALLS
-        if (!perCategory) return readStreams(api(p, "get_live_streams"), p, base, u, pw, ext, catNames, emit)
-        skipped?.addAll(catNames.filterKeys { it !in keepIds }.values)
-        var n = 0
-        for (id in keepIds) n += readStreams(api(p, "get_live_streams") + "&category_id=" + java.net.URLEncoder.encode(id, "UTF-8"), p, base, u, pw, ext, catNames, emit)
-        return n
-    }
-
-    private fun readStreams(url: String, p: Playlist, base: String, u: String, pw: String, ext: String, catNames: Map<String, String>, emit: (Channel) -> Unit): Int =
         // Read the list one channel at a time: a big provider's answer is tens of MB, and holding it
         // as one string plus a JSON tree is what runs a Fire TV Stick out of memory.
-        Net.open(url) { input ->
+        return Net.open(api(p, "get_live_streams")) { input ->
             var n = 0
             android.util.JsonReader(java.io.InputStreamReader(input, Charsets.UTF_8)).use { r ->
                 if (r.peek() != android.util.JsonToken.BEGIN_ARRAY) { r.skipValue(); return@use } // empty or an error object
@@ -177,6 +158,7 @@ object Xtream {
             }
             n
         }
+    }
 
     /** A JSON value as text: numbers and booleans as written, null as "". */
     private fun android.util.JsonReader.text(): String = when (peek()) {
