@@ -618,8 +618,21 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** #30, #32: which video decoder each stream uses (the TV's own, or Android's software one after trouble). */
     internal val decoders = com.avidviewer.tv.data.Decoders(app.getSharedPreferences("decoders", android.content.Context.MODE_PRIVATE))
 
+    /**
+     * Nov 20, 2026: a lighter start-up on ~2 GB devices (DeviceClass): the preview waits [DeviceClass.PREVIEW_DELAY_MS]
+     * after the guide appears and the player's buffer is capped. Tests set it themselves.
+     */
+    var lightStart = com.avidviewer.tv.data.DeviceClass.isSmall(app)
+
     val player: ExoPlayer = ExoPlayer.Builder(app)
         .setBandwidthMeter(bandwidth)
+        .apply {
+            if (lightStart) setLoadControl(
+                androidx.media3.exoplayer.DefaultLoadControl.Builder()
+                    .setTargetBufferBytes(com.avidviewer.tv.data.DeviceClass.BUFFER_BYTES)
+                    .build()
+            )
+        }
         .setRenderersFactory(
             androidx.media3.exoplayer.DefaultRenderersFactory(app)
                 .setMediaCodecSelector(decoders.selector)
@@ -2297,7 +2310,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             val shownHere = shownChannel(prefs.lastChannel, list, gs)
             if (shownHere != null) {
                 currentKey = shownHere.key; selectedGroup = shownHere.group
-                preview(currentKey); guideFocusTick++
+                launchPreview(currentKey); guideFocusTick++
             } else {
                 selectedGroup = selectedGroup?.takeIf { g -> gs.any { it.raw == g } } ?: gs.firstOrNull()?.raw
                 viewModelScope.launch { startOnListedChannel() }
@@ -2340,7 +2353,23 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         if (currentKey != null && lastKeyAt > 0) return // the viewer has already picked something
         currentKey = key; selectedGroup = group
         guideFocusMode = GuideFocus.CURRENT
-        preview(key); guideFocusTick++
+        launchPreview(key); guideFocusTick++
+    }
+
+    /**
+     * The preview at launch. On a small device ([lightStart]) it waits [DeviceClass.PREVIEW_DELAY_MS] so the guide and
+     * its logos are on screen before the video decoder starts, and doesn't start at all if the viewer has already
+     * picked something (or is on another screen) by then.
+     */
+    internal fun launchPreview(key: String?) {
+        if (!lightStart) { preview(key); return }
+        val pressedBefore = lastKeyAt
+        com.avidviewer.tv.data.CrashLog.note(app, "Light start-up: preview in ${com.avidviewer.tv.data.DeviceClass.PREVIEW_DELAY_MS / 1000} s")
+        viewModelScope.launch {
+            delay(com.avidviewer.tv.data.DeviceClass.PREVIEW_DELAY_MS)
+            if (lastKeyAt != pressedBefore || currentKey != key || screen != Screen.GUIDE || player.mediaItemCount > 0) return@launch
+            preview(key)
+        }
     }
 
     // ---------------- prefs ----------------

@@ -2,25 +2,40 @@
 
 <!-- The version below and the Release notes section are updated automatically after each published build
      (.github/workflows/user-guide.yml). Feature descriptions are written by hand. -->
-This guide covers **Avid Viewer 1.21.1**, the current public release. Avid Viewer is an IPTV player for Android TV and Fire TV. You bring your own provider (an Xtream Codes login or an M3U link); the app doesn't include any channels.
+This guide covers **Avid Viewer 1.22.0**, the current public release. Avid Viewer is an IPTV player for Android TV and Fire TV. You bring your own provider (an Xtream Codes login or an M3U link); the app doesn't include any channels.
 
-**Contents:** [Getting started](#1-getting-started) · [Main menu](#2-main-menu) · [TV Guide](#3-tv-guide) · [Full-screen playback](#4-full-screen-playback) · [Search](#5-search) · [Discover](#6-discover) · [Sports](#7-sports) · [Movies and Series](#8-movies-and-series) · [Settings](#9-settings) ([Profiles](#profiles)) · [Privacy](#10-privacy) · [Troubleshooting](#11-troubleshooting) · [Control4](#12-control4) · [Supplemental services](#13-supplemental-services) · [Cable & satellite](#14-using-your-cable-or-satellite-subscription) · [Release notes](#release-notes)
+**Contents:** [Getting started](#1-getting-started) · [Main menu](#2-main-menu) · [TV Guide](#3-tv-guide) · [Full-screen playback](#4-full-screen-playback) · [Search](#5-search) · [Discover](#6-discover) · [Sports](#7-sports) · [Movies and Series](#8-movies-and-series) · [Settings](#9-settings) ([Profiles](#profiles)) · [Privacy](#10-privacy) · [Troubleshooting](#11-troubleshooting) · [Control4](#12-control4) · [Supplemental services](#13-supplemental-services) · [Cable & satellite](#14-using-your-cable-or-satellite-subscription) · [Free services](#15-free-services) · [Release notes](#release-notes)
 
 ## 1. Getting started
 
-### Installing the Downloader app
+### Preparing your device
 
-1. Install the **Downloader** app from the Google Play Store or the Amazon Appstore.
-2. Put the device into Developer Mode: go to **Settings › My Fire TV › About**, highlight your device's name and press **OK** 7 times.
-3. Press **Back** and choose **Developer Options**.
-4. Turn on **ADB debugging**.
-5. Turn on **Install unknown apps** for Downloader.
+Avid Viewer isn't in the Amazon Appstore or Google Play, so the device needs to allow one app, **Downloader**, to install it. You do this once.
+
+#### Fire TV (Fire TV Stick, Fire TV Cube, Fire TV smart TVs)
+
+1. Install **Downloader** from the Amazon Appstore: search for "Downloader" on the home screen and choose the orange app by AFTVnews.
+2. Turn on Developer Options: open **Settings › My Fire TV › About**, highlight your device's name (the first line, for example **Fire TV Stick 4K**) and press **OK** 7 times, until it says you're a developer.
+3. Press **Back** once. **Developer Options** is now in the **My Fire TV** menu; open it.
+4. Choose **Install unknown apps** and turn on **Downloader**. (On older Fire TVs this is a single switch called **Apps from Unknown Sources**: turn it on.)
+
+The newest Fire TV Stick HD runs Amazon's Vega OS instead of Fire OS; it can't install apps from outside the Appstore, so Avid Viewer can't be installed on it.
+
+#### Android TV and Google TV (Chromecast with Google TV, Google TV Streamer, NVIDIA Shield, Sony, TCL, Hisense and others)
+
+1. Install **Downloader** from Google Play: search for "Downloader" and choose the app by AFTVnews.
+2. Turn on Developer options: open **Settings › System › About**, highlight **Android TV OS build** (on some TVs **Build**) and press **OK** 7 times, until it says you're a developer. Some devices, such as the NVIDIA Shield, don't need this step, but it does no harm.
+3. Allow Downloader to install apps. On most Google TV devices: **Settings › Apps › Security & restrictions › Unknown sources**, then turn on **Downloader**. On older Android TVs the same list is under **Settings › Device Preferences › Security & restrictions › Unknown sources**. On the newest models it can be under **Settings › Apps › Downloader › Install unknown apps**.
+4. Can't find the setting? Skip it: when Downloader first tries to install Avid Viewer, it shows a **Settings** button that goes straight to the right switch. Turn it on, press **Back**, and choose **Install** again.
+
+Menu names differ a little between brands; if a path above doesn't match, search the TV's settings for "unknown".
 
 ### Install
 
-1. Download **AvidViewer.apk**: on your TV box, open the Downloader app and enter the code **2895338** in the URL box, or download it directly from `github.com/mavenmarty/avid-viewer/releases/latest`.
-2. Open the file and install it. You may need to allow installs from unknown sources for your browser or file manager.
-3. Every version is signed with the same key, so a new version installs over the old one and keeps your playlists, favorites and settings.
+1. Open **Downloader**, select the URL box and enter the code **2895338**, then choose **Go**. (On a phone or computer, the same file is at `github.com/mavenmarty/avid-viewer/releases/latest`.)
+2. When the download finishes, choose **Install**, then **Open** (or **Done** and open Avid Viewer from your apps).
+3. Downloader offers to delete the installation file; choose **Delete** to free up space. You don't need it again: Avid Viewer updates itself (**Settings › Updates & about**).
+4. Every version is signed with the same key, so a new version installs over the old one and keeps your playlists, favorites and settings.
 
 ### First start: the welcome screen
 
@@ -41,7 +56,7 @@ Your playlists and profiles live in your account at avidviewer.app, and you mana
 1. **Link the device to your account:** its welcome screen shows a code and a QR code (or Settings › Account › **Link this device**). Scan the QR code with your phone, or type the code at **avidviewer.app/link**, and choose **Add this device**. See [Account](#account).
 2. **Playlists** (avidviewer.app/playlists): **＋ Add a playlist**, enter a **name** and either an **Xtream Codes login** (server, username, password) or an **M3U link**, with an optional guide (XMLTV) link, and tick the **profiles** that get it.
 3. **Profiles** (avidviewer.app/profiles): **＋ Add a profile** for each person (or the kids). **Manage** a profile to choose its playlists, its devices, and **what it can see** in each playlist: categories and channels, for live TV, movies and series.
-4. **Devices** (avidviewer.app/devices): tick the profiles that appear on each device.
+4. **Devices** (avidviewer.app/devices): tick the profiles that appear on each device. An account can have up to 4 devices.
 5. **Favorites and lists:** Profiles › **Manage** › **Favorites & lists**. **Order and names** of categories and channels: Playlists › **Edit** › **Order & names**. See [Organizing on the website](#organizing-on-the-website).
 
 While Avid Viewer is open, a device picks up changes within a minute: a playlist arrives when any profile on the device has it, is checked like one added by hand, and leaves when no profile there has it any more. Each page shows where things stand (for example **waiting for the device to open**).
@@ -56,11 +71,23 @@ While Avid Viewer is open, a device picks up changes within a minute: a playlist
 
 **Needs your attention:** every account tab lists what failed or is waiting on you, such as a playlist a device couldn't add (with the device's own words and what to check), a device waiting for a login, a device that needs an update, or changes waiting for a device that hasn't checked in. The tabs show counts. **Dismiss** hides an item until something about it changes; **Show dismissed** brings it back. A device not seen for 7 days is marked **Away**: its changes wait for it, and you can remove it if it's no longer used.
 
-**The website's tabs:** Playlists · Profiles · Devices (profiles on each device, rename, remove, Add a device) · Backups (each device's backup, Show PIN, how to restore) · Account (passkeys, locked logins, signed-in browsers, privacy, delete account).
+**Getting around the website:** **Sign up / Sign in** is the yellow button at the top right of every page; once you're signed in it shows your name and opens your account. The top row (the site's sections and that button) stays at the top of the screen as you scroll, so you can jump to another section from anywhere.
+
+**The website's tabs:** Playlists · Profiles · Devices (profiles on each device, rename, remove, Add a device) · Backups (each device's backup, Show PIN, how to restore) · Reports (crash reports, playback logs and problems sent from your devices, and what's happening to each; see [Reports](#reports)) · Account (passkeys, locked logins, signed-in browsers, privacy, delete account).
+
+**Up to 4 devices per account.** The Devices page shows how many are linked (for example **3 of 4 devices linked**). With 4, **Add a device** is greyed out; remove one you no longer use first (devices not seen for a week are marked **Away**). If you enter a new device's code on a full account, **avidviewer.app/link** lists your devices with **Remove** next to each: remove one, then choose **Add this device**. The device's code keeps working while you choose, and the device itself says **That account already has 4 devices, the most it can have**.
 
 **Private by design:** each device's copy is locked with a key only that device has (made when it's linked; it never leaves the device), and the copy kept in your account is locked with your passkey. The website can't read your logins. To help you choose what each profile sees, devices send each account playlist's category and channel names and counts. Where you stopped (see [Pick up where you left off](#pick-up-where-you-left-off)) is sent locked, so the website can't read what you watch.
 
 **Watching now:** the Playlists and Devices pages show which playlists are playing, on which device and profile, and for how long, never the channel or title. **Stop stream** ends playback on that device within a few seconds (useful when your provider allows only one or two streams); the device says **This stream was stopped from your account** and offers **Watch again**.
+
+### Reports
+
+**avidviewer.app › Reports** lists what your devices have sent (crash reports, playback logs and problems sent with the Report a bug QR code) and what's happening to each: **Received**, **Looking into it**, **Filed as a bug**, **Being fixed**, **Fixed in** a version (with **update the device** when it's on an older one), **Confirmed fixed**, **Not an app problem**, **We need more details** or **Closed**. Everyone with the account sees its devices' reports. A report fixed more than 30 days ago is no longer shown.
+
+- **It's still happening** on a fixed report puts it back in front of the Avid Viewer team, and asks the device for a new playback log the next time it checks in.
+- Reports sent before a device was linked appear here once it's linked.
+- Nothing is emailed: the page is where you follow a report.
 
 ### Pick up where you left off
 
@@ -78,7 +105,7 @@ Where a profile stopped in each movie and episode, and the episodes it finished,
 
 **Favorites and lists belong to a profile** and follow it to every TV, and **the order and names of a playlist's live categories and channels** belong to the playlist, for every profile and device. Change them on the website or on a TV (Add to List, Re-order, Rename): the change reaches the account and the other TVs within a minute while Avid Viewer is open, and **the most recent change wins**, wherever it was made. The first time a TV syncs a profile, its favorites and lists are combined with the account's (lists with the same name become one).
 
-- **Favorites & lists** (a profile's page): pick ★ Favorites or a list on the left. **＋ Add channels** searches all of the profile's playlists or lets you browse a playlist's categories, listing every channel; tick channels, or use **Select all** / **Select none** for the channels shown, and choose **Add**. Each channel has **⤒** (top), **▲ ▼** (one step), **⤓** (bottom) and **✕** (remove from the list). **＋ New list**, and for a list: **Rename**, **Hide on the TV**, **Delete list**. Drag lists to change their order on the TV; ★ Favorites is always first. **Sort** for each list: **A–Z** (channels from every playlist mixed, by name) or **Manual**; dragging a channel switches to Manual. Channels the profile can't see aren't offered.
+- **Favorites & lists** (a profile's page): pick ★ Favorites or a list on the left. **＋ Add channels** searches all of the profile's playlists or lets you browse a playlist's categories, listing every channel; tick channels, or use **Select all** / **Select none** for the channels shown, and choose **Add N channels** (above and below the list; nothing is added until you do). Each channel has **⤒** (top), **▲ ▼** (one step), **⤓** (bottom) and **✕** (remove from the list). **＋ New list**, and for a list: **Rename**, **Hide on the TV**, **Delete list**. Drag lists to change their order on the TV; ★ Favorites is always first. **Sort** for each list: **A–Z** (channels from every playlist mixed, by name) or **Manual**; dragging a channel switches to Manual. Channels the profile can't see aren't offered.
 - **Order & names** (a playlist's page): categories on the left, the chosen category's channels on the right. **Rename** in place (the provider's name shows underneath; empty = the provider's name; Enter saves, Esc cancels). **Sort channels:** **Provider's order · A–Z · Manual**, one setting for every category of the playlist, on every profile and device; A–Z uses the names as shown, renames included; dragging a channel switches to Manual, starting from the order shown. Categories: **Arrange:** A–Z or the provider's order. **Undo last change**, and **Reset all to the provider's order and names**.
 - **Drag and drop:** drag a row by **⋮⋮** with a mouse or finger; the page scrolls at the top and bottom edges. With a keyboard: Tab to ⋮⋮, **Space** to pick it up, **↑ ↓** to move, **Space** to drop, **Esc** to cancel.
 - Live TV only for now: movie and series category order is still set on each TV.
@@ -87,7 +114,7 @@ Where a profile stopped in each movie and episode, and the episodes it finished,
 
 ![Settings › Playlists](images/settings-playlists.jpg)
 
-Easiest: add playlists at avidviewer.app/playlists (see [Set up with your phone](#set-up-with-your-phone)). To type one with the remote, the device must be linked to your account first: on a device that isn't, Add playlist shows its link code instead of the form. A device that has playlists but isn't linked keeps them, and asks to be linked (Not now waits 7 days).
+Easiest: add playlists at avidviewer.app/playlists (see [Set up with your phone](#set-up-with-your-phone)). To type one with the remote, the device must be linked to your account first: on a device that isn't, Add playlist shows its link code instead of the form. A device that isn't linked can't be used: it shows **Link this device to keep watching** over everything until it's linked (see [Account](#account)).
 
 1. Open **Settings › Playlists** and choose **Add playlist**.
 2. Pick the type:
@@ -251,7 +278,7 @@ Press **Menu** while watching full screen. A panel opens on the right. **▲▼*
   - **Download speed**: how fast the stream is arriving, and what the stream needs.
   - **Buffered ahead**: seconds of video already downloaded. Near 0 means a freeze is likely.
   - **Freezes here** and **Dropped frames** on this channel so far, and the last problem with its likely cause.
-  - **Send playback log to bugs@avidviewer.app**.
+  - **Send playback log to avidviewer.app**.
 
 Audio tracks and captions only appear when the stream carries them, so they vary from channel to channel.
 
@@ -398,7 +425,7 @@ Each profile also has its own **theme** (colours) and its own Movies and Series 
 
 - **New profile:** a name and colour; **Parent** (its PIN unlocks any profile on the TV); a 4-digit **PIN** (optional unless your account has a Kids profile).
 - **Kids profile:** sees only the categories you allow (everything starts hidden; adult categories can never be shown). Before a Kids profile is created, every grown-up profile needs a PIN, so a child can't switch to it; the page asks for any that are missing. A Kids profile that came from a device whose grown-ups have no PIN stays unfinished (not sent to devices) until you choose **Finish setting up** and set them. A grown-up's PIN can't be removed while a Kids profile exists. PINs are saved only as a salted one-way hash and reach devices the same way.
-- **What a profile can see:** pick a playlist, then **Live TV**, **Movies** or **Series**: each category is **Shown** or **Hidden**; open a live category to hide single channels. Hidden items disappear from the guide, search, Favorites and Sports for that profile on every device it's on. The names come from the playlist as a device last downloaded it. The page says whose choices you're editing, for which playlist, and when they were last saved; each profile keeps its own.
+- **What a profile can see:** pick a playlist, then **Live TV**, **Movies** or **Series**: each category is **Shown** or **Hidden**; open a live category to hide single channels. Hidden items disappear from the guide, search, Favorites and Sports for that profile on every device it's on. The names come from the playlist as a device last downloaded it. The page says whose choices you're editing, for which playlist, and when they were last saved; each profile keeps its own. **Changes aren't saved until you choose Save what (name) can see**, at the top of the page (and again at the bottom): the bar there says when you have changes that aren't saved yet, and leaving the page first asks whether to leave them unsaved.
 
 **On a device that isn't linked,** Settings › Profiles works as before: **＋ Add profile**, **＋ Add Kids profile** (if no grown-up has a PIN yet, the app asks you to set the first profile's PIN), and for each profile **Edit** (name, colour, theme; a Kids profile's categories), **Set PIN / Change PIN**, **Parent**, **Delete…**. In a profile that isn't a parent, changing profiles asks for a parent's PIN.
 
@@ -522,11 +549,11 @@ Everything here stays on the device; nothing is uploaded or backed up to the clo
   - The download shows its progress. If the connection stalls, the app waits 15 seconds and continues from where it stopped (up to 8 tries). The finished file is checked before installing, and a damaged download is refused.
   - If Android's installer doesn't appear within about 25 seconds, an **Open installer** button opens Android's own install screen for the same file.
 - **Beta versions:** to try new versions before everyone else, turn on **Offer this device beta builds** for the device at **avidviewer.app/devices**. Its status says **Offered · waiting to be chosen** until it's chosen for the beta (you get an email), then **In the beta**. A device in the beta is offered beta versions here and in the main menu, named like **1.20.0 beta 2**, and this section shows a **Beta** block. Beta versions can have rough edges; their crash reports and playback logs say beta. To leave, turn the switch off: the device keeps its beta version until a public version is newer, then updates as usual.
-- **Last crash**: if the app closed unexpectedly, the details are kept here on the device, with **Report issue** and **Clear crash report** (asks first). **Report issue** sends them to **bugs@avidviewer.app** and then clears them (see *If the app closes unexpectedly* below).
-- **Playback log**: a summary ("Playback log: 3 freezes (longest 12 s), 1 error today") and the latest problems, each with its likely cause. Channels and titles appear as short codes ("Live channel 4F2A", "Title 9C01"), never by name. **Send playback log** sends it to bugs@avidviewer.app; **Clear log** asks first. **Send it automatically** (on by default) sends it at most once a day, and only when there were freezes or errors since the last send.
-- **Report a bug**: email **bugs@avidviewer.app** with what happened and the steps that lead to it. The section lists the details to include, read from the TV (app version, device model, Android and Fire OS versions, and the last crash's error). Scan the **QR code** with a phone camera to start that email with the details filled in; **Open email app** appears only on TVs that have one. No playlists, logins or provider addresses are included.
+- **Last crash**: if the app closed unexpectedly, the details are kept here on the device, with **Report issue** and **Clear crash report** (asks first). **Report issue** sends them to avidviewer.app and then clears them (see *If the app closes unexpectedly* below).
+- **Playback log**: a summary ("Playback log: 3 freezes (longest 12 s), 1 error today") and the latest problems, each with its likely cause. Channels and titles appear as short codes ("Live channel 4F2A", "Title 9C01"), never by name. **Send playback log** sends it to avidviewer.app; **Clear log** asks first. **Send it automatically** (on by default) sends it at most once a day, and only when there were freezes or errors since the last send.
+- **Report a bug**: scan the **QR code** with your phone's camera. It opens **Report a problem** on avidviewer.app for this device, with no sign-in needed: say what happened and the steps that lead to it, and send. The device's details (app version, model, Android and Fire OS versions, and the last crash's error) are sent with it and listed here too; no playlists, logins or provider addresses. On a linked device, follow it afterwards at avidviewer.app › Reports. If avidviewer.app can't be reached, the block says so and tries again by itself every 30 seconds.
 - **User guide and Control4 driver**: two QR codes to scan with a phone. **User guide** opens this guide on avidviewer.app (always the latest version); **Control4 mini driver** downloads `um_avid_viewer.c4z` (see [Control4](#12-control4)).
-- **Moving through this section:** opening it (OK on Updates & about) highlights **Report a bug** first; **Down** moves to the QR codes, then to Backup & restore and App updates. Blocks without buttons (Report a bug on TVs without an email app, and the QR codes) take the highlight themselves, with a ring around the whole block, so the page scrolls each one fully into view.
+- **Moving through this section:** opening it (OK on Updates & about) highlights **Report a bug** first; **Down** moves to the QR codes, then to Backup & restore and App updates. Blocks without buttons (Report a bug and the QR codes) take the highlight themselves, with a ring around the whole block, so the page scrolls each one fully into view.
 - **Credits**: TMDB, JustWatch, Open-Meteo and ESPN.
 
 ### Account
@@ -534,8 +561,10 @@ Everything here stays on the device; nothing is uploaded or backed up to the clo
 A device is linked to an Avid Viewer account at avidviewer.app, which is also where its backups are kept (see below).
 
 - **Making an account:** at **avidviewer.app/signin**, enter your email for a one-time sign-in link, or use a passkey you've added. There are no passwords. Your account page (**avidviewer.app/account**) lists your devices, their backups, passkeys and signed-in browsers, your watch-history choice, and **Delete account**.
+- **Linking is required.** A device that isn't linked shows **Link this device to keep watching** over the whole app, with its code and QR code, and nothing plays until it's linked. There's no Not now: **Back** or **Exit Avid Viewer** closes the app. It closes by itself once the device is linked. A device removed from its account, or signed out, shows it again; a linked device that's offline keeps working.
+- **Up to 4 devices** per account. If the account is full, the link screen says so; remove a device at avidviewer.app/devices, then choose **Add this device** again (the code keeps working). See [Set up with your phone](#set-up-with-your-phone).
 - **Link this device** (Settings › Account, or the code on the welcome screen): the device shows an 8-character code and a QR code. Scan the QR code with your phone (the code is filled in for you), or open **avidviewer.app/link** (**Add a device** on your Account page) and type the code. Sign in if asked, check the device it found, give it a name, and choose **Add this device**. The device notices within a few seconds and shows **Linked to** your email. The code works for 10 minutes; **Cancel** stops waiting.
-- **Linked:** Settings › Account shows the account and this device's name. **Sign out of this device** (asks first) unlinks it and forgets its backup PIN; playlists and settings on the device stay.
+- **Linked:** Settings › Account shows the account and this device's name. **Sign out of this device** (asks first) unlinks it and forgets its backup PIN; playlists and settings on the device stay, but the device asks to be linked again before it can be used.
 - **Your devices** on avidviewer.app/account shows each linked device's name, model, app version and when it last checked in, with **Rename** and **Remove**. A removed device unlinks itself the next time it checks in (a minute after the app starts, then every 6 hours); its backup stays in your account for 30 days.
 - **Profiles on this device** (Settings › Account): the account's profiles on this device and their playlists, with **Check for changes now**.
 - **What's shared:** linking sends the device's name, model and Avid Viewer version, and a public key, so the website can send it playlists only it can open; also its profiles (names, Kids, Parent, PINs as salted hashes) the first time, the category and channel names of your account's playlists, and while something plays, which playlist and profile (for Watching now). Your settings go to your account only in a backup, locked with your backup PIN. Where each profile stopped (movies, episodes and the last live channel) is sent locked with a key only your TVs and your passkey have; the website and its admins can't read it. Watching now shows only the playlist, device and profile, never the channel or title.
@@ -575,11 +604,11 @@ A backup holds your playlists (with their logins), ★ Favorites and your lists,
 - Provider passwords and the TMDB key are encrypted with the Android Keystore.
 - Backups are encrypted on the device with your backup PIN before they're sent to your account, because they contain provider logins. The website keeps the PIN separately, encrypted, so you can look it up on your Account page.
 - Profile PINs are stored only as salted one-way hashes, never as the digits.
-- The **playback log** (freezes and errors) never records what you watch: each channel or title is a short code made from a random number kept on your TV, which can't be turned back into a name. It is sent to bugs@avidviewer.app at most once a day when there were problems, or when you choose Send playback log. Turn off **Send it automatically** in Settings › Updates & about to send it only by hand. Addresses, logins and IP addresses are removed first.
-- Crash details leave the TV only when you choose **Report issue**. They go to bugs@avidviewer.app through a small mail relay, with web addresses, server and host names, IP addresses, user names, passwords and tokens removed first.
-- **Security checks** use freeRASP by Talsec. It checks the TV and the app for tampering (root, hooking tools, a modified copy, debuggers, emulators) and sends Talsec anonymous findings about the device and app for its security reports; nothing about what you watch, your playlists or logins. Alerts the app finds are also sent to bugs@avidviewer.app through the crash relay, each kind once and at most once a day.
+- The **playback log** (freezes and errors) never records what you watch: each channel or title is a short code made from a random number kept on your TV, which can't be turned back into a name. It is sent to avidviewer.app at most once a day when there were problems, or when you choose Send playback log. Turn off **Send it automatically** in Settings › Updates & about to send it only by hand. Addresses, logins and IP addresses are removed first.
+- Crash details leave the TV only when you choose **Report issue**. They go to avidviewer.app, with web addresses, server and host names, IP addresses, user names, passwords and tokens removed first. Nothing is emailed. Reports from a linked device show on its account's Reports page; only you and the Avid Viewer team can see them.
+- **Security checks** use freeRASP by Talsec. It checks the TV and the app for tampering (root, hooking tools, a modified copy, debuggers, emulators) and sends Talsec anonymous findings about the device and app for its security reports; nothing about what you watch, your playlists or logins. Alerts the app finds are also sent to avidviewer.app, each kind once and at most once a day.
 - **Accounts:** linking a TV to an avidviewer.app account sends only the TV's name, model and app version; the TV keeps its own key, encrypted with the Android Keystore. Playlists sent from avidviewer.app/playlists are locked in your browser for each device with that device's own key; the website can't read the logins, and keeps each locked copy only until the device has it. What an account stores is on the website's [privacy page](https://avidviewer.app/privacy/).
-- Outside services get only what they need: your postal code (Open-Meteo, for weather), title lookups (TMDB/JustWatch, if you add a key), scoreboards (ESPN), update checks (GitHub) and, when you choose Report issue, the crash report (the Avid Viewer crash relay, a Google Apps Script web app).
+- Outside services get only what they need: your postal code (Open-Meteo, for weather), title lookups (TMDB/JustWatch, if you add a key), scoreboards (ESPN), update checks (GitHub) and, when you choose Report issue, the crash report (avidviewer.app).
 
 ## 11. Troubleshooting
 
@@ -621,7 +650,8 @@ Sending the log (Send playback log) helps us find a pattern across days.
 
 The next time it starts, the app says **Avid Viewer closed unexpectedly**:
 
-- **Report issue** sends the details to **bugs@avidviewer.app**: the app version, the TV model and Android / Fire OS version, and the error. Web addresses, host names, IP addresses, user names, passwords and tokens are removed first; no playlists, logins or keys are sent. When it's sent, the message says thanks, closes after a few seconds, and the details are cleared.
+- **Report issue** sends the details to avidviewer.app: the app version, the TV model and Android / Fire OS version, and the error. Web addresses, host names, IP addresses, user names, passwords and tokens are removed first; no playlists, logins or keys are sent. When it's sent, the message says thanks, closes after a few seconds, and the details are cleared. On a linked device, follow it at avidviewer.app › Reports (see [Reports](#reports)).
+- **On a device that isn't linked**, the app says you can't follow the report and shows the link code; once the device is linked, this report and later ones appear on the account's Reports page.
 - If it can't be sent (no connection, for example), the message says so and the details stay in **Settings › Updates & about › Last crash**, where **Report issue** can try again.
 - **Cancel** closes the message. Nothing is sent, and the details stay in Last crash.
 
@@ -760,13 +790,163 @@ An HDHomeRun network tuner with a TV antenna picks up free over-the-air channels
 - **A channel shows "not available" or won't play:** the network may not offer TV Everywhere for your provider or package, or the channel uses copy protection.
 - **No guide listings:** check the TV guide link, then use **Download the guide now** in Settings › TV guide. For a single channel, press Menu on it and choose **Match guide…**.
 
+## 15. Free services
+
+Free TV channels you can add like any other M3U playlist. Avid Viewer doesn't run, check or vouch for these lists; they're maintained by other people, and channels come and go.
+
+### Free-TV
+
+Source: **[Free-TV/IPTV](https://github.com/Free-TV/IPTV)** on GitHub, a community-maintained list of free TV channels from around the world. Its rules: only channels that broadcasters make available for free (over the air, satellite or their own websites), no paid channels, mainstream channels only, and one good stream per channel, HD where there is one. The lists below are theirs; Avid Viewer only shows where to find them. To suggest a channel, or report one that's gone, use the Free-TV project on GitHub, not Avid Viewer's bug report.
+
+**How to add one**
+
+1. Pick a country (or a theme) from the table below.
+2. At [avidviewer.app/playlists](https://avidviewer.app/playlists/), choose **Add a playlist › M3U link**. On the TV: **Settings › Playlists › Add playlist › M3U link**.
+3. Name it as in the **Service** column, paste the **M3U link**, and paste the **EPG link** into **Guide (XMLTV) link** (on the TV: **TV guide (XMLTV) link**). Where there's no EPG link, leave it empty.
+4. On the TV, open the playlist's **▤ Guide sources** and turn **Provider's guide** off. Free-TV's playlists name about a hundred guide files in one line, which Avid Viewer can't use; the EPG link you added is the one to keep.
+
+**Good to know**
+
+- **Some channels only play in their own country.** Free-TV marks them with Ⓖ in its lists. Outside that country they won't start; that's the broadcaster's choice, not a problem with the app.
+- **Some channels are live YouTube streams** (marked Ⓨ by Free-TV). They don't play in Avid Viewer.
+- **Guide coverage varies.** The EPG links are free guide files from epgshare01.online. They cover most channels for the larger countries but not all; to connect a channel to its listings yourself, see [Matching a channel to the guide](#matching-a-channel-to-the-guide).
+- **Lists change.** Free-TV updates its lists often, and Avid Viewer downloads the playlist again every day, so new channels appear and dead ones disappear by themselves.
+- **Everything at once:** `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlist.m3u8` has every country (over 2,000 channels). It's slow to load and hard to browse on a TV; one or two countries work better.
+
+**By country**
+
+| Service | M3U link | EPG link |
+|---|---|---|
+| Free-TV: Albania | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_albania.m3u8` | `https://epgshare01.online/epgshare01/epg_ripper_AL1.xml.gz` |
+| Free-TV: Andorra | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_andorra.m3u8` | — |
+| Free-TV: Argentina | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_argentina.m3u8` | `https://epgshare01.online/epgshare01/epg_ripper_AR1.xml.gz` |
+| Free-TV: Armenia | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_armenia.m3u8` | — |
+| Free-TV: Australia | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_australia.m3u8` | `https://epgshare01.online/epgshare01/epg_ripper_AU1.xml.gz` |
+| Free-TV: Austria | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_austria.m3u8` | `https://epgshare01.online/epgshare01/epg_ripper_AT1.xml.gz` |
+| Free-TV: Azerbaijan | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_azerbaijan.m3u8` | — |
+| Free-TV: Belarus | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_belarus.m3u8` | — |
+| Free-TV: Belgium | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_belgium.m3u8` | `https://epgshare01.online/epgshare01/epg_ripper_BE2.xml.gz` |
+| Free-TV: Bosnia and Herzegovina | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_bosnia_and_herzegovina.m3u8` | `https://epgshare01.online/epgshare01/epg_ripper_BA1.xml.gz` |
+| Free-TV: Brazil | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_brazil.m3u8` | `https://epgshare01.online/epgshare01/epg_ripper_BR1.xml.gz` |
+| Free-TV: Bulgaria | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_bulgaria.m3u8` | `https://epgshare01.online/epgshare01/epg_ripper_BG1.xml.gz` |
+| Free-TV: Canada | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_canada.m3u8` | `https://epgshare01.online/epgshare01/epg_ripper_CA1.xml.gz` |
+| Free-TV: Chad | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_chad.m3u8` | — |
+| Free-TV: Chile | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_chile.m3u8` | `https://epgshare01.online/epgshare01/epg_ripper_CL1.xml.gz` |
+| Free-TV: China | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_china.m3u8` | — |
+| Free-TV: Costa Rica | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_costa_rica.m3u8` | `https://epgshare01.online/epgshare01/epg_ripper_CR1.xml.gz` |
+| Free-TV: Croatia | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_croatia.m3u8` | `https://epgshare01.online/epgshare01/epg_ripper_HR1.xml.gz` |
+| Free-TV: Cyprus | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_cyprus.m3u8` | `https://epgshare01.online/epgshare01/epg_ripper_CY1.xml.gz` |
+| Free-TV: Czech Republic | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_czech_republic.m3u8` | `https://epgshare01.online/epgshare01/epg_ripper_CZ1.xml.gz` |
+| Free-TV: Denmark | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_denmark.m3u8` | `https://epgshare01.online/epgshare01/epg_ripper_DK1.xml.gz` |
+| Free-TV: Dominican Republic | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_dominican_republic.m3u8` | `https://epgshare01.online/epgshare01/epg_ripper_DO1.xml.gz` |
+| Free-TV: Egypt | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_egypt.m3u8` | `https://epgshare01.online/epgshare01/epg_ripper_EG1.xml.gz` |
+| Free-TV: Estonia | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_estonia.m3u8` | — |
+| Free-TV: Faroe Islands | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_faroe_islands.m3u8` | — |
+| Free-TV: Finland | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_finland.m3u8` | `https://epgshare01.online/epgshare01/epg_ripper_FI1.xml.gz` |
+| Free-TV: France | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_france.m3u8` | `https://epgshare01.online/epgshare01/epg_ripper_FR1.xml.gz` |
+| Free-TV: Georgia | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_georgia.m3u8` | — |
+| Free-TV: Germany | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_germany.m3u8` | `https://epgshare01.online/epgshare01/epg_ripper_DE1.xml.gz` |
+| Free-TV: Greece | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_greece.m3u8` | `https://epgshare01.online/epgshare01/epg_ripper_GR1.xml.gz` |
+| Free-TV: Greenland | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_greenland.m3u8` | — |
+| Free-TV: Hong Kong | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_hong_kong.m3u8` | `https://epgshare01.online/epgshare01/epg_ripper_HK1.xml.gz` |
+| Free-TV: Hungary | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_hungary.m3u8` | `https://epgshare01.online/epgshare01/epg_ripper_HU1.xml.gz` |
+| Free-TV: Iceland | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_iceland.m3u8` | — |
+| Free-TV: India | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_india.m3u8` | `https://epgshare01.online/epgshare01/epg_ripper_IN1.xml.gz` |
+| Free-TV: Indonesia | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_indonesia.m3u8` | `https://epgshare01.online/epgshare01/epg_ripper_ID1.xml.gz` |
+| Free-TV: Iran | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_iran.m3u8` | — |
+| Free-TV: Iraq | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_iraq.m3u8` | — |
+| Free-TV: Ireland | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_ireland.m3u8` | `https://epgshare01.online/epgshare01/epg_ripper_IE1.xml.gz` |
+| Free-TV: Israel | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_israel.m3u8` | `https://epgshare01.online/epgshare01/epg_ripper_IL1.xml.gz` |
+| Free-TV: Italy | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_italy.m3u8` | `https://epgshare01.online/epgshare01/epg_ripper_IT1.xml.gz` |
+| Free-TV: Japan | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_japan.m3u8` | `https://epgshare01.online/epgshare01/epg_ripper_JP1.xml.gz` |
+| Free-TV: Kazakhstan | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_kazakhstan.m3u8` | — |
+| Free-TV: Kenya | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_kenya.m3u8` | `https://epgshare01.online/epgshare01/epg_ripper_KE1.xml.gz` |
+| Free-TV: South Korea | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_korea.m3u8` | `https://epgshare01.online/epgshare01/epg_ripper_KR1.xml.gz` |
+| Free-TV: Kosovo | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_kosovo.m3u8` | — |
+| Free-TV: Latvia | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_latvia.m3u8` | `https://epgshare01.online/epgshare01/epg_ripper_LV1.xml.gz` |
+| Free-TV: Lebanon | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_lebanon.m3u8` | — |
+| Free-TV: Lithuania | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_lithuania.m3u8` | `https://epgshare01.online/epgshare01/epg_ripper_LT1.xml.gz` |
+| Free-TV: Luxembourg | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_luxembourg.m3u8` | — |
+| Free-TV: Macau | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_macau.m3u8` | — |
+| Free-TV: Malta | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_malta.m3u8` | `https://epgshare01.online/epgshare01/epg_ripper_MT1.xml.gz` |
+| Free-TV: Mexico | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_mexico.m3u8` | `https://epgshare01.online/epgshare01/epg_ripper_MX1.xml.gz` |
+| Free-TV: Moldova | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_moldova.m3u8` | — |
+| Free-TV: Monaco | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_monaco.m3u8` | — |
+| Free-TV: Mongolia | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_mongolia.m3u8` | — |
+| Free-TV: Montenegro | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_montenegro.m3u8` | — |
+| Free-TV: Netherlands | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_netherlands.m3u8` | `https://epgshare01.online/epgshare01/epg_ripper_NL1.xml.gz` |
+| Free-TV: Nigeria | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_nigeria.m3u8` | `https://epgshare01.online/epgshare01/epg_ripper_NG1.xml.gz` |
+| Free-TV: North Korea | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_north_korea.m3u8` | — |
+| Free-TV: North Macedonia | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_north_macedonia.m3u8` | — |
+| Free-TV: Norway | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_norway.m3u8` | `https://epgshare01.online/epgshare01/epg_ripper_NO1.xml.gz` |
+| Free-TV: Paraguay | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_paraguay.m3u8` | — |
+| Free-TV: Peru | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_peru.m3u8` | `https://epgshare01.online/epgshare01/epg_ripper_PE1.xml.gz` |
+| Free-TV: Poland | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_poland.m3u8` | `https://epgshare01.online/epgshare01/epg_ripper_PL1.xml.gz` |
+| Free-TV: Portugal | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_portugal.m3u8` | `https://epgshare01.online/epgshare01/epg_ripper_PT1.xml.gz` |
+| Free-TV: Qatar | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_qatar.m3u8` | — |
+| Free-TV: Romania | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_romania.m3u8` | `https://epgshare01.online/epgshare01/epg_ripper_RO1.xml.gz` |
+| Free-TV: Russia | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_russia.m3u8` | — |
+| Free-TV: San Marino | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_san_marino.m3u8` | — |
+| Free-TV: Saudi Arabia | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_saudi_arabia.m3u8` | `https://epgshare01.online/epgshare01/epg_ripper_SA1.xml.gz` |
+| Free-TV: Serbia | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_serbia.m3u8` | `https://epgshare01.online/epgshare01/epg_ripper_RS1.xml.gz` |
+| Free-TV: Slovakia | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_slovakia.m3u8` | `https://epgshare01.online/epgshare01/epg_ripper_SK1.xml.gz` |
+| Free-TV: Slovenia | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_slovenia.m3u8` | — |
+| Free-TV: Somalia | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_somalia.m3u8` | — |
+| Free-TV: Spain | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_spain.m3u8` | `https://epgshare01.online/epgshare01/epg_ripper_ES1.xml.gz` |
+| Free-TV: Sweden | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_sweden.m3u8` | `https://epgshare01.online/epgshare01/epg_ripper_SE1.xml.gz` |
+| Free-TV: Switzerland | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_switzerland.m3u8` | `https://epgshare01.online/epgshare01/epg_ripper_CH1.xml.gz` |
+| Free-TV: Taiwan | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_taiwan.m3u8` | — |
+| Free-TV: Trinidad and Tobago | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_trinidad.m3u8` | — |
+| Free-TV: Turkey | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_turkey.m3u8` | `https://epgshare01.online/epgshare01/epg_ripper_TR1.xml.gz` |
+| Free-TV: Turkmenistan | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_turkmenistan.m3u8` | — |
+| Free-TV: United Kingdom | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_uk.m3u8` | `https://epgshare01.online/epgshare01/epg_ripper_UK1.xml.gz` |
+| Free-TV: Ukraine | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_ukraine.m3u8` | — |
+| Free-TV: United Arab Emirates | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_united_arab_emirates.m3u8` | — |
+| Free-TV: United States | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_usa.m3u8` | `https://epgshare01.online/epgshare01/epg_ripper_US1.xml.gz` |
+| Free-TV: Venezuela | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_venezuela.m3u8` | — |
+
+**By theme**
+
+| Service | M3U link | EPG link |
+|---|---|---|
+| Free-TV: Documentaries (Arabic) | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_zz_documentaries_ar.m3u8` | — |
+| Free-TV: Documentaries (English) | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_zz_documentaries_en.m3u8` | — |
+| Free-TV: Movies | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_zz_movies.m3u8` | — |
+| Free-TV: Music (English) | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_zz_music_en.m3u8` | — |
+| Free-TV: News (Arabic) | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_zz_news_ar.m3u8` | `https://epgshare01.online/epgshare01/epg_ripper_ALJAZEERA1.xml.gz` |
+| Free-TV: News (English) | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_zz_news_en.m3u8` | — |
+| Free-TV: News (Spanish) | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_zz_news_es.m3u8` | — |
+| Free-TV: On demand (Italian) | `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_zz_vod_it.m3u8` | — |
+
+Channel lists from [Free-TV/IPTV](https://github.com/Free-TV/IPTV) (checked November 20, 2026). Guide files from [epgshare01.online](https://epgshare01.online/), as listed in Free-TV's `epglist.txt`.
+
 ## Release notes
 
 Every public release since 1.0.35, newest first. From 1.1.0, versions are numbered major.minor.patch: new features raise the middle number, fixes the last one (the GitHub tag adds a build number, for example `v1.1.0.186`). Releases are published on GitHub (`mavenmarty/avid-viewer`) as `AvidViewer.apk`. The app offers each new version itself, or you can check in Settings › Updates & about › **Check now**.
 
 <!-- new-releases: entries for new builds are added automatically below this line -->
 
-### 1.21.1 — November 19, 2026, 9:03 AM CT (current)
+### 1.22.0 — November 20, 2026, 8:25 AM CT (current)
+
+**Release notes**
+
+- **Linking is required.** A device that isn't linked shows **Link this device to keep watching** over the whole app, with its code and QR code; nothing plays until it's linked, and Back closes the app. It replaces the weekly reminder.
+- **Up to 4 devices per account.** The website's Add a device page lets you remove one right there when the account is full, and the device says so on its link screen.
+- **Reports on the website.** Crash reports, playback logs and security alerts go to avidviewer.app instead of email. A linked device's reports, and what's happening to each, are at avidviewer.app › Reports, with **It's still happening** for one that comes back.
+- **Report a bug opens a form.** The QR code in Settings › Updates & about opens **Report a problem** on avidviewer.app for this device, with no sign-in needed.
+- **A device that isn't linked** is told it can't follow a report it sends, and shown its link code; reports sent before linking move to the account once it's linked.
+
+**Change log**
+
+- Reports go to avidviewer.app; a device that isn't linked is told and can link
+- Report a bug's QR code opens avidviewer.app's Report a problem page for this device
+- A device that isn't linked must be linked before it can be used
+- Crash and freeze reports no longer use email
+- Report a bug keeps its highlight and retries by itself when the website can't be reached
+- Tell the TV when its account already has 4 devices
+- Guide: Preparing your device (Fire TV and Android TV / Google TV); 15. Free services (Free-TV)
+
+### 1.21.1 — November 19, 2026, 9:03 AM CT
 
 **Release notes**
 
