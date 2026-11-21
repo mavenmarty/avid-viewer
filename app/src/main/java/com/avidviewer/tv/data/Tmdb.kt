@@ -81,6 +81,10 @@ object Tmdb {
 
     fun trending(key: String): List<Title> = titles(get(key, "/trending/all/week").optJSONArray("results"))
 
+    /** This week's trending movies ("movie") or series ("tv"), the first [pages] pages (20 a page). */
+    fun trendingWeek(key: String, type: String, pages: Int = 2): List<Title> =
+        (1..pages).flatMap { titles(get(key, "/trending/$type/week", "&page=$it").optJSONArray("results"), type) }
+
     /** 1.17.0: titles for grown-ups off: movies rated PG-13 or lower (US ratings). */
     private const val FAMILY = "&certification_country=US&certification.lte=PG-13"
 
