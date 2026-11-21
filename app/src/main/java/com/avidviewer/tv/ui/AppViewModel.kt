@@ -19,6 +19,7 @@ import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import com.avidviewer.tv.data.Channel
+import com.avidviewer.tv.data.EventNames
 import com.avidviewer.tv.data.Catalog
 import com.avidviewer.tv.data.EpgSource
 import com.avidviewer.tv.data.GuideChannel
@@ -1852,10 +1853,15 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     // ---------------- guide sources, matching and refresh ----------------
     fun guideMs() = prefs.guideRefreshHours * 3600 * 1000L
 
-    /** The guide channel a channel uses: the one matched by hand, else the provider's (null = no guide). */
+    /**
+     * The guide channel a channel uses: the one matched by hand, else the provider's, else (an event
+     * slot without a guide id) listings read from its name, see [EventNames] (null = no guide).
+     */
     fun epgIdOf(c: Channel): String? {
         val m = prefs.epgMap[c.key]
-        return if (m != null) m.ifBlank { null } else c.epgId
+        if (m != null) return m.ifBlank { null }
+        if (!c.epgId.isNullOrEmpty()) return c.epgId
+        return if (EventNames.parse(c.name, c.group) != null) EventNames.ID_PREFIX + c.key else null
     }
 
     /** Result of the last download of each guide source: "playlistId|sourceId" → message. */
