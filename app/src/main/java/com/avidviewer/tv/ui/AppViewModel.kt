@@ -508,6 +508,13 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     var accountStatus by mutableStateOf<String?>(null); private set
     private var linkJob: Job? = null
     private var lastAccountCheck = 0L
+    // Declared up here: start-up (init) already uses them. Nov 21, 2026.
+    /** Per playlist: categories left out of the last download because every profile hides them. */
+    var skippedGroups by mutableStateOf<Map<String, Set<String>>>(emptyMap()); private set
+    /** Each playlist's last channel load (website Troubleshooting) and when Strong 8K lines were last checked. */
+    private val loadStatus: JSONObject by lazy { store.loadLoadStatus() }
+    private var loadReportJob: Job? = null
+    private var loadsReported = false
 
     private fun accountInfo() = com.avidviewer.tv.data.AccountApi.info(getApplication(), installed.second.ifBlank { com.avidviewer.tv.BuildConfig.VERSION_NAME })
 
@@ -1759,8 +1766,6 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     // ---------------- categories nobody sees aren't downloaded (Nov 21, 2026) ----------------
-    /** Per playlist: categories left out of the last download because every profile hides them. */
-    var skippedGroups by mutableStateOf<Map<String, Set<String>>>(emptyMap()); private set
 
     /**
      * Categories of [p] that no profile sees (hidden everywhere, not allowed in any Kids profile) and that hold no
@@ -1797,9 +1802,6 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     // ---------------- each playlist's last channel load, for the website (Nov 21, 2026) ----------------
-    private val loadStatus: JSONObject by lazy { store.loadLoadStatus() }
-    private var loadReportJob: Job? = null
-    private var loadsReported = false
 
     /** Records how [p]'s download went (no channel names, no addresses) and tells the website a little later. */
     private suspend fun noteLoad(p: Playlist, r: Result<Int>) {
