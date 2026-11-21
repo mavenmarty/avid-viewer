@@ -1207,6 +1207,21 @@ class UsabilityTest {
         assertTrue("two profiles: the chip", rule.onAllNodesWithTag("osd-profile", useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty())
     }
 
+    /** Nov 20: on a ~2 GB device the preview at start-up waits 3 s after the guide, and not at all once the viewer has pressed a key. */
+    @Test
+    fun aSmallDeviceStartsThePreviewAFewSecondsAfterTheGuide() {
+        lateinit var key: String
+        rule.runOnIdle { vm.lightStart = true; vm.stop(); vm.player.clearMediaItems(); key = vm.channels.first().key; vm.screen = Screen.GUIDE }
+        rule.runOnIdle { vm.launchPreview(key) }
+        settle()
+        assertTrue("not yet", vm.player.mediaItemCount == 0)
+        waitFor("the preview after about 3 s") { vm.player.mediaItemCount > 0 }
+        // A key pressed meanwhile: the viewer has picked something, so the delayed preview doesn't start.
+        rule.runOnIdle { vm.stop(); vm.player.clearMediaItems(); vm.launchPreview(key); vm.lastKeyAt = System.currentTimeMillis() }
+        Thread.sleep(3_600); settle()
+        assertTrue("nothing after a key press", vm.player.mediaItemCount == 0)
+    }
+
     /** 1.22.0 (owner, Nov 20): a device that isn't linked can't be used: full screen, nothing plays, closes once linked. */
     @Test
     fun aDeviceThatIsNotLinkedMustBeLinkedFirst() {

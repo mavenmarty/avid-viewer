@@ -29,7 +29,9 @@ object Images {
                     .dispatcher(okhttp3.Dispatcher().apply { maxRequests = 6; maxRequestsPerHost = 3 })
                     .build()
             }
-            .memoryCache { coil.memory.MemoryCache.Builder(context).maxSizePercent(0.15).build() }
+            // Smaller on ~2 GB devices (DeviceClass, Nov 20, 2026).
+            .memoryCache { coil.memory.MemoryCache.Builder(context).maxSizePercent(
+                if (com.avidviewer.tv.data.DeviceClass.isSmall(context)) com.avidviewer.tv.data.DeviceClass.IMAGE_CACHE_SMALL else com.avidviewer.tv.data.DeviceClass.IMAGE_CACHE).build() }
             .diskCache { coil.disk.DiskCache.Builder().directory(context.cacheDir.resolve("images")).maxSizeBytes(64L * 1024 * 1024).build() }
             .crossfade(false)
             .build()
