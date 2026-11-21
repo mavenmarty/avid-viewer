@@ -222,6 +222,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             store.profileId = id
             profiles = profiles.copy(active = id, lastKids = if (target.kids) id else profiles.lastKids).also { store.saveProfiles(it) }
             prefs = store.loadPrefs()
+            reorderSportChannels()
             history = store.loadHistory(); resume = store.loadResume(); watched = LinkedHashSet(store.loadWatched()); placeInfo = store.loadPlaceInfo()
             applyDiscoverStart()
             otherLive.clear(); playlistGroups = emptyMap(); favDataTick++
@@ -2637,6 +2638,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         store.savePrefs(prefs)
         if (before.hiddenGroups != prefs.hiddenGroups || before.hiddenChannels != prefs.hiddenChannels ||
             before.favorites != prefs.favorites || before.lists != prefs.lists) guideWantedChanged()
+        if (before.favorites != prefs.favorites || before.lists != prefs.lists) reorderSportChannels()
         if (before.vodHiddenCats !== prefs.vodHiddenCats || before.vodHiddenTitles !== prefs.vodHiddenTitles) {
             // Right away, so the lists on screen (and the next one read) are already correct.
             runCatching { catalog.applyHiddenChange(before.vodHiddenCats, prefs.vodHiddenCats, before.vodHiddenTitles, prefs.vodHiddenTitles) }
@@ -4604,8 +4606,35 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     // ---------------- sports ----------------
-    /** A game from ESPN and the channels that carry it, best first. */
-    data class SportGame(val game: Game, val channels: List<ChannelMatch>)
+    /**
+     * A game from ESPN and the channels that carry it, in the order shown ([channels]: see [orderForProfile]) and as
+     * found ([found], best match first).
+     */
+    data class SportGame(val game: Game, val channels: List<ChannelMatch>, val found: List<ChannelMatch> = channels)
+
+    /**
+     * Nov 21, 2026 (owner): Where to watch lists, for the profile in use, ★ Favorites first, then the teams' own
+     * channels (their local or regional networks), then channels in the profile's lists, then everything else. Within
+     * each, the best match first, as found (national TV, the guide, event channels, local TV; US before Canada).
+     */
+    internal fun orderForProfile(found: List<ChannelMatch>): List<ChannelMatch> {
+        val favs = prefs.favorites.toHashSet()
+        val inLists = prefs.lists.flatMap { it.keys }.toHashSet()
+        fun tier(m: ChannelMatch) = when {
+            m.key in favs -> 0
+            com.avidviewer.tv.data.MatchKind.LOCAL in m.kinds && m.reasons.any { it.contains(" local TV · ") } -> 1
+            m.key in inLists -> 2
+            else -> 3
+        }
+        return found.withIndex().sortedWith(compareBy({ tier(it.value) }, { it.index })).map { it.value }.take(12) // Where to watch lists 12
+    }
+
+    private fun sportGame(g: Game, found: List<ChannelMatch>) = SportGame(g, orderForProfile(found), found)
+
+    /** Favorites, lists or the profile changed: Where to watch follows. */
+    private fun reorderSportChannels() {
+        if (sportGames.isNotEmpty()) sportGames = sportGames.map { sportGame(it.game, it.found) }
+    }
 
     /** The leagues switched on, in the user's order. */
     fun sportLeagues(): List<com.avidviewer.tv.data.LeagueSetting> = com.avidviewer.tv.data.LeagueSetting.complete(prefs.sportLeagues)
@@ -4723,7 +4752,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         if (kept.isEmpty()) { sportGames = emptyList(); return }
         // List the games now, with the channels already found for them; matching fills in the rest.
         val before = sportGames.associateBy { it.game.id }
-        sportGames = kept.sortedBy { it.start }.map { g -> SportGame(g, before[g.id]?.channels.orEmpty()) }
+        sportGames = kept.sortedBy { it.start }.map { g -> sportGame(g, before[g.id]?.found.orEmpty()) }
         val hiddenKeys = prefs.hiddenChannels
         val epgMap = prefs.epgMap
         val pls = livePlaylists.filter { it.enabled }
@@ -4737,7 +4766,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             return
         }
         sportsChannels = chans
-        sportGames = kept.sortedBy { it.start }.map { SportGame(it, matched[it.id].orEmpty()) }
+        sportGames = kept.sortedBy { it.start }.map { sportGame(it, matched[it.id].orEmpty()) }
         sportsMatchedIds = kept.mapTo(HashSet()) { it.id }
     }
 
@@ -4761,7 +4790,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 if (m.anyGuide()) live.forEachProgram(p.id, from, to) { e, s0, e0, title, sub -> if (m.wantsGuide(p.id, e)) m.addProgram(p.id, e, s0, e0, title, sub) }
                 m.nextPlaylist()
             }
-            val r = m.result()
+            val r = m.result(max = 40) // ordered for the profile and cut to 12 in sportGame
             val keys = r.values.flatten().map { it.key }.distinct()
             r to live.channelsByKeys(keys).associateBy { it.key }
         }

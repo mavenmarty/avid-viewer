@@ -234,4 +234,28 @@ class SportsTest {
         assertEquals(a, a)
         c.close(); app.deleteDatabase("catalog.db")
     }
+
+    /** Nov 21, 2026 (owner): Where to watch: ★ Favorites, then the teams' own channels, then the profile's lists, then the rest. */
+    @Test
+    fun whereToWatchPutsFavoritesTeamChannelsAndListsFirst() {
+        TestData.seed(app)
+        val vm = AppViewModel(app).also { made.add(it) }
+        fun m(key: String, kind: MatchKind, reason: String, country: String? = "US") =
+            com.avidviewer.tv.data.ChannelMatch(key, key, TestData.P1, setOf(kind), listOf(reason), country)
+        // As found: best match first (national TV, the guide, event channels, local TV).
+        val found = listOf(
+            m("p:espn", MatchKind.NATIONAL, "National TV · ESPN"),
+            m("p:guide", MatchKind.GUIDE, "In the guide · Avalanche at Maple Leafs"),
+            m("p:event", MatchKind.EVENT, "Event channel · names both teams"),
+            m("p:listed", MatchKind.NATIONAL, "National TV · TNT"),
+            m("p:team", MatchKind.LOCAL, "Avalanche local TV · Altitude"),
+            m("p:generic", MatchKind.LOCAL, "Local TV · Altitude"),
+            m("p:fav", MatchKind.GUIDE, "In the guide · Avalanche at Maple Leafs", null),
+        )
+        vm.updatePrefs { it.copy(favorites = listOf("p:fav"), lists = listOf(com.avidviewer.tv.data.ChannelList("l9", "Hockey", listOf("p:listed")))) }
+        assertEquals(listOf("p:fav", "p:team", "p:listed", "p:espn", "p:guide", "p:event", "p:generic"), vm.orderForProfile(found).map { it.key })
+        // No favorites or lists: the team's channel first, then the rest as found.
+        vm.updatePrefs { it.copy(favorites = emptyList(), lists = emptyList()) }
+        assertEquals(listOf("p:team", "p:espn", "p:guide", "p:event", "p:listed", "p:generic", "p:fav"), vm.orderForProfile(found).map { it.key })
+    }
 }
