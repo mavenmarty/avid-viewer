@@ -445,9 +445,26 @@ Each profile also has its own **theme** (colours) and its own Movies and Series 
 
 **Kids profile on the TV**
 
-- The TV Guide, Movies, Series and Search show only its categories. Channels outside them can't be opened from favorites, lists, search or the last channel.
-- Discover, Sports and Settings aren't in a Kids profile's menu.
-- A Kids profile never needs a PIN. While a Kids profile exists, every other profile needs one (its own or a parent's).
+What a Kids profile can see:
+
+- **Only the categories a grown-up picks.** The TV Guide, Movies, Series and Search show only its live, movie and series categories. Channels outside them can't be opened from favorites, lists, search, a channel number or the last channel.
+- **Adult categories are never shown,** even if one is picked: any category whose name has XXX, Adult, 18+, Porn, Erotic, Playboy or Hustler in it. This goes by the category's name only, so a title in an ordinary-looking category isn't caught. Pick only categories you're comfortable with.
+- **Suggested to start with:** a new Kids profile starts with categories whose names look made for children (Kids, Children, Cartoons, Family, Junior, Animation, Anime, Toddler, Preschool and the like) already picked. Change them under Profiles.
+- **Favorites and lists start empty** (a new grown-up profile starts with a copy of the owner's).
+- **Movies and Series keep their categories:** Sort by genre isn't available on a Kids profile.
+
+What it can't do:
+
+- **Discover, Sports, Settings and Playlists** aren't in its menu and can't be opened.
+- It can't manage profiles or be a **Parent**.
+- **No PIN:** a Kids profile never needs one. While a Kids profile exists, every other profile needs one (its own or a parent's), and the app starts on **Who's watching?**.
+
+What stays private:
+
+- **Nothing it watches leaves the TV:** no watch history or places are sent to your account, and the website's **Watching** and **Discover** tabs for it only say so.
+- **Nothing is looked up on TMDB for it:** no artwork, descriptions, ratings or genres are fetched while it's in use. It shows only what the TV already has (the provider's pictures, and details a grown-up profile looked up on the same TV).
+- **Sports schedules aren't loaded** for it.
+- What *is* synced: the categories it's allowed to see, so the same choices follow it to every TV and can be changed on the website.
 
 **Who's watching? and switching**
 
