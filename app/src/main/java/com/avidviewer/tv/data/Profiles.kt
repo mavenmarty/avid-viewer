@@ -175,6 +175,8 @@ val PERSONAL_KEYS = listOf(
     "myList", "lastChannel", "dismissedSuggestions", "historyPaused",
     // 1.17.0: Discover settings belong to the profile (decision 17).
     "myServices", "discoverStart", "discoverGrownUps",
+    // Nov 21, 2026: sorting Movies and Series by TMDB genre is the profile's choice.
+    "genreSort", "vodHiddenGenres",
 )
 
 /** [p]'s personal fields, as JSON. */

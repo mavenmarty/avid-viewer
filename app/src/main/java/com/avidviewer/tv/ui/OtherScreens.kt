@@ -1302,7 +1302,21 @@ private fun androidx.compose.foundation.lazy.LazyListScope.discoverSettings(vm: 
             vm.tmdbStatus?.let { Label(it, size = 12.sp, color = C.Soft, lines = 2) }
         }
     }
-    if (p.tmdbKeyEnc.isNotBlank()) {
+    if (p.tmdbKeyEnc.isNotBlank() && !vm.kidsMode) {
+        item {
+            val prog = vm.genreProgress
+            val desc = when {
+                !p.genreSort -> "Lists TMDB genres (Action, Comedy, Drama…) in Movies and Series in place of your provider's categories. Titles are looked up on TMDB by name and year, newest first. Turn off to go back to your provider's categories."
+                prog != null && prog.first < prog.second -> "Sorting into genres… ${"%,d".format(prog.first)} of ${"%,d".format(prog.second)} titles. Titles not sorted yet are under Not sorted yet."
+                else -> "Movies and Series list TMDB genres. A title can be in more than one genre; titles TMDB doesn't know are under Other."
+            }
+            SettingSwitch("Sort Movies and Series by genre", desc, p.genreSort) { vm.setGenreSort(!p.genreSort) }
+        }
+        if (p.genreSort && p.vodHiddenGenres.isNotEmpty()) item {
+            SettingBlock("Hidden genres", "${p.vodHiddenGenres.size} hidden from Movies and Series (Menu on a genre hides it).") {
+                TvButton("Show hidden genres") { vm.showHiddenGenres() }
+            }
+        }
         item {
             LaunchedEffect(Unit) { if (vm.availableServices.isEmpty()) vm.loadServices() }
             SettingBlock("My streaming services", "Pick the services you subscribe to. Discover can then show only titles you can watch now. Region: ${vm.region()}") {
