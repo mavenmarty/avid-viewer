@@ -94,6 +94,10 @@ const val GUIDE_DAYS = 7
 const val LIVE_KIND = "live"
 /** Movies and Series categories that are TMDB genres: "genre:28" (Nov 21, 2026). */
 const val GENRE_CAT = "genre:"
+/** No video on screen for this long (another screen): the stream stops. Nov 21, 2026. */
+const val PARK_SCREEN_MS = 10_000L
+/** The main menu open over the Guide or Sports for this long: the stream stops. */
+const val PARK_MENU_MS = 1_500L
 /** The categories above the provider's (or the genres) in Movies and Series. */
 val VOD_SPECIALS = listOf("All", "Recently added", "Continue watching", "My List")
 /** 1.18.0: how channels and lists are sorted. */
@@ -512,6 +516,18 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     var linkCode by mutableStateOf<LinkCode?>(null); private set
     var accountStatus by mutableStateOf<String?>(null); private set
     private var linkJob: Job? = null
+    /**
+     * The live stream was stopped because no video was on screen (another screen, or the main menu, for a while).
+     * The guide then fills the screen until a channel is picked; nothing restarts on its own.
+     */
+    var streamParked by mutableStateOf(false); private set
+    /** Off in tests, which turn it on where they check it. */
+    internal var stopWhenNoVideo = android.os.Build.FINGERPRINT != "robolectric"
+    /** Something is playing (read by background work off the screen's thread, which waits while it is). */
+    @Volatile internal var videoBusy = false
+    /** The screen open, for the playback log ("Settings"); never what's on it. */
+    @Volatile private var screenNow = "TV Guide"
+
     private var lastAccountCheck = 0L
     // Declared up here: start-up (init) already uses them. Nov 21, 2026.
     /** Per playlist: categories left out of the last download because every profile hides them. */
@@ -1103,6 +1119,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             if (n > 0) regroupLater(0) // English copies first now that languages are known
         }
         player.addAnalyticsListener(playback)
+        val load = com.avidviewer.tv.data.DeviceLoad(app)
+        playback.deviceLoad = { load.text() }
+        playback.screenName = { screenNow }
+        watchVideoOnScreen()
         // Nov 15: the stream is reopened when the picture sticks or the data stops (PlaybackMonitor.checkReconnect).
         playback.onReconnect = { live, full, other -> reconnectStream(live, full, other) }
         viewModelScope.launch {
@@ -1123,6 +1143,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
             override fun onIsPlayingChanged(isPlaying: Boolean) {
                 playing = isPlaying
+                videoBusy = isPlaying
                 if (isPlaying) { playerError = null; decoderRetried = null; if (vodPlaying == null) currentKey?.let { noteFailedChannel(it, false) } }
             }
 
@@ -5383,6 +5404,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                         val batch = runCatching { catalog.pendingGenres(pids, 40) }.getOrDefault(emptyList())
                         for (t in batch) {
                             ensureActive()
+                            while (videoBusy) delay(5_000) // the TV's processor goes to the video first
                             val name = if (t.year.isNotBlank() && !t.name.contains("(" + t.year.take(4) + ")")) t.name + " (" + t.year.take(4) + ")" else t.name
                             val found = runCatching { genreFinder(key, name, if (t.group == "series") "tv" else "movie") }
                             if (found.isFailure) return@withContext false // try again next time
@@ -5540,7 +5562,42 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         player.seekTo(if (d > 0) target.coerceAtMost(d - 1000) else target)
     }
 
+    // ---------------- no video on screen, no stream (Nov 21, 2026) ----------------
+    /** Whether video is on screen: full screen, or the Guide or Sports with the preview (not with the main menu open). */
+    private fun videoOnScreen(): Boolean = when (screen) {
+        Screen.PLAYER -> true
+        Screen.GUIDE, Screen.SPORTS -> navMode != NavMode.FULL
+        else -> false
+    }
+
+    /** Twice a second: once no video has been on screen long enough, the live stream stops. */
+    private fun watchVideoOnScreen() {
+        viewModelScope.launch {
+            var hiddenSince = 0L
+            while (true) {
+                delay(500)
+                screenNow = (if (navMode == NavMode.FULL && screen != Screen.PLAYER) "the main menu over " else "") + screen.name.lowercase().replace('_', ' ')
+                if (!stopWhenNoVideo || videoOnScreen() || streamParked || vodPlaying != null) { hiddenSince = 0L; continue }
+                val now = android.os.SystemClock.uptimeMillis()
+                if (hiddenSince == 0L) hiddenSince = now
+                val menu = (screen == Screen.GUIDE || screen == Screen.SPORTS) && navMode == NavMode.FULL
+                if (now - hiddenSince >= (if (menu) PARK_MENU_MS else PARK_SCREEN_MS)) { hiddenSince = 0L; parkStream() }
+            }
+        }
+    }
+
+    /** Stops the live stream (the channel is remembered, so OK on it plays it again). */
+    private fun parkStream() {
+        if (player.mediaItemCount == 0 && !isStreaming()) return
+        trail("stream stopped: no video on screen ($screenNow)")
+        recordWatch()
+        playback.finished()
+        player.stop(); player.clearMediaItems()
+        streamParked = true
+    }
+
     private fun start(c: Channel) {
+        streamParked = false
         if (choosingProfile || linkRequired) { currentKey = c.key; return } // nothing plays behind Who's watching? or Link this device
         if (!channelAllowed(c)) return
         if (expiredBlocks(c.key.substringBefore(':')) { start(c) }) { currentKey = c.key; return }

@@ -80,6 +80,14 @@ class PlaybackMonitor(
     /** The video decoder in use ("" until one starts), e.g. "OMX.MTK.VIDEO.DECODER.AVC" or "c2.android.avc.decoder". */
     var decoderName = ""; private set
 
+    // ---- Device load (Nov 21, 2026) ----
+    /** The TV's memory and the app's processor use, e.g. "Memory 410 MB free of 1.9 GB · app 74% of a core". Set by AppViewModel. */
+    var deviceLoad: (() -> String)? = null
+    /** Which screen is open ("Settings"), never what's on it. Set by AppViewModel. */
+    var screenName: (() -> String)? = null
+    private var decoderStarts = 0
+    private var deviceLoggedAt = 0L
+
     /** A channel or title is starting ([key]: its key, never shown; the log gets a code instead of the name). */
     fun started(key: String, live: Boolean) {
         endStall(left = true)
@@ -90,6 +98,7 @@ class PlaybackMonitor(
         DataFlow.lastBytesAt = startedAt
         name = log.label(key, live)
         everReady = false; lastRendered = -1; dropped = 0; droppedWindow = 0; recentLoadErrors.clear()
+        decoderStarts = 0; deviceLoggedAt = startedAt
         stats = StreamStats()
         log.add(PlaybackLog.START, name, if (live) "live channel" else "movie or episode")
     }
@@ -116,6 +125,8 @@ class PlaybackMonitor(
         val bufEnd = player.bufferedPosition
         if (bufEnd > lastBufferEnd) { lastBufferEnd = bufEnd; bufferGrewAt = now }
         checkReconnect(now, buffered)
+        // Every 2 minutes while something plays: how busy the TV is.
+        if (player.playWhenReady && name.isNotEmpty() && now - deviceLoggedAt >= DEVICE_EVERY_MS) { deviceLoggedAt = now; logDevice("") }
         if (droppedWindowAt > 0 && now - droppedWindowAt > 10_000) {
             if (droppedWindow >= 30) put(PlaybackLog.DROPPED, "$droppedWindow frames dropped in 10 s (the TV struggled to decode${videoText().let { if (it.isBlank()) "" else ": $it" }})")
             droppedWindow = 0; droppedWindowAt = 0
@@ -168,6 +179,7 @@ class PlaybackMonitor(
         reconnects.addLast(now)
         if (picture) endPicture() else endStall(left = false)
         put(PlaybackLog.RECOVER, "Reconnected: $why." + if (otherDecoder) " Trying the TV's other video decoder for this stream." else "")
+        logDevice("at the reconnect")
         reconnectAt = now; reconnectWhy = why
         DataFlow.lastBytesAt = now; bufferGrewAt = now; stallStarts.clear()
         // #23: a reconnect within a minute of the last one rebuilds the player (a restart alone rarely helped again).
@@ -290,7 +302,17 @@ class PlaybackMonitor(
         note(PlaybackLog.ERROR, "Player stopped: ${error.errorCodeName}" + (cause?.let { " ($it)" } ?: "") + ".", 0)
     }
 
+    /** One DEVICE entry: memory, the app's processor use and the screen open (never a channel or title). */
+    private fun logDevice(why: String) {
+        val load = runCatching { deviceLoad?.invoke() }.getOrNull()?.ifBlank { null } ?: return
+        val screen = runCatching { screenName?.invoke() }.getOrNull()?.ifBlank { null }
+        put(PlaybackLog.DEVICE, load + (screen?.let { " · on $it" } ?: "") + (if (why.isNotBlank()) " ($why)" else ""))
+    }
+
     override fun onVideoDecoderInitialized(eventTime: AnalyticsListener.EventTime, decoderName: String, initializedTimestampMs: Long, initializationDurationMs: Long) {
+        // Nov 21, 2026: every start of the video decoder after the first on a stream (a new video window, a reconnect).
+        decoderStarts++
+        if (decoderStarts > 1) put(PlaybackLog.FORMAT, "Video decoder started again ($decoderStarts times on this stream, ${initializationDurationMs} ms)")
         if (decoderName == this.decoderName) return
         this.decoderName = decoderName
         put(PlaybackLog.FORMAT, "Video decoder: $decoderName" + if (com.avidviewer.tv.data.Decoders.isSoftware(decoderName)) " (software)" else "")
@@ -315,6 +337,7 @@ class PlaybackMonitor(
     }
 
     companion object {
+        const val DEVICE_EVERY_MS = 120_000L
         /** After 3 reconnects in 3 minutes, the shortest gap between reconnects (BUG-058). */
         const val SLOW_RECONNECT_MS = 30_000L
         /** #30: the same for a still picture. */
