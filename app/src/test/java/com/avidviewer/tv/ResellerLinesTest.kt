@@ -221,7 +221,7 @@ class ResellerLinesTest {
             prov.expSeconds = System.currentTimeMillis() / 1000 - 86400
             setUp(Playlist("px", "Provider", "xtream", server = prov.base, username = "u", password = "p", vodOn = false))
             val vm = newVm()
-            idleUntil("end date from the provider") { vm.expiries["px"] != null }
+            idleUntil("end date and channels") { vm.expiries["px"] != null && vm.channels.isNotEmpty() }
             vm.expiredNotice = null
             vm.stop(); vm.player.clearMediaItems()
             vm.preview(vm.channels.first().key)
