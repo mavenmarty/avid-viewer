@@ -2,7 +2,7 @@
 
 <!-- The version below and the Release notes section are updated automatically after each published build
      (.github/workflows/user-guide.yml). Feature descriptions are written by hand. -->
-This guide covers **Avid Viewer 1.23.0**, the current public release. Avid Viewer is an IPTV player for Android TV and Fire TV. You bring your own provider (an Xtream Codes login or an M3U link); the app doesn't include any channels.
+This guide covers **Avid Viewer 1.24.0**, the current public release. Avid Viewer is an IPTV player for Android TV and Fire TV. You bring your own provider (an Xtream Codes login or an M3U link); the app doesn't include any channels.
 
 **Contents:** [Getting started](#1-getting-started) · [Main menu](#2-main-menu) · [TV Guide](#3-tv-guide) · [Full-screen playback](#4-full-screen-playback) · [Search](#5-search) · [Discover](#6-discover) · [Sports](#7-sports) · [Movies and Series](#8-movies-and-series) · [Settings](#9-settings) ([Profiles](#profiles)) · [Privacy](#10-privacy) · [Troubleshooting](#11-troubleshooting) · [Control4](#12-control4) · [Supplemental services](#13-supplemental-services) · [Cable & satellite](#14-using-your-cable-or-satellite-subscription) · [Free services](#15-free-services) · [Release notes](#release-notes)
 
@@ -73,7 +73,7 @@ While Avid Viewer is open, a device picks up changes within a minute: a playlist
 
 **Getting around the website:** **Sign up / Sign in** is the yellow button at the top right of every page; once you're signed in it shows your name and opens your account. The top row (the site's sections and that button) stays at the top of the screen as you scroll, so you can jump to another section from anywhere.
 
-**The website's tabs:** Playlists · Profiles · Devices (profiles on each device, rename, remove, Add a device) · Backups (each device's backup, Show PIN, how to restore) · Reports (crash reports, playback logs and problems sent from your devices, and what's happening to each; see [Reports](#reports)) · Account (passkeys, locked logins, signed-in browsers, privacy, delete account).
+**The website's tabs:** Playlists · Profiles · Devices (profiles on each device, rename, remove, Add a device) · Backups (each device's backup, Show PIN, how to restore) · Reports (crash reports, playback logs and problems sent from your devices, and what's happening to each; see [Reports](#reports)) · Account (troubleshooting, passkeys, locked logins, signed-in browsers, privacy, delete account).
 
 **Up to 4 devices per account.** The Devices page shows how many are linked (for example **3 of 4 devices linked**). With 4, **Add a device** is greyed out; remove one you no longer use first (devices not seen for a week are marked **Away**). If you enter a new device's code on a full account, **avidviewer.app/link** lists your devices with **Remove** next to each: remove one, then choose **Add this device**. The device's code keeps working while you choose, and the device itself says **That account already has 4 devices, the most it can have**.
 
@@ -397,6 +397,7 @@ Settings has sections on the left and the open section's options on the right. *
   - **▤ Guide sources**: where this playlist's TV guide comes from (see below).
   - Switches: **Playlist on** (off hides it everywhere without deleting anything), **Live TV & guide**, and **Movies & series**.
 - **Details** shows the type, server, username, playlist link, TV guide source and status.
+- **Subscription end date:** when your provider says when your subscription ends (most Xtream Codes logins do, and M3U links on the same kind of server), it shows under the playlist's name and in Details ("Subscription ends December 3, 2026"). It's checked each time the playlist's channels download. When the end is near, a reminder opens **30 days**, **14 days** and **2 days** before: **OK** or **Back** closes it, and each one appears only once. If the subscription is renewed (a later date), the reminders start over. See [If a subscription has ended](#if-a-subscription-has-ended).
 - **From your phone** (under the add form): link this device to your account, then add playlists at avidviewer.app/playlists. See [Set up with your phone](#set-up-with-your-phone).
 
 **Guide sources** (Settings › Playlists › choose a playlist › ▤ Guide sources)
@@ -410,7 +411,7 @@ Settings has sections on the left and the open section's options on the right. *
 
 **Downloads that stall** give up after 45 seconds. A download that fails before it starts (no connection, a busy server) is tried again twice, after 1 and 3 seconds. Loading, empty and error messages look the same on every screen, and errors have **Try again**.
 
-**Background downloads.** About 10 seconds after the app opens, it updates each switched-on playlist in turn, fetching only what's out of date: channels older than a day, the guide when it's older than your guide setting (8 hours by default), and movies & series older than a day. Content that's switched off is never loaded. The first download of a large movie catalog can make a Fire TV Stick feel slower for a minute or two.
+**Background downloads.** About 10 seconds after the app opens, it updates each switched-on playlist in turn, fetching only what's out of date: channels older than a day, the guide when it's older than your guide setting (8 hours by default), and movies & series older than a day. Content that's switched off is never loaded. Live categories that every profile on the device hides (and that hold none of your favorites, list channels or recent channels) aren't downloaded at all when they make up a large part of a big Xtream Codes playlist: the rest download one category at a time, which is much lighter on a Fire TV Stick. The first download of a large movie catalog can make a Fire TV Stick feel slower for a minute or two.
 
 ### Profiles
 
@@ -475,6 +476,7 @@ Rename, re-order and Add to List are done with Menu on the item itself in the TV
 - Headers show counts, for example "EN - MOVIES 4K · 1105 · 222 hidden". With a filter typed, Show all / Hide all act only on the matches (for example "Hide 222").
 - Hidden movies, series and categories also disappear from search.
 - A hidden list keeps its channels. Add to List marks it "(hidden)".
+- A live category hidden in every profile may show **0** channels: it wasn't downloaded (see [Background downloads](#playlists)). Showing it again downloads the playlist's channels, and its channels come back within a minute.
 
 ### Location & weather
 
@@ -566,9 +568,10 @@ A device is linked to an Avid Viewer account at avidviewer.app, which is also wh
 - **Up to 4 devices** per account. If the account is full, the link screen says so; remove a device at avidviewer.app/devices, then choose **Add this device** again (the code keeps working). See [Set up with your phone](#set-up-with-your-phone).
 - **Link this device** (Settings › Account, or the code on the welcome screen): the device shows an 8-character code and a QR code. Scan the QR code with your phone (the code is filled in for you), or open **avidviewer.app/link** (**Add a device** on your Account page) and type the code. Sign in if asked, check the device it found, give it a name, and choose **Add this device**. The device notices within a few seconds and shows **Linked to** your email. The code works for 10 minutes; **Cancel** stops waiting.
 - **Linked:** Settings › Account shows the account and this device's name. **Sign out of this device** (asks first) unlinks it and forgets its backup PIN; playlists and settings on the device stay, but the device asks to be linked again before it can be used.
-- **Your devices** on avidviewer.app/account shows each linked device's name, model, app version and when it last checked in, with **Rename** and **Remove**. A removed device unlinks itself the next time it checks in (a minute after the app starts, then every 6 hours); its backup stays in your account for 30 days.
+- **Your devices** on avidviewer.app/account shows each linked device's name, model, app version and when it last checked in, with **Rename** and **Remove**. A removed device unlinks itself the next time it checks in (a minute after the app starts, then every 10 minutes while it's open); its backup stays in your account for 30 days.
+- **Troubleshooting** (avidviewer.app/account): for each device and playlist, how its last channel download went ("6,201 channels · 2 h ago", or **Login not accepted**, **Subscription expired**, **Couldn't reach the server**, **No channels came back**) and when the subscription ends, if the provider says. **Reload channels now** has every device download its channels again; for some subscriptions, **Check my subscription** asks the devices to check it again. Devices do this at their next check-in, within about 10 minutes while they're on.
 - **Profiles on this device** (Settings › Account): the account's profiles on this device and their playlists, with **Check for changes now**.
-- **What's shared:** linking sends the device's name, model and Avid Viewer version, and a public key, so the website can send it playlists only it can open; also its profiles (names, Kids, Parent, PINs as salted hashes) the first time, the category and channel names of your account's playlists, and while something plays, which playlist and profile (for Watching now). Your settings go to your account only in a backup, locked with your backup PIN. Where each profile stopped (movies, episodes and the last live channel) is sent locked with a key only your TVs and your passkey have; the website and its admins can't read it. Watching now shows only the playlist, device and profile, never the channel or title.
+- **What's shared:** linking sends the device's name, model and Avid Viewer version, and a public key, so the website can send it playlists only it can open; also its profiles (names, Kids, Parent, PINs as salted hashes) the first time, the category and channel names of your account's playlists, and while something plays, which playlist and profile (for Watching now). For Troubleshooting, each playlist's name, how many channels its last download brought (or what went wrong) and its subscription end date, never channel names, addresses or logins. Your settings go to your account only in a backup, locked with your backup PIN. Where each profile stopped (movies, episodes and the last live channel) is sent locked with a key only your TVs and your passkey have; the website and its admins can't read it. Watching now shows only the playlist, device and profile, never the channel or title.
 
 #### Backup & restore
 
@@ -614,6 +617,10 @@ A backup holds your playlists (with their logins), ★ Favorites and your lists,
 ## 11. Troubleshooting
 
 **First, make sure Avid Viewer is up to date.** This guide describes the latest version, and many problems are already fixed in it. Open **Settings › Updates & about** and choose **Check now**; if a new version is offered, choose **Download and install**. The main menu also shows **Update** when one is ready. If the app can't update itself, install the latest version with the Downloader app (code **2895338**). If something still doesn't work as described here after updating, report it (Settings › Updates & about › **Report a bug**).
+
+### If a subscription has ended
+
+If your provider says a playlist's subscription has ended, choosing one of its channels, movies or episodes shows **Service has expired**: "Your subscription for (playlist) ended on (date)… Contact your service provider to renew it." Nothing from that playlist plays until it's renewed. Each time you choose something, Avid Viewer asks the provider again, so once it's renewed the channel or title simply plays. The end date is in Settings › Playlists and on your account's Troubleshooting page.
 
 ### If video freezes
 
@@ -929,7 +936,24 @@ Every public release since 1.0.35, newest first. From 1.1.0, versions are number
 
 <!-- new-releases: entries for new builds are added automatically below this line -->
 
-### 1.23.0 — November 21, 2026, 6:55 AM CT (current)
+### 1.24.0 — November 21, 2026, 12:54 PM CT (current)
+
+**Release notes**
+
+- **Subscription end dates.** When your provider says when a playlist's subscription ends, Settings › Playlists shows it, and reminders open 30, 14 and 2 days before (each once, closed with OK). A subscription that has ended shows **Service has expired** when you choose one of its channels or titles; once it's renewed with your provider, it plays again.
+- **Hidden categories aren't downloaded.** Live categories that every profile hides are left out of the channel download when they make up much of a big playlist, so loading channels is lighter on smaller devices. They stay in the List Editor, and showing one downloads it.
+- **Troubleshooting on your account page.** avidviewer.app/account shows how each device's last channel download went and when each subscription ends, with **Reload channels now**.
+- **Event channels get listings from their names.** Pay-per-view and event channels with no guide show the event (or "No event scheduled") from the channel's name, in the guide, Live TV and the info bar.
+- Linked devices check in with your account every 10 minutes while open (was 6 hours).
+
+**Change log**
+
+- Subscription end dates from the provider's login; reminders at 30, 14 and 2 days; Service has expired notice
+- Live categories hidden in every profile left out of the download (one category at a time)
+- Last channel download per playlist sent to the account (counts and problems only); Reload channels now
+- Event channels without a guide get listings from their names
+
+### 1.23.0 — November 21, 2026, 6:55 AM CT
 
 **Release notes**
 

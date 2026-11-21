@@ -261,8 +261,28 @@ class LiveDb(private val catalog: Catalog) {
             }
             out.values.forEach { l -> l.sortBy { it.start } }
         }
-        else ids.distinct().chunked(400).forEach { part ->
+        else ids.distinct().filterNot { it.startsWith(EventNames.ID_PREFIX) }.chunked(400).forEach { part ->
             if (part.isNotEmpty()) db.rawQuery("$sql AND e IN (${part.joinToString(",") { "?" }}) ORDER BY e, s", arrayOf(pid, from.toString(), to.toString()) + part).use(::collect)
+        }
+        eventGuide(pid, ids, from, to).forEach { (e, l) -> out[e] = l.toMutableList() }
+        return out
+    }
+
+    /**
+     * Listings for event channels without a guide id, made from their names ([EventNames]): for the
+     * "event:<key>" ids among [ids], or (null) every such channel of the playlist.
+     */
+    private fun eventGuide(pid: String, ids: Collection<String>?, from: Long, to: Long): Map<String, List<Program>> {
+        val out = HashMap<String, List<Program>>()
+        fun add(key: String, name: String, group: String) {
+            val ev = EventNames.parse(name, group) ?: return
+            out[EventNames.ID_PREFIX + key] = EventNames.programs(ev, from, to)
+        }
+        if (ids == null) {
+            forEachChannel(pid) { k, n, g, e -> if (e.isNullOrEmpty()) add(k, n, g) }
+        } else {
+            val keys = ids.filter { it.startsWith(EventNames.ID_PREFIX) }.map { it.removePrefix(EventNames.ID_PREFIX) }
+            if (keys.isNotEmpty()) channelsByKeys(keys).forEach { c -> if (c.epgId.isNullOrEmpty()) add(c.key, c.name, c.group) }
         }
         return out
     }
