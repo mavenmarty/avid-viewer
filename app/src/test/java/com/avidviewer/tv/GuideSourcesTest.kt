@@ -173,7 +173,11 @@ class GuideSourcesTest {
             vm.removeEpgSource(TestData.P1, p1.epgSources.first().id)
             vm.addEpgSource(TestData.P1, "Source A", "http://127.0.0.1:${srv.localPort}/a.xml", 0)
             val src = { vm.playlists.first { it.id == TestData.P1 }.epgSources.first() }
-            idleUntil("first download", info = { "(${vm.guideSourceStatus}; status=${vm.status}; busy=${vm.guideBusy}; bodies=${bodies.get()}; source=${src().url}; sources=${vm.playlists.first { it.id == TestData.P1 }.epgSources.size})" }) { vm.guideBusy == null && vm.guideSourceStatus[TestData.P1 + "|" + src().id]?.startsWith("Updated") == true }
+            idleUntil("first download", info = { "(${vm.guideSourceStatus}; status=${vm.status}; busy=${vm.guideBusy}; bodies=${bodies.get()}; source=${src().url}; sources=${vm.playlists.first { it.id == TestData.P1 }.epgSources.size})" }) {
+                // Downloaded once. An automatic re-check may already have run and said "unchanged" (the test clock moves fast).
+                val st = vm.guideSourceStatus[TestData.P1 + "|" + src().id]
+                vm.guideBusy == null && bodies.get() == 1 && (st?.startsWith("Updated") == true || st?.contains("unchanged") == true)
+            }
             assertEquals(1, bodies.get())
             vm.refreshGuideNow(TestData.P1)
             idleUntil("checked again (${vm.guideSourceStatus})") { vm.guideBusy == null && vm.guideSourceStatus[TestData.P1 + "|" + src().id]?.contains("unchanged") == true }
