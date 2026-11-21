@@ -5337,12 +5337,14 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         val pids = vodPids(); if (pids.isEmpty()) return
         genreJob = viewModelScope.launch {
             try {
-                while (isActive && genresOn() && vodPids() == pids) {
+                while (genresOn() && vodPids() == pids) {
+                    ensureActive()
                     val batch = withContext(Dispatchers.IO) { runCatching { catalog.pendingGenres(pids, 40) }.getOrDefault(emptyList()) }
                     genreProgress = withContext(Dispatchers.IO) { runCatching { catalog.genreProgress(pids) }.getOrNull() }
                     if (batch.isEmpty()) break
                     for (t in batch) {
-                        if (!isActive || !genresOn()) return@launch
+                        ensureActive()
+                        if (!genresOn()) return@launch
                         val name = if (t.year.isNotBlank() && !t.name.contains("(" + t.year.take(4) + ")")) t.name + " (" + t.year.take(4) + ")" else t.name
                         val found = withContext(Dispatchers.IO) { runCatching { genreFinder(key, name, if (t.group == "series") "tv" else "movie") } }
                         if (found.isFailure) return@launch // offline, or the key was refused: try again later
