@@ -515,6 +515,15 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     private val loadStatus: JSONObject by lazy { store.loadLoadStatus() }
     private var loadReportJob: Job? = null
     private var loadsReported = false
+    /**
+     * Nov 21, 2026 (owner): when each playlist's subscription ends, as its provider says (Xtream exp_date; M3U links on
+     * an Xtream server too). Reminders at 30, 14 and 2 days (each dismissed once); playing from an expired one says so.
+     */
+    var expiries by mutableStateOf<Map<String, Long>>(emptyMap()); private set
+    /** The reminder on screen: (playlist id, stage in days: 30, 14 or 2). */
+    var expiryReminder by mutableStateOf<Pair<String, Int>?>(null); private set
+    /** "Service has expired", for this playlist id. */
+    var expiredNotice by mutableStateOf<String?>(null)
 
     private fun accountInfo() = com.avidviewer.tv.data.AccountApi.info(getApplication(), installed.second.ifBlank { com.avidviewer.tv.BuildConfig.VERSION_NAME })
 
@@ -1051,6 +1060,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     private var matchCacheFor = -1
 
     init {
+        loadExpiries() // before anything plays: an expired playlist says so instead
         if (prefs.clearCacheOnExit) store.clearCache() // catches exits Android didn't report
         // Memory in use, every 30 s while on screen, so a hard close shows what it was just before (CrashLog).
         if (android.os.Build.FINGERPRINT != "robolectric") viewModelScope.launch {
@@ -1119,6 +1129,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 // The update reminder comes due while the app stays open; a TV left on for days still hears
                 // of new versions (checked every 6 hours when automatic checks are on).
                 if (update != null) onUpdateFound(now)
+                checkExpiryReminders(now)
                 if (prefs.autoUpdateCheck && lastUpdateCheck > 0 && now - lastUpdateCheck > 6 * 60 * 60 * 1000L) checkForUpdate(quiet = true)
                 // Linked to an account: check in a minute after start, then every 10 minutes (removed TVs unlink; Reload
                 // channels and Check my subscription on the website are picked up). Was every 6 hours before Nov 21, 2026.
@@ -1806,6 +1817,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** Records how [p]'s download went (no channel names, no addresses) and tells the website a little later. */
     private suspend fun noteLoad(p: Playlist, r: Result<Int>) {
         val n = r.getOrNull() ?: 0
+        refreshExpiry(p)
         val problem = if (n > 0) null else withContext(Dispatchers.IO) {
             val m = if (p.isXtream) Xtream.checkLogin(p) else r.exceptionOrNull()?.let { "Couldn't reach the server" }
             when {
@@ -1837,12 +1849,91 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 playlists.forEach { p ->
                     loads.optJSONObject(p.id)?.let { o ->
                         arr.put(JSONObject().put("localId", p.id).put("name", p.name).put("ok", o.optBoolean("ok")).put("channels", o.optInt("channels"))
-                            .put("problem", o.opt("problem") ?: JSONObject.NULL).put("at", o.optLong("at")))
+                            .put("problem", o.opt("problem") ?: JSONObject.NULL).put("at", o.optLong("at"))
+                            .put("expiresAt", expiries[p.id] ?: JSONObject.NULL))
                     }
                 }
             }
             withContext(Dispatchers.IO) { runCatching { com.avidviewer.tv.data.AccountApi.loadStatus(token, arr, accountApi) } }
         }
+    }
+
+    // ---------------- subscription end dates (Nov 21, 2026) ----------------
+    private fun loadExpiries() {
+        val o = synchronized(loadStatus) { loadStatus.optJSONObject("expiry") } ?: return
+        expiries = o.keys().asSequence().associateWith { o.optLong(it) }.filterValues { it > 0 }
+    }
+
+    /** Asks [p]'s provider when its subscription ends (one small request) and remembers it. */
+    private suspend fun refreshExpiry(p: Playlist): Result<Long?> {
+        val login = Xtream.loginOf(p) ?: return Result.success(null)
+        val r = withContext(Dispatchers.IO) { runCatching { Xtream.expiry(login) } }
+        r.onSuccess { setExpiry(p.id, it) }
+        return r
+    }
+
+    private suspend fun setExpiry(pid: String, at: Long?) {
+        val before = expiries[pid]
+        if (before == at) return
+        expiries = if (at == null) expiries - pid else expiries + (pid to at)
+        withContext(Dispatchers.IO) {
+            synchronized(loadStatus) {
+                val o = loadStatus.optJSONObject("expiry") ?: JSONObject().also { loadStatus.put("expiry", it) }
+                if (at == null) o.remove(pid) else o.put(pid, at)
+                // Renewed (a later end date): its reminders start over.
+                if (at == null || (before != null && at > before)) loadStatus.optJSONObject("expiryShown")?.remove(pid)
+                store.saveLoadStatus(loadStatus)
+            }
+        }
+        checkExpiryReminders()
+    }
+
+    private fun expiryStage(at: Long, now: Long): Int? {
+        if (at <= now) return null
+        val days = Math.ceil((at - now) / 86_400_000.0).toInt()
+        return when { days <= 2 -> 2; days <= 14 -> 14; days <= 30 -> 30; else -> null }
+    }
+
+    /** Shows the next reminder that's due and not yet dismissed (checked every 15 s and when a date changes). */
+    fun checkExpiryReminders(now: Long = System.currentTimeMillis()) {
+        if (expiryReminder != null) return
+        val shown = synchronized(loadStatus) { loadStatus.optJSONObject("expiryShown") }
+        for (p in playlists) {
+            if (!p.enabled) continue
+            val stage = expiryStage(expiries[p.id] ?: continue, now) ?: continue
+            val last = shown?.optInt(p.id, 0) ?: 0
+            if (last == 0 || stage < last) { expiryReminder = p.id to stage; return }
+        }
+    }
+
+    fun dismissExpiryReminder() {
+        val (pid, stage) = expiryReminder ?: return
+        expiryReminder = null
+        synchronized(loadStatus) {
+            val o = loadStatus.optJSONObject("expiryShown") ?: JSONObject().also { loadStatus.put("expiryShown", it) }
+            o.put(pid, stage)
+        }
+        viewModelScope.launch(Dispatchers.IO) { synchronized(loadStatus) { store.saveLoadStatus(loadStatus) } }
+    }
+
+    /**
+     * True (and "Service has expired" on screen) when [pid]'s subscription has ended. The provider is asked again
+     * at once: if it was renewed, the notice closes and [retry] plays what was chosen.
+     */
+    private fun expiredBlocks(pid: String, retry: () -> Unit): Boolean {
+        val at = expiries[pid] ?: return false
+        if (at > System.currentTimeMillis()) return false
+        expiredNotice = pid
+        val p = playlists.firstOrNull { it.id == pid } ?: return true
+        viewModelScope.launch {
+            val r = refreshExpiry(p)
+            val e = r.getOrNull()
+            if (r.isSuccess && (e == null || e > System.currentTimeMillis())) {
+                if (expiredNotice == pid) expiredNotice = null
+                retry()
+            }
+        }
+        return true
     }
 
     // ---------------- reseller lines (Nov 21, 2026) ----------------
@@ -5005,6 +5096,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     fun playVod(item: VodItem, fromStart: Boolean = false) {
         if (linkRequired) return // nothing plays until the device is linked (1.22.0)
+        if (expiredBlocks(item.playlistId) { playVod(item, fromStart) }) return
         recordWatch()
         if (screen != Screen.PLAYER) lastScreen = screen
         vodPlaying = item
@@ -5281,6 +5373,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     private fun start(c: Channel) {
         if (choosingProfile || linkRequired) { currentKey = c.key; return } // nothing plays behind Who's watching? or Link this device
         if (!channelAllowed(c)) return
+        if (expiredBlocks(c.key.substringBefore(':')) { start(c) }) { currentKey = c.key; return }
         recordWatch()
         vodPlaying = null
         currentKey = c.key

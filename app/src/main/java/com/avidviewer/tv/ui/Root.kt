@@ -178,6 +178,11 @@ fun AppRoot(vm: AppViewModel) {
         if (vm.reportUnlinkedNotice && !((vm.lastCrash != null || vm.crashReportSent) && !vm.crashNoticeSeen) && vm.screen != Screen.PLAYER) ReportUnlinkedDialog(vm)
         // 1.22.0: a device that isn't linked can't be used until it is (covers everything, the player included).
         if (vm.linkRequired) LinkRequiredScreen(vm)
+        // Nov 21, 2026: a playlist's subscription ends within 30, 14 or 2 days (each once), or has ended.
+        if (!vm.linkRequired && !vm.showWelcome && !vm.choosingProfile) {
+            vm.expiredNotice?.let { pid -> ExpiryDialog(vm, pid, expired = true) }
+            if (vm.expiredNotice == null && vm.screen != Screen.PLAYER) vm.expiryReminder?.let { (pid, _) -> ExpiryDialog(vm, pid, expired = false) }
+        }
         // New version found: ask before updating (never interrupts full-screen viewing).
         val rel = vm.update
         // Opens by itself only once the latest release has been out 24 hours (see updatePromptAllowed).
@@ -318,4 +323,31 @@ private fun androidx.compose.foundation.layout.BoxScope.ReorderHelp(vm: AppViewM
         Text("▲ ▼  Move (hold = faster)   ◀  To the top   ▶  To the bottom", color = C.Soft, fontSize = 12.sp)
         Text("OK or Back  Done — the new order is saved", color = C.Accent, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
     }
+}
+
+/** "Service expires soon" / "Service has expired": contact the provider to renew. Dismissed with OK or Back. */
+@Composable
+private fun ExpiryDialog(vm: AppViewModel, pid: String, expired: Boolean) {
+    val p = vm.playlists.firstOrNull { it.id == pid } ?: return
+    val at = vm.expiries[pid] ?: return
+    val day = remember(at) { java.text.SimpleDateFormat("MMMM d, yyyy", java.util.Locale.getDefault()).format(java.util.Date(at)) }
+    val days = Math.ceil((at - System.currentTimeMillis()) / 86_400_000.0).toInt().coerceAtLeast(1)
+    val close = { if (expired) vm.expiredNotice = null else vm.dismissExpiryReminder() }
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = close,
+        containerColor = C.Surface,
+        modifier = Modifier.testTag(if (expired) "expired-dialog" else "expiry-dialog"),
+        title = { Text(if (expired) "Service has expired" else "Service expires soon", color = C.Text, fontWeight = FontWeight.Bold) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Label(
+                    if (expired) "Your subscription for \u201c${p.name}\u201d ended on $day, so its channels, movies and series can't play."
+                    else "Your subscription for \u201c${p.name}\u201d ends on $day, in $days day${if (days == 1) "" else "s"}.",
+                    size = 14.sp, color = C.Soft, lines = Int.MAX_VALUE,
+                )
+                Label("Contact your service provider to renew it.", size = 14.sp, color = C.Text, lines = 2)
+            }
+        },
+        confirmButton = { TvButton("OK", primary = true, modifier = Modifier.testTag("expiry-ok")) { close() } },
+    )
 }
