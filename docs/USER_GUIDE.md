@@ -2,7 +2,7 @@
 
 <!-- The version below and the Release notes section are updated automatically after each published build
      (.github/workflows/user-guide.yml). Feature descriptions are written by hand. -->
-This guide covers **Avid Viewer 1.22.0**, the current public release. Avid Viewer is an IPTV player for Android TV and Fire TV. You bring your own provider (an Xtream Codes login or an M3U link); the app doesn't include any channels.
+This guide covers **Avid Viewer 1.23.0**, the current public release. Avid Viewer is an IPTV player for Android TV and Fire TV. You bring your own provider (an Xtream Codes login or an M3U link); the app doesn't include any channels.
 
 **Contents:** [Getting started](#1-getting-started) · [Main menu](#2-main-menu) · [TV Guide](#3-tv-guide) · [Full-screen playback](#4-full-screen-playback) · [Search](#5-search) · [Discover](#6-discover) · [Sports](#7-sports) · [Movies and Series](#8-movies-and-series) · [Settings](#9-settings) ([Profiles](#profiles)) · [Privacy](#10-privacy) · [Troubleshooting](#11-troubleshooting) · [Control4](#12-control4) · [Supplemental services](#13-supplemental-services) · [Cable & satellite](#14-using-your-cable-or-satellite-subscription) · [Free services](#15-free-services) · [Release notes](#release-notes)
 
@@ -172,6 +172,7 @@ The TV Guide is the home screen for live TV. Next to the main menu it has:
 
 ### The guide grid
 
+- **On smaller devices** (about 2 GB of memory or less, such as most Fire TV Sticks), the TV Guide appears first and the preview starts about 3 seconds later, so the guide has the device's full attention as it opens. Press OK on a channel to start one sooner.
 - The top shows a **preview window** and a **details panel** for the highlighted channel or program: channel number and name (plus the playlist name when you have more than one), the program title with a **New** tag for new episodes, the times with **N min left** and a progress bar (or **starts in …** for a later program), up to two lines about the show, and what's **Next**.
 - Below it is a **timeline grid**: two-line channel names on the left, programs across 2 hours (full width) or 2.5 hours (with the category list), with a line marking "now". Above the times, the row names the category, the day and the time zone ("KIDS · Today · CST"). The columns sit on your clock's :00 and :30.
 - **Left/Right** move between programs. Going past the last program in view scrolls the guide forward by half hours, **as far as the guide has listings, up to 7 days**. The guide doesn't scroll back before now: Left on the first program moves to the channel name, and Left again to the category list.
@@ -657,6 +658,8 @@ The next time it starts, the app says **Avid Viewer closed unexpectedly**:
 
 **If the app vanished to the Fire TV home screen.** Sometimes the TV closes the app itself, usually to free memory, and the app gets no chance to save anything. The app notices at its next start and shows the same message, so **Report issue** covers this too. The report says the app **closed while in use**, with the last few steps (screen names such as "Screen: search", or "Search: 2 words"; never what you searched or watched) and the memory in use. On Fire OS 8 and later it also includes the reason the TV gives (low memory, not responding, or a crash in the video code). Leaving the app with Home or Back is never reported, nor is force-stopping it in the TV's settings, nor is installing an update while the app is on screen.
 
+**On smaller devices**, the app starts lighter to make this less likely: the preview starts a few seconds after the TV Guide, and less video and fewer pictures are kept in memory. If the app still vanishes, please send the report: it says the lighter start-up was in use, which helps find the cause.
+
 ### Backup questions
 
 **Backup & restore only says Link this device.** Backups live in your avidviewer.app account. Link the device in Settings › Account, then back up.
@@ -926,7 +929,17 @@ Every public release since 1.0.35, newest first. From 1.1.0, versions are number
 
 <!-- new-releases: entries for new builds are added automatically below this line -->
 
-### 1.22.0 — November 20, 2026, 8:25 AM CT (current)
+### 1.23.0 — November 21, 2026, 6:55 AM CT (current)
+
+**Release notes**
+
+- **A lighter start-up on smaller devices** (about 2 GB of memory or less, such as most Fire TV Sticks). The TV Guide and its logos appear first and the preview starts about 3 seconds later; pressing a button before then skips it. These devices also keep less video ahead and fewer pictures in memory. This is aimed at the app being closed by the TV right after it opens. Other devices start as before.
+
+**Change log**
+
+- A lighter start-up on ~2 GB devices
+
+### 1.22.0 — November 20, 2026, 8:25 AM CT
 
 **Release notes**
 

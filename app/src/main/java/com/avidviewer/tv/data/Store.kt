@@ -287,6 +287,21 @@ class Store(private val context: Context) {
     /** The old movies & series file, once its titles are in the catalog database. */
     fun deleteVodFile(playlistId: String) { File(dataDir, "vod_$playlistId.json").delete() }
 
+    /**
+     * Categories left out of a playlist's last channel download because every profile hides them (names, as the
+     * provider spells them). The List Editor still lists them, and showing one downloads it again.
+     */
+    fun saveSkippedGroups(playlistId: String, names: Collection<String>) =
+        writeAtomic(File(dataDir, "skipped_$playlistId.json"), org.json.JSONArray(names.toList()).toString())
+    fun loadSkippedGroups(playlistId: String): Set<String> = runCatching {
+        val a = org.json.JSONArray(File(dataDir, "skipped_$playlistId.json").readText())
+        (0 until a.length()).map { a.getString(it) }.toSet()
+    }.getOrDefault(emptySet())
+
+    /** Each playlist's last channel load (for the website's Troubleshooting), and when Strong 8K lines were last checked. */
+    fun saveLoadStatus(o: JSONObject) = writeAtomic(File(dir, "load-status.json"), o.toString())
+    fun loadLoadStatus(): JSONObject = runCatching { JSONObject(File(dir, "load-status.json").readText()) }.getOrDefault(JSONObject())
+
     /** ESPN's last answer per league and day, for when it can't be reached. */
     fun saveSportsCache(league: String, day: String, text: String) = runCatching { File(dataDir, "sports_${league}_$day.json").writeText(text) }
     fun loadSportsCache(league: String, day: String): String? =
