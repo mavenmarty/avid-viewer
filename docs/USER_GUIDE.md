@@ -332,7 +332,13 @@ Sports lists real games from **ESPN's schedules** for today and the next 2 days,
 - **Left:**
   - **League filters:** **All**, then each league you've switched on.
   - **Games:** grouped as **Live now**, **Later today**, the next days and **Final**. Each card shows the matchup, its networks, its time or score, and how many channels were found. Games with no channel found are greyed out.
-- **Right: Where to watch.** The game's channels, best first, each with why it matched:
+- **Right: Where to watch.** The game's channels, each with why it matched. They're listed in this order, for the profile in use:
+  1. channels in your **★ Favorites**;
+  2. the **teams' own channels** (each team's local or regional network, for example "Red Wings local TV · FanDuel Sports Network Detroit");
+  3. channels in your **lists**;
+  4. everything else.
+
+  Within each group the best match comes first. Adding a favorite or a channel to a list changes the order at once. Why a channel matched:
   - **National TV / Streaming:** a channel named for the network ESPN lists (TNT, ESPN2, Fox, Prime Video…).
   - **In the guide:** a listing during the game that names both teams.
   - **Event channel:** the channel's name has both teams, for example "NHL 03: Red Wings @ Blues".
@@ -938,10 +944,13 @@ Every public release since 1.0.35, newest first. From 1.1.0, versions are number
 
 ### 1.25.0 — November 21, 2026, 3:33 PM CT (current)
 
+**Release notes**
+
+- **Sports › Where to watch puts your channels first:** your ★ Favorites, then the teams' own channels (their local or regional networks), then channels in your lists, then everything else, each in best-match order. It follows the profile in use, and Channel Up/Down in full screen goes through the channels in the same order.
+
 **Change log**
 
-- Sports › Where to watch lists Favorites first, then the teams' own channels, then your lists, then the rest
-- The unchanged-guide test waits for the download itself, not its status wording
+- Sports › Where to watch: Favorites, teams' own channels, your lists, then the rest (per profile)
 
 ### 1.24.0 — November 21, 2026, 12:54 PM CT
 
