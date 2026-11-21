@@ -309,7 +309,7 @@ private fun GridDetails(vm: AppViewModel, v: VodItem?, modifier: Modifier) {
         if (v == null) return@Column
         val a = vm.artOf(v)
         val genre = a?.genres?.firstNotNullOfOrNull { com.avidviewer.tv.data.Art.genreName(it) }
-        val meta = listOfNotNull(v.year.ifBlank { null }, if (v.kind == "series") "Series" else "Movie", genre).joinToString("  ·  ")
+        val meta = listOfNotNull(v.year.ifBlank { null }, vm.certificationOf(v), if (v.kind == "series") "Series" else "Movie", genre).joinToString("  ·  ")
         Text(v.name, color = C.Text, fontSize = 30.sp, fontWeight = FontWeight.Bold, maxLines = 1,
             overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, modifier = Modifier.testTag("vod-hero-title"))
         Row(horizontalArrangement = Arrangement.spacedBy(18.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -334,7 +334,7 @@ private fun GridDetails(vm: AppViewModel, v: VodItem?, modifier: Modifier) {
 private fun VodHero(vm: AppViewModel, v: VodItem?, full: Boolean, modifier: Modifier) {
     Box(modifier) {
         if (v == null) return@Box
-        val meta = listOf(v.year, v.rating.takeIf { it.isNotBlank() && it != "0" }?.let { "★ $it" } ?: "", if (v.kind == "series") "Series" else "Movie")
+        val meta = listOf(v.year, vm.certificationOf(v) ?: "", v.rating.takeIf { it.isNotBlank() && it != "0" }?.let { "★ $it" } ?: "", if (v.kind == "series") "Series" else "Movie")
             .filter { it.isNotBlank() }.joinToString("  ·  ")
         val black = Color.Black
         if (full) {
@@ -483,7 +483,7 @@ private fun VodDetail(vm: AppViewModel, v: VodItem) {
           item(key = "head") { Column(Modifier.fillMaxWidth(0.62f), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text(v.name, color = C.Text, fontSize = 44.sp, fontWeight = FontWeight.Bold, maxLines = 2, lineHeight = 48.sp,
                 overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, modifier = Modifier.testTag("detail-title"))
-            val meta = listOf((info?.year?.ifBlank { null } ?: v.year), info?.duration ?: "", if (isSeries) "Series" else "Movie")
+            val meta = listOf((info?.year?.ifBlank { null } ?: v.year), vm.certificationOf(v, info) ?: "", info?.duration ?: "", if (isSeries) "Series" else "Movie")
                 .filter { it.isNotBlank() }.joinToString("  ·  ")
             if (meta.isNotBlank()) Label(meta, size = 15.sp, color = C.Text, lines = 1)
             // Three facts, as on the design: the genre, where it's on, and its rating from the provider.

@@ -41,4 +41,32 @@ class ArtTest {
         assertNull(Art(null, "", 0.0, 0).ratingText)
         assertEquals("1.2M votes", Art(null, "", 8.0, 1_234_567).votesText)
     }
+
+    // ---- Nov 21, 2026: content ratings (R, PG-13, TV-14) ----
+
+    @Test
+    fun contentRatingsAreReadFromTmdbAndKeptWithTheArtwork() {
+        val movie = org.json.JSONObject("""{"results":[{"iso_3166_1":"GB","release_dates":[{"certification":"15","type":3}]},
+            {"iso_3166_1":"US","release_dates":[{"certification":"","type":1},{"certification":"PG-13","type":3},{"certification":"R","type":4}]}]}""")
+        assertEquals("theatrical first", "PG-13", com.avidviewer.tv.data.Tmdb.movieCertification(movie, "US"))
+        assertEquals("the US rating when the region has none", "PG-13", com.avidviewer.tv.data.Tmdb.movieCertification(movie, "CA"))
+        val tv = org.json.JSONObject("""{"results":[{"iso_3166_1":"US","rating":"TV-14"}]}""")
+        assertEquals("TV-14", com.avidviewer.tv.data.Tmdb.tvCertification(tv, "US"))
+        assertEquals("", com.avidviewer.tv.data.Tmdb.tvCertification(org.json.JSONObject("{}"), "US"))
+
+        val dir = Files.createTempDirectory("art").toFile()
+        val store = ArtStore(dir)
+        store.put("a", Art(null, "", 7.0, 10, emptyList(), 603, "R"))
+        store.put("b", Art(null, "", 7.0, 10, emptyList(), 604, null))
+        val again = ArtStore(dir)
+        assertEquals("R", again.get("a")!!.second!!.cert); assertEquals(603, again.get("a")!!.second!!.tmdbId)
+        assertNull("not looked up yet stays unknown", again.get("b")!!.second!!.cert)
+    }
+
+    @Test
+    fun providerRatingsAreTidiedAndUnknownOnesLeftOut() {
+        val c = com.avidviewer.tv.data.Certification
+        assertEquals("PG-13", c.clean("Rated pg-13")); assertEquals("TV-14", c.clean("TV14")); assertEquals("TV-MA", c.clean(" tv-ma "))
+        assertEquals("R", c.clean("R")); assertEquals("", c.clean("16+")); assertEquals("", c.clean("7.5"))
+    }
 }
