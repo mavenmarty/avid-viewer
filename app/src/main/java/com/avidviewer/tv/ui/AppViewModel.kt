@@ -5287,10 +5287,15 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     private fun genreCatName(id: Int) = when (id) {
         com.avidviewer.tv.data.Catalog.GENRE_OTHER -> "Other (not on TMDB)"
         com.avidviewer.tv.data.Catalog.GENRE_PENDING -> "Not sorted yet"
+        com.avidviewer.tv.data.Catalog.GENRE_TRENDING -> "Trending this week"
+        com.avidviewer.tv.data.Catalog.GENRE_TOP -> "Top rated"
         else -> com.avidviewer.tv.data.Art.genreLabel(id)
     }
 
-    /** Genres by name (or the user's order), then Other, then titles not looked up yet. Each title counted once. */
+    /**
+     * Trending this week and Top rated (titles on the user's playlists), then the genres by name (or the user's
+     * order), then Other, then titles not looked up yet. Each title counted once.
+     */
     private fun computeGenreCategories(kind: String): List<Pair<String, Int>> {
         val g = vodKindKey(kind)
         val counts = runCatching { catalog.genreCounts(g, vodPids()) }.getOrDefault(emptyMap())
@@ -5298,11 +5303,13 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         val named = counts.filter { it.key > 0 && it.value > 0 && "$g|${it.key}" !in hidden }
             .map { GENRE_CAT + it.key }.sortedBy { vodCatName(kind, it).lowercase() }
         val other = com.avidviewer.tv.data.Catalog.GENRE_OTHER; val pending = com.avidviewer.tv.data.Catalog.GENRE_PENDING
+        val head = listOf(com.avidviewer.tv.data.Catalog.GENRE_TRENDING, com.avidviewer.tv.data.Catalog.GENRE_TOP)
+            .filter { (counts[it] ?: 0) > 0 && "$g|$it" !in hidden }.map { GENRE_CAT + it }
         val tail = listOfNotNull(
             (counts[other] ?: 0).takeIf { it > 0 && "$g|$other" !in hidden }?.let { GENRE_CAT + other },
             (counts[pending] ?: 0).takeIf { it > 0 }?.let { GENRE_CAT + pending },
         )
-        return (orderVodCats(kind, named) + tail).map { it to (counts[genreOf(it)] ?: 0) }
+        return (head + orderVodCats(kind, named) + tail).map { it to (counts[genreOf(it)] ?: 0) }
     }
 
     /** Bumped as lookups are saved, so the genre list and counts follow. */
@@ -5313,9 +5320,14 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** Pause between TMDB lookups (tests: 0). */
     internal var genreDelayMs = 250L
     /** Looks a title up on TMDB: its genre ids, or null when TMDB has no match. Tests replace it. */
-    internal var genreFinder: (key: String, name: String, type: String) -> List<Int>? = { key, name, type ->
-        com.avidviewer.tv.data.Tmdb.find(key, name, type)?.genres
+    internal var genreFinder: (key: String, name: String, type: String) -> com.avidviewer.tv.data.Catalog.GenreFound? = { key, name, type ->
+        com.avidviewer.tv.data.Tmdb.find(key, name, type)?.let { com.avidviewer.tv.data.Catalog.GenreFound(it.genres, it.rating, it.votes) }
     }
+    /** This week's trending titles' names, for "movie" or "tv". Tests replace it. */
+    internal var trendingFinder: (key: String, type: String) -> List<String> = { key, type ->
+        com.avidviewer.tv.data.Tmdb.trendingWeek(key, type).map { it.name }
+    }
+    private var trendingAt = 0L
 
     /** Turns sorting by genre on or off for this profile; on starts the lookups. */
     fun setGenreSort(on: Boolean) {
@@ -5337,21 +5349,34 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         val pids = vodPids(); if (pids.isEmpty()) return
         genreJob = viewModelScope.launch {
             try {
+                // Trending this week, at most every 6 hours (matched to the playlists by name).
+                if (System.currentTimeMillis() - trendingAt > 6 * 3600_000L) withContext(Dispatchers.IO) {
+                    runCatching {
+                        val keys = listOf("movie" to "movie", "tv" to "series").flatMap { (type, g) ->
+                            trendingFinder(key, type).map { g + "|" + com.avidviewer.tv.data.Tmdb.normalize(it) }.filter { !it.endsWith("|") }
+                        }
+                        catalog.saveTrending(keys); trendingAt = System.currentTimeMillis()
+                    }
+                }
+                genreVersion++
                 while (genresOn() && vodPids() == pids) {
                     ensureActive()
-                    val batch = withContext(Dispatchers.IO) { runCatching { catalog.pendingGenres(pids, 40) }.getOrDefault(emptyList()) }
                     genreProgress = withContext(Dispatchers.IO) { runCatching { catalog.genreProgress(pids) }.getOrNull() }
-                    if (batch.isEmpty()) break
-                    for (t in batch) {
-                        ensureActive()
-                        if (!genresOn()) return@launch
-                        val name = if (t.year.isNotBlank() && !t.name.contains("(" + t.year.take(4) + ")")) t.name + " (" + t.year.take(4) + ")" else t.name
-                        val found = withContext(Dispatchers.IO) { runCatching { genreFinder(key, name, if (t.group == "series") "tv" else "movie") } }
-                        if (found.isFailure) return@launch // offline, or the key was refused: try again later
-                        withContext(Dispatchers.IO) { runCatching { catalog.saveGenres(t.gk, found.getOrNull()) } }
-                        if (genreDelayMs > 0) delay(genreDelayMs)
+                    // A batch at a time off the screen's thread; stops when offline or the key is refused.
+                    val more = withContext(Dispatchers.IO) {
+                        val batch = runCatching { catalog.pendingGenres(pids, 40) }.getOrDefault(emptyList())
+                        for (t in batch) {
+                            ensureActive()
+                            val name = if (t.year.isNotBlank() && !t.name.contains("(" + t.year.take(4) + ")")) t.name + " (" + t.year.take(4) + ")" else t.name
+                            val found = runCatching { genreFinder(key, name, if (t.group == "series") "tv" else "movie") }
+                            if (found.isFailure) return@withContext false // try again next time
+                            runCatching { catalog.saveGenres(t.gk, found.getOrNull()) }
+                            if (genreDelayMs > 0) delay(genreDelayMs)
+                        }
+                        batch.isNotEmpty()
                     }
                     genreVersion++
+                    if (!more) break
                 }
             } finally {
                 genreVersion++

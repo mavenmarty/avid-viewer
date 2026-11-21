@@ -18,6 +18,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import java.util.Collections
+import com.avidviewer.tv.data.Catalog.GenreFound as Found
 
 /** Movies and Series by TMDB genre (Nov 21, 2026): genres replace the provider's categories when the profile asks. */
 @RunWith(RobolectricTestRunner::class)
@@ -46,13 +47,15 @@ class GenreSortTest {
         vm.genreFinder = { _, name, type ->
             asked.add("$type|$name")
             when {
-                name.startsWith("Action Movie 1 ") -> listOf(28, 12)
-                name.startsWith("Action") -> listOf(28)
-                name.startsWith("Drama") -> listOf(18)
-                name.startsWith("Crime") -> listOf(80)
+                name.startsWith("Action Movie 1 ") -> Found(listOf(28, 12), 6.1, 900)
+                name.startsWith("Action") -> Found(listOf(28), 6.0, 900)
+                name.startsWith("Drama Movie 7 ") -> Found(listOf(18), 8.6, 5000)
+                name.startsWith("Drama") -> Found(listOf(18), 7.5, 1200)
+                name.startsWith("Crime") -> Found(listOf(80), 8.0, 40)
                 else -> null
             }
         }
+        vm.trendingFinder = { _, type -> if (type == "movie") listOf("Not On Any Playlist", "Drama Movie 3", "Action Movie 2") else emptyList() }
     }
 
     private fun idleUntil(what: String, ms: Long = 60_000, ok: () -> Boolean) {
@@ -82,17 +85,23 @@ class GenreSortTest {
         sorted(vm)
 
         val movies = names(vm, "movie")
-        assertEquals(listOf("Action", "Adventure", "Drama", "Other (not on TMDB)"), movies)
+        assertEquals(listOf("Trending this week", "Top rated", "Action", "Adventure", "Drama", "Other (not on TMDB)"), movies)
         assertEquals("a title is looked up once, by name and year", asked.size, asked.toSet().size)
         assertTrue(asked.any { it.startsWith("movie|Drama Movie 3 (") })
 
+        vm.chooseVodCategory("movie", GENRE_CAT + com.avidviewer.tv.data.Catalog.GENRE_TRENDING)
+        assertEquals("trending titles on the playlists, in TMDB's order", listOf("Drama Movie 3", "Action Movie 2"), vm.vodItems("movie").map { it.name })
+        vm.chooseVodCategory("movie", GENRE_CAT + com.avidviewer.tv.data.Catalog.GENRE_TOP)
+        val top = vm.vodItems("movie").map { it.name }
+        assertEquals("rated 7+ with enough votes, best first", 20, top.size)
+        assertEquals("Drama Movie 7", top.first())
         vm.chooseVodCategory("movie", GENRE_CAT + 28)
         assertEquals(15, vm.vodItems("movie").size)
         vm.chooseVodCategory("movie", GENRE_CAT + 12)
         assertEquals("a title can be in more than one genre", listOf("Action Movie 1"), vm.vodItems("movie").map { it.name })
         vm.chooseVodCategory("movie", GENRE_CAT + com.avidviewer.tv.data.Catalog.GENRE_OTHER)
         assertTrue("titles TMDB doesn't know", vm.vodItems("movie").size > 1000)
-        assertEquals(listOf("Crime", "Other (not on TMDB)"), names(vm, "series"))
+        assertEquals("too few votes for Top rated", listOf("Crime", "Other (not on TMDB)"), names(vm, "series"))
 
         // Hide, rename and order work on genres.
         vm.hideVodCatEverywhere("movie", GENRE_CAT + 18)
@@ -101,7 +110,7 @@ class GenreSortTest {
         assertTrue("Drama" in names(vm, "movie"))
         vm.renameVodCat("movie", GENRE_CAT + 18, "Dramas")
         vm.moveVodCatTo("movie", GENRE_CAT + 18, 0)
-        assertEquals("Dramas", names(vm, "movie").first())
+        assertEquals("Dramas", names(vm, "movie")[2])
 
         // Off: the provider's categories again; the lookups are kept for next time.
         vm.setGenreSort(false)

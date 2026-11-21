@@ -43,10 +43,12 @@ class Catalog(context: Context) : SQLiteOpenHelper(context.applicationContext, "
     /**
      * 6 (Nov 21, 2026): TMDB genres per title, kept apart from the downloaded rows so they survive every download.
      * Keyed by [GENRE_KEY] (the kind and the name without provider tags, as titles are grouped), so all copies of a
-     * title share one lookup. genre_done: looked up (matched = 0: TMDB had no match).
+     * title share one lookup. genre_done: looked up (matched = 0: TMDB had no match), with TMDB's rating and votes.
      */
     private fun createGenres(db: SQLiteDatabase) {
-        db.execSQL("CREATE TABLE IF NOT EXISTS genre_done (gk TEXT PRIMARY KEY, at INTEGER NOT NULL, matched INTEGER NOT NULL)")
+        db.execSQL("CREATE TABLE IF NOT EXISTS genre_done (gk TEXT PRIMARY KEY, at INTEGER NOT NULL, matched INTEGER NOT NULL, r REAL NOT NULL DEFAULT 0, v INTEGER NOT NULL DEFAULT 0)")
+        // This week's TMDB trending titles, by genre key, in TMDB's order (only those on the user's playlists show).
+        db.execSQL("CREATE TABLE IF NOT EXISTS trending (gk TEXT PRIMARY KEY, pos INTEGER NOT NULL)")
         db.execSQL("CREATE TABLE IF NOT EXISTS title_genre (gk TEXT NOT NULL, genre INTEGER NOT NULL, PRIMARY KEY (genre, gk))")
         db.execSQL("CREATE INDEX IF NOT EXISTS title_genre_gk ON title_genre (gk)")
     }
@@ -166,6 +168,13 @@ class Catalog(context: Context) : SQLiteOpenHelper(context.applicationContext, "
         private const val GENRE_KEY = "(title.g || '|' || (CASE WHEN title.nn = '' THEN title.k ELSE title.nn END))"
         const val GENRE_OTHER = -1
         const val GENRE_PENDING = -2
+        /** This week's TMDB trending titles that are on the user's playlists. */
+        const val GENRE_TRENDING = -3
+        /** The best-rated titles on the user's playlists (TMDB rating, enough votes), best first. */
+        const val GENRE_TOP = -4
+        const val TOP_LIMIT = 100
+        private const val TOP_VOTES = 250
+        private const val TOP_RATING = 7.0
         private const val COLS = "k, p, t, c, n, l, u, s, a, r, y"
         fun read(c: Cursor) = VodItem(
             key = c.getString(0), playlistId = c.getString(1), kind = c.getString(2), category = c.getString(3),
@@ -365,6 +374,8 @@ class Catalog(context: Context) : SQLiteOpenHelper(context.applicationContext, "
                 null -> {}
                 GENRE_PENDING -> sb.append(" AND NOT EXISTS (SELECT 1 FROM genre_done d WHERE d.gk = $GENRE_KEY)")
                 GENRE_OTHER -> sb.append(" AND EXISTS (SELECT 1 FROM genre_done d WHERE d.gk = $GENRE_KEY) AND NOT EXISTS (SELECT 1 FROM title_genre x WHERE x.gk = $GENRE_KEY)")
+                GENRE_TRENDING -> sb.append(" AND EXISTS (SELECT 1 FROM trending t WHERE t.gk = $GENRE_KEY)")
+                GENRE_TOP -> sb.append(" AND EXISTS (SELECT 1 FROM genre_done d WHERE d.gk = $GENRE_KEY AND d.v >= $TOP_VOTES AND d.r >= $TOP_RATING)")
                 else -> { sb.append(" AND EXISTS (SELECT 1 FROM title_genre x WHERE x.genre = ? AND x.gk = $GENRE_KEY)"); args.add(genre.toString()) }
             }
             sb.append(" AND p IN (${playlists.joinToString(",") { "?" }})"); args.addAll(playlists)
@@ -377,7 +388,12 @@ class Catalog(context: Context) : SQLiteOpenHelper(context.applicationContext, "
             return sb.toString() to args.toTypedArray()
         }
         // Playlists in the user's order, then the provider's order within each.
-        fun order(): String = if (newestFirst) "a DESC, o" else "${plIndex()}, o"
+        fun order(): String = when {
+            genre == GENRE_TRENDING -> "(SELECT pos FROM trending t WHERE t.gk = $GENRE_KEY), o"
+            genre == GENRE_TOP -> "(SELECT r FROM genre_done d WHERE d.gk = $GENRE_KEY) DESC, o"
+            newestFirst -> "a DESC, o"
+            else -> "${plIndex()}, o"
+        }
         private fun plIndex() = "CASE p ${playlists.mapIndexed { i, p -> "WHEN '${p.replace("'", "''")}' THEN $i" }.joinToString(" ")} END"
     }
 
@@ -444,19 +460,34 @@ class Catalog(context: Context) : SQLiteOpenHelper(context.applicationContext, "
         ).use { c -> val out = ArrayList<GenreLookup>(); val seen = HashSet<String>(); while (c.moveToNext()) if (seen.add(c.getString(0))) out.add(GenreLookup(c.getString(0), c.getString(1), c.getString(2), c.getString(3))); out }
     }
 
-    /** Saves a lookup: [genres] null = TMDB had no match. */
-    fun saveGenres(gk: String, genres: List<Int>?, now: Long = System.currentTimeMillis()) {
+    /** What TMDB says about a title: its genres, rating and number of votes. */
+    data class GenreFound(val genres: List<Int>, val rating: Double = 0.0, val votes: Int = 0)
+
+    /** Saves a lookup: [found] null = TMDB had no match. */
+    fun saveGenres(gk: String, found: GenreFound?, now: Long = System.currentTimeMillis()) {
         val db = writableDatabase
         db.beginTransaction()
         try {
-            db.execSQL("INSERT OR REPLACE INTO genre_done (gk, at, matched) VALUES (?, ?, ?)", arrayOf<Any>(gk, now, if (genres == null) 0 else 1))
+            db.execSQL("INSERT OR REPLACE INTO genre_done (gk, at, matched, r, v) VALUES (?, ?, ?, ?, ?)",
+                arrayOf<Any>(gk, now, if (found == null) 0 else 1, found?.rating ?: 0.0, found?.votes ?: 0))
             db.execSQL("DELETE FROM title_genre WHERE gk = ?", arrayOf(gk))
-            genres?.distinct()?.forEach { db.execSQL("INSERT OR IGNORE INTO title_genre (gk, genre) VALUES (?, ?)", arrayOf<Any>(gk, it)) }
+            found?.genres?.distinct()?.forEach { db.execSQL("INSERT OR IGNORE INTO title_genre (gk, genre) VALUES (?, ?)", arrayOf<Any>(gk, it)) }
             db.setTransactionSuccessful()
         } finally { db.endTransaction() }
     }
 
-    /** Titles shown in each genre ([GENRE_OTHER], [GENRE_PENDING] included), each title once. */
+    /** This week's trending titles ("movie|" or "series|" plus the normalized name), in TMDB's order. */
+    fun saveTrending(keys: List<String>) {
+        val db = writableDatabase
+        db.beginTransaction()
+        try {
+            db.execSQL("DELETE FROM trending")
+            keys.distinct().forEachIndexed { i, k -> db.execSQL("INSERT OR IGNORE INTO trending (gk, pos) VALUES (?, ?)", arrayOf<Any>(k, i)) }
+            db.setTransactionSuccessful()
+        } finally { db.endTransaction() }
+    }
+
+    /** Titles shown in each genre ([GENRE_OTHER], [GENRE_PENDING], [GENRE_TRENDING], [GENRE_TOP] included), each title once. */
     fun genreCounts(group: String, playlists: List<String>): Map<Int, Int> {
         if (playlists.isEmpty()) return emptyMap()
         val (w, a) = Query(group, playlists, grouped = true).where()
@@ -466,6 +497,8 @@ class Catalog(context: Context) : SQLiteOpenHelper(context.applicationContext, "
         }
         out[GENRE_OTHER] = count(Query(group, playlists, grouped = true, genre = GENRE_OTHER))
         out[GENRE_PENDING] = count(Query(group, playlists, grouped = true, genre = GENRE_PENDING))
+        out[GENRE_TRENDING] = count(Query(group, playlists, grouped = true, genre = GENRE_TRENDING))
+        out[GENRE_TOP] = count(Query(group, playlists, grouped = true, genre = GENRE_TOP, limit = TOP_LIMIT))
         return out
     }
 
