@@ -180,8 +180,8 @@ data class Prefs(
     val vodHiddenCats: Set<String> = emptySet(),
     /** Hidden individual movies/series (VodItem.key). */
     val vodHiddenTitles: Set<String> = emptySet(),
-    /** Nov 21, 2026, per profile: Movies and Series list TMDB genres in place of the provider's categories. */
-    val genreSort: Boolean = false,
+    /** Nov 21, 2026, per profile: Movies and Series list TMDB genres in place of the provider's categories (on by default once a TMDB key is saved). */
+    val genreSort: Boolean = true,
     /** Genres hidden while [genreSort] is on: "movie|28" or "series|10759". */
     val vodHiddenGenres: Set<String> = emptySet(),
     /** Renamed movie/series categories: "movie|Category" → new name. */
@@ -289,7 +289,7 @@ data class Prefs(
                 vodPlaylist = o.optString("vodPlaylist").ifBlank { null },
                 vodHiddenCats = strList(o.optJSONArray("vodHiddenCats")).toSet(),
                 vodHiddenTitles = strList(o.optJSONArray("vodHiddenTitles")).toSet(),
-                genreSort = o.optBoolean("genreSort", false),
+                genreSort = o.optBoolean("genreSort", true),
                 vodHiddenGenres = strList(o.optJSONArray("vodHiddenGenres")).toSet(),
                 vodCatNames = strMap(o.optJSONObject("vodCatNames")),
                 vodCatOrder = o.optJSONObject("vodCatOrder")?.let { vo -> vo.keys().asSequence().associateWith { strList(vo.getJSONArray(it)) } } ?: emptyMap(),
