@@ -79,10 +79,10 @@ class GuideSourcesTest {
         return s
     }
 
-    private fun idleUntil(what: String, timeoutMs: Long = 30_000, ok: () -> Boolean) {
+    private fun idleUntil(what: String, timeoutMs: Long = 30_000, info: () -> String = { "" }, ok: () -> Boolean) {
         val until = System.currentTimeMillis() + timeoutMs
         while (!ok()) {
-            if (System.currentTimeMillis() > until) throw AssertionError("Timed out waiting for: $what")
+            if (System.currentTimeMillis() > until) throw AssertionError("Timed out waiting for: $what ${info()}")
             // Move the test clock too, so short waits in the app (like the 2.5 s before re-downloading) pass.
             shadowOf(android.os.Looper.getMainLooper()).idleFor(java.time.Duration.ofMillis(100))
             Thread.sleep(25)
@@ -173,7 +173,7 @@ class GuideSourcesTest {
             vm.removeEpgSource(TestData.P1, p1.epgSources.first().id)
             vm.addEpgSource(TestData.P1, "Source A", "http://127.0.0.1:${srv.localPort}/a.xml", 0)
             val src = { vm.playlists.first { it.id == TestData.P1 }.epgSources.first() }
-            idleUntil("first download (${vm.guideSourceStatus})") { vm.guideBusy == null && vm.guideSourceStatus[TestData.P1 + "|" + src().id]?.startsWith("Updated") == true }
+            idleUntil("first download", info = { "(${vm.guideSourceStatus}; status=${vm.status}; busy=${vm.guideBusy}; bodies=${bodies.get()}; source=${src().url}; sources=${vm.playlists.first { it.id == TestData.P1 }.epgSources.size})" }) { vm.guideBusy == null && vm.guideSourceStatus[TestData.P1 + "|" + src().id]?.startsWith("Updated") == true }
             assertEquals(1, bodies.get())
             vm.refreshGuideNow(TestData.P1)
             idleUntil("checked again (${vm.guideSourceStatus})") { vm.guideBusy == null && vm.guideSourceStatus[TestData.P1 + "|" + src().id]?.contains("unchanged") == true }

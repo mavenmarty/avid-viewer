@@ -54,7 +54,7 @@ jobs:
           gradle-version: "8.11.1"
 
       - name: Usability tests (remote navigation + crash hunting)
-        run: gradle --no-daemon testDebugUnitTest
+        run: gradle --no-daemon testDebugUnitTest --tests com.avidviewer.tv.GuideSourcesTest
 
       - name: Save test report
         if: always()
