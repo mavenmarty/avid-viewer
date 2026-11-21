@@ -81,6 +81,8 @@ class GenreSortTest {
         val vm = newVm()
         vm.ensureVod()
         idleUntil("movies") { vm.vod.isNotEmpty() }
+        assertTrue("on by default with a TMDB key", vm.genresOn())
+        vm.setGenreSort(false)
         assertTrue("off: the provider's categories", "Drama" in names(vm, "movie"))
         sorted(vm)
 
