@@ -1211,7 +1211,7 @@ class UsabilityTest {
     @Test
     fun aSmallDeviceStartsThePreviewAFewSecondsAfterTheGuide() {
         lateinit var key: String
-        rule.runOnIdle { vm.lightStart = true; vm.stop(); vm.player.clearMediaItems(); key = vm.channels.first().key; vm.screen = Screen.GUIDE }
+        rule.runOnIdle { vm.lightStart = true; vm.stop(); vm.player.clearMediaItems(); key = vm.currentKey ?: vm.channels.first().key; vm.screen = Screen.GUIDE }
         rule.runOnIdle { vm.launchPreview(key) }
         settle()
         assertTrue("not yet", vm.player.mediaItemCount == 0)
