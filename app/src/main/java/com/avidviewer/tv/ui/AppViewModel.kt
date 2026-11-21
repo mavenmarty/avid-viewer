@@ -5332,17 +5332,19 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
      * from a Kids profile. Stops when offline or refused, and carries on the next time Movies or Series opens.
      */
     fun startGenreLookups() {
-        if (genreJob?.isActive == true || !genresOn()) return
+        if (genreJob?.coroutineContext[Job]?.isActive != false == true || !genresOn()) return
         val key = tmdbKey(); if (key.isBlank()) return
         val pids = vodPids(); if (pids.isEmpty()) return
         genreJob = viewModelScope.launch {
             try {
-                while (isActive && genresOn() && vodPids() == pids) {
+                while (genresOn() && vodPids() == pids) {
+                    ensureActive()
                     val batch = withContext(Dispatchers.IO) { runCatching { catalog.pendingGenres(pids, 40) }.getOrDefault(emptyList()) }
                     genreProgress = withContext(Dispatchers.IO) { runCatching { catalog.genreProgress(pids) }.getOrNull() }
                     if (batch.isEmpty()) break
                     for (t in batch) {
-                        if (!isActive || !genresOn()) return@launch
+                        ensureActive()
+                        if (!genresOn()) return@launch
                         val name = if (t.year.isNotBlank() && !t.name.contains("(" + t.year.take(4) + ")")) t.name + " (" + t.year.take(4) + ")" else t.name
                         val found = withContext(Dispatchers.IO) { runCatching { genreFinder(key, name, if (t.group == "series") "tv" else "movie") } }
                         if (found.isFailure) return@launch // offline, or the key was refused: try again later
