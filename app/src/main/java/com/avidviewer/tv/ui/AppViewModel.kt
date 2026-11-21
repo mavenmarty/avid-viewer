@@ -4504,24 +4504,40 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
      */
     fun wantArt(v: VodItem) {
         val k = artStore.key(v)
-        if (art.containsKey(k)) return
-        artStore.get(k)?.let { art = art + (k to it.second); return }
+        // Done: artwork with its content rating looked up, or no match on TMDB.
+        fun done(a: com.avidviewer.tv.data.Art?) = a == null || a.cert != null
+        if (art.containsKey(k) && done(art[k])) return
+        val saved = artStore.get(k)
+        if (saved != null && (done(saved.second) || kidsMode)) { art = art + (k to saved.second); return }
         if (kidsMode) return
         val key = tmdbKey(); if (key.isBlank()) return
+        val type = if (v.kind == "series") "tv" else "movie"
         artJob?.cancel()
         artJob = viewModelScope.launch {
+            val had = saved?.second
             val found = withContext(Dispatchers.IO) {
                 runCatching {
-                    val name = if (v.year.isNotBlank() && !v.name.contains("(" + v.year + ")")) v.name + " (" + v.year + ")" else v.name
-                    com.avidviewer.tv.data.Tmdb.find(key, name, if (v.kind == "series") "tv" else "movie")
+                    // Saved before content ratings (Nov 21, 2026) with TMDB's id: only the rating is looked up.
+                    if (had != null && had.tmdbId > 0) {
+                        had.copy(cert = runCatching { com.avidviewer.tv.data.Tmdb.certification(key, type, had.tmdbId, region()) }.getOrNull())
+                    } else {
+                        val name = if (v.year.isNotBlank() && !v.name.contains("(" + v.year + ")")) v.name + " (" + v.year + ")" else v.name
+                        com.avidviewer.tv.data.Tmdb.find(key, name, type)?.let { t ->
+                            com.avidviewer.tv.data.Art.from(t, runCatching { com.avidviewer.tv.data.Tmdb.certification(key, type, t.id, region()) }.getOrNull())
+                        }
+                    }
                 }
             }
             if (found.isFailure) return@launch // offline or refused: try again next time
-            val a = found.getOrNull()?.let { com.avidviewer.tv.data.Art.from(it) }
+            val a = found.getOrNull()
             withContext(Dispatchers.IO) { artStore.put(k, a) }
             art = art + (k to a)
         }
     }
+
+    /** The content rating to show: the provider's when it gives one, else TMDB's. */
+    fun certificationOf(v: VodItem, info: VodInfo? = null): String? =
+        info?.certification?.ifBlank { null } ?: artOf(v)?.cert?.let { com.avidviewer.tv.data.Certification.clean(it).ifBlank { it.takeIf { c -> c.length in 1..6 } } }
 
     /** Tests: puts artwork in place without TMDB. */
     internal fun putArtForTests(v: VodItem, a: com.avidviewer.tv.data.Art?) { artStore.put(artStore.key(v), a); art = art + (artStore.key(v) to a) }

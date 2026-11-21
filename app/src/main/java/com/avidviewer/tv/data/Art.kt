@@ -8,7 +8,13 @@ import java.io.File
  * hero style). Kept on the TV in art.json, by title, so a title is never looked up twice; "not found" is kept too,
  * and tried again after a week.
  */
-data class Art(val backdrop: String?, val overview: String, val rating: Double, val votes: Int, val genres: List<Int> = emptyList()) {
+data class Art(
+    val backdrop: String?, val overview: String, val rating: Double, val votes: Int, val genres: List<Int> = emptyList(),
+    /** TMDB's id for the title (0: saved before Nov 21, 2026). */
+    val tmdbId: Int = 0,
+    /** The content rating ("R", "TV-14"); "" = TMDB has none; null = not looked up yet. */
+    val cert: String? = null,
+) {
     /** "7.9" and "4.2K votes", or null when TMDB has no rating for it. */
     val ratingText: String? get() = if (rating <= 0.0 || votes <= 0) null else String.format(java.util.Locale.US, "%.1f", rating)
     val votesText: String get() = when {
@@ -21,7 +27,7 @@ data class Art(val backdrop: String?, val overview: String, val rating: Double, 
         /** The bigger TMDB backdrop, for a picture that fills most of the screen. */
         fun big(url: String?): String? = url?.replace("/w780/", "/w1280/")
 
-        fun from(t: Title) = Art(big(t.backdrop), t.overview, t.rating, t.votes, t.genres)
+        fun from(t: Title, cert: String? = null) = Art(big(t.backdrop), t.overview, t.rating, t.votes, t.genres, t.id, cert)
 
         /** TMDB's genre names (movie and TV lists together). */
         private val GENRES = mapOf(28 to "Action", 12 to "Adventure", 16 to "Animation", 35 to "Comedy", 80 to "Crime", 99 to "Documentary",
@@ -66,7 +72,8 @@ class ArtStore(dir: File) {
                 val e = o.getJSONObject(k)
                 val a = e.optJSONObject("a")?.let { j ->
                     Art(j.optString("b").ifBlank { null }, j.optString("o"), j.optDouble("r", 0.0), j.optInt("v"),
-                        j.optJSONArray("g")?.let { g -> List(g.length()) { g.getInt(it) } } ?: emptyList())
+                        j.optJSONArray("g")?.let { g -> List(g.length()) { g.getInt(it) } } ?: emptyList(),
+                        j.optInt("id"), if (j.has("c")) j.optString("c") else null)
                 }
                 out[k] = e.optLong("t") to a
             }
@@ -79,7 +86,7 @@ class ArtStore(dir: File) {
             val o = JSONObject()
             map.forEach { (k, v) ->
                 val e = JSONObject().put("t", v.first)
-                v.second?.let { a -> e.put("a", JSONObject().put("b", a.backdrop ?: "").put("o", a.overview).put("r", a.rating).put("v", a.votes).put("g", org.json.JSONArray(a.genres))) }
+                v.second?.let { a -> e.put("a", JSONObject().put("b", a.backdrop ?: "").put("o", a.overview).put("r", a.rating).put("v", a.votes).put("g", org.json.JSONArray(a.genres)).put("id", a.tmdbId).apply { a.cert?.let { put("c", it) } }) }
                 o.put(k, e)
             }
             val tmp = File(file.parentFile, "art.json.tmp"); tmp.writeText(o.toString()); tmp.renameTo(file)

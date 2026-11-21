@@ -50,7 +50,19 @@ data class VodInfo(
     val director: String = "",
     val rating: String = "",
     val image: String? = null,
+    /** The content rating the provider gives ("PG-13", "TV-MA"), when it's one we recognise. */
+    val certification: String = "",
 )
+
+/** US-style content ratings (movie and TV), as a provider or TMDB writes them. Nov 21, 2026. */
+object Certification {
+    private val KNOWN = Regex("""^(G|PG|PG-13|R|NC-17|NR|TV-Y|TV-Y7|TV-Y7-FV|TV-G|TV-PG|TV-14|TV-MA)$""")
+    /** "Rated PG-13", "pg-13", "TV14" → "PG-13" / "TV-14"; anything else → "". */
+    fun clean(s: String): String {
+        val t = s.trim().uppercase().removePrefix("RATED").trim().replace(Regex("^TV(?=[YGPM1])"), "TV-").replace(" ", "")
+        return if (KNOWN.matches(t)) t else ""
+    }
+}
 
 private fun JsonReader.str(): String = when (peek()) {
     JsonToken.NULL -> { nextNull(); "" }
@@ -169,6 +181,8 @@ object XtreamVod {
             director = o.optString("director"),
             rating = o.optString("rating"),
             image = o.optString("movie_image").ifBlank { o.optString("cover") }.ifBlank { null } ?: backdrop,
+            certification = listOf("mpaa_rating", "mpaa", "certification", "age_rating", "rated", "age")
+                .firstNotNullOfOrNull { k -> Certification.clean(o.optString(k)).ifBlank { null } } ?: "",
         )
     }
 

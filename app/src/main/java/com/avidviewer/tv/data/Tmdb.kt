@@ -125,6 +125,38 @@ object Tmdb {
     fun recommendations(key: String, t: Title): List<Title> =
         titles(get(key, "/${t.type}/${t.id}/recommendations").optJSONArray("results"), t.type)
 
+    /**
+     * The title's content rating in [region] ("R", "PG-13", "TV-14"): "" when TMDB has none there (US as a fallback).
+     * Nov 21, 2026: shown with the year on posters and title pages.
+     */
+    fun certification(key: String, type: String, id: Int, region: String): String =
+        if (type == "tv") tvCertification(get(key, "/tv/$id/content_ratings"), region)
+        else movieCertification(get(key, "/movie/$id/release_dates"), region)
+
+    /** From /movie/{id}/release_dates: the theatrical rating if there is one, else the first given. */
+    fun movieCertification(o: JSONObject, region: String): String {
+        val res = o.optJSONArray("results") ?: return ""
+        fun forRegion(r: String): String {
+            for (i in 0 until res.length()) {
+                val e = res.getJSONObject(i)
+                if (e.optString("iso_3166_1") != r) continue
+                val dates = e.optJSONArray("release_dates") ?: continue
+                val all = (0 until dates.length()).map { dates.getJSONObject(it) }.filter { it.optString("certification").isNotBlank() }
+                return (all.firstOrNull { it.optInt("type") == 3 } ?: all.firstOrNull())?.optString("certification")?.trim() ?: ""
+            }
+            return ""
+        }
+        return forRegion(region).ifBlank { if (region != "US") forRegion("US") else "" }
+    }
+
+    /** From /tv/{id}/content_ratings. */
+    fun tvCertification(o: JSONObject, region: String): String {
+        val res = o.optJSONArray("results") ?: return ""
+        fun forRegion(r: String) = (0 until res.length()).map { res.getJSONObject(it) }
+            .firstOrNull { it.optString("iso_3166_1") == r }?.optString("rating")?.trim() ?: ""
+        return forRegion(region).ifBlank { if (region != "US") forRegion("US") else "" }
+    }
+
     /** Finds the TMDB title for a name from the user's provider, e.g. "Dune: Part Two (2024)". */
     fun find(key: String, name: String, type: String): Title? {
         val year = Regex("\\((\\d{4})\\)").find(name)?.groupValues?.get(1)
