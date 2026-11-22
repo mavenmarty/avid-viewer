@@ -250,11 +250,12 @@ class SportsTest {
             m("p:teamch", MatchKind.TEAM, "NHL channel · Avalanche", league = true),
             m("p:rsn", MatchKind.LOCAL, "Avalanche local TV · Altitude"),
             m("p:fav", MatchKind.NATIONAL, "National TV · FOX", null),
+            m("p:listed", MatchKind.NATIONAL, "National TV · TNT"),
         )
-        vm.updatePrefs { it.copy(favorites = listOf("p:fav")) }
-        assertEquals(listOf("p:fav", "p:event", "p:teamch", "p:rsn", "p:espn", "p:guide"), vm.orderForProfile(found).map { it.key })
-        vm.updatePrefs { it.copy(favorites = emptyList()) }
-        assertEquals(listOf("p:event", "p:teamch", "p:rsn", "p:espn", "p:guide", "p:fav"), vm.orderForProfile(found).map { it.key })
+        vm.updatePrefs { it.copy(favorites = listOf("p:fav"), lists = listOf(com.avidviewer.tv.data.ChannelList("l9", "Hockey", listOf("p:listed")))) }
+        assertEquals("Favorites and lists first", listOf("p:fav", "p:listed", "p:event", "p:teamch", "p:rsn", "p:espn", "p:guide"), vm.orderForProfile(found).map { it.key })
+        vm.updatePrefs { it.copy(favorites = emptyList(), lists = emptyList()) }
+        assertEquals(listOf("p:event", "p:teamch", "p:rsn", "p:espn", "p:guide", "p:fav", "p:listed"), vm.orderForProfile(found).map { it.key })
     }
 
     @Test
