@@ -6,6 +6,8 @@ import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.border
+import androidx.compose.ui.platform.testTag
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -52,6 +54,15 @@ fun PlayerScreen(vm: AppViewModel) {
     val focus = remember { FocusRequester() }
     var showInfo by remember { mutableStateOf(true) }
     var infoTick by remember { mutableIntStateOf(0) }
+    // Nov 22, 2026 (owner): once an episode counts as watched (95 %, or it ended), ▶ Next episode is offered; OK starts it.
+    var nextUp by remember { mutableStateOf<com.avidviewer.tv.data.Episode?>(null) }
+    LaunchedEffect(vm.vodPlaying?.key) {
+        nextUp = null
+        while (vm.vodPlaying?.kind == "episode") {
+            nextUp = vm.nextEpisodeDue(vm.player.currentPosition, vm.player.duration.coerceAtLeast(0L), vm.player.playbackState == androidx.media3.common.Player.STATE_ENDED)
+            delay(500)
+        }
+    }
 
     LaunchedEffect(vm.listPickerKey, vm.avPanel) { if (vm.listPickerKey == null && !vm.avPanel) runCatching { focus.requestFocus() } }
     LaunchedEffect(infoTick) {
@@ -82,7 +93,12 @@ fun PlayerScreen(vm: AppViewModel) {
                 if (vm.vodPlaying != null) return@onKeyEvent when (it.key) {
                     Key.DirectionLeft, Key.MediaRewind -> { vm.seek(-10_000); infoTick++; true }
                     Key.DirectionRight, Key.MediaFastForward -> { vm.seek(30_000); infoTick++; true }
-                    Key.DirectionCenter, Key.Enter, Key.NumPadEnter, Key.MediaPlayPause -> {
+                    Key.DirectionCenter, Key.Enter, Key.NumPadEnter -> {
+                        if (nextUp != null) vm.playNextEpisode()
+                        else if (vm.player.isPlaying) vm.player.pause() else vm.player.play()
+                        infoTick++; true
+                    }
+                    Key.MediaPlayPause -> {
                         if (vm.player.isPlaying) vm.player.pause() else vm.player.play(); infoTick++; true
                     }
                     Key.DirectionUp, Key.DirectionDown, Key.Info -> { infoTick++; true }
@@ -115,6 +131,16 @@ fun PlayerScreen(vm: AppViewModel) {
         if (vm.avPanel) AvPanel(vm)
         else if (showInfo || (vm.vodPlaying != null && vm.paused)) {
             if (vm.vodPlaying != null) VodBar(vm, Modifier.align(Alignment.BottomCenter)) else InfoBar(vm, Modifier.align(Alignment.BottomCenter))
+        }
+        nextUp?.takeIf { !vm.avPanel }?.let { e ->
+            Column(
+                Modifier.align(Alignment.TopEnd).padding(top = 28.dp, end = 28.dp).testTag("next-episode")
+                    .clip(RoundedCornerShape(12.dp)).background(C.Surface2.copy(alpha = 0.96f)).border(2.dp, C.Accent, RoundedCornerShape(12.dp)).padding(horizontal = 18.dp, vertical = 12.dp),
+            ) {
+                Text("▶  Next episode", color = C.Text, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                Text("S${e.season} E${e.number} · ${e.title}", color = C.Soft, fontSize = 13.sp, maxLines = 1)
+                Text("Press OK", color = C.Accent, fontSize = 12.sp)
+            }
         }
     }
 }

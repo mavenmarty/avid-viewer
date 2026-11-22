@@ -444,6 +444,7 @@ private fun VodDetail(vm: AppViewModel, v: VodItem) {
     val isSeries = v.kind == "series"
     val versions = vm.versionsOfItem(v)
     vm.versionPicker?.let { VersionPickerDialog(vm, it, versions) }
+    vm.episodeMenu?.let { e -> EpisodeOptionsDialog(vm, v, e) }
     // Opening the page, coming back from the player, or episodes arriving: put the highlight
     // on the episode that was playing, else the main button. Retried per frame until it lands,
     // and dropped as soon as the user presses a key.
@@ -579,6 +580,7 @@ private fun androidx.compose.foundation.lazy.LazyListScope.seasonsAndEpisodes(vm
                     }
                 }
             }
+            item(key = "eps-hint") { Label("Menu (or hold OK) on an episode: mark it or the whole season as watched.", size = 12.sp, color = C.Muted) }
             val shown = eps.filter { it.season == season }
             // The episode the page opens on: the one that was playing, else the next one to watch.
             val target = vm.lastEpisode?.takeIf { l -> eps.any { it.key == l.key && it.season == l.season && it.number == l.number } } ?: vm.nextUpEpisode(series, eps)
@@ -586,7 +588,7 @@ private fun androidx.compose.foundation.lazy.LazyListScope.seasonsAndEpisodes(vm
                 val ek = vm.episodeKey(series, e)
                 val r = vm.resumeOf(ek)
                 val isLast = target != null && target.key == e.key && target.season == e.season && target.number == e.number
-                Focusable(Modifier.fillMaxWidth().height(52.dp).then(if (e == shown.first()) Modifier.focusProperties { if (seasonOn.value) up = seasonFr } else Modifier).then(if (isLast) Modifier.focusRequester(episodeFocus).onFocusChanged { onLastFocused(it.isFocused) } else Modifier), onClick = { vm.playDetailEpisode(e) }) {
+                Focusable(Modifier.fillMaxWidth().height(52.dp).then(if (e == shown.first()) Modifier.focusProperties { if (seasonOn.value) up = seasonFr } else Modifier).then(if (isLast) Modifier.focusRequester(episodeFocus).onFocusChanged { onLastFocused(it.isFocused) } else Modifier), onMenu = { vm.episodeMenu = e }, onClick = { vm.playDetailEpisode(e) }) {
                     Label("E${e.number}", size = 13.sp, color = C.Accent, weight = FontWeight.Bold, modifier = Modifier.width(50.dp).padding(start = 12.dp))
                     Column(Modifier.weight(1f)) {
                         Label(e.title, size = 14.sp, color = C.Text, weight = FontWeight.SemiBold)
@@ -602,6 +604,34 @@ private fun androidx.compose.foundation.lazy.LazyListScope.seasonsAndEpisodes(vm
 private fun fmtPos(ms: Long): String {
     val s = ms / 1000
     return if (s >= 3600) "%d:%02d:%02d".format(s / 3600, (s / 60) % 60, s % 60) else "%d:%02d".format(s / 60, s % 60)
+}
+
+/** Menu on an episode: mark it, or its whole season, as watched or not watched. */
+@Composable
+private fun EpisodeOptionsDialog(vm: AppViewModel, series: VodItem, e: com.avidviewer.tv.data.Episode) {
+    val first = remember { FocusRequester() }
+    val season = vm.seasonEpisodes(e.season)
+    val done = vm.isWatched(vm.episodeKey(series, e))
+    val seasonDone = season.isNotEmpty() && season.all { vm.isWatched(vm.episodeKey(series, it)) }
+    fun close() { vm.episodeMenu = null }
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = { close() },
+        containerColor = C.Surface,
+        title = { Text("S${e.season} E${e.number} · ${e.title}", color = C.Text, fontWeight = FontWeight.Bold) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Box(Modifier.focusRequester(first).testTag("episode-watched")) {
+                    OptionRow(if (done) "○  Mark as not watched" else "✓  Mark as watched") { vm.setEpisodesWatched(series, listOf(e), !done); close() }
+                }
+                Box(Modifier.testTag("season-watched")) {
+                    OptionRow(if (seasonDone) "○  Mark season ${e.season} as not watched" else "✓  Mark season ${e.season} as watched (${season.size} episodes)") { vm.setEpisodesWatched(series, season, !seasonDone); close() }
+                }
+                Label("Watched episodes follow this profile to its other TVs.", size = 12.sp, lines = Int.MAX_VALUE)
+            }
+        },
+        confirmButton = { TvButton("Done", primary = true) { close() } },
+    )
+    LaunchedEffect(e) { focusWhenReady(vm) { runCatching { first.requestFocus() }.isSuccess } }
 }
 
 /** The title page's "⇄ N versions": every copy of the title (language, category, playlist), English first. */

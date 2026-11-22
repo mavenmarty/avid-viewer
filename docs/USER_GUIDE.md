@@ -2,7 +2,7 @@
 
 <!-- The version below and the Release notes section are updated automatically after each published build
      (.github/workflows/user-guide.yml). Feature descriptions are written by hand. -->
-This guide covers **Avid Viewer 1.27.0**, the current public release. Avid Viewer is an IPTV player for Android TV and Fire TV. You bring your own provider (an Xtream Codes login or an M3U link); the app doesn't include any channels.
+This guide covers **Avid Viewer 1.28.0**, the current public release. Avid Viewer is an IPTV player for Android TV and Fire TV. You bring your own provider (an Xtream Codes login or an M3U link); the app doesn't include any channels.
 
 **Contents:** [Getting started](#1-getting-started) · [Main menu](#2-main-menu) · [TV Guide](#3-tv-guide) · [Full-screen playback](#4-full-screen-playback) · [Search](#5-search) · [Discover](#6-discover) · [Sports](#7-sports) · [Movies and Series](#8-movies-and-series) · [Settings](#9-settings) ([Profiles](#profiles)) · [Privacy](#10-privacy) · [Troubleshooting](#11-troubleshooting) · [Control4](#12-control4) · [Supplemental services](#13-supplemental-services) · [Cable & satellite](#14-using-your-cable-or-satellite-subscription) · [Free services](#15-free-services) · [Release notes](#release-notes)
 
@@ -324,6 +324,8 @@ Discover shows what's new and popular, and where to watch it, using TMDB and Jus
 - Titles your provider carries are tagged **▶ ON YOUR PROVIDER** (with a large catalog, the tag may appear a moment after the posters). Open one to play it (**▶ Play**, or **▶ Episodes** for a series), add it to **My List**, or **Search my playlists**.
 - **Every version on your provider:** when your playlists have the title more than once (other languages, qualities or playlists), its page lists **N versions on your provider**, English first, each with its language, category and playlist. The page scrolls as one: **Down** from the buttons moves through the versions and then **Where to watch**. **OK** on a version plays that movie or opens that series. The main button plays the first and says which ("Plays: English · EN | Drama · My provider").
 - **Where to watch** lists Stream, Free, Rent and Buy options for your region.
+- **Sort**: **A–Z**, **Rating** or **Release date** (newest first) put the titles of the tab in that order; press the same button again to go back to TMDB's order.
+- **☆ Rate** on a title's page rates it on TMDB with the profile's own TMDB account (see [Rating titles on TMDB](#rating-titles-on-tmdb)).
 - **A title's page:** its artwork fills the screen, with the name in large type, the year, and **Genre**, **On** (your provider, or not on it) and its TMDB rating with how many people rated it.
 
 Discover needs a free **TMDB API key**. Enter it in **Settings › Discover**; it's stored encrypted on the device. How to get one: [TMDB](#tmdb-discover) in Supplemental services.
@@ -339,12 +341,12 @@ Sports lists real games from **ESPN's schedules** for today and the next 2 days,
   - **League filters:** **All**, then each league you've switched on.
   - **Games:** grouped as **Live now**, **Later today**, the next days and **Final**. Each card shows the matchup, its networks, its time or score, and how many channels were found. Games with no channel found are greyed out.
 - **Right: Where to watch.** The game's channels, each with why it matched. They're listed in this order, for the profile in use:
-  1. channels in your **★ Favorites**;
-  2. the **teams' own channels** (each team's local or regional network, for example "Red Wings local TV · FanDuel Sports Network Detroit");
-  3. channels in your **lists**;
+  1. channels in your **★ Favorites** and your **lists**, including local stations you've added (for example your city's Fox or ABC affiliate when it carries the game);
+  2. channels in the **league's own categories** in your playlists (for example "NHL" or "NFL Sunday Ticket"); replay categories such as "NHL Replay" are skipped;
+  3. the **regional sports networks** (each team's local or regional network, for example "Red Wings local TV · FanDuel Sports Network Detroit");
   4. everything else.
 
-  Within each group the best match comes first. Adding a favorite or a channel to a list changes the order at once. Why a channel matched:
+  Within each group the best match comes first. Favorites, lists and the league's categories are always listed, however many channels a game has. Adding a favorite or a channel to a list changes the order at once. Why a channel matched:
   - **National TV / Streaming:** a channel named for the network ESPN lists (TNT, ESPN2, Fox, Prime Video…).
   - **In the guide:** a listing during the game that names both teams.
   - **Event channel:** the channel's name has both teams, for example "NHL 03: Red Wings @ Blues".
@@ -361,23 +363,20 @@ Sports lists real games from **ESPN's schedules** for today and the next 2 days,
 
 ## 8. Movies and Series
 
-![Series in the Grid layout](images/series-grid.jpg)
+![Series](images/series-grid.jpg)
 
 - **Left side**: Playlists, then categories: **All**, **Recently added**, **Continue watching** (movies part-way, and series until their latest episode is watched), **My List**, and your provider's categories, or TMDB genres (see [Sorted by genre](#sorted-by-genre)).
 - **Right side**: posters for the chosen category. A category you pause on is read ahead, so OK shows it at once.
 - **Posters fill their tiles.** The title and year appear on a dark fade only on the highlighted poster, and on titles that have no artwork (most posters already show their title). The highlighted poster grows a little and gets a ring. **✓** in a corner means the title is in My List.
-- **Layouts**: the buttons above the posters switch between two ways of browsing. Each profile remembers its choice; **Up** from the top row of posters reaches them.
-  - **▦ Grid**: rows of posters, with the highlighted title's artwork filling the screen behind them and fading into the page. Above the posters: its name, year, content rating (such as PG-13 or TV-14), genre, TMDB rating (with how many people rated it) and a short description. Moving the highlight fades to the next title's picture. **Right** from the categories goes to the poster you were on.
+- **The posters**: rows of posters, with the highlighted title's artwork filling the screen behind them and fading into the page. Above the posters: its name, year, content rating (such as PG-13 or TV-14), genre, TMDB rating (with how many people rated it) and a short description. Moving the highlight fades to the next title's picture. **Right** from the categories goes to the poster you were on.
 
-    ![Movies in the Grid layout: the highlighted title's artwork and details above the posters](images/movies-grid.jpg)
+  ![Movies: the highlighted title's artwork and details above the posters](images/movies-grid.jpg)
 
-  - **▣ Showcase**: the highlighted title's artwork fills the screen, with one row of posters along the bottom (**Left/Right** to move along it).
-
-    ![Movies in the Showcase layout](images/movies-showcase.jpg)
+- **Sort**: the buttons above the posters put the titles in order: **Date added** (newest first, the default), **A–Z**, or **Rating** (TMDB's rating, else your provider's, best first; titles with no rating go last). **Up** from the top row of posters reaches them. Each profile remembers its choice, for Movies and Series alike. **Recently added**, **Continue watching**, **My List**, **Trending this week**, **Top rated** and search results keep their own order, so they have no Sort buttons.
 
 - **Each title is listed once.** When your playlists have the same title several times (other languages, qualities such as 4K or HD, provider tags such as "NF -" in front of the name, or other playlists), it appears once, shown by its English copy (else one with no language marked). This applies to All, Recently added, every category and the search.
 - **🔍 Search movies / 🔍 Search series** is in the category list, below My List. Results replace the poster grid; **✕ Clear search** ends the search. When fewer than 30 titles hold every word you typed, near matches (a small typo, or a word left out) are added after them.
-- **OK on a poster** opens its page. The title's artwork fills the screen; on it are the name in large type, the year, content rating and length, three facts (**Genre**, **On**: the playlist, and **Rating**: your provider's), **▶ Play**, or **▶ Resume from [time]** and **Start over**, plus **+ My List**, the plot, cast and director, and **Ratings** (the TMDB score and how many people rated it).
+- **OK on a poster** opens its page. The title's artwork fills the screen; on it are the name in large type, the year, content rating and length, three facts (**Genre**, **On**: the playlist, and **Rating**: your provider's), **▶ Play**, or **▶ Resume from [time]** and **Start over**, plus **+ My List**, **☆ Rate** (see [Rating titles on TMDB](#rating-titles-on-tmdb)), the plot, cast and director, and **Ratings** (the TMDB score and how many people rated it).
 
   ![A movie's page](images/movie-page.jpg)
 
@@ -385,18 +384,28 @@ Sports lists real games from **ESPN's schedules** for today and the next 2 days,
 - **⇄ N versions** (on a title with several copies) lists each copy with its language, name, category and playlist; ✓ marks the one shown, and the line **This version: …** under the buttons says which one you're on. **OK** on another copy shows that one, with its own episodes, resume point and My List button. The language comes from codes on the name or category ("EN |", "FR -", "VF", "MULTI"…); copies without one show "Language not marked". Series pages list episodes by **Season**, with resume points; episodes you've played to the end say **✓ Watched**. **A series page opens on the next episode to watch**, with its season chosen: Season 1, Episode 1 for a series you haven't started, otherwise the episode after the last one you finished (or the one you stopped part-way through). The page scrolls as one: **Up** from the episode goes to the season buttons, then the title's buttons; from the buttons, **Down** goes to the season buttons, then through every episode, however long the description. After you watch an episode and press **Back**, that episode is highlighted.
 - **Each category (and each search) keeps its own place.**
 - **Back** goes one step at a time: from a title's page to its poster, from a poster to the category you're in (highlighted), then to the main menu, on **Movies** or **Series**.
-- **Left** from the first column of posters (in Showcase, from the first poster) goes to the category you're browsing.
+- **Left** from the first column of posters goes to the category you're browsing.
 - **Category list wraps around**: Up on **All** jumps to the last category, and Down on the last returns to All. The poster grid stops at the end.
 - **Menu on a category**: **Rename**, **Re-order** or **Hide** it. Hidden categories come back in Settings › List Editor.
 - If you have more than one playlist, movies and series from all of them are merged.
 - **Content ratings** (G, PG, PG-13, R, NC-17, TV-Y to TV-MA) show with the year: your provider's when its details give one (on the title's page), otherwise TMDB's for your region (US ratings when your region has none). They're looked up with the artwork, so they need a TMDB key, and a title shows its rating once it has been highlighted or opened.
+
+### Rating titles on TMDB
+
+You can rate movies and series on TMDB from the TV, with your own TMDB account. Each profile links its own account, so everyone's ratings stay their own.
+
+1. **Link the account once:** **Settings › Discover › TMDB account for ratings › Link TMDB account**. A QR code appears. Scan it with your phone, sign in to TMDB if asked, and choose **Approve**. The TV finishes by itself within a few seconds and shows **Linked as (your TMDB name)**.
+2. **Rate:** on a movie or series page (in Movies, Series or Discover) choose **☆ Rate**, then a score from **1** to **10**. The button then shows your rating, for example **★ 8 · Your rating**. Choose it again to change the score, or **Remove my rating**.
+3. **Unlink** in the same place stops ratings from that profile. Ratings already sent stay on TMDB.
+
+Good to know: rating needs the TMDB key (see [TMDB](#tmdb-discover)) and a TMDB account of your own (free at themoviedb.org). Kids profiles can't rate. The link is kept on this TV and isn't sent to your Avid Viewer account, so link each TV you want to rate from.
 
 ### Sorted by genre
 
 With a TMDB key (see [TMDB](#tmdb-discover)), Movies and Series list **TMDB genres** in place of your provider's categories. It's on by default once a key is saved, and each profile can turn it off in **Settings › Discover › Sort Movies and Series by genre** (or on the website: Profiles › a profile › **Discover**).
 
 - **The list**: All, Recently added, Continue watching and My List at the top, then **Trending this week** (TMDB's trending titles that are on your playlists, in TMDB's order), **Top rated** (rated 7.0 or more by at least 250 people, best first, up to 100), the genres A to Z, **Other (not on TMDB)**, and **Not sorted yet** while titles are still being looked up.
-- **Inside a genre**, titles follow your playlists' order and your provider's order, as in All. A title can be in more than one genre, and each title is listed once.
+- **Inside a genre**, titles follow the **Sort** you've chosen, as in All. A title can be in more than one genre, and each title is listed once.
 - **Looking titles up**: each movie and series is looked up on TMDB once, by name and year, newest first, one at a time, and kept on the TV through every download. Settings › Discover shows **Sorting into genres… X of Y titles** while it runs. Lookups wait while something is playing, and carry on the next time Movies or Series opens if the TV was offline.
 - **Rename, Re-order and Hide** work on genres too (Menu on a genre). **Show hidden genres** in Settings › Discover brings them back.
 - **Turning it off** brings back your provider's categories, with your renames, order and hidden categories as you left them. The lookups are kept for next time.
@@ -443,17 +452,17 @@ Settings has sections on the left and the open section's options on the right. *
 
 Each person in the household can have their own profile. A profile has its own ★ Favorites and lists, hidden channels and categories, hidden movie and series categories and titles, My List, last channel, dismissed local suggestions, watch history (and whether it's paused), resume points and watched episodes. Playlists and logins, guide sources and matches, renamed and re-ordered items, Picture & sound and every other setting are shared.
 
-Each profile also has its own **theme** (colours) and its own Movies and Series **layout**. See [Display & time](#display--time).
+Each profile also has its own **theme** (colours), its own Movies and Series **Sort** and its own TMDB account for ratings. See [Display & time](#display--time).
 
 **Profiles from your account.** On a linked device, profiles are managed at **avidviewer.app/profiles**, with their PINs, playlists and what each one can see, and each device shows the profiles ticked for it at avidviewer.app/devices. Settings › Profiles then says **Managed at avidviewer.app** and lists them (each can still pick its colour theme). The first time a device checks in, its own profiles are added to your account (a profile with the same name as one already there becomes that one), with their PINs, what they hid in the account's playlists and, for Kids, their categories; their favorites and history stay on the device. A profile taken off a device disappears from it, but its favorites and history stay there in case it comes back.
 
 **On the website:**
 
-- **New profile:** a name and colour; **Parent** (its PIN unlocks any profile on the TV); a 4-digit **PIN** (optional unless your account has a Kids profile).
-- **Kids profile:** sees only the categories you allow (everything starts hidden; adult categories can never be shown). Before a Kids profile is created, every grown-up profile needs a PIN, so a child can't switch to it; the page asks for any that are missing. A Kids profile that came from a device whose grown-ups have no PIN stays unfinished (not sent to devices) until you choose **Finish setting up** and set them. A grown-up's PIN can't be removed while a Kids profile exists. PINs are saved only as a salted one-way hash and reach devices the same way.
+- **New profile:** a name and colour; **Parent** (its PIN unlocks any profile on the TV); a 4-digit **PIN** (optional).
+- **Kids profile:** sees only the categories you allow (everything starts hidden; adult categories can never be shown). Grown-up PINs are optional: without one, anyone at the TV can switch from Kids to that profile, so give a PIN to each grown-up profile a child shouldn't open (or to a **Parent**, whose PIN opens the others). PINs are saved only as a salted one-way hash and reach devices the same way.
 - **What a profile can see:** pick a playlist, then **Live TV**, **Movies** or **Series**: each category is **Shown** or **Hidden**; open a live category to hide single channels. Hidden items disappear from the guide, search, Favorites and Sports for that profile on every device it's on. The names come from the playlist as a device last downloaded it. The page says whose choices you're editing, for which playlist, and when they were last saved; each profile keeps its own. **Changes aren't saved until you choose Save what (name) can see**, at the top of the page (and again at the bottom): the bar there says when you have changes that aren't saved yet, and leaving the page first asks whether to leave them unsaved.
 
-**On a device that isn't linked,** Settings › Profiles works as before: **＋ Add profile**, **＋ Add Kids profile** (if no grown-up has a PIN yet, the app asks you to set the first profile's PIN), and for each profile **Edit** (name, colour, theme; a Kids profile's categories), **Set PIN / Change PIN**, **Parent**, **Delete…**. In a profile that isn't a parent, changing profiles asks for a parent's PIN.
+**On a device that isn't linked,** Settings › Profiles works as before: **＋ Add profile**, **＋ Add Kids profile**, and for each profile **Edit** (name, colour, theme; a Kids profile's categories), **Set PIN / Change PIN**, **Parent**, **Delete…**. In a profile that isn't a parent, changing profiles asks for a parent's PIN.
 
 **Which profile opens when the app starts**
 
@@ -475,7 +484,7 @@ What it can't do:
 
 - **Discover, Sports, Settings and Playlists** aren't in its menu and can't be opened.
 - It can't manage profiles or be a **Parent**.
-- **No PIN:** a Kids profile never needs one. While a Kids profile exists, every other profile needs one (its own or a parent's), and the app starts on **Who's watching?**.
+- **Keep grown-up profiles locked (optional):** a Kids profile never has a PIN, and grown-up PINs are up to you. A grown-up profile with no PIN can be opened from **Who's watching?** by anyone, so set a PIN on the ones a child shouldn't open. With a Kids profile on the device the app still starts on **Who's watching?**.
 
 What stays private:
 
@@ -559,6 +568,7 @@ Rename, re-order and Add to List are done with Menu on the item itself in the TV
 
 - **TMDB API key**: Save it (or press Done on the keyboard), or Remove it (asks first). With a linked account it can be set once for every TV on the website.
 - **My streaming services**: pick the services you subscribe to. These belong to the profile and follow it to every TV.
+- **TMDB account for ratings**: **Link TMDB account** (a QR code to approve on your phone) or **Unlink**, for the profile in use. See [Rating titles on TMDB](#rating-titles-on-tmdb).
 
 ### Playback
 
@@ -673,9 +683,9 @@ The app notes every freeze in the playback log, with its likely cause. Open **Me
 - **"data stopped arriving… the provider's server paused the stream"**: no error, but nothing came. Usually the provider.
 - **"the TV's video decoder"** (picture stopped while the sound went on, or many dropped frames), or **"the TV's video decoder fell behind, not the download"** (a stop with plenty buffered): the TV struggled with the video, often 4K or HEVC on a Fire TV Stick. The app tries the TV's other video decoder for that channel by itself (see below); if it keeps happening, try the HD version of the channel.
 
-**Automatic reconnect.** When the picture stands still for 5 seconds while the sound plays, or no data has arrived for 4 seconds with less than 8 seconds left in the buffer, the app reopens the stream by itself and shows "Reconnecting…". Live channels come back at the live point, movies and episodes where they were. It doesn't reconnect in a channel's first 10 seconds. A second reconnect within a minute restarts the player completely; after 3 reconnects in 3 minutes it keeps trying while the channel stays stuck, every 15 seconds for a still picture and every 30 seconds otherwise. It also reconnects when the picture has waited 6 seconds while the provider only trickles data (with little buffered), and when the picture keeps stopping for a moment (more than 5 times in 30 seconds, logged once as "Stuttered N times"). With 20 seconds or more buffered, short stops come from the TV's decoder, so the app doesn't throw the buffer away. Each reconnect is in the playback log, with whether the picture came back. Stops shorter than a second are never logged as freezes on their own.
+**Automatic reconnect.** When the picture stands still for 5 seconds while the sound plays, or no data has arrived for 4 seconds while the buffer runs down to less than 8 seconds, the app reopens the stream by itself and shows "Reconnecting…". Live channels come back at the live point, movies and episodes where they were. It doesn't reconnect in a channel's first 10 seconds. A second reconnect within a minute restarts the player completely; after 3 reconnects in 3 minutes it keeps trying while the channel stays stuck, every 15 seconds for a still picture and every 30 seconds otherwise. It also reconnects when the picture has waited 6 seconds while the provider only trickles data (with little buffered), and when the picture keeps stopping for a moment (more than 5 times in 30 seconds, logged once as "Stuttered N times"). With 20 seconds or more buffered, short stops come from the TV's decoder, so the app doesn't throw the buffer away. Each reconnect is in the playback log, with whether the picture came back. Stops shorter than a second are never logged as freezes on their own.
 
-**The TV's other video decoder.** If a channel's picture stops a second time, or it stops with a decoding error, the app restarts it on the TV's other video decoder (Android's software one) and keeps using it for that channel for a week. This applies to streams the TV can decode in software, up to 1080p at 30 fps or 720p at 60. If the other decoder has trouble too, the channel goes back to the usual one. The playback log names the decoder each channel uses.
+**The TV's other video decoder.** If a channel's picture stops a second time, or it stops with a decoding error, the app restarts it on the TV's other video decoder (Android's software one) and keeps using it for that channel for a week. This applies only to streams the TV's software decoder can keep up with, up to 1080p at 30 fps or 720p at 60 (and to streams whose format isn't known). If the software decoder drops half the frames or more for 20 seconds, or has trouble of its own, the channel goes back to the TV's usual decoder. The playback log names the decoder each channel uses.
 
 **Channels that won't play.** The message says why: "The provider refused this channel (HTTP 405)…" (often a channel that isn't in your subscription or is off the air), "Can't find the provider's server…" (check the internet connection or DNS), or "The provider's server isn't answering…". A channel the provider refused is marked **⚠ didn't play** in the guide for a day; the mark goes as soon as it plays. To take it out of the guide, use Menu › Hide channel.
 
@@ -977,7 +987,35 @@ Every public release since 1.0.35, newest first. From 1.1.0, versions are number
 
 <!-- new-releases: entries for new builds are added automatically below this line -->
 
-### 1.27.0 — November 21, 2026, 8:18 PM CT (current)
+### 1.28.0 — November 22, 2026, 9:48 AM CT (current)
+
+**Release notes**
+
+- **Sort in place of layouts.** Movies, Series and genres now have **Sort** buttons above the posters: **Date added** (newest first, the default), **A–Z** or **Rating** (TMDB's, else your provider's). Each profile remembers its choice. The Grid with the highlighted title's artwork stays; Showcase is gone (a profile set to it gets the Grid). Discover has **A–Z**, **Rating** and **Release date** too. See [Movies and Series](#8-movies-and-series).
+- **Rate titles on TMDB.** Link a profile's own TMDB account in **Settings › Discover** (a QR code to approve on your phone), then choose **☆ Rate** on any movie or series page. See [Rating titles on TMDB](#rating-titles-on-tmdb).
+- **Sports › Where to watch, in a new order:** your Favorites and lists (local stations included), then channels in the league's own categories (replays skipped), then the regional sports networks, then everything else. See [Sports](#7-sports).
+- **PINs are optional with a Kids profile.** Grown-up profiles no longer need a PIN before a Kids profile can be made; set one on each profile a child shouldn't open. See [Profiles](#profiles).
+- **Fewer needless reconnects.** A pause in the data no longer reconnects while plenty stays buffered (about 90 a day on one TV), and the TV's software decoder is used only for streams it can keep up with; if it falls behind, the channel goes back to the TV's own decoder.
+- **DASH channels play** instead of closing the app.
+- **Searches stay with their profile:** a profile's Movies or Series search no longer shows up after switching to another profile.
+
+**Change log**
+
+- Sports › Where to watch: Favorites, then the league's categories, then regional sports networks, then the rest
+- Sports matcher takes favorites before the hidden-channel filter
+- Sports keeps channels in the league's categories past the limit, like favorites
+- Sports › Where to watch puts channels in your lists with Favorites
+- No reconnect for missing data while the buffer holds steady; the software decoder only when it can keep up
+- An unknown format still tries the other decoder after a decoding error
+- DASH channels play instead of closing the app
+- Search boxes start empty when the profile changes (a Kids profile saw the grown-up's Movies search)
+- Conscrypt off in tests (Net sometimes failed to start: OkHttp with a JDK trust manager)
+- Movies, Series and Discover sort by date added, A–Z or rating, in place of Grid / Showcase
+- Grown-up PINs are optional with a Kids profile; test: the grid's last row follows the sort
+- Rate movies and series on TMDB with the profile's own TMDB account
+- TMDB account stand-in on a plain socket
+
+### 1.27.0 — November 21, 2026, 8:18 PM CT
 
 **Release notes**
 
