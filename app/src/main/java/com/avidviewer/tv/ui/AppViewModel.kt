@@ -4723,12 +4723,13 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
      * each, the best match first, as found (national TV, the guide, event channels, local TV; US before Canada).
      */
     internal fun orderForProfile(found: List<ChannelMatch>): List<ChannelMatch> {
+        // Nov 21, 2026 (owner): ★ Favorites, then channels in the playlists' categories for the game's league
+        // ("NHL", "NHL Teams"; replays left out), then regional sports networks, then everything else.
         val favs = prefs.favorites.toHashSet()
-        val inLists = prefs.lists.flatMap { it.keys }.toHashSet()
         fun tier(m: ChannelMatch) = when {
             m.key in favs -> 0
-            com.avidviewer.tv.data.MatchKind.LOCAL in m.kinds && m.reasons.any { it.contains(" local TV · ") } -> 1
-            m.key in inLists -> 2
+            m.leagueCategory -> 1
+            com.avidviewer.tv.data.MatchKind.LOCAL in m.kinds -> 2
             else -> 3
         }
         return found.withIndex().sortedWith(compareBy({ tier(it.value) }, { it.index })).map { it.value }.take(12) // Where to watch lists 12
@@ -4883,7 +4884,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     ): Pair<Map<String, List<com.avidviewer.tv.data.ChannelMatch>>, Map<String, Channel>> =
         withContext(Dispatchers.IO) {
             liveReady()
-            val m = com.avidviewer.tv.data.SportsMatcher(kept) { it in hiddenKeys }
+            // Every profile's ★ Favorites on this TV: matched loosely and never cut (Where to watch puts them first).
+            val favs = profiles.list.flatMapTo(HashSet()) { prof -> (if (prof.id == profile.id) prefs else runCatching { store.loadPrefs(prof.id) }.getOrDefault(prefs)).favorites }
+            val m = com.avidviewer.tv.data.SportsMatcher(kept, { it in hiddenKeys }, favs)
             val from = kept.minOf { it.start } - 2 * 3600_000L
             val to = kept.maxOf { it.likelyEnd() } + 3600_000L
             for (p in pls) {

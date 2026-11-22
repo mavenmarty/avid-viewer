@@ -1,9 +1,13 @@
 package com.avidviewer.tv.data
 
 /** How a channel was found for a game, best first. */
-enum class MatchKind(val rank: Int) { NATIONAL(100), GUIDE(90), EVENT(85), LOCAL(70) }
+enum class MatchKind(val rank: Int) { NATIONAL(100), GUIDE(90), EVENT(85), TEAM(80), LOCAL(70) }
 
-data class ChannelMatch(val key: String, val name: String, val playlistId: String, val kinds: Set<MatchKind>, val reasons: List<String>, val country: String? = null) {
+/**
+ * A channel found for a game. [leagueCategory]: it's in one of the playlist's categories for the game's league
+ * ("NHL", "NHL Teams", "US| NFL Sunday Ticket"; Nov 21, 2026).
+ */
+data class ChannelMatch(val key: String, val name: String, val playlistId: String, val kinds: Set<MatchKind>, val reasons: List<String>, val country: String? = null, val leagueCategory: Boolean = false) {
     /** US channels first, Canadian ones as a backup (unmarked channels in between). */
     val rank: Int get() = (kinds.maxOfOrNull { it.rank } ?: 0) + 5 * (kinds.size - 1) + when (country) { "US" -> 30; null -> 15; else -> 0 }
 }
@@ -55,9 +59,15 @@ object Country {
  * 3. Event channels whose name has both teams ("NHL 03: Red Wings @ Blues").
  * 4. Each team's local network from ESPN (FanDuel Sports Network, Altitude Sports…).
  */
-class SportsMatcher(private val games: List<Game>, private val isHidden: (String) -> Boolean = { false }) {
+class SportsMatcher(
+    private val games: List<Game>,
+    private val isHidden: (String) -> Boolean = { false },
+    /** Channels in someone's ★ Favorites: matched to a network more loosely ("Fargo FOX"), and never cut from the result. */
+    private val favorites: Set<String> = emptySet(),
+) {
 
     private class Found(val key: String, val name: String, val pid: String, val country: String?) {
+        var leagueCategory = false
         val kinds = LinkedHashSet<MatchKind>()
         val reasons = ArrayList<String>()
         fun add(kind: MatchKind, reason: String) { kinds.add(kind); if (reason !in reasons) reasons.add(reason) }
@@ -90,9 +100,14 @@ class SportsMatcher(private val games: List<Game>, private val isHidden: (String
         }
     }
 
+    // Channel key → its category, for "is it in a category for this game's league".
+    private val groups = HashMap<String, String?>()
+
     private fun hit(g: Game, pid: String, key: String, name: String, kind: MatchKind, reason: String) {
         if (isHidden(key)) return
-        found.getOrPut(g.id) { LinkedHashMap() }.getOrPut(key) { Found(key, name, pid, countries[key]) }.add(kind, reason)
+        val f = found.getOrPut(g.id) { LinkedHashMap() }.getOrPut(key) { Found(key, name, pid, countries[key]) }
+        f.add(kind, reason)
+        if (Leagues.isCategoryFor(g.league, groups[key])) f.leagueCategory = true
     }
 
     /**
@@ -102,15 +117,25 @@ class SportsMatcher(private val games: List<Game>, private val isHidden: (String
     fun addChannel(pid: String, key: String, name: String, epgId: String?, mappedEpg: String? = null, group: String? = null) {
         val country = Country.of(name, group)
         if (!Country.northAmerican(country)) return
+        // Replays and archives: those games are over (Nov 21, 2026).
+        if (Leagues.isReplay(group) || Leagues.isReplay(name)) return
         countries[key] = country
+        groups[key] = group
         val e = (mappedEpg ?: epgId)?.takeIf { it.isNotBlank() }
         if (e != null) byEpg.getOrPut("$pid|$e") { ArrayList() }.add(Triple(key, name, pid))
         // 1. National networks.
-        val nets = Networks.identities(name)
+        val nets = Networks.identities(name, loose = key in favorites)
         for (n in nets) national[n]?.forEach { (g, b) -> hit(g, pid, key, name, MatchKind.NATIONAL, (if (b.kind.equals("Streaming", true)) "Streaming · " else "National TV · ") + b.name) }
         // 3. Event channels naming both teams.
         val lower = name.lowercase()
-        for (g in candidates(lower)) if (namesBoth(g, lower)) hit(g, pid, key, name, MatchKind.EVENT, "Event channel · names both teams")
+        for (g in candidates(lower)) {
+            if (namesBoth(g, lower)) hit(g, pid, key, name, MatchKind.EVENT, "Event channel · names both teams")
+            // A team's own channel in the league's category ("NHL Teams" › "Colorado Avalanche").
+            else if (Leagues.isCategoryFor(g.league, group)) for (t in listOf(g.home, g.away)) if (namesTeam(t, lower)) {
+                hit(g, pid, key, name, MatchKind.TEAM, "${Leagues.label(g.league)} channel · ${t.name}")
+                break
+            }
+        }
         // 4. Local networks.
         if (locals.isNotEmpty()) {
             val cw = Networks.words(name).toHashSet()
@@ -143,12 +168,16 @@ class SportsMatcher(private val games: List<Game>, private val isHidden: (String
     /** Whether any channel added for this playlist has a guide id at all (no: its guide isn't read). */
     fun anyGuide(): Boolean = byEpg.isNotEmpty()
 
-    /** Channels per game id, best first, at most [max] each. */
+    /** Channels per game id, best first, at most [max] each (★ Favorites always kept, over the limit if need be). */
     fun result(max: Int = 12): Map<String, List<ChannelMatch>> = found.mapValues { (_, m) ->
-        m.values.map { ChannelMatch(it.key, it.name, it.pid, it.kinds, it.reasons, it.country) }
+        val all = m.values.map { ChannelMatch(it.key, it.name, it.pid, it.kinds, it.reasons, it.country, it.leagueCategory) }
             .sortedWith(compareByDescending<ChannelMatch> { it.rank }.thenBy { it.name.length }.thenBy { it.name })
-            .take(max)
+        val top = all.take(max)
+        top + all.drop(max).filter { it.key in favorites }
     }
+
+    /** [lower] names the team by its full name or nickname (not just its place, which is too loose for a channel name). */
+    private fun namesTeam(t: Team, lower: String) = listOf(t.fullName, t.name).any { n -> n.length >= 4 && has(lower, n.lowercase()) }
 
     private fun candidates(lower: String): Set<Game> {
         val out = HashSet<Game>()
@@ -184,6 +213,28 @@ class SportsMatcher(private val games: List<Game>, private val isHidden: (String
             return false
         }
     }
+}
+
+/** League categories in playlists (Nov 21, 2026): "NHL", "NHL Teams", "US| NFL Sunday Ticket", "College Football". */
+object Leagues {
+    private val WORDS = mapOf(
+        "NFL" to listOf("nfl"), "NBA" to listOf("nba"), "NHL" to listOf("nhl"), "MLB" to listOf("mlb"), "WNBA" to listOf("wnba"), "CFL" to listOf("cfl"),
+        "NCAAF" to listOf("ncaaf", "college football", "ncaa football", "cfb"),
+        "NCAAM" to listOf("ncaab", "ncaam", "college basketball", "ncaa basketball", "march madness"),
+    )
+    private val REPLAY = Regex("""\b(replays?|rewind|archives?|catch[ -]?up|classics?|highlights?|full games?|vod)\b""", RegexOption.IGNORE_CASE)
+
+    /** Whether category [group] is for league [league] (and isn't a replay category). */
+    fun isCategoryFor(league: String, group: String?): Boolean {
+        val g = group?.lowercase() ?: return false
+        if (isReplay(g)) return false
+        return WORDS[league].orEmpty().any { SportsMatcher.has(g, it) }
+    }
+
+    /** A replay or archive category or channel: its games are over. */
+    fun isReplay(text: String?): Boolean = text != null && REPLAY.containsMatchIn(text)
+
+    fun label(league: String) = when (league) { "NCAAF" -> "College football"; "NCAAM" -> "College basketball"; else -> league }
 }
 
 /** Network names as ESPN writes them and as providers name channels. */
@@ -237,6 +288,23 @@ object Networks {
     }
 
     /** The networks a channel name could be: "US| ESPN 2 HD" → espn2, "FOX 9 KMSP" → fox, "TSN3" → tsn. */
+    /** Words that make a channel something other than the network's local station ("Fox News", "CBS Sports Network"). */
+    private val NOT_A_STATION = setOf("news", "business", "sports", "weather", "life", "soul", "deportes", "kids", "classic", "classics", "movies", "comedy", "now", "nation", "reality", "travel", "true", "crime", "drama", "family", "bet", "black", "nuestra")
+    private val BIG_NETWORKS = setOf("fox", "cbs", "nbc", "abc", "cw")
+
+    /**
+     * The networks a channel name could be. [loose] (a ★ Favorite, Nov 21, 2026): a big network's local station
+     * named any way ("Fargo FOX", "WDAY ABC Fargo HD", "Fox (KVRR) Fargo") counts as that network.
+     */
+    fun identities(channelName: String, loose: Boolean): Set<String> {
+        val out = identities(channelName)
+        if (out.isNotEmpty() || !loose) return out
+        val toks = channelName.replace(PREFIX, "").lowercase().split(Regex("[^a-z0-9]+")).filter { it.isNotEmpty() && it !in NOISE }
+        if (toks.any { it in NOT_A_STATION }) return out
+        val nets = toks.filter { it in BIG_NETWORKS }.toSet()
+        return if (nets.size == 1) nets else out
+    }
+
     fun identities(channelName: String): Set<String> {
         val raw = channelName.replace(PREFIX, "").lowercase().replace("+", " plus ")
         val toks = raw.split(Regex("[^a-z0-9]+")).filter { it.isNotEmpty() && it !in NOISE }

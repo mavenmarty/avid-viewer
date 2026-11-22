@@ -2,7 +2,7 @@
 
 <!-- The version below and the Release notes section are updated automatically after each published build
      (.github/workflows/user-guide.yml). Feature descriptions are written by hand. -->
-This guide covers **Avid Viewer 1.26.0**, the current public release. Avid Viewer is an IPTV player for Android TV and Fire TV. You bring your own provider (an Xtream Codes login or an M3U link); the app doesn't include any channels.
+This guide covers **Avid Viewer 1.27.0**, the current public release. Avid Viewer is an IPTV player for Android TV and Fire TV. You bring your own provider (an Xtream Codes login or an M3U link); the app doesn't include any channels.
 
 **Contents:** [Getting started](#1-getting-started) · [Main menu](#2-main-menu) · [TV Guide](#3-tv-guide) · [Full-screen playback](#4-full-screen-playback) · [Search](#5-search) · [Discover](#6-discover) · [Sports](#7-sports) · [Movies and Series](#8-movies-and-series) · [Settings](#9-settings) ([Profiles](#profiles)) · [Privacy](#10-privacy) · [Troubleshooting](#11-troubleshooting) · [Control4](#12-control4) · [Supplemental services](#13-supplemental-services) · [Cable & satellite](#14-using-your-cable-or-satellite-subscription) · [Free services](#15-free-services) · [Release notes](#release-notes)
 
@@ -41,7 +41,9 @@ Menu names differ a little between brands; if a path above doesn't match, search
 
 ![The welcome screen on a new install](images/welcome.jpg)
 
-**Every start** shows the Avid Viewer logo with **Getting your channels ready…** for a moment (1.5 to 5 seconds) while the channels and guide saved on the TV are read, so the TV has a head start; the remote waits until it closes. New downloads carry on afterwards.
+**Every start** shows the Avid Viewer logo with **Getting your channels ready…** for a moment (1.5 to 5 seconds) while the channels and guide saved on the TV are read, so the TV has a head start; the remote waits until it closes.
+
+**A quiet start.** Right after it opens, the app runs only the guide and the preview. Downloading new channels, guides and movies, syncing with your account, sorting titles and checking for updates wait until the video has played steadily for 30 seconds (or nothing has played for 30 seconds, or at most 2 minutes), then run one at a time. So right after a start, new channels or guide listings can take a minute or two longer to appear. On a new device with no playlists yet nothing waits.
 
 The first time you open Avid Viewer, and every time it starts while there are no playlists, it shows a welcome screen:
 
@@ -677,7 +679,7 @@ The app notes every freeze in the playback log, with its likely cause. Open **Me
 
 **Channels that won't play.** The message says why: "The provider refused this channel (HTTP 405)…" (often a channel that isn't in your subscription or is off the air), "Can't find the provider's server…" (check the internet connection or DNS), or "The provider's server isn't answering…". A channel the provider refused is marked **⚠ didn't play** in the guide for a day; the mark goes as soon as it plays. To take it out of the guide, use Menu › Hide channel.
 
-Sending the log (Send playback log) helps us find a pattern across days. It also notes how busy the TV is, every 2 minutes while something plays and at each reconnect: its free memory, the app's memory and processor use, and which screen was open (never what was on it), plus each restart of the video decoder.
+Sending the log (Send playback log) helps us find a pattern across days. At each start it notes when the guide appeared, the first picture, when the quiet start ended and how long each job after it took (playlists as "playlist 2 of 5", never by name). It also notes how busy the TV is, every 2 minutes while something plays and at each reconnect: its free memory, the app's memory and processor use, and which screen was open (never what was on it), plus each restart of the video decoder.
 
 - **Channels won't play**: switch the Stream format in Settings › Playback, then Refresh the playlist.
 - **No channels or guide**: check that the playlist, and its Live TV switch, are on in Settings › Playlists, then choose Refresh.
@@ -975,7 +977,21 @@ Every public release since 1.0.35, newest first. From 1.1.0, versions are number
 
 <!-- new-releases: entries for new builds are added automatically below this line -->
 
-### 1.26.0 — November 21, 2026, 6:31 PM CT (current)
+### 1.27.0 — November 21, 2026, 8:18 PM CT (current)
+
+**Release notes**
+
+- **Much quicker with several playlists.** Finding a movie or series by name read every title of every playlist, so with five playlists the start-up sync took minutes and Discover could stop responding until the TV closed the app. It now goes straight to the name.
+- **A quiet start.** Right after it opens, the app runs only the guide and the preview; downloads, the account sync, title sorting and update checks wait until the video has played steadily for 30 seconds (or nothing has played for 30 seconds, or at most 2 minutes), then run one at a time. See [Getting started](#first-start-the-welcome-screen).
+- **Playback log:** at each start, when the guide appeared, the first picture, when the quiet start ended and how long each job after it took.
+
+**Change log**
+
+- Lookups by name always use the name index (several playlists, Discover, the account sync)
+- A quiet start: background work waits until the video plays steadily, then runs one job at a time on a low-priority thread
+- Start-up timings in the playback log
+
+### 1.26.0 — November 21, 2026, 6:31 PM CT
 
 **Release notes**
 
