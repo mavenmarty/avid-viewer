@@ -174,12 +174,19 @@ private fun GameCard(vm: AppViewModel, sg: AppViewModel.SportGame, isSelected: B
                 Label(networks(g).ifBlank { "No TV listed" }, size = 11.sp, color = C.Muted)
             }
             Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Label(statusText(vm, g), size = 13.sp, weight = FontWeight.Bold, color = if (g.live) Color(0xFFFF8A8D) else C.Text)
+                Label(statusText(vm, g), size = 13.sp, weight = FontWeight.Bold, color = if (g.live) liveScoreColor() else C.Text)
                 Label(when (val n = sg.channels.size) { 0 -> if (finding) "Finding channels…" else "No channel yet"; 1 -> "1 channel"; else -> "$n channels" }, size = 11.sp, color = if (none) C.Muted else C.Soft)
             }
         }
     }
 }
+
+/**
+ * The live score on a game card (Nov 22, 2026, owner): light red on the dark card, but a deep red on the light
+ * highlight of the warm themes, where the light red was barely readable (1.5–2.1:1 on the four warm highlights; now 7.1–9.9:1).
+ */
+@Composable
+private fun liveScoreColor(): Color = if (LocalOnLight.current) Color(0xFF7F1016) else Color(0xFFFF8A8D)
 
 @Composable
 private fun GameHeader(vm: AppViewModel, g: Game?, modifier: Modifier) {
