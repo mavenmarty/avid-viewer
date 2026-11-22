@@ -178,6 +178,9 @@ fun AppRoot(vm: AppViewModel) {
         if (vm.reportUnlinkedNotice && !((vm.lastCrash != null || vm.crashReportSent) && !vm.crashNoticeSeen) && vm.screen != Screen.PLAYER) ReportUnlinkedDialog(vm)
         // 1.22.0: a device that isn't linked can't be used until it is (covers everything, the player included).
         if (vm.linkRequired) LinkRequiredScreen(vm)
+        // Nov 22, 2026: rating titles on TMDB (link the profile's TMDB account, then rate).
+        if (vm.tmdbLinkUrl != null || vm.tmdbLinkError != null) TmdbLinkDialog(vm)
+        vm.rateTarget?.let { RateDialog(vm, it) }
         // Nov 21, 2026: over everything for a moment at start, while this TV's channels and guide are read.
         if (vm.startSplash) StartSplash()
         // Nov 21, 2026: a playlist's subscription ends within 30, 14 or 2 days (each once), or has ended.
@@ -365,4 +368,60 @@ fun StartSplash() {
             Text("Getting your channels ready…", color = C.Soft, fontSize = 15.sp)
         }
     }
+}
+
+/** Linking the profile's TMDB account (Nov 22, 2026): approve this TV on themoviedb.org by scanning the code. */
+@Composable
+private fun TmdbLinkDialog(vm: AppViewModel) {
+    val url = vm.tmdbLinkUrl
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = { vm.cancelTmdbLink() },
+        containerColor = C.Surface,
+        modifier = Modifier.testTag("tmdb-link-dialog"),
+        title = { Text("Link your TMDB account", color = C.Text, fontWeight = FontWeight.Bold) },
+        text = {
+            androidx.compose.foundation.layout.Column(verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(10.dp)) {
+                vm.tmdbLinkError?.let { Label(it, size = 14.sp, color = C.Text, lines = 3) }
+                if (url != null) {
+                    Label("Scan with your phone and choose Approve on themoviedb.org (sign in to TMDB first). Ratings from ${vm.profile.name} then go to that TMDB account.", size = 14.sp, color = C.Soft, lines = Int.MAX_VALUE)
+                    QrCode(url, Modifier.size(180.dp))
+                    Label(url, size = 12.sp, color = C.Soft, lines = 2)
+                    Label("Waiting for you to approve…", size = 13.sp, color = C.Text)
+                } else if (vm.tmdbLinkError == null) Label("Asking TMDB…", size = 13.sp)
+            }
+        },
+        confirmButton = { TvButton(if (url != null) "Cancel" else "Close", primary = true) { vm.cancelTmdbLink() } },
+    )
+}
+
+/** Rating a title on TMDB: 1–10 (Left/Right along the row), or removing a rating. */
+@Composable
+private fun RateDialog(vm: AppViewModel, t: AppViewModel.RateTarget) {
+    val mine = vm.myRatingOf(t)
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = { vm.closeRate() },
+        containerColor = C.Surface,
+        modifier = Modifier.testTag("rate-dialog"),
+        title = { Text("Rate ${t.name}", color = C.Text, fontWeight = FontWeight.Bold) },
+        text = {
+            androidx.compose.foundation.layout.Column(verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(10.dp)) {
+                Label("On TMDB, as ${vm.prefs.tmdbUser.ifBlank { "your account" }}." + (mine?.let { " Your rating now: $it." } ?: ""), size = 13.sp, color = C.Soft, lines = 2)
+                androidx.compose.foundation.layout.Row(horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(6.dp)) {
+                    val first = remember { androidx.compose.ui.focus.FocusRequester() }
+                    (1..10).forEach { n ->
+                        TvButton("$n", selected = mine?.let { Math.round(it).toInt() == n } == true,
+                            modifier = (if (n == (mine?.let { Math.round(it).toInt() } ?: 7)) Modifier.focusRequester(first) else Modifier).testTag("rate-$n")) { vm.submitRating(n.toDouble()) }
+                    }
+                    LaunchedEffect(Unit) { runCatching { first.requestFocus() } }
+                }
+                vm.rateStatus?.let { Label(it, size = 13.sp, color = C.Text, lines = 2) }
+            }
+        },
+        confirmButton = {
+            androidx.compose.foundation.layout.Row(horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp)) {
+                if (mine != null) TvButton("Remove my rating") { vm.submitRating(null) }
+                TvButton("Cancel") { vm.closeRate() }
+            }
+        },
+    )
 }

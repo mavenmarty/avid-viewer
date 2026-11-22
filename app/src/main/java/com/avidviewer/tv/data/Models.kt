@@ -184,6 +184,9 @@ data class Prefs(
     val genreSort: Boolean = true,
     /** Genres hidden while [genreSort] is on: "movie|28" or "series|10759". */
     val vodHiddenGenres: Set<String> = emptySet(),
+    /** Nov 22, 2026, per profile: the TMDB account session for rating titles (encrypted on this device), and its name. */
+    val tmdbSessionEnc: String = "",
+    val tmdbUser: String = "",
     /** Renamed movie/series categories: "movie|Category" → new name. */
     val vodCatNames: Map<String, String> = emptyMap(),
     /** Order of movie/series categories: "movie" or "series" → category names in order. */
@@ -232,6 +235,7 @@ data class Prefs(
         o.put("vodHiddenCats", JSONArray(vodHiddenCats.toList()))
         o.put("vodHiddenTitles", JSONArray(vodHiddenTitles.toList()))
         o.put("genreSort", genreSort).put("vodHiddenGenres", JSONArray(vodHiddenGenres.toList()))
+        o.put("tmdbSessionEnc", tmdbSessionEnc).put("tmdbUser", tmdbUser)
         o.put("vodCatNames", JSONObject(vodCatNames))
         o.put("vodCatOrder", JSONObject().apply { vodCatOrder.forEach { (k, l) -> put(k, JSONArray(l)) } })
         o.put("lists", JSONArray().apply { lists.forEach { put(it.toJson()) } })
@@ -291,6 +295,7 @@ data class Prefs(
                 vodHiddenTitles = strList(o.optJSONArray("vodHiddenTitles")).toSet(),
                 genreSort = o.optBoolean("genreSort", true),
                 vodHiddenGenres = strList(o.optJSONArray("vodHiddenGenres")).toSet(),
+                tmdbSessionEnc = o.optString("tmdbSessionEnc"), tmdbUser = o.optString("tmdbUser"),
                 vodCatNames = strMap(o.optJSONObject("vodCatNames")),
                 vodCatOrder = o.optJSONObject("vodCatOrder")?.let { vo -> vo.keys().asSequence().associateWith { strList(vo.getJSONArray(it)) } } ?: emptyMap(),
                 lists = o.optJSONArray("lists")?.let { a -> List(a.length()) { ChannelList.fromJson(a.getJSONObject(it)) } } ?: emptyList(),

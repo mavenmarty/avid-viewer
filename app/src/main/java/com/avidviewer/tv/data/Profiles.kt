@@ -180,6 +180,8 @@ val PERSONAL_KEYS = listOf(
     "myServices", "discoverStart", "discoverGrownUps",
     // Nov 21, 2026: sorting Movies and Series by TMDB genre is the profile's choice.
     "genreSort", "vodHiddenGenres",
+    // Nov 22, 2026: each profile rates titles with its own TMDB account (never copied to a new profile).
+    "tmdbSessionEnc", "tmdbUser",
 )
 
 /** [p]'s personal fields, as JSON. */
