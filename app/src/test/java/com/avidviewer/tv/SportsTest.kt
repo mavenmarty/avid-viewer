@@ -113,7 +113,7 @@ class SportsTest {
     fun channelsAreFoundBestFirstUsThenCanadaAndNothingFromElsewhere() {
         val now = System.currentTimeMillis()
         val g = EspnFeed.parse("NHL", FakeEspn.board(liveGame(now))).single()
-        val m = SportsMatcher(listOf(g)) { it == "p:hidden" }
+        val m = SportsMatcher(listOf(g), emptySet()) { it == "p:hidden" }
         val chans = listOf(
             Triple("p:tnt", "US| TNT HD", "e1"), Triple("p:catnt", "CA| TNT", "e2"), Triple("p:uktnt", "UK| TNT Sports 1", "e3"),
             Triple("p:ev", "NHL 03: Red Wings @ Blues", null), Triple("p:tbs", "US| TBS", "tbs.us"), Triple("p:fdsn", "FanDuel Sports Network Detroit", "e5"),
@@ -143,7 +143,7 @@ class SportsTest {
         // Nov 18: the guide listings of channels that weren't added (hidden, or in a hidden category) are skipped unread.
         val now = System.currentTimeMillis()
         val g = EspnFeed.parse("NHL", FakeEspn.board(liveGame(now))).single()
-        val m = SportsMatcher(listOf(g)) { false }
+        val m = SportsMatcher(listOf(g), emptySet()) { false }
         assertFalse("no channels yet: no guide to read", m.anyGuide())
         m.addChannel("p", "p:tbs", "US| TBS", "tbs.us", group = "SPORTS")
         assertTrue(m.anyGuide())
@@ -265,7 +265,7 @@ class SportsTest {
         val ev = FakeEspn.event("501", now + 3600_000L, "pre", vikes, pack, listOf(Triple("FOX", "national", "TV")), "Sun 12:00 PM")
         val g = EspnFeed.parse("NFL", FakeEspn.board(ev)).single()
         val favs = setOf("p:fargofox", "p:kvrr")
-        val m = SportsMatcher(listOf(g), { false }, favs)
+        val m = SportsMatcher(listOf(g), favs) { false }
         // Hundreds of FOX stations elsewhere: the favorites must survive the cut.
         for (i in 1..60) m.addChannel("p", "p:fox$i", "US| FOX $i K${"%03d".format(i).map { 'A' + (it - '0') }.joinToString("")}", null, group = "US LOCALS")
         m.addChannel("p", "p:fargofox", "Fargo FOX", null, group = "US LOCALS")           // favorite, named loosely

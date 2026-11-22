@@ -61,9 +61,9 @@ object Country {
  */
 class SportsMatcher(
     private val games: List<Game>,
-    private val isHidden: (String) -> Boolean = { false },
     /** Channels in someone's ★ Favorites: matched to a network more loosely ("Fargo FOX"), and never cut from the result. */
     private val favorites: Set<String> = emptySet(),
+    private val isHidden: (String) -> Boolean = { false },
 ) {
 
     private class Found(val key: String, val name: String, val pid: String, val country: String?) {
