@@ -1,5 +1,7 @@
 package com.avidviewer.tv.data
 
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
 import org.json.JSONObject
 import java.text.SimpleDateFormat
@@ -35,13 +37,14 @@ data class WhereToWatch(val stream: List<WatchProvider>, val free: List<WatchPro
  * Streaming availability is provided to TMDB by JustWatch.
  */
 object Tmdb {
-    private const val BASE = "https://api.themoviedb.org/3"
+    /** TMDB's API (tests point it at a stand-in). */
+    @Volatile internal var base = "https://api.themoviedb.org/3"
     const val IMG = "https://image.tmdb.org/t/p/"
 
     private fun url(key: String, path: String, params: String = ""): String {
         // Long tokens are "API Read Access Tokens"; 32-character values are classic API keys.
         val auth = if (key.length > 40) "" else "api_key=$key&"
-        return "$BASE$path?${auth}language=en-US$params"
+        return "$base$path?${auth}language=en-US$params"
     }
 
     private fun get(key: String, path: String, params: String = ""): JSONObject {
@@ -156,6 +159,53 @@ object Tmdb {
             .firstOrNull { it.optString("iso_3166_1") == r }?.optString("rating")?.trim() ?: ""
         return forRegion(region).ifBlank { if (region != "US") forRegion("US") else "" }
     }
+
+    // ---------------- the profile's TMDB account: rating titles (Nov 22, 2026) ----------------
+
+    /** A POST or DELETE with a JSON body; the answer, or an IOException with TMDB's message. */
+    private fun send(key: String, method: String, path: String, params: String, body: JSONObject?): JSONObject {
+        val rb = (body ?: JSONObject()).toString().toRequestBody("application/json;charset=utf-8".toMediaType())
+        val req = okhttp3.Request.Builder().url(url(key, path, params)).header("User-Agent", USER_AGENT).method(method, rb).apply {
+            if (key.length > 40) header("Authorization", "Bearer $key")
+        }.build()
+        Net.client.newCall(req).execute().use { r ->
+            val o = runCatching { JSONObject(r.body?.string() ?: "{}") }.getOrDefault(JSONObject())
+            if (!r.isSuccessful) throw java.io.IOException(o.optString("status_message").ifBlank { "TMDB answered ${r.code}" }, AnswerCode(r.code))
+            return o
+        }
+    }
+    /** The HTTP status behind a refused call (401: the person hasn't approved the TV yet, or the session ended). */
+    class AnswerCode(val code: Int) : Exception()
+
+    /** Step 1 of linking a TMDB account: a request token the person approves at [approveUrl] (a QR code on the TV). */
+    fun newRequestToken(key: String): String =
+        get(key, "/authentication/token/new").optString("request_token").ifBlank { throw java.io.IOException("TMDB gave no token") }
+
+    fun approveUrl(token: String) = "https://www.themoviedb.org/authenticate/$token"
+
+    /** Step 2: the session once the person has approved the token; null while they haven't yet. */
+    fun newSession(key: String, token: String): String? = try {
+        send(key, "POST", "/authentication/session/new", "", JSONObject().put("request_token", token)).optString("session_id").ifBlank { null }
+    } catch (e: java.io.IOException) {
+        if ((e.cause as? AnswerCode)?.code == 401) null else throw e
+    }
+
+    /** The TMDB user name of a session ("Linked as …"). */
+    fun accountName(key: String, session: String): String =
+        get(key, "/account", "&session_id=$session").let { o -> o.optString("username").ifBlank { o.optString("name") } }
+
+    /** The person's own rating of a title (0.5–10), or null when they haven't rated it. [type]: "movie" or "tv". */
+    fun myRating(key: String, type: String, id: Int, session: String): Double? =
+        get(key, "/$type/$id/account_states", "&session_id=$session").optJSONObject("rated")?.optDouble("value")?.takeIf { it > 0 }
+
+    /** Rates a title (0.5–10 in steps of 0.5), or removes the rating when [value] is null. */
+    fun rate(key: String, type: String, id: Int, session: String, value: Double?) {
+        if (value == null) send(key, "DELETE", "/$type/$id/rating", "&session_id=$session", null)
+        else send(key, "POST", "/$type/$id/rating", "&session_id=$session", JSONObject().put("value", (Math.round(value * 2) / 2.0).coerceIn(0.5, 10.0)))
+    }
+
+    /** Unlinking: ends the session on TMDB too. */
+    fun endSession(key: String, session: String) { runCatching { send(key, "DELETE", "/authentication/session", "", JSONObject().put("session_id", session)) } }
 
     /** Finds the TMDB title for a name from the user's provider, e.g. "Dune: Part Two (2024)". */
     fun find(key: String, name: String, type: String): Title? {

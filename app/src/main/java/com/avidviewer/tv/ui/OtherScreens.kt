@@ -1312,6 +1312,17 @@ private fun androidx.compose.foundation.lazy.LazyListScope.discoverSettings(vm: 
             }
             SettingSwitch("Sort Movies and Series by genre", desc, p.genreSort) { vm.setGenreSort(!p.genreSort) }
         }
+        // Nov 22, 2026: the profile's TMDB account, for rating titles on their pages.
+        item {
+            SettingBlock("TMDB account for ratings",
+                if (p.tmdbSessionEnc.isNotBlank()) "Linked as ${p.tmdbUser.ifBlank { "your TMDB account" }}. ☆ Rate on a movie or series page sends your rating to it."
+                else "Link ${vm.profile.name}'s TMDB account to rate movies and series from their pages. Each profile links its own.") {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (p.tmdbSessionEnc.isNotBlank()) TvButton("Unlink") { ask(Confirm("Unlink the TMDB account?", "Ratings already sent stay on TMDB.", "Unlink") { vm.unlinkTmdb() }) }
+                    else TvButton("Link TMDB account", primary = true, modifier = Modifier.testTag("tmdb-link")) { vm.startTmdbLink() }
+                }
+            }
+        }
         if (p.genreSort && p.vodHiddenGenres.isNotEmpty()) item {
             SettingBlock("Hidden genres", "${p.vodHiddenGenres.size} hidden from Movies and Series (Menu on a genre hides it).") {
                 TvButton("Show hidden genres") { vm.showHiddenGenres() }

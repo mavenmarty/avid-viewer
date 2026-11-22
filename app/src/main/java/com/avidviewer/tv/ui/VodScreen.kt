@@ -518,6 +518,12 @@ private fun VodDetail(vm: AppViewModel, v: VodItem) {
                 val inList = vm.inMyList(v.key)
                 TvButton(if (inList) "✓ In My List" else "+ My List", selected = inList, modifier = if (isSeries) Modifier.focusRequester(playFocus) else Modifier) { vm.toggleMyList(v) }
                 if (versions.size > 1) TvButton("⇄ ${versions.size} versions", modifier = Modifier.testTag("versions-button")) { vm.versionPicker = v }
+                // Nov 22, 2026: rate it on TMDB with the profile's own TMDB account.
+                if (vm.canRate()) vm.rateTargetOf(v)?.let { t ->
+                    LaunchedEffect(t) { vm.loadMyRating(t) }
+                    val mine = vm.myRatingOf(t)
+                    TvButton(if (mine != null) "★ ${if (mine % 1.0 == 0.0) mine.toInt() else mine} · Your rating" else "☆ Rate", selected = mine != null, modifier = Modifier.testTag("rate-button")) { vm.openRate(t) }
+                }
                 TvButton("Back") { vm.closeVodDetail() }
             }
             // Movies and Series list each title once; this says which copy the page is on.

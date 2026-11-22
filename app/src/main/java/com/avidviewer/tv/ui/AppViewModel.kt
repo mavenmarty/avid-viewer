@@ -258,6 +258,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             // grown-up's Movies search. Every search box starts empty in the new profile.
             searchQuery = ""; searchResults = null; guideQuery = ""; guideSearchHits = GuideHits()
             vodQuery = mapOf("movie" to "", "series" to ""); vodNear.clear()
+            // Ratings belong to the profile's own TMDB account.
+            myRatings = emptyMap(); rateTarget = null; cancelTmdbLink()
             // Playlists limited to some profiles: what this profile sees may differ (1.14.0).
             if (playlists.any { it.profiles != null }) { resetVod(); reloadAfterActiveChange() }
         }
@@ -307,7 +309,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         val p = Profile(id, name.trim().ifEmpty { if (kids) "Kids" else "Profile" }, color, kids = kids, theme = com.avidviewer.tv.data.THEME_DEFAULT,
             allowedGroups = if (kids) suggestedKidsGroups() else emptySet(), allowedVodCats = if (kids) suggestedKidsVodCats() else emptySet())
         // A new grown-up profile starts with a copy of the owner's favorites and lists; Kids starts empty.
-        if (!kids) store.savePersonal(id, com.avidviewer.tv.data.personalOf(store.loadPrefs(Profile.OWNER)).apply { remove("lastChannel") })
+        if (!kids) store.savePersonal(id, com.avidviewer.tv.data.personalOf(store.loadPrefs(Profile.OWNER)).apply { remove("lastChannel"); remove("tmdbSessionEnc"); remove("tmdbUser") })
         else store.savePersonal(id, org.json.JSONObject())
         saveProfiles(profiles.copy(list = profiles.list + p))
         return id
@@ -4527,6 +4529,102 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
      * Movies and Series screens. Only titles on your provider can go in My List; for the others the
      * note says why and how to find them.
      */
+    // ---------------- rating titles on TMDB with the profile's own TMDB account (Nov 22, 2026) ----------------
+    /** A title to rate: TMDB's type ("movie" or "tv"), id and name. */
+    data class RateTarget(val type: String, val id: Int, val name: String)
+    /** Linking in progress: the address to approve (shown as a QR code). */
+    var tmdbLinkUrl by mutableStateOf<String?>(null); private set
+    var tmdbLinkError by mutableStateOf<String?>(null); private set
+    private var tmdbLinkJob: Job? = null
+    /** The rating dialog's title, and the profile's own ratings looked up so far ("movie:603" → 8.0; absent = not rated). */
+    var rateTarget by mutableStateOf<RateTarget?>(null); private set
+    var myRatings by mutableStateOf<Map<String, Double?>>(emptyMap()); private set
+    var rateStatus by mutableStateOf<String?>(null); private set
+    private var rateAfterLink: RateTarget? = null
+
+    /** Rating is offered with a TMDB key, never on a Kids profile. */
+    fun canRate(): Boolean = !kidsMode && tmdbKey().isNotBlank()
+    fun tmdbLinked(): Boolean = prefs.tmdbSessionEnc.isNotBlank()
+    private fun tmdbSession(): String? = prefs.tmdbSessionEnc.takeIf { it.isNotBlank() }?.let { runCatching { Crypto.decrypt(it) }.getOrNull() }
+    fun rateTargetOf(v: VodItem): RateTarget? = artOf(v)?.tmdbId?.takeIf { it > 0 }?.let { RateTarget(if (v.kind == "series") "tv" else "movie", it, v.name) }
+    fun myRatingOf(t: RateTarget): Double? = myRatings["${t.type}:${t.id}"]
+
+    /** Looks up the profile's own rating of a title once (for "★ 8 · Your rating" on its page). */
+    fun loadMyRating(t: RateTarget) {
+        val k = "${t.type}:${t.id}"
+        if (k in myRatings || !canRate()) return
+        val s = tmdbSession() ?: return
+        val key = tmdbKey()
+        viewModelScope.launch {
+            val r = withContext(Dispatchers.IO) { runCatching { Tmdb.myRating(key, t.type, t.id, s) } }
+            if (r.isSuccess) myRatings = myRatings + (k to r.getOrNull())
+        }
+    }
+
+    /** "Rate" on a title page: the rating dialog, or first linking the profile's TMDB account. */
+    fun openRate(t: RateTarget) {
+        if (!canRate()) return
+        rateStatus = null
+        if (!tmdbLinked()) { rateAfterLink = t; startTmdbLink(); return }
+        rateTarget = t; loadMyRating(t)
+    }
+    fun closeRate() { rateTarget = null; rateStatus = null }
+
+    /** Sends the rating (0.5–10), or removes it ([value] null). */
+    fun submitRating(value: Double?) {
+        val t = rateTarget ?: return
+        val s = tmdbSession() ?: run { rateStatus = "Link your TMDB account first."; return }
+        val key = tmdbKey()
+        rateStatus = "Sending…"
+        viewModelScope.launch {
+            val r = withContext(Dispatchers.IO) { runCatching { Tmdb.rate(key, t.type, t.id, s, value) } }
+            if (r.isSuccess) {
+                myRatings = myRatings + ("${t.type}:${t.id}" to value)
+                rateTarget = null; rateStatus = null
+                status = if (value == null) "Your rating of ${t.name} was removed on TMDB." else "Rated ${t.name} ${fmtRating(value)} on TMDB."
+            } else {
+                val e = r.exceptionOrNull()
+                if ((e?.cause as? Tmdb.AnswerCode)?.code == 401) { updatePrefs { it.copy(tmdbSessionEnc = "", tmdbUser = "") }; rateStatus = "TMDB ended this TV's link. Link your account again." }
+                else rateStatus = "Couldn't reach TMDB: ${e?.message ?: "try again"}"
+            }
+        }
+    }
+    private fun fmtRating(v: Double) = if (v % 1.0 == 0.0) v.toInt().toString() else v.toString()
+
+    /** Linking: a request token approved by the person on themoviedb.org (QR code), then a session for this profile. */
+    fun startTmdbLink() {
+        if (kidsMode) return
+        val key = tmdbKey(); if (key.isBlank()) return
+        tmdbLinkJob?.cancel(); tmdbLinkError = null; tmdbLinkUrl = null
+        tmdbLinkJob = viewModelScope.launch {
+            val token = withContext(Dispatchers.IO) { runCatching { Tmdb.newRequestToken(key) } }.getOrElse {
+                tmdbLinkError = "Couldn't reach TMDB: ${it.message}"; return@launch
+            }
+            tmdbLinkUrl = Tmdb.approveUrl(token)
+            val until = System.currentTimeMillis() + 15 * 60_000L
+            while (System.currentTimeMillis() < until) {
+                delay(3_000)
+                val session = withContext(Dispatchers.IO) { runCatching { Tmdb.newSession(key, token) } }.getOrNull() ?: continue
+                val name = withContext(Dispatchers.IO) { runCatching { Tmdb.accountName(key, session) }.getOrDefault("") }
+                val enc = runCatching { Crypto.encrypt(session) }.getOrNull() ?: run { tmdbLinkError = "Couldn't keep the link on this TV."; return@launch }
+                updatePrefs { it.copy(tmdbSessionEnc = enc, tmdbUser = name) }
+                tmdbLinkUrl = null; myRatings = emptyMap()
+                status = "Linked TMDB account ${name.ifBlank { "" }} to ${profile.name}.".replace("  ", " ")
+                rateAfterLink?.let { rateAfterLink = null; rateTarget = it; loadMyRating(it) }
+                return@launch
+            }
+            tmdbLinkUrl = null; tmdbLinkError = "The link wasn't approved in time. Try again."
+        }
+    }
+    fun cancelTmdbLink() { tmdbLinkJob?.cancel(); tmdbLinkUrl = null; tmdbLinkError = null; rateAfterLink = null }
+
+    fun unlinkTmdb() {
+        val s = tmdbSession(); val key = tmdbKey()
+        updatePrefs { it.copy(tmdbSessionEnc = "", tmdbUser = "") }
+        myRatings = emptyMap()
+        if (s != null && key.isNotBlank()) viewModelScope.launch(Dispatchers.IO) { Tmdb.endSession(key, s) }
+    }
+
     /** Discover's sort (Nov 22, 2026): null = TMDB's order; "az", "rating" or "added" (release date, newest first). */
     var discoverSort by mutableStateOf<String?>(null)
 

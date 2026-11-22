@@ -186,6 +186,12 @@ private fun TitleDetail(vm: AppViewModel, t: Title) {
                                 vm.discoverDetail = null; vm.searchQuery = Title_clean(t.name); vm.navSelect(Screen.SEARCH); vm.search(vm.searchQuery)
                             }
                         }
+                        if (vm.canRate()) {
+                            val rt = AppViewModel.RateTarget(t.type, t.id, t.name)
+                            LaunchedEffect(rt) { vm.loadMyRating(rt) }
+                            val mine = vm.myRatingOf(rt)
+                            TvButton(if (mine != null) "★ ${if (mine % 1.0 == 0.0) mine.toInt() else mine} · Your rating" else "☆ Rate", selected = mine != null) { vm.openRate(rt) }
+                        }
                         TvButton("Back") { vm.discoverDetail = null }
                     }
                     if (match != null) Label("Plays: " + versionLabel(vm, match), size = 12.sp, color = C.Soft)
