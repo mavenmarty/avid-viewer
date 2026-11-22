@@ -2,7 +2,7 @@
 
 <!-- The version below and the Release notes section are updated automatically after each published build
      (.github/workflows/user-guide.yml). Feature descriptions are written by hand. -->
-This guide covers **Avid Viewer 1.27.0**, the current public release. Avid Viewer is an IPTV player for Android TV and Fire TV. You bring your own provider (an Xtream Codes login or an M3U link); the app doesn't include any channels.
+This guide covers **Avid Viewer 1.28.0**, the current public release. Avid Viewer is an IPTV player for Android TV and Fire TV. You bring your own provider (an Xtream Codes login or an M3U link); the app doesn't include any channels.
 
 **Contents:** [Getting started](#1-getting-started) · [Main menu](#2-main-menu) · [TV Guide](#3-tv-guide) · [Full-screen playback](#4-full-screen-playback) · [Search](#5-search) · [Discover](#6-discover) · [Sports](#7-sports) · [Movies and Series](#8-movies-and-series) · [Settings](#9-settings) ([Profiles](#profiles)) · [Privacy](#10-privacy) · [Troubleshooting](#11-troubleshooting) · [Control4](#12-control4) · [Supplemental services](#13-supplemental-services) · [Cable & satellite](#14-using-your-cable-or-satellite-subscription) · [Free services](#15-free-services) · [Release notes](#release-notes)
 
@@ -977,7 +977,25 @@ Every public release since 1.0.35, newest first. From 1.1.0, versions are number
 
 <!-- new-releases: entries for new builds are added automatically below this line -->
 
-### 1.27.0 — November 21, 2026, 8:18 PM CT (current)
+### 1.28.0 — November 22, 2026, 9:48 AM CT (current)
+
+**Change log**
+
+- Sports › Where to watch: Favorites, then the league's categories, then regional sports networks, then the rest
+- Sports matcher takes favorites before the hidden-channel filter
+- Sports keeps channels in the league's categories past the limit, like favorites
+- Sports › Where to watch puts channels in your lists with Favorites
+- No reconnect for missing data while the buffer holds steady; the software decoder only when it can keep up
+- An unknown format still tries the other decoder after a decoding error
+- DASH channels play instead of closing the app
+- Search boxes start empty when the profile changes (a Kids profile saw the grown-up's Movies search)
+- Conscrypt off in tests (Net sometimes failed to start: OkHttp with a JDK trust manager)
+- Movies, Series and Discover sort by date added, A–Z or rating, in place of Grid / Showcase
+- Grown-up PINs are optional with a Kids profile; test: the grid's last row follows the sort
+- Rate movies and series on TMDB with the profile's own TMDB account
+- TMDB account stand-in on a plain socket
+
+### 1.27.0 — November 21, 2026, 8:18 PM CT
 
 **Release notes**
 
