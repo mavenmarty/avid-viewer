@@ -4886,7 +4886,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             liveReady()
             // Every profile's ★ Favorites on this TV: matched loosely and never cut (Where to watch puts them first).
             val favs = profiles.list.flatMapTo(HashSet()) { prof -> (if (prof.id == profile.id) prefs else runCatching { store.loadPrefs(prof.id) }.getOrDefault(prefs)).favorites }
-            val m = com.avidviewer.tv.data.SportsMatcher(kept, { it in hiddenKeys }, favs)
+            val m = com.avidviewer.tv.data.SportsMatcher(kept, favs) { it in hiddenKeys }
             val from = kept.minOf { it.start } - 2 * 3600_000L
             val to = kept.maxOf { it.likelyEnd() } + 3600_000L
             for (p in pls) {
