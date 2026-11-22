@@ -98,6 +98,9 @@ const val GENRE_CAT = "genre:"
 /** The start-up screen stays at least this long, and at most [SPLASH_MAX_MS]. Nov 21, 2026. */
 const val SPLASH_MIN_MS = 1_500L
 const val SPLASH_MAX_MS = 5_000L
+/** Tests: the quiet start runs as on a TV (it's skipped in tests otherwise). */
+@Volatile internal var quietStartInTests = false
+
 /** A quiet start ends once the video has played steadily this long… Nov 21, 2026. */
 const val QUIET_PLAYING_MS = 30_000L
 /** …or nothing has played for this long, or at the latest after [QUIET_MAX_MS]. */
@@ -5670,7 +5673,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Ends the quiet start once the video has played steadily, nothing has played for a while, or at the latest. */
     private fun watchQuietStart() {
-        if (android.os.Build.FINGERPRINT == "robolectric" || playlists.none { it.enabled }) { quietStartDone.complete(Unit); return }
+        if ((android.os.Build.FINGERPRINT == "robolectric" && !quietStartInTests) || playlists.none { it.enabled }) { quietStartDone.complete(Unit); return }
         viewModelScope.launch {
             var playingFrom = 0L
             var why: String? = null
@@ -5679,7 +5682,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 val now = android.os.SystemClock.uptimeMillis(); val since = now - startedUptime
                 val steady = player.isPlaying && playerError == null
                 playingFrom = if (steady) (if (playingFrom == 0L) now else playingFrom) else 0L
-                val nothing = player.mediaItemCount == 0 || streamParked || choosingProfile || linkRequired
+                val nothing = player.mediaItemCount == 0 || playerError != null || streamParked || choosingProfile || linkRequired
                 why = when {
                     playingFrom > 0 && now - playingFrom >= QUIET_PLAYING_MS -> "the video played steadily for ${QUIET_PLAYING_MS / 1000} s"
                     nothing && since >= QUIET_IDLE_MS -> "nothing was playing"
