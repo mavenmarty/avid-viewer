@@ -248,6 +248,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             applyDiscoverStart()
             otherLive.clear(); playlistGroups = emptyMap(); favDataTick++
             applyProfileVodLimits()
+            // Nov 22, 2026 (beta report): searches belong to the profile that typed them; a Kids profile saw the
+            // grown-up's Movies search. Every search box starts empty in the new profile.
+            searchQuery = ""; searchResults = null; guideQuery = ""; guideSearchHits = GuideHits()
+            vodQuery = mapOf("movie" to "", "series" to ""); vodNear.clear()
             // Playlists limited to some profiles: what this profile sees may differ (1.14.0).
             if (playlists.any { it.profiles != null }) { resetVod(); reloadAfterActiveChange() }
         }
