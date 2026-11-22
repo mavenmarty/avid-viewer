@@ -94,6 +94,9 @@ const val GUIDE_DAYS = 7
 const val LIVE_KIND = "live"
 /** Movies and Series categories that are TMDB genres: "genre:28" (Nov 21, 2026). */
 const val GENRE_CAT = "genre:"
+/** The start-up screen stays at least this long, and at most [SPLASH_MAX_MS]. Nov 21, 2026. */
+const val SPLASH_MIN_MS = 1_500L
+const val SPLASH_MAX_MS = 5_000L
 /** No video on screen for this long (another screen): the stream stops. Nov 21, 2026. */
 const val PARK_SCREEN_MS = 10_000L
 /** The main menu open over the Guide or Sports for this long: the stream stops. */
@@ -521,6 +524,12 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
      * The guide then fills the screen until a channel is picked; nothing restarts on its own.
      */
     var streamParked by mutableStateOf(false); private set
+    /**
+     * Nov 21, 2026: the start-up screen, over everything while the channels and guide saved on this TV are read
+     * (at least [SPLASH_MIN_MS], at most [SPLASH_MAX_MS]); keys are ignored meanwhile. Downloads go on afterwards.
+     * Off in tests.
+     */
+    var startSplash by mutableStateOf(android.os.Build.FINGERPRINT != "robolectric"); private set
     /** Off in tests, which turn it on where they check it. */
     internal var stopWhenNoVideo = android.os.Build.FINGERPRINT != "robolectric"
     /** Something is playing (read by background work off the screen's thread, which waits while it is). */
@@ -1119,6 +1128,18 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             if (n > 0) regroupLater(0) // English copies first now that languages are known
         }
         player.addAnalyticsListener(playback)
+        if (startSplash) viewModelScope.launch {
+            val t0 = android.os.SystemClock.uptimeMillis()
+            fun waited() = android.os.SystemClock.uptimeMillis() - t0
+            while (waited() < SPLASH_MAX_MS) {
+                delay(100) // first, so everything this reads exists before it's read (the view model is still starting)
+                val ready = playlists.none { it.enabled } || (channels.isNotEmpty() && guide.isNotEmpty())
+                if (ready && waited() >= SPLASH_MIN_MS) break
+            }
+            trail("start-up screen closed after ${waited()} ms (channels ${channels.size}, guide ${guide.size})")
+            startSplash = false
+            guideFocusTick++
+        }
         val load = com.avidviewer.tv.data.DeviceLoad(app)
         playback.deviceLoad = { load.text() }
         playback.screenName = { screenNow }

@@ -178,6 +178,8 @@ fun AppRoot(vm: AppViewModel) {
         if (vm.reportUnlinkedNotice && !((vm.lastCrash != null || vm.crashReportSent) && !vm.crashNoticeSeen) && vm.screen != Screen.PLAYER) ReportUnlinkedDialog(vm)
         // 1.22.0: a device that isn't linked can't be used until it is (covers everything, the player included).
         if (vm.linkRequired) LinkRequiredScreen(vm)
+        // Nov 21, 2026: over everything for a moment at start, while this TV's channels and guide are read.
+        if (vm.startSplash) StartSplash()
         // Nov 21, 2026: a playlist's subscription ends within 30, 14 or 2 days (each once), or has ended.
         if (!vm.linkRequired && !vm.showWelcome && !vm.choosingProfile) {
             vm.expiredNotice?.let { pid -> ExpiryDialog(vm, pid, expired = true) }
@@ -350,4 +352,17 @@ private fun ExpiryDialog(vm: AppViewModel, pid: String, expired: Boolean) {
         },
         confirmButton = { TvButton("OK", primary = true, modifier = Modifier.testTag("expiry-ok")) { close() } },
     )
+}
+
+/** The start-up screen (Nov 21, 2026): the logo while the channels and guide saved on this TV are read. */
+@Composable
+fun StartSplash() {
+    androidx.compose.foundation.layout.Box(Modifier.fillMaxSize().background(C.Bg).testTag("start-splash"), contentAlignment = androidx.compose.ui.Alignment.Center) {
+        androidx.compose.foundation.layout.Column(horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally, verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(14.dp)) {
+            androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(com.avidviewer.tv.R.drawable.logo), contentDescription = null,
+                modifier = Modifier.size(84.dp).clip(androidx.compose.foundation.shape.RoundedCornerShape(20.dp)))
+            Text("Avid Viewer", color = C.Text, fontSize = 30.sp, fontWeight = FontWeight.Bold)
+            Text("Getting your channels ready…", color = C.Soft, fontSize = 15.sp)
+        }
+    }
 }
