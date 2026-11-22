@@ -187,4 +187,12 @@ class PlaybackRecoveryTest {
         assertFalse("1080p at 60 fps: the Cube's software decoder dropped nearly every frame", Decoders.softwareCanKeepUp(1920, 1080, 60f, "video/avc"))
         assertFalse("HEVC: never", Decoders.softwareCanKeepUp(1280, 720, 30f, "video/hevc"))
     }
+
+    @Test
+    fun aDashChannelGetsADashSourceInsteadOfCrashing() {
+        // AVR-efddbf19: a .mpd channel crashed the app (ClassNotFoundException: DashMediaSource\$Factory).
+        val f = androidx.media3.exoplayer.source.DefaultMediaSourceFactory(app)
+        val src = f.createMediaSource(androidx.media3.common.MediaItem.Builder().setUri("http://127.0.0.1:9/live/manifest.mpd").setMimeType(androidx.media3.common.MimeTypes.APPLICATION_MPD).build())
+        assertTrue(src.javaClass.name, src.javaClass.name.contains("DashMediaSource"))
+    }
 }
