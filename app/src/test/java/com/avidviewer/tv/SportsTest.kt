@@ -237,25 +237,53 @@ class SportsTest {
 
     /** Nov 21, 2026 (owner): Where to watch: ★ Favorites, then the teams' own channels, then the profile's lists, then the rest. */
     @Test
-    fun whereToWatchPutsFavoritesTeamChannelsAndListsFirst() {
+    fun whereToWatchPutsFavoritesThenLeagueCategoriesThenRegionalNetworksThenTheRest() {
         TestData.seed(app)
         val vm = AppViewModel(app).also { made.add(it) }
-        fun m(key: String, kind: MatchKind, reason: String, country: String? = "US") =
-            com.avidviewer.tv.data.ChannelMatch(key, key, TestData.P1, setOf(kind), listOf(reason), country)
-        // As found: best match first (national TV, the guide, event channels, local TV).
+        fun m(key: String, kind: MatchKind, reason: String, country: String? = "US", league: Boolean = false) =
+            com.avidviewer.tv.data.ChannelMatch(key, key, TestData.P1, setOf(kind), listOf(reason), country, league)
+        // As found: best match first (national TV, the guide, event channels, team channels, local TV).
         val found = listOf(
             m("p:espn", MatchKind.NATIONAL, "National TV · ESPN"),
             m("p:guide", MatchKind.GUIDE, "In the guide · Avalanche at Maple Leafs"),
-            m("p:event", MatchKind.EVENT, "Event channel · names both teams"),
-            m("p:listed", MatchKind.NATIONAL, "National TV · TNT"),
-            m("p:team", MatchKind.LOCAL, "Avalanche local TV · Altitude"),
-            m("p:generic", MatchKind.LOCAL, "Local TV · Altitude"),
-            m("p:fav", MatchKind.GUIDE, "In the guide · Avalanche at Maple Leafs", null),
+            m("p:event", MatchKind.EVENT, "Event channel · names both teams", league = true),
+            m("p:teamch", MatchKind.TEAM, "NHL channel · Avalanche", league = true),
+            m("p:rsn", MatchKind.LOCAL, "Avalanche local TV · Altitude"),
+            m("p:fav", MatchKind.NATIONAL, "National TV · FOX", null),
         )
-        vm.updatePrefs { it.copy(favorites = listOf("p:fav"), lists = listOf(com.avidviewer.tv.data.ChannelList("l9", "Hockey", listOf("p:listed")))) }
-        assertEquals(listOf("p:fav", "p:team", "p:listed", "p:espn", "p:guide", "p:event", "p:generic"), vm.orderForProfile(found).map { it.key })
-        // No favorites or lists: the team's channel first, then the rest as found.
-        vm.updatePrefs { it.copy(favorites = emptyList(), lists = emptyList()) }
-        assertEquals(listOf("p:team", "p:espn", "p:guide", "p:event", "p:listed", "p:generic", "p:fav"), vm.orderForProfile(found).map { it.key })
+        vm.updatePrefs { it.copy(favorites = listOf("p:fav")) }
+        assertEquals(listOf("p:fav", "p:event", "p:teamch", "p:rsn", "p:espn", "p:guide"), vm.orderForProfile(found).map { it.key })
+        vm.updatePrefs { it.copy(favorites = emptyList()) }
+        assertEquals(listOf("p:event", "p:teamch", "p:rsn", "p:espn", "p:guide", "p:fav"), vm.orderForProfile(found).map { it.key })
+    }
+
+    @Test
+    fun favoriteLocalStationsTeamChannelsInLeagueCategoriesAndNoReplays() {
+        val now = System.currentTimeMillis()
+        val vikes = FakeEspn.Companion.T("MIN", "Vikings", "Minnesota", "4f2683", "6-4", "0")
+        val pack = FakeEspn.Companion.T("GB", "Packers", "Green Bay", "203731", "7-3", "0")
+        val ev = FakeEspn.event("501", now + 3600_000L, "pre", vikes, pack, listOf(Triple("FOX", "national", "TV")), "Sun 12:00 PM")
+        val g = EspnFeed.parse("NFL", FakeEspn.board(ev)).single()
+        val favs = setOf("p:fargofox", "p:kvrr")
+        val m = SportsMatcher(listOf(g), { false }, favs)
+        // Hundreds of FOX stations elsewhere: the favorites must survive the cut.
+        for (i in 1..60) m.addChannel("p", "p:fox$i", "US| FOX $i K${"%03d".format(i).map { 'A' + (it - '0') }.joinToString("")}", null, group = "US LOCALS")
+        m.addChannel("p", "p:fargofox", "Fargo FOX", null, group = "US LOCALS")           // favorite, named loosely
+        m.addChannel("p", "p:kvrr", "KVRR Fox News Fargo", null, group = "US LOCALS")     // favorite, but a news channel
+        m.addChannel("p", "p:vteam", "NFL: Minnesota Vikings", null, group = "NFL Teams")   // team channel in the league category
+        m.addChannel("p", "p:vmusic", "Vikings Radio", null, group = "MUSIC")              // a team's name outside the league: not it
+        m.addChannel("p", "p:nfl01", "NFL 01: Vikings @ Packers", null, group = "US| NFL Sunday Ticket")
+        m.addChannel("p", "p:replay", "NFL 01: Vikings @ Packers", null, group = "NFL Replay")
+        val found = m.result(max = 40)[g.id].orEmpty()
+        val keys = found.map { it.key }
+        assertTrue("a favorite local station named loosely is found, past the limit", "p:fargofox" in keys)
+        assertFalse("Fox News isn't the FOX station", "p:kvrr" in keys)
+        assertTrue("a team's channel in the league category", "p:vteam" in keys && found.first { it.key == "p:vteam" }.leagueCategory)
+        assertFalse("a team's name outside the league's categories isn't a team channel", "p:vmusic" in keys)
+        assertTrue("event channel in a league category", found.first { it.key == "p:nfl01" }.leagueCategory)
+        assertFalse("replay categories are left out", "p:replay" in keys)
+        assertTrue(com.avidviewer.tv.data.Leagues.isCategoryFor("NHL", "NHL Teams"))
+        assertFalse(com.avidviewer.tv.data.Leagues.isCategoryFor("NHL", "NHL Replay"))
+        assertFalse("WNBA isn't NBA", com.avidviewer.tv.data.Leagues.isCategoryFor("NBA", "WNBA League Pass"))
     }
 }
