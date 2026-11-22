@@ -169,4 +169,22 @@ class PlaybackRecoveryTest {
         repeat(30) { i -> store.savePrefs(base.copy(lastChannel = "${TestData.P1}:c1-$i")) }
         assertEquals("${TestData.P1}:c1-29", Store(app).loadPrefs().lastChannel)
     }
+
+    // ---- Nov 22, 2026: from the 1.27.0 playback logs (Cube and Fire Stick 4K Max) ----
+
+    @Test
+    fun noDataIsOnlyAReasonWhenTheBufferRunsDown() {
+        fun why(buf: Long, drained: Long) = PlaybackMonitor.reconnectReason(60_000, 0, 0, 0, 40_000, buf, true, drainedMs = drained)
+        assertEquals("a buffer steady at 7 s for 20 s isn't being played: not the data", null, why(7_000, 0))
+        assertEquals(null, why(7_000, 1_500))
+        assertTrue("a buffer running down with no data: reconnect", why(3_000, 5_000)!!.startsWith("no data for 20 s"))
+    }
+
+    @Test
+    fun theSoftwareDecoderIsOnlyChosenWhenItCanKeepUp() {
+        assertTrue(Decoders.softwareCanKeepUp(1280, 720, 30f, "video/avc"))
+        assertTrue(Decoders.softwareCanKeepUp(1920, 1080, 30f, "video/avc"))
+        assertFalse("1080p at 60 fps: the Cube's software decoder dropped nearly every frame", Decoders.softwareCanKeepUp(1920, 1080, 60f, "video/avc"))
+        assertFalse("HEVC: never", Decoders.softwareCanKeepUp(1280, 720, 30f, "video/hevc"))
+    }
 }

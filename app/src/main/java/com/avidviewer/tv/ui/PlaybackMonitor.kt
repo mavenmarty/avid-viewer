@@ -86,6 +86,11 @@ class PlaybackMonitor(
     /** Which screen is open ("Settings"), never what's on it. Set by AppViewModel. */
     var screenName: (() -> String)? = null
     private var decoderStarts = 0
+    /** Nov 22, 2026: the buffer when data last arrived, to tell a stream that ran dry from one that just isn't being played. */
+    private var bytesSeenAt = 0L
+    private var bufferAtBytes = 0L
+    /** Software decoding windows in a row where most frames were dropped. */
+    private var softwareBehind = 0
     private var deviceLoggedAt = 0L
 
     /** A channel or title is starting ([key]: its key, never shown; the log gets a code instead of the name). */
@@ -98,7 +103,7 @@ class PlaybackMonitor(
         DataFlow.lastBytesAt = startedAt
         name = log.label(key, live)
         everReady = false; lastRendered = -1; dropped = 0; droppedWindow = 0; recentLoadErrors.clear()
-        decoderStarts = 0; deviceLoggedAt = startedAt
+        decoderStarts = 0; deviceLoggedAt = startedAt; bytesSeenAt = 0L; bufferAtBytes = 0L; softwareBehind = 0
         stats = StreamStats()
         log.add(PlaybackLog.START, name, if (live) "live channel" else "movie or episode")
     }
@@ -124,11 +129,20 @@ class PlaybackMonitor(
         // #23: the buffer's end, to tell a stream that trickles a few bytes (so "no data" never fires) from one that flows.
         val bufEnd = player.bufferedPosition
         if (bufEnd > lastBufferEnd) { lastBufferEnd = bufEnd; bufferGrewAt = now }
+        if (DataFlow.lastBytesAt != bytesSeenAt) { bytesSeenAt = DataFlow.lastBytesAt; bufferAtBytes = buffered }
         checkReconnect(now, buffered)
         // Every 2 minutes while something plays: how busy the TV is.
         if (player.playWhenReady && name.isNotEmpty() && now - deviceLoggedAt >= DEVICE_EVERY_MS) { deviceLoggedAt = now; logDevice("") }
         if (droppedWindowAt > 0 && now - droppedWindowAt > 10_000) {
             if (droppedWindow >= 30) put(PlaybackLog.DROPPED, "$droppedWindow frames dropped in 10 s (the TV struggled to decode${videoText().let { if (it.isBlank()) "" else ": $it" }})")
+            // Nov 22, 2026: the software decoder dropping most frames can't keep up: back to the TV's own (once a stream).
+            val fps = player.videoFormat?.frameRate?.takeIf { it > 0 } ?: 30f
+            softwareBehind = if (com.avidviewer.tv.data.Decoders.isSoftware(decoderName) && droppedWindow >= fps * 10 / 2) softwareBehind + 1 else 0
+            if (softwareBehind >= 2 && !decoderSwitched && onReconnect != null && name.isNotEmpty()) {
+                softwareBehind = 0; decoderSwitched = true; reconnectAt = now; reconnectWhy = "the software video decoder couldn't keep up"
+                put(PlaybackLog.RECOVER, "Back to the TV's own video decoder: the software one dropped most frames.")
+                onReconnect?.invoke(live, true, true)
+            }
             droppedWindow = 0; droppedWindowAt = 0
         }
         stats = stats.copy(
@@ -158,7 +172,7 @@ class PlaybackMonitor(
         while (reconnects.isNotEmpty() && now - reconnects.first() > 180_000) reconnects.removeFirst()
         val stops = stallStarts.count { now - it <= 30_000 }
         val why = reconnectReason(now, startedAt, reconnectAt, picStuckSince, DataFlow.lastBytesAt, buffered, everReady,
-            stallingSince = stallAt, bufferGrewAt = bufferGrewAt, stopsIn30s = stops) ?: return
+            stallingSince = stallAt, bufferGrewAt = bufferGrewAt, stopsIn30s = stops, drainedMs = bufferAtBytes - buffered) ?: return
         val picture = why.startsWith("the picture")
         // #31: stops with a full buffer are the TV's decoder falling behind, not the download: reconnecting throws the
         // buffer away and doesn't help. The only thing worth trying is the other decoder, once.
@@ -354,11 +368,14 @@ class PlaybackMonitor(
          * data for 4 s with under 8 s buffered; never in the first 10 s of a channel or of a reconnect.
          */
         fun reconnectReason(now: Long, startedAt: Long, reconnectAt: Long, picStuckSince: Long, lastBytesAt: Long, bufferedMs: Long, everReady: Boolean,
-                            stallingSince: Long = 0L, bufferGrewAt: Long = now, stopsIn30s: Int = 0): String? {
+                            stallingSince: Long = 0L, bufferGrewAt: Long = now, stopsIn30s: Int = 0, drainedMs: Long = Long.MAX_VALUE): String? {
             if (now - startedAt < 10_000 || (reconnectAt > 0 && now - reconnectAt < 10_000)) return null
             if (picStuckSince > 0 && now - picStuckSince >= 5_000) return "the picture stood still for ${(now - picStuckSince) / 1000} s"
             val quiet = now - lastBytesAt
-            if (everReady && quiet >= 4_000 && bufferedMs < 8_000) return "no data for ${quiet / 1000} s with ${bufferedMs / 1000} s left in the buffer"
+            // Nov 22, 2026: only when the buffer is running down. One that holds steady while no data comes isn't being
+            // played (the decoder is behind, or playback is waiting): reconnecting threw it away and froze the picture
+            // for 2–3 s, about 90 times a day on two TVs ("no data for 22 s with 7 s left").
+            if (everReady && quiet >= 4_000 && bufferedMs < 8_000 && drainedMs >= 2_000) return "no data for ${quiet / 1000} s with ${bufferedMs / 1000} s left in the buffer"
             // #23: waiting 6 s with the buffer not growing, though a few bytes keep arriving (the provider trickling).
             // (#31: not with 8 s or more buffered: a full buffer doesn't grow because it's full.)
             if (everReady && stallingSince > 0 && now - stallingSince >= 6_000 && now - bufferGrewAt >= 6_000 && bufferedMs < 8_000) return "waiting ${(now - stallingSince) / 1000} s with the buffer not growing"
