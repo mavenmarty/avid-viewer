@@ -234,7 +234,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         if (profiles.needsPin(p)) {
             pinAsk = PinAsk(
                 if (p.hasPin) "Enter ${p.name}'s PIN" else "Parent PIN to open ${p.name}",
-                if (profiles.hasKids) "A Kids profile is on this device, so ${p.name} needs a PIN" else "",
+                "",
                 p, { profiles.unlocks(p, it) }, { openProfile(p.id) },
             )
         } else openProfile(p.id)
@@ -346,10 +346,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
      * has a PIN yet the owner sets one first.
      */
     fun addKidsProfile(name: String, color: Int, done: (String) -> Unit = {}) {
-        val owner = profiles.owner
-        if (profiles.list.none { it.isParent && it.hasPin }) {
-            askNewPin(owner) { pin -> setProfilePin(owner.id, pin); done(addProfile(name, true, color)) }
-        } else done(addProfile(name, true, color))
+        // Nov 22, 2026: grown-up PINs are optional, Kids profile or not (each household decides).
+        done(addProfile(name, true, color))
     }
 
     private fun saveProfiles(s: ProfileSet) { profiles = s; store.saveProfiles(s) }

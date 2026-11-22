@@ -102,7 +102,8 @@ data class ProfileSet(
     val multiple get() = list.size > 1
 
     /** Opening [p] asks for a PIN: Kids never; any other profile when it has one, or always while a Kids profile exists. */
-    fun needsPin(p: Profile) = !p.kids && (p.hasPin || hasKids)
+    /** Nov 22, 2026 (beta request): a PIN is the profile's own choice, Kids profile or not. */
+    fun needsPin(p: Profile) = !p.kids && p.hasPin
 
     /** [pin] opens [p]: its own PIN, or a parent's. */
     fun unlocks(p: Profile, pin: String) = p.pinMatches(pin) || list.any { it.isParent && it.hasPin && it.pinMatches(pin) }

@@ -328,23 +328,18 @@ class UsabilityTest {
         var sam = ""
         var kids = ""
         rule.runOnIdle { sam = vm.addProfile("Sam", kids = false, color = 1) }
-        // Adding a Kids profile when no parent has a PIN: the owner sets one first (twice).
+        // The owner chooses a PIN; Sam doesn't. Nov 22, 2026: adding a Kids profile no longer requires PINs.
+        rule.runOnIdle { vm.setProfilePin(com.avidviewer.tv.data.Profile.OWNER, "1234") }
         rule.runOnIdle { vm.addKidsProfile("Kids", 2) { kids = it } }
-        waitFor("asked for a new PIN") { vm.pinAsk != null }
-        rule.runOnIdle { assertEquals(null, vm.answerPin("1234")) }
-        rule.runOnIdle { assertEquals(null, vm.answerPin("1234")) }
         waitFor("Kids profile added") { kids.isNotEmpty() && vm.profiles.get(kids)?.kids == true }
-        assertTrue("the owner has a PIN now", vm.profiles.owner.hasPin)
+        assertEquals("no PIN asked for", null, vm.pinAsk)
         rule.runOnIdle {
             val k = vm.profiles.get(kids)!!
             vm.updateProfile(k.copy(allowedGroups = setOf(vm.liveCategoryId(TestData.P1, "KIDS"))))
         }
         // Sam starts with a copy of the owner's favorites.
         rule.runOnIdle { vm.chooseProfile(sam) }
-        waitFor("Sam asks for a PIN (a Kids profile exists)") { vm.pinAsk != null }
-        rule.runOnIdle { assertEquals("That PIN isn't right.", vm.answerPin("0000")) }
-        rule.runOnIdle { assertEquals(null, vm.answerPin("1234")) } // a parent's PIN opens it
-        waitFor("watching as Sam") { vm.profile.id == sam }
+        waitFor("watching as Sam (no PIN of its own, so none asked)") { vm.profile.id == sam && vm.pinAsk == null }
         assertTrue(news in vm.prefs.favorites)
         rule.runOnIdle { vm.toggleFavorite(news) } // Sam's own change
         waitFor("Sam's favorite removed") { news !in vm.prefs.favorites }
@@ -1566,7 +1561,9 @@ class UsabilityTest {
         val last = focused()
         press(listOf(Key.DirectionDown))
         assertEquals("no wrap in the poster grid", last, focused())
-        assertTrue("on the grid's last row (focus: $last)", Regex("Action Movie (\\d+)").find(last)?.groupValues?.get(1)?.toInt()?.let { it > 12 } == true)
+        // Nov 22, 2026: in the profile's sort (Date added by default), so the last row is whatever the list ends with.
+        val lastRow = vm.vodItems("movie").let { l -> l.takeLast(if (l.size % 7 == 0) 7 else l.size % 7) }.map { it.name }
+        assertTrue("on the grid's last row (focus: $last, last row: $lastRow)", lastRow.any { last.contains(it) })
     }
 
     @Test

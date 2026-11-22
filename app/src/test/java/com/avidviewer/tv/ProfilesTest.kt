@@ -32,7 +32,7 @@ class ProfilesTest {
         assertFalse("Sam's PIN doesn't open the owner", set.unlocks(owner, "5678"))
         // Without a Kids profile, a profile without a PIN opens freely.
         assertFalse(ProfileSet(listOf(owner, Profile("guest", "Guest"))).needsPin(Profile("guest", "Guest")))
-        assertTrue("…but with one, it needs a parent's", set.needsPin(Profile("guest", "Guest")))
+        assertFalse("Nov 22, 2026: with a Kids profile too (PINs are optional)", set.needsPin(Profile("guest", "Guest")))
         val back = ProfileSet.fromJson(set.toJson())
         assertEquals(set, back)
     }
