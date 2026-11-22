@@ -2,7 +2,7 @@
 
 <!-- The version below and the Release notes section are updated automatically after each published build
      (.github/workflows/user-guide.yml). Feature descriptions are written by hand. -->
-This guide covers **Avid Viewer 1.25.0**, the current public release. Avid Viewer is an IPTV player for Android TV and Fire TV. You bring your own provider (an Xtream Codes login or an M3U link); the app doesn't include any channels.
+This guide covers **Avid Viewer 1.26.0**, the current public release. Avid Viewer is an IPTV player for Android TV and Fire TV. You bring your own provider (an Xtream Codes login or an M3U link); the app doesn't include any channels.
 
 **Contents:** [Getting started](#1-getting-started) · [Main menu](#2-main-menu) · [TV Guide](#3-tv-guide) · [Full-screen playback](#4-full-screen-playback) · [Search](#5-search) · [Discover](#6-discover) · [Sports](#7-sports) · [Movies and Series](#8-movies-and-series) · [Settings](#9-settings) ([Profiles](#profiles)) · [Privacy](#10-privacy) · [Troubleshooting](#11-troubleshooting) · [Control4](#12-control4) · [Supplemental services](#13-supplemental-services) · [Cable & satellite](#14-using-your-cable-or-satellite-subscription) · [Free services](#15-free-services) · [Release notes](#release-notes)
 
@@ -40,6 +40,8 @@ Menu names differ a little between brands; if a path above doesn't match, search
 ### First start: the welcome screen
 
 ![The welcome screen on a new install](images/welcome.jpg)
+
+**Every start** shows the Avid Viewer logo with **Getting your channels ready…** for a moment (1.5 to 5 seconds) while the channels and guide saved on the TV are read, so the TV has a head start; the remote waits until it closes. New downloads carry on afterwards.
 
 The first time you open Avid Viewer, and every time it starts while there are no playlists, it shows a welcome screen:
 
@@ -167,6 +169,8 @@ The TV Guide is the home screen for live TV. Next to the main menu it has:
 - **The guide**: the preview window and details panel at the top, the channel grid below.
 
 **The guide fills the screen.** As soon as you've chosen a category and the highlight is in the guide (channels, programs or the preview), the main menu and the category list step aside: the guide shows **2 hours across the full width** (2.5 hours while the category list is showing). **Left** from the channel names, or **Back**, brings them back, with your current category highlighted. **Right** from the category list goes to the first channel on screen (or opens another category, like OK). The row above the times always names the category.
+
+**The stream stops when no video is on screen** (to spare the TV's processor). After 10 seconds on another screen (Settings, Movies, Search…), or 1.5 seconds with the main menu open over the Guide or Sports, the live stream stops. Back in the guide, it fills the screen with **Choose a channel and press OK to watch** until you pick a channel: **OK** plays it in the preview again, and **OK** once more goes full screen. A quick look at another screen and straight back doesn't interrupt anything. Movies and episodes aren't affected.
 
 **Back and Left step back one layer at a time:** from a channel to your current category in the category list, then to the playlist list (on that same category), then to the main menu. With only one playlist with live TV, the playlist list is skipped: from the categories, Back goes straight to the main menu. Holding Left doesn't skip layers, and inside the grid Left still moves through programs and time.
 
@@ -357,11 +361,11 @@ Sports lists real games from **ESPN's schedules** for today and the next 2 days,
 
 ![Series in the Grid layout](images/series-grid.jpg)
 
-- **Left side**: Playlists, then categories: **All**, **Recently added**, **Continue watching** (movies part-way, and series until their latest episode is watched), **My List**, and your provider's categories.
+- **Left side**: Playlists, then categories: **All**, **Recently added**, **Continue watching** (movies part-way, and series until their latest episode is watched), **My List**, and your provider's categories, or TMDB genres (see [Sorted by genre](#sorted-by-genre)).
 - **Right side**: posters for the chosen category. A category you pause on is read ahead, so OK shows it at once.
 - **Posters fill their tiles.** The title and year appear on a dark fade only on the highlighted poster, and on titles that have no artwork (most posters already show their title). The highlighted poster grows a little and gets a ring. **✓** in a corner means the title is in My List.
 - **Layouts**: the buttons above the posters switch between two ways of browsing. Each profile remembers its choice; **Up** from the top row of posters reaches them.
-  - **▦ Grid**: rows of posters, with the highlighted title's artwork filling the screen behind them and fading into the page. Above the posters: its name, year, genre, TMDB rating (with how many people rated it) and a short description. Moving the highlight fades to the next title's picture. **Right** from the categories goes to the poster you were on.
+  - **▦ Grid**: rows of posters, with the highlighted title's artwork filling the screen behind them and fading into the page. Above the posters: its name, year, content rating (such as PG-13 or TV-14), genre, TMDB rating (with how many people rated it) and a short description. Moving the highlight fades to the next title's picture. **Right** from the categories goes to the poster you were on.
 
     ![Movies in the Grid layout: the highlighted title's artwork and details above the posters](images/movies-grid.jpg)
 
@@ -371,7 +375,7 @@ Sports lists real games from **ESPN's schedules** for today and the next 2 days,
 
 - **Each title is listed once.** When your playlists have the same title several times (other languages, qualities such as 4K or HD, provider tags such as "NF -" in front of the name, or other playlists), it appears once, shown by its English copy (else one with no language marked). This applies to All, Recently added, every category and the search.
 - **🔍 Search movies / 🔍 Search series** is in the category list, below My List. Results replace the poster grid; **✕ Clear search** ends the search. When fewer than 30 titles hold every word you typed, near matches (a small typo, or a word left out) are added after them.
-- **OK on a poster** opens its page. The title's artwork fills the screen; on it are the name in large type, the year and length, three facts (**Genre**, **On**: the playlist, and **Rating**: your provider's), **▶ Play**, or **▶ Resume from [time]** and **Start over**, plus **+ My List**, the plot, cast and director, and **Ratings** (the TMDB score and how many people rated it).
+- **OK on a poster** opens its page. The title's artwork fills the screen; on it are the name in large type, the year, content rating and length, three facts (**Genre**, **On**: the playlist, and **Rating**: your provider's), **▶ Play**, or **▶ Resume from [time]** and **Start over**, plus **+ My List**, the plot, cast and director, and **Ratings** (the TMDB score and how many people rated it).
 
   ![A movie's page](images/movie-page.jpg)
 
@@ -383,6 +387,18 @@ Sports lists real games from **ESPN's schedules** for today and the next 2 days,
 - **Category list wraps around**: Up on **All** jumps to the last category, and Down on the last returns to All. The poster grid stops at the end.
 - **Menu on a category**: **Rename**, **Re-order** or **Hide** it. Hidden categories come back in Settings › List Editor.
 - If you have more than one playlist, movies and series from all of them are merged.
+- **Content ratings** (G, PG, PG-13, R, NC-17, TV-Y to TV-MA) show with the year: your provider's when its details give one (on the title's page), otherwise TMDB's for your region (US ratings when your region has none). They're looked up with the artwork, so they need a TMDB key, and a title shows its rating once it has been highlighted or opened.
+
+### Sorted by genre
+
+With a TMDB key (see [TMDB](#tmdb-discover)), Movies and Series list **TMDB genres** in place of your provider's categories. It's on by default once a key is saved, and each profile can turn it off in **Settings › Discover › Sort Movies and Series by genre** (or on the website: Profiles › a profile › **Discover**).
+
+- **The list**: All, Recently added, Continue watching and My List at the top, then **Trending this week** (TMDB's trending titles that are on your playlists, in TMDB's order), **Top rated** (rated 7.0 or more by at least 250 people, best first, up to 100), the genres A to Z, **Other (not on TMDB)**, and **Not sorted yet** while titles are still being looked up.
+- **Inside a genre**, titles follow your playlists' order and your provider's order, as in All. A title can be in more than one genre, and each title is listed once.
+- **Looking titles up**: each movie and series is looked up on TMDB once, by name and year, newest first, one at a time, and kept on the TV through every download. Settings › Discover shows **Sorting into genres… X of Y titles** while it runs. Lookups wait while something is playing, and carry on the next time Movies or Series opens if the TV was offline.
+- **Rename, Re-order and Hide** work on genres too (Menu on a genre). **Show hidden genres** in Settings › Discover brings them back.
+- **Turning it off** brings back your provider's categories, with your renames, order and hidden categories as you left them. The lookups are kept for next time.
+- **Kids profiles** keep their allowed categories: sorting by genre isn't available there, and nothing is looked up.
 
 ## 9. Settings
 
@@ -661,7 +677,7 @@ The app notes every freeze in the playback log, with its likely cause. Open **Me
 
 **Channels that won't play.** The message says why: "The provider refused this channel (HTTP 405)…" (often a channel that isn't in your subscription or is off the air), "Can't find the provider's server…" (check the internet connection or DNS), or "The provider's server isn't answering…". A channel the provider refused is marked **⚠ didn't play** in the guide for a day; the mark goes as soon as it plays. To take it out of the guide, use Menu › Hide channel.
 
-Sending the log (Send playback log) helps us find a pattern across days.
+Sending the log (Send playback log) helps us find a pattern across days. It also notes how busy the TV is, every 2 minutes while something plays and at each reconnect: its free memory, the app's memory and processor use, and which screen was open (never what was on it), plus each restart of the video decoder.
 
 - **Channels won't play**: switch the Stream format in Settings › Playback, then Refresh the playlist.
 - **No channels or guide**: check that the playlist, and its Live TV switch, are on in Settings › Playlists, then choose Refresh.
@@ -959,7 +975,28 @@ Every public release since 1.0.35, newest first. From 1.1.0, versions are number
 
 <!-- new-releases: entries for new builds are added automatically below this line -->
 
-### 1.25.0 — November 21, 2026, 3:33 PM CT (current)
+### 1.26.0 — November 21, 2026, 6:31 PM CT (current)
+
+**Release notes**
+
+- **Movies and Series by genre.** With a TMDB key, Movies and Series list TMDB genres (Action, Comedy, Drama…) in place of your provider's categories, on by default: **Trending this week** and **Top rated** (titles on your playlists) first, then the genres, then **Other (not on TMDB)**. Each title is looked up once, newest first, and a title can be in more than one genre. Genres can be renamed, re-ordered and hidden; turn it off per profile in Settings › Discover or on the website's Discover tab. Not on Kids profiles. See [Sorted by genre](#sorted-by-genre).
+- **Content ratings.** PG-13, R, TV-14 and the like show with the year on posters and title pages: your provider's when it gives one, otherwise TMDB's.
+- **Lighter on the TV.** The live stream stops after 10 seconds without video on screen (Settings, Movies, Search…) or 1.5 seconds with the main menu open; back in the guide, it fills the screen until you pick a channel. Genre lookups wait while something plays.
+- **A head start at launch.** The logo shows for a moment (1.5 to 5 seconds) while the channels and guide saved on the TV are read; the remote waits until it closes.
+- **Playback log:** notes the TV's memory, the app's processor use and the screen open every 2 minutes while something plays and at each reconnect, and each restart of the video decoder (never what was playing).
+- **User guide:** what a Kids profile can see, can't do and keeps private.
+
+**Change log**
+
+- Sort Movies and Series by TMDB genre
+- Genre lookups stop when cancelled
+- Trending this week and Top rated above the genres
+- Content ratings (R, PG-13, TV-14) on posters and title pages
+- Movies and Series use TMDB genres by default once a TMDB key is saved
+- The live stream stops when no video is on screen
+- A start-up screen gives the TV a head start
+
+### 1.25.0 — November 21, 2026, 3:33 PM CT
 
 **Release notes**
 
