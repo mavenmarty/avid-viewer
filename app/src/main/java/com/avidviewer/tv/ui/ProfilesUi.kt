@@ -139,7 +139,7 @@ fun ProfileSwitcherDialog(vm: AppViewModel) {
                     TvButton("Manage profiles…") { vm.profileSwitcher = false; vm.navSelect(Screen.SETTINGS); vm.settingsSection = "profiles" }
                 }
                 Label(
-                    if (vm.profiles.hasKids) "Kids opens straight away; every other profile asks for its PIN or a parent's." else "A profile with a PIN asks for it.",
+                    "A profile with a PIN asks for it (or a parent's).",
                     size = 12.sp, lines = 3,
                 )
             }
@@ -278,7 +278,6 @@ internal fun LazyListScope.profilesSettings(vm: AppViewModel, ask: (Confirm) -> 
                     when {
                         p.kids -> "no PIN · ${p.allowedGroups.size} live and ${p.allowedVodCats.size} movie & series categories"
                         p.hasPin -> "PIN set"
-                        set.hasKids -> "no PIN yet: opens with a parent's PIN"
                         else -> "no PIN"
                     },
                 ).joinToString(" · "),
@@ -292,8 +291,7 @@ internal fun LazyListScope.profilesSettings(vm: AppViewModel, ask: (Confirm) -> 
                         val go = { vm.askNewPin(p) { pin -> vm.setProfilePin(p.id, pin) } }
                         if (p.id == vm.profile.id || vm.profile.isParent) go() else vm.withParentPin("A parent's PIN is needed to change ${p.name}'s PIN", go)
                     }
-                    // A grown-up profile keeps its PIN while a Kids profile exists.
-                    if (!p.kids && p.hasPin && !set.hasKids) TvButton("Remove PIN") {
+                    if (!p.kids && p.hasPin) TvButton("Remove PIN") {
                         asParent("A parent's PIN is needed") { vm.setProfilePin(p.id, null) }
                     }
                     if (!p.isOwner && p.id != vm.profile.id) TvButton("Delete…") {
@@ -313,8 +311,8 @@ internal fun LazyListScope.profilesSettings(vm: AppViewModel, ask: (Confirm) -> 
 }
 
 /** Which profile opens at start (1.15.0). */
-private const val startRule = "When the app starts: with a Kids profile on this device, it opens on Kids (the last Kids profile used here) " +
-    "and shows a 5-second splash with Change profile. Otherwise it opens on the last profile used. With one profile, there are no profiles to choose."
+private const val startRule = "When the app starts: with a Kids profile on this device, it opens on Who's watching? with Kids highlighted. " +
+    "Otherwise it opens on the last profile used. With one profile, there are no profiles to choose. PINs are optional: a profile with one asks for it."
 
 /** The 5-second "Watching as Kids" splash when the app opens on a Kids profile (1.15.0). */
 @Composable
