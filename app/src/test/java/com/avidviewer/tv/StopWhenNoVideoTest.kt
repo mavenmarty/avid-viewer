@@ -76,4 +76,20 @@ class StopWhenNoVideoTest {
         vm.navMode = NavMode.FULL; idle(3_000)
         assertTrue(vm.streamParked)
     }
+
+    @Test
+    fun searchesDontFollowYouIntoAnotherProfile() {
+        // Beta report (Nov 20): text typed into the grown-up profile's Movies search was still there in the Kids profile.
+        TestData.seed(app)
+        val vm = AppViewModel(app).also { made.add(it) }
+        idleUntil("channels") { vm.channels.isNotEmpty() }
+        val kids = vm.addProfile("Kids", kids = true, color = 0)
+        vm.vodQuery = mapOf("movie" to "horror", "series" to "crime")
+        vm.guideQuery = "news"; vm.searchQuery = "fargo"
+        vm.chooseProfile(kids)
+        idleUntil("watching as Kids") { vm.kidsMode }
+        assertEquals(mapOf("movie" to "", "series" to ""), vm.vodQuery)
+        assertEquals("", vm.guideQuery)
+        assertEquals("", vm.searchQuery)
+    }
 }
