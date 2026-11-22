@@ -1978,6 +1978,56 @@ class UsabilityTest {
         }
     }
 
+    /**
+     * Nov 22, 2026 (owner): a series in My List with episodes left is in Continue watching; Menu on an episode marks
+     * it, or its season, watched; once an episode counts as watched the player offers the next one.
+     */
+    @Test
+    fun myListSeriesContinueWatchedMarksAndNextEpisode() {
+        FakeProvider().use { server ->
+            rule.runOnIdle { vm.addPlaylist("Fake provider", "xtream", "http://127.0.0.1:${server.port}", "u", "", "", "", liveOn = false, vodOn = true) }
+            waitFor("the provider to be added (status=${vm.status})") { vm.playlists.any { it.name == "Fake provider" } }
+            val pid = vm.playlists.first { it.name == "Fake provider" }.id
+            val show = com.avidviewer.tv.data.VodItem("$pid:s78", pid, "series", "Test Show", null, "", seriesId = "78", category = "Shows")
+            rule.runOnIdle { vm.catalog.replace(pid, sequenceOf(show)) { false } }
+            // In My List, nothing watched yet: in Continue watching.
+            assertTrue(vm.continueKeysForTests().isEmpty())
+            rule.runOnIdle { vm.toggleMyList(show) }
+            assertEquals(listOf(show.key), vm.continueKeysForTests())
+            go(Screen.SERIES)
+            rule.runOnIdle { vm.openVodDetail(show) }
+            waitFor("episodes") { vm.detailEpisodes?.size == 3 }
+            waitFor("the page opens on episode 1 (focus: ${focused()})") { focused().contains("Pilot") }
+            // Menu on the episode: Mark as watched.
+            press(listOf(Key.Menu))
+            waitFor("the episode's options") { vm.episodeMenu != null }
+            rule.onNodeWithText("Mark season 1 as watched", substring = true).assertExists()
+            waitFor("the first option has the highlight (focus: ${focused()})") { focused().contains("Mark as watched") }
+            press(listOf(Key.DirectionCenter))
+            waitFor("S1 E1 watched") { vm.isWatched("$pid:s78:1:1") && vm.episodeMenu == null }
+            // The whole of season 1, then not watched again.
+            val s1 = vm.seasonEpisodes(vm.detailEpisodes!!.first().season)
+            rule.runOnIdle { vm.setEpisodesWatched(show, s1, true) }
+            assertTrue(vm.isWatched("$pid:s78:1:2"))
+            rule.runOnIdle { vm.setEpisodesWatched(show, s1.take(1), false) }
+            assertFalse(vm.isWatched("$pid:s78:1:1"))
+            assertTrue(vm.isWatched("$pid:s78:1:2"))
+            // Next episode: offered only once the episode counts as watched; S1 E2 leads to S2 E1.
+            rule.runOnIdle { vm.playDetailEpisode(vm.detailEpisodes!!.first { it.number == 2 && it.season.trim() == "1" }) }
+            waitFor("S1 E2 plays") { vm.vodPlaying?.name?.contains("S1 E2") == true }
+            assertNull(vm.nextEpisodeDue(50_000, 100_000, false))
+            assertEquals(2, vm.nextEpisodeDue(96_000, 100_000, false)?.season?.trim()?.toInt())
+            assertEquals(1, vm.nextEpisodeDue(0, 0, true)?.number)
+            rule.runOnIdle { vm.playNextEpisode() }
+            waitFor("S2 E1 plays") { vm.vodPlaying?.name?.contains("S2 E1") == true }
+            assertNull("no episode after the last", vm.nextEpisodeDue(0, 0, true))
+            rule.runOnIdle { vm.closeFullScreen() }
+            // Every episode watched: off Continue watching even though it's in My List.
+            rule.runOnIdle { vm.setEpisodesWatched(show, vm.detailEpisodes!!, true) }
+            assertTrue(vm.continueKeysForTests().isEmpty())
+        }
+    }
+
     /** Nov 12: from My List, a series with several copies (versions line) left no room for its episodes. */
     @Test
     fun aSeriesFromMyListWithSeveralCopiesStillReachesItsEpisodes() {

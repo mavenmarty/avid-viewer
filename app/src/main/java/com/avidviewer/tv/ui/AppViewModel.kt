@@ -3544,6 +3544,11 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         return when { d == 0 -> "today $time"; d == 1 -> "yesterday $time"; else -> java.text.SimpleDateFormat("EEE MMM d", java.util.Locale.US).format(java.util.Date(t)) }
     }
     private var seriesLatest: Map<String, com.avidviewer.tv.data.Store.SeriesLatest> = store.loadSeriesLatest()
+    /** A series is finished when its latest known episode has been watched and no episode is part-way. */
+    private fun seriesFinished(series: String): Boolean {
+        val latest = seriesLatest[series] ?: return false
+        return "$series:${latest.season}:${latest.episode}" in watched && resume.keys.none { it.startsWith("$series:") }
+    }
     private fun seriesOf(k: String): String? = EPISODE_KEY.find(k)?.let { k.substring(0, it.range.first) }
 
     /**
@@ -3563,6 +3568,12 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
         // A new episode found for a series in progress counts as activity too.
         act.keys.toList().forEach { k -> seriesLatest[k]?.newAt?.let { bump(k, it) } }
+        // Nov 22, 2026 (owner): a series in My List with episodes left to watch is in Continue watching too, after the
+        // titles being watched (unless the latest episode known has been watched and nothing is part-way).
+        for (m in prefs.myList) {
+            if (m.kind != "series" || m.key in act) continue
+            if (!seriesFinished(m.key)) bump(m.key, seriesLatest[m.key]?.newAt?.takeIf { it > 0 } ?: 1L)
+        }
         return act.entries.filter { (k, t) -> (placeInfo["hide|$k"]?.at ?: 0L) < t }.sortedByDescending { it.value }.map { it.key }
     }
 
@@ -3708,7 +3719,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun checkSeriesForNewEpisodes(limit: Int = 8) {
         if (checkingSeries) return
         val now = System.currentTimeMillis()
-        val keys = (watched.mapNotNull { seriesOf(it) } + resume.keys.mapNotNull { seriesOf(it) }).distinct()
+        val keys = (watched.mapNotNull { seriesOf(it) } + resume.keys.mapNotNull { seriesOf(it) } + prefs.myList.filter { it.kind == "series" }.map { it.key }).distinct()
             .filter { now - (seriesLatest[it]?.checked ?: 0L) > 12 * 3600_000L }.take(limit)
         if (keys.isEmpty()) return
         checkingSeries = true
@@ -5396,6 +5407,56 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** For tests: marks an episode watched to the end, as the player does. */
     internal fun markWatched(key: String) { watched.add(key); store.saveWatched(watched); notePlace(key, 0) }
 
+    // ---------------- series: watched marks and the next episode (Nov 22, 2026, owner request) ----------------
+    /** Menu (or hold OK) on an episode of the title page: its options. */
+    var episodeMenu by mutableStateOf<Episode?>(null)
+
+    /**
+     * Marks [eps] of [series] watched (their places cleared) or not watched. Like a finished or removed episode,
+     * it goes to the account with the next history sync, so the profile's other TVs follow.
+     */
+    fun setEpisodesWatched(series: VodItem, eps: List<Episode>, on: Boolean) {
+        val keys = eps.map { episodeKey(series, it) }
+        val now = System.currentTimeMillis()
+        if (on) {
+            resume = resume - keys.toSet()
+            keys.forEach { watched.remove(it); watched.add(it) }
+            placeInfo = placeInfo + keys.associateWith { com.avidviewer.tv.data.Store.PlaceInfo(placeInfo[it]?.dur ?: 0L, now, null) }
+        } else {
+            watched.removeAll(keys.toSet())
+            placeInfo = placeInfo - keys.toSet()
+        }
+        store.saveResume(resume); store.saveWatched(watched); store.savePlaceInfo(placeInfo)
+        vodVersion++
+        val what = if (eps.size == 1) "S${eps[0].season} E${eps[0].number}" else "${eps.size} episodes"
+        status = (if (on) "Marked $what as watched" else "Marked $what as not watched") + "."
+    }
+
+    /** The episodes of [season] on the title page, in order. */
+    fun seasonEpisodes(season: String): List<Episode> = detailEpisodes.orEmpty().filter { it.season == season }
+
+    /** The episode after the one playing, in season and episode order, when it was started from its title page. */
+    fun nextEpisode(): Episode? {
+        val v = vodPlaying?.takeIf { it.kind == "episode" } ?: return null
+        val s = vodDetail?.takeIf { it.kind == "series" } ?: return null
+        val eps = detailEpisodes?.sortedWith(compareBy<Episode>({ seasonNum(it.season) }, { it.number })) ?: return null
+        val i = eps.indexOfFirst { episodeKey(s, it) == v.key }
+        return if (i < 0) null else eps.getOrNull(i + 1)
+    }
+
+    /** Whether the player offers ▶ Next episode: the episode counts as watched (95 %, or it ended) and there's a next one. */
+    fun nextEpisodeDue(pos: Long, dur: Long, ended: Boolean): Episode? =
+        if (ended || (dur > 0 && pos >= dur * 0.95)) nextEpisode() else null
+
+    /** ▶ Next episode: this one is saved (watched), then the next starts (from its own place, if it has one). */
+    fun playNextEpisode() {
+        val e = nextEpisode() ?: return
+        saveResumePoint()
+        if (player.playbackState == Player.STATE_ENDED) vodPlaying?.let { v -> watched.remove(v.key); watched.add(v.key); store.saveWatched(watched); resume = resume - v.key; store.saveResume(resume) }
+        trail("next episode")
+        playDetailEpisode(e)
+    }
+
     /**
      * Where a series page starts: Season 1, Episode 1 if nothing has been watched; otherwise the episode after
      * the last one watched to the end, or the one part-watched if that came later.
@@ -5731,7 +5792,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** Closes a title's page; [returnFocus] puts the highlight back on its poster (not when leaving via the menu). */
     fun closeVodDetail(returnFocus: Boolean = true) {
         val had = vodDetail != null
-        vodDetail = null; vodInfo = null; detailEpisodes = null
+        vodDetail = null; vodInfo = null; detailEpisodes = null; episodeMenu = null
         if (had && returnFocus) vodFocusBack++
     }
 
