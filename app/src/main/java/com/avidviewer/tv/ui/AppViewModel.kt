@@ -55,6 +55,7 @@ import com.avidviewer.tv.data.Xmltv
 import com.avidviewer.tv.data.Xtream
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.Job
 import org.json.JSONArray
 import org.json.JSONObject
@@ -97,6 +98,12 @@ const val GENRE_CAT = "genre:"
 /** The start-up screen stays at least this long, and at most [SPLASH_MAX_MS]. Nov 21, 2026. */
 const val SPLASH_MIN_MS = 1_500L
 const val SPLASH_MAX_MS = 5_000L
+/** A quiet start ends once the video has played steadily this long… Nov 21, 2026. */
+const val QUIET_PLAYING_MS = 30_000L
+/** …or nothing has played for this long, or at the latest after [QUIET_MAX_MS]. */
+const val QUIET_IDLE_MS = 30_000L
+const val QUIET_MAX_MS = 120_000L
+
 /** No video on screen for this long (another screen): the stream stops. Nov 21, 2026. */
 const val PARK_SCREEN_MS = 10_000L
 /** The main menu open over the Guide or Sports for this long: the stream stops. */
@@ -530,6 +537,24 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
      * Off in tests.
      */
     var startSplash by mutableStateOf(android.os.Build.FINGERPRINT != "robolectric"); private set
+
+    // ---------------- a quiet start (Nov 21, 2026) ----------------
+    /**
+     * Done once the start is over: the video has played steadily for [QUIET_PLAYING_MS], or nothing has played for
+     * [QUIET_IDLE_MS], or [QUIET_MAX_MS] have passed. Until then only the guide and the preview run; downloads,
+     * the account sync, catalog work, update and episode checks wait. At once without playlists, and in tests.
+     */
+    internal val quietStartDone = kotlinx.coroutines.CompletableDeferred<Unit>()
+    /** Start-up work that waits for [quietStartDone] runs one job at a time, in turn. */
+    private val backgroundTurn = kotlinx.coroutines.sync.Mutex()
+    /** A low-priority thread for the catalog's heavy work, so it never competes with the video or the remote. */
+    private val backgroundThread: kotlinx.coroutines.CoroutineDispatcher = java.util.concurrent.Executors.newSingleThreadExecutor { r ->
+        Thread({ android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_BACKGROUND); r.run() }, "avid-background").apply { isDaemon = true }
+    }.asCoroutineDispatcher()
+    /** Start-up timings for the playback log: (label, ms after start). Never names. */
+    private val startupMarks = java.util.Collections.synchronizedList(ArrayList<Pair<String, Long>>())
+    @Volatile private var firstPictureAt = 0L
+    private val startedUptime = android.os.SystemClock.uptimeMillis()
     /** Off in tests, which turn it on where they check it. */
     internal var stopWhenNoVideo = android.os.Build.FINGERPRINT != "robolectric"
     /** Something is playing (read by background work off the screen's thread, which waits while it is). */
@@ -1100,6 +1125,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             // Playlists sent from avidviewer.app/playlists: once a minute while the app is on screen (1.14.0).
             delay(5_000)
+            afterQuietStart() // Nov 21, 2026: after the quiet start (at once on a TV with no playlists yet)
             while (true) { if (onScreen && account.linked) syncAccountPlaylists(); delay(60_000) }
         }
         viewModelScope.launch {
@@ -1117,16 +1143,21 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         // a little after start-up (channels and the guide come first); then Movies & Series regroup.
         viewModelScope.launch {
             // Which copy stands for each title, worked out in the background (not while a list is read).
+            // Nov 21, 2026: after the quiet start, in turn, on the low-priority thread.
             delay(3_000)
-            // #14 (1.5.1): titles saved with the older name rules get them again once, so "NF - Allen" and
-            // "Allen" count as one title.
-            val marker = java.io.File(getApplication<android.app.Application>().filesDir, "catalog-names-2")
-            if (!marker.exists()) withContext(Dispatchers.IO) { runCatching { catalog.renormalize(); marker.writeText("1") } }
-            regroupLater(0)
-            delay(5_000)
-            val n = withContext(Dispatchers.IO) { runCatching { if (catalog.needsLanguages()) catalog.fillLanguages() else 0 }.getOrDefault(0) }
-            if (n > 0) regroupLater(0) // English copies first now that languages are known
+            afterQuietStart()
+            inTurn("catalog") {
+                // #14 (1.5.1): titles saved with the older name rules get them again once, so "NF - Allen" and
+                // "Allen" count as one title.
+                val marker = java.io.File(getApplication<android.app.Application>().filesDir, "catalog-names-2")
+                if (!marker.exists()) withContext(backgroundThread) { runCatching { catalog.renormalize(); marker.writeText("1") } }
+                val pids = vodPlaylists.map { it.id }
+                if (withContext(backgroundThread) { runCatching { catalog.regroup(pids) }.isSuccess }) { groupedFor = pids; vodVersion++ }
+                val n = withContext(backgroundThread) { runCatching { if (catalog.needsLanguages()) catalog.fillLanguages() else 0 }.getOrDefault(0) }
+                if (n > 0) regroupLater(0) // English copies first now that languages are known
+            }
         }
+        watchQuietStart()
         player.addAnalyticsListener(playback)
         if (startSplash) viewModelScope.launch {
             val t0 = android.os.SystemClock.uptimeMillis()
@@ -1138,6 +1169,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             }
             trail("start-up screen closed after ${waited()} ms (channels ${channels.size}, guide ${guide.size})")
             startSplash = false
+            markStart("guide on screen")
             guideFocusTick++
         }
         val load = com.avidviewer.tv.data.DeviceLoad(app)
@@ -1169,6 +1201,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             }
 
             override fun onTracksChanged(tracks: androidx.media3.common.Tracks) { tracksChanged(tracks) }
+            override fun onRenderedFirstFrame() { if (firstPictureAt == 0L) { firstPictureAt = android.os.SystemClock.uptimeMillis() - startedUptime } }
         })
         viewModelScope.launch {
             while (true) {
@@ -1196,7 +1229,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 if (sportsFetchedAt > 0 && age >= due) refreshSports()
                 // Nov 18: Sports is ready before it's opened: 2 minutes after start (channels and guide in), on every
                 // TV with live TV and a league switched on; not for a Kids profile (it has no Sports).
-                else if (sportsFetchedAt == 0L && System.currentTimeMillis() - startedAt > SPORTS_PRELOAD_AFTER && !profile.kids &&
+                else if (sportsFetchedAt == 0L && quietStartDone.isCompleted && System.currentTimeMillis() - startedAt > SPORTS_PRELOAD_AFTER && !profile.kids &&
                     livePlaylists.any { it.enabled } && leaguesOn().isNotEmpty() && onScreen) refreshSports()
             }
         }
@@ -1227,7 +1260,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 updateStatus = if (msg == Updater.NO_CONFIRM) "The installer screen didn't open. Choose Open installer to finish." else msg
             }
         }
-        if (prefs.autoUpdateCheck) checkForUpdate(quiet = true)
+        if (prefs.autoUpdateCheck) viewModelScope.launch { afterQuietStart(); checkForUpdate(quiet = true) }
         if (activePlaylist() == null) { screen = Screen.SETTINGS; settingsSection = "playlists"; navMode = NavMode.COLLAPSED }
         // First time (1.6.0): with no playlists at all, a welcome screen comes first.
         if (playlists.isEmpty()) showWelcome = true
@@ -1237,6 +1270,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         // 1.17.1: series being watched are checked for new episodes (twice a day), so they come back to Continue watching.
         if (android.os.Build.FINGERPRINT != "robolectric") viewModelScope.launch {
             delay(45_000)
+            afterQuietStart()
             while (true) { checkSeriesForNewEpisodes(); delay(6 * 3600_000L) }
         }
     }
@@ -1653,7 +1687,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 if (savedGuide.isNotEmpty()) guide = savedGuide
                 refreshGuideEnd()
                 val stale = System.currentTimeMillis() - savedAt > guideMs()
-                if (refresh || download || stale || savedGuide.isEmpty()) refreshGuide(p)
+                if (refresh || download || savedGuide.isEmpty()) refreshGuide(p)
+                // Out of date but there: downloaded after the quiet start, in turn (Nov 21, 2026).
+                else if (stale) { if (quietStartDone.isCompleted) refreshGuide(p) else viewModelScope.launch { afterQuietStart(); inTurn("guide of the playlist in use") { refreshGuide(p) } } }
             }
             ensureFavoriteData()
             busy = false
@@ -2449,9 +2485,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         if (syncJob?.isActive == true && !force) return
         syncJob?.cancel()
         syncJob = viewModelScope.launch {
-            if (!force) delay(10_000) // let the first screen settle on slow devices
+            if (!force) { delay(10_000); afterQuietStart() } // let the first screen settle (Nov 21, 2026: the quiet start)
             val dayMs = 24 * 3600 * 1000L; val guideMs = guideMs()
-            for (p in shownPlaylists) {
+            val all = shownPlaylists
+            for ((n, p) in all.withIndex()) inTurn("playlist ${n + 1} of ${all.size}", force) {
                 val nowMs = System.currentTimeMillis()
                 val isGuidePlaylist = p.id == activePlaylist()?.id
                 if (p.liveOn && !isGuidePlaylist) runCatching {
@@ -2476,6 +2513,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                     }
                 }
             }
+            logStartupWork()
             if (prefs.showSuggestions) refreshSuggestions()
         }
     }
@@ -5407,6 +5445,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         val pids = vodPids(); if (pids.isEmpty()) return
         genreJob = viewModelScope.launch {
             try {
+                afterQuietStart()
                 // Trending this week, at most every 6 hours (matched to the playlists by name).
                 if (System.currentTimeMillis() - trendingAt > 6 * 3600_000L) withContext(Dispatchers.IO) {
                     runCatching {
@@ -5421,7 +5460,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                     ensureActive()
                     genreProgress = withContext(Dispatchers.IO) { runCatching { catalog.genreProgress(pids) }.getOrNull() }
                     // A batch at a time off the screen's thread; stops when offline or the key is refused.
-                    val more = withContext(Dispatchers.IO) {
+                    val more = withContext(backgroundThread) {
                         val batch = runCatching { catalog.pendingGenres(pids, 40) }.getOrDefault(emptyList())
                         for (t in batch) {
                             ensureActive()
@@ -5605,6 +5644,65 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 if (now - hiddenSince >= (if (menu) PARK_MENU_MS else PARK_SCREEN_MS)) { hiddenSince = 0L; parkStream() }
             }
         }
+    }
+
+    /** Waits for the end of the quiet start (Nov 21, 2026). */
+    internal suspend fun afterQuietStart() = quietStartDone.await()
+
+    private fun markStart(label: String) { startupMarks.add(label to android.os.SystemClock.uptimeMillis() - startedUptime) }
+
+    /**
+     * Start-up work, one job at a time ([backgroundTurn]); its time goes in the playback log's start-up entry while
+     * the first round after the quiet start runs. [now]: a download the viewer asked for doesn't wait its turn.
+     */
+    private suspend fun inTurn(label: String, now: Boolean = false, block: suspend () -> Unit) {
+        if (now) { block(); return }
+        backgroundTurn.withLock {
+            val t = android.os.SystemClock.uptimeMillis()
+            try { block() } finally {
+                if (!startupLogged) startupJobs.add("$label ${secs(android.os.SystemClock.uptimeMillis() - t)}")
+            }
+        }
+    }
+    private val startupJobs = java.util.Collections.synchronizedList(ArrayList<String>())
+    @Volatile private var startupLogged = false
+    private fun secs(ms: Long) = if (ms < 10_000) String.format(java.util.Locale.US, "%.1f s", ms / 1000.0) else "${ms / 1000} s"
+
+    /** Ends the quiet start once the video has played steadily, nothing has played for a while, or at the latest. */
+    private fun watchQuietStart() {
+        if (android.os.Build.FINGERPRINT == "robolectric" || playlists.none { it.enabled }) { quietStartDone.complete(Unit); return }
+        viewModelScope.launch {
+            var playingFrom = 0L
+            var why: String? = null
+            while (why == null) {
+                delay(500)
+                val now = android.os.SystemClock.uptimeMillis(); val since = now - startedUptime
+                val steady = player.isPlaying && playerError == null
+                playingFrom = if (steady) (if (playingFrom == 0L) now else playingFrom) else 0L
+                val nothing = player.mediaItemCount == 0 || streamParked || choosingProfile || linkRequired
+                why = when {
+                    playingFrom > 0 && now - playingFrom >= QUIET_PLAYING_MS -> "the video played steadily for ${QUIET_PLAYING_MS / 1000} s"
+                    nothing && since >= QUIET_IDLE_MS -> "nothing was playing"
+                    since >= QUIET_MAX_MS -> "${QUIET_MAX_MS / 1000} s passed"
+                    else -> null
+                }
+            }
+            markStart("quiet start over")
+            quietStartDone.complete(Unit)
+            val marks = startupMarks.toList().joinToString(" · ") { "${it.first} ${secs(it.second)}" }
+            val pic = if (firstPictureAt > 0) " · first picture ${secs(firstPictureAt)}" else ""
+            playbackLog.add(com.avidviewer.tv.data.PlaybackLog.DEVICE, "", "Start-up: $marks$pic ($why)")
+        }
+    }
+
+    /** After the first round of downloads: how long each start-up job took, in the playback log. */
+    private fun logStartupWork() {
+        if (startupLogged || !quietStartDone.isCompleted) return
+        startupLogged = true
+        val jobs = startupJobs.toList()
+        if (jobs.isEmpty()) return
+        playbackLog.add(com.avidviewer.tv.data.PlaybackLog.DEVICE, "", "After start-up, one at a time: " + jobs.joinToString(" · ") +
+            " · all done ${secs(android.os.SystemClock.uptimeMillis() - startedUptime)} after start")
     }
 
     /** Stops the live stream (the channel is remembered, so OK on it plays it again). */
