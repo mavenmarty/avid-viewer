@@ -40,6 +40,8 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun dispatchKeyEvent(event: android.view.KeyEvent): Boolean {
+        // Nov 21, 2026: the start-up screen gives the TV a head start; remote keys wait until it closes.
+        if (vm.startSplash) return true
         // #22: a key that makes Compose follow a focus link to something not on screen threw "FocusRequester is not
         // initialized" and closed the app. Now it's noted for crash reports and the press is used up instead.
         val handled = try { super.dispatchKeyEvent(event) } catch (e: IllegalStateException) {
