@@ -4723,9 +4723,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
      * each, the best match first, as found (national TV, the guide, event channels, local TV; US before Canada).
      */
     internal fun orderForProfile(found: List<ChannelMatch>): List<ChannelMatch> {
-        // Nov 21, 2026 (owner): ★ Favorites, then channels in the playlists' categories for the game's league
-        // ("NHL", "NHL Teams"; replays left out), then regional sports networks, then everything else.
-        val favs = prefs.favorites.toHashSet()
+        // Nov 21, 2026 (owner): ★ Favorites and your lists, then channels in the playlists' categories for the game's
+        // league ("NHL", "NHL Teams"; replays left out), then regional sports networks, then everything else.
+        val favs = (prefs.favorites + prefs.lists.flatMap { it.keys }).toHashSet()
         fun tier(m: ChannelMatch) = when {
             m.key in favs -> 0
             m.leagueCategory -> 1
@@ -4884,8 +4884,11 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     ): Pair<Map<String, List<com.avidviewer.tv.data.ChannelMatch>>, Map<String, Channel>> =
         withContext(Dispatchers.IO) {
             liveReady()
-            // Every profile's ★ Favorites on this TV: matched loosely and never cut (Where to watch puts them first).
-            val favs = profiles.list.flatMapTo(HashSet()) { prof -> (if (prof.id == profile.id) prefs else runCatching { store.loadPrefs(prof.id) }.getOrDefault(prefs)).favorites }
+            // Every profile's ★ Favorites and lists on this TV: matched loosely and never cut (Where to watch puts them first).
+            val favs = profiles.list.flatMapTo(HashSet()) { prof ->
+                val pr = if (prof.id == profile.id) prefs else runCatching { store.loadPrefs(prof.id) }.getOrDefault(prefs)
+                pr.favorites + pr.lists.flatMap { it.keys }
+            }
             val m = com.avidviewer.tv.data.SportsMatcher(kept, favs) { it in hiddenKeys }
             val from = kept.minOf { it.start } - 2 * 3600_000L
             val to = kept.maxOf { it.likelyEnd() } + 3600_000L
