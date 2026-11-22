@@ -5908,7 +5908,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         // dropped nearly every frame for a week). Otherwise a full restart on the same decoder.
         val f = player.videoFormat
         val onSoftware = decoders.usesOther(key)
-        val canSwitch = onSoftware || (f != null && com.avidviewer.tv.data.Decoders.softwareCanKeepUp(f.width, f.height, f.frameRate, f.sampleMimeType ?: f.codecs))
+        val canSwitch = onSoftware || f == null || f.width <= 0 || com.avidviewer.tv.data.Decoders.softwareCanKeepUp(f.width, f.height, f.frameRate, f.sampleMimeType ?: f.codecs)
         val other = if (canSwitch) decoders.switch(key) else false
         playback.decoderError(error.errorCodeName, other)
         reconnectStream(live = vodPlaying == null, full = true)
