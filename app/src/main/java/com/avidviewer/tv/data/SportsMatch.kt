@@ -168,12 +168,15 @@ class SportsMatcher(
     /** Whether any channel added for this playlist has a guide id at all (no: its guide isn't read). */
     fun anyGuide(): Boolean = byEpg.isNotEmpty()
 
-    /** Channels per game id, best first, at most [max] each (★ Favorites always kept, over the limit if need be). */
+    /**
+     * Channels per game id, best first, at most [max] each. ★ Favorites and channels in the league's categories are
+     * always kept, over the limit if need be (dozens of a network's local stations could otherwise push them out).
+     */
     fun result(max: Int = 12): Map<String, List<ChannelMatch>> = found.mapValues { (_, m) ->
         val all = m.values.map { ChannelMatch(it.key, it.name, it.pid, it.kinds, it.reasons, it.country, it.leagueCategory) }
             .sortedWith(compareByDescending<ChannelMatch> { it.rank }.thenBy { it.name.length }.thenBy { it.name })
         val top = all.take(max)
-        top + all.drop(max).filter { it.key in favorites }
+        top + all.drop(max).filter { it.key in favorites || it.leagueCategory }
     }
 
     /** [lower] names the team by its full name or nickname (not just its place, which is too loose for a channel name). */
