@@ -2,7 +2,6 @@ package com.avidviewer.tv
 
 import android.app.Application
 import com.avidviewer.tv.data.Tmdb
-import com.sun.net.httpserver.HttpServer
 import org.json.JSONObject
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -12,46 +11,60 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
-import java.net.InetSocketAddress
+import java.net.ServerSocket
+import kotlin.concurrent.thread
 import java.util.Collections
 
 /** Nov 22, 2026: rating titles on TMDB with the profile's own TMDB account (link by approving a request token). */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], application = Application::class)
 class TmdbAccountTest {
-    private lateinit var server: HttpServer
+    private lateinit var server: ServerSocket
     private val seen: MutableList<String> = Collections.synchronizedList(ArrayList())
     @Volatile private var approved = false
     @Volatile private var rating: Double? = null
     private var oldBase = ""
 
+    private fun answer(method: String, path: String, body: String): Pair<Int, JSONObject> = when {
+        path == "/authentication/token/new" -> 200 to JSONObject().put("success", true).put("request_token", "tok123")
+        path == "/authentication/session/new" -> if (approved) 200 to JSONObject().put("success", true).put("session_id", "sess9")
+            else 401 to JSONObject().put("status_message", "Authentication failed: request token not approved")
+        path == "/account" -> 200 to JSONObject().put("id", 1).put("username", "evan")
+        path == "/movie/603/account_states" -> 200 to JSONObject().put("id", 603).put("rated", rating?.let { JSONObject().put("value", it) } ?: false)
+        path == "/movie/603/rating" && method == "POST" -> { rating = JSONObject(body).getDouble("value"); 201 to JSONObject().put("success", true) }
+        path == "/movie/603/rating" && method == "DELETE" -> { rating = null; 200 to JSONObject().put("success", true) }
+        else -> 404 to JSONObject().put("status_message", "not here")
+    }
+
     @Before
     fun start() {
-        server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
-        server.createContext("/3/") { ex ->
-            val path = ex.requestURI.path.removePrefix("/3")
-            val body = ex.requestBody.readBytes().toString(Charsets.UTF_8)
-            seen.add("${ex.requestMethod} $path ${ex.requestURI.query.orEmpty()} $body")
-            val (code, out) = when {
-                path == "/authentication/token/new" -> 200 to JSONObject().put("success", true).put("request_token", "tok123")
-                path == "/authentication/session/new" -> if (approved) 200 to JSONObject().put("success", true).put("session_id", "sess9")
-                    else 401 to JSONObject().put("status_message", "Authentication failed: request token not approved")
-                path == "/account" -> 200 to JSONObject().put("id", 1).put("username", "evan")
-                path == "/movie/603/account_states" -> 200 to JSONObject().put("id", 603).put("rated", rating?.let { JSONObject().put("value", it) } ?: false)
-                path == "/movie/603/rating" && ex.requestMethod == "POST" -> { rating = JSONObject(body).getDouble("value"); 201 to JSONObject().put("success", true) }
-                path == "/movie/603/rating" && ex.requestMethod == "DELETE" -> { rating = null; 200 to JSONObject().put("success", true) }
-                else -> 404 to JSONObject().put("status_message", "not here")
+        server = ServerSocket(0)
+        thread(isDaemon = true) {
+            while (!server.isClosed) {
+                val c = runCatching { server.accept() }.getOrNull() ?: break
+                c.use { conn ->
+                    val input = conn.getInputStream().bufferedReader()
+                    val first = input.readLine() ?: return@use
+                    var len = 0
+                    while (true) { val l = input.readLine() ?: break; if (l.isEmpty()) break; if (l.startsWith("Content-Length:", true)) len = l.substringAfter(':').trim().toInt() }
+                    val body = if (len > 0) CharArray(len).also { var n = 0; while (n < len) { val r = input.read(it, n, len - n); if (r < 0) break; n += r } }.concatToString() else ""
+                    val (method, target) = first.split(" ").let { it[0] to it[1] }
+                    val path = target.substringBefore('?').removePrefix("/3"); val query = target.substringAfter('?', "")
+                    seen.add("$method $path $query $body")
+                    val (code, out) = answer(method, path, body)
+                    val bytes = out.toString().toByteArray()
+                    conn.getOutputStream().apply {
+                        write("HTTP/1.1 $code X\r\nContent-Type: application/json\r\nContent-Length: ${bytes.size}\r\nConnection: close\r\n\r\n".toByteArray()); write(bytes); flush()
+                    }
+                }
             }
-            val bytes = out.toString().toByteArray()
-            ex.sendResponseHeaders(code, bytes.size.toLong()); ex.responseBody.use { it.write(bytes) }
         }
-        server.start()
         oldBase = Tmdb.base
-        Tmdb.base = "http://127.0.0.1:${server.address.port}/3"
+        Tmdb.base = "http://127.0.0.1:${server.localPort}/3"
     }
 
     @After
-    fun stop() { Tmdb.base = oldBase; server.stop(0) }
+    fun stop() { Tmdb.base = oldBase; server.close() }
 
     @Test
     fun linkThenRateAndRemoveTheRating() {
