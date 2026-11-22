@@ -204,4 +204,16 @@ class CatalogStreamTest {
         assertEquals(500, catalog.count(Catalog.Query("movie", listOf("p"))))
         server.close()
     }
+
+    // ---- Nov 21, 2026: lookups by name use the name index, with any number of playlists ----
+
+    @Test
+    fun lookingATitleUpByNameUsesTheNameIndexWithFivePlaylists() {
+        val pids = listOf("p1", "p2", "p3", "p4", "p5")
+        for (pid in pids) catalog.replace(pid, (1..400).asSequence().map { i -> VodItem("$pid:m$i", pid, "movie", "Movie $i", null, "http://x/movie/$i.mp4", category = "Cat ${i % 20}") }) { false }
+        val plan = catalog.byNamePlan("movie", pids)
+        assertTrue("plan: $plan", plan.contains("title_name"))
+        assertEquals(5, catalog.findAllByName("movie", com.avidviewer.tv.data.Tmdb.normalize("Movie 7"), pids).size)
+        assertEquals("p1:m7", catalog.findByName("movie", com.avidviewer.tv.data.Tmdb.normalize("Movie 7"), pids)?.key)
+    }
 }

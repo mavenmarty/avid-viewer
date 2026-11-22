@@ -164,6 +164,7 @@ class Catalog(context: Context) : SQLiteOpenHelper(context.applicationContext, "
         private const val PER_PLAYLIST = 10_000_000_000L
         /** What folds copies together: the normalized name (a title with no usable name stays on its own). */
         private const val GROUP_KEY = "(CASE WHEN nn = '' THEN k ELSE nn END)"
+        private const val BY_NAME = "INDEXED BY title_name"
         /** A title's key in the genre tables: its kind group and [GROUP_KEY]. Matches [genreKeyOf]. */
         private const val GENRE_KEY = "(title.g || '|' || (CASE WHEN title.nn = '' THEN title.k ELSE title.nn END))"
         const val GENRE_OTHER = -1
@@ -528,7 +529,7 @@ class Catalog(context: Context) : SQLiteOpenHelper(context.applicationContext, "
         if (playlists.isEmpty() || normalized.isBlank()) return null
         val q = Query(group, playlists, includeHidden = true)
         val (w, a) = q.where()
-        return readableDatabase.rawQuery("SELECT $COLS FROM title WHERE nn = ? AND $w ORDER BY ${q.order()} LIMIT 1", arrayOf(normalized) + a).use { c ->
+        return byNameQuery("SELECT $COLS FROM title $BY_NAME WHERE nn = ? AND $w ORDER BY ${q.order()} LIMIT 1", arrayOf(normalized) + a).use { c ->
             if (c.moveToFirst()) read(c) else null
         }
     }
@@ -538,8 +539,27 @@ class Catalog(context: Context) : SQLiteOpenHelper(context.applicationContext, "
         if (playlists.isEmpty() || normalized.isBlank()) return emptyList()
         val q = Query(group, playlists, includeHidden = includeHidden)
         val (w, a) = q.where()
-        return readableDatabase.rawQuery("SELECT $COLS FROM title WHERE nn = ? AND $w ORDER BY ${q.order()} LIMIT $limit", arrayOf(normalized) + a).use { c ->
+        return byNameQuery("SELECT $COLS FROM title $BY_NAME WHERE nn = ? AND $w ORDER BY ${q.order()} LIMIT $limit", arrayOf(normalized) + a).use { c ->
             val out = ArrayList<VodItem>(); while (c.moveToNext()) out.add(read(c)); out
+        }
+    }
+
+    /**
+     * Nov 21, 2026: a lookup by name always uses the name index. Without table statistics SQLite chose the
+     * (kind, hidden, playlist) index instead whenever several playlists were asked for, so each lookup read every
+     * movie or series of every playlist: seconds per title with five playlists, on the screen's thread in Discover
+     * (crash reports AVR-3f2f65bc, AVR-eb092ea6) and once per My List and history entry in the account sync.
+     */
+    private fun byNameQuery(sql: String, args: Array<String>): android.database.Cursor =
+        try { readableDatabase.rawQuery(sql, args) } catch (e: android.database.sqlite.SQLiteException) {
+            readableDatabase.rawQuery(sql.replace(BY_NAME, ""), args) // the index missing: the old way
+        }
+
+    /** The query plan for a lookup by name (tests). */
+    internal fun byNamePlan(group: String, playlists: List<String>): String {
+        val (w, a) = Query(group, playlists).where()
+        return readableDatabase.rawQuery("EXPLAIN QUERY PLAN SELECT $COLS FROM title $BY_NAME WHERE nn = ? AND $w", arrayOf("x") + a).use { c ->
+            val out = StringBuilder(); while (c.moveToNext()) out.append(c.getString(c.columnCount - 1)).append('\n'); out.toString()
         }
     }
 
