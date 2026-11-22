@@ -111,6 +111,8 @@ const val QUIET_MAX_MS = 120_000L
 const val PARK_SCREEN_MS = 10_000L
 /** The main menu open over the Guide or Sports for this long: the stream stops. */
 const val PARK_MENU_MS = 1_500L
+/** Sorts for Movies, Series and Discover (Nov 22, 2026). */
+val VOD_SORTS = listOf("added", "az", "rating")
 /** The categories above the provider's (or the genres) in Movies and Series. */
 val VOD_SPECIALS = listOf("All", "Recently added", "Continue watching", "My List")
 /** 1.18.0: how channels and lists are sorted. */
@@ -180,7 +182,11 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** Movies and Series layout for the profile: "grid", "featured" or "showcase". */
     // Nov 18, 2026: Featured is retired; the Grid now carries the highlighted title's artwork. A profile set to
     // Featured shows the Grid.
-    val vodLayout: String get() = profile.vodLayout.let { if (it == "featured") "grid" else it }
+    /** Nov 22, 2026 (owner): one layout, the Grid; Movies, Series and Discover choose a sort instead. */
+    val vodLayout: String get() = "grid"
+    /** How Movies, Series and Discover sort for this profile: "added" (newest first), "az" or "rating". */
+    val vodSort: String get() = profile.vodSort.takeIf { it in VOD_SORTS } ?: "added"
+    fun setVodSort(s: String) { if (s in VOD_SORTS && s != vodSort) updateProfile(profile.copy(vodSort = s)) }
     fun setVodLayout(l: String) = updateProfile(profile.copy(vodLayout = l))
     /** The profile in use is a Kids profile: only its categories, no Settings, Discover or Sports. */
     val kidsMode: Boolean get() = profile.kids
@@ -4523,6 +4529,16 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
      * Movies and Series screens. Only titles on your provider can go in My List; for the others the
      * note says why and how to find them.
      */
+    /** Discover's sort (Nov 22, 2026): null = TMDB's order; "az", "rating" or "added" (release date, newest first). */
+    var discoverSort by mutableStateOf<String?>(null)
+
+    fun sortDiscover(list: List<Title>): List<Title> = when (discoverSort) {
+        "az" -> list.sortedBy { com.avidviewer.tv.data.Tmdb.cleanName(it.name).lowercase().removePrefix("the ") }
+        "rating" -> list.sortedWith(compareByDescending<Title> { if (it.votes > 0) it.rating else -1.0 }.thenByDescending { it.votes })
+        "added" -> list.sortedByDescending { it.date }
+        else -> list
+    }
+
     fun discoverMenu(t: Title) {
         val match = matchVod(t)
         discoverHint = if (match == null) {
@@ -5552,17 +5568,17 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun vodItems(kind: String): List<VodItem> = vodItemsNow(kind).also { ensureGrouped() }
 
     private fun vodItemsNow(kind: String): List<VodItem> =
-        vodItemsMemo.getOrPut(kind) { Memo() }.get(vodVersion, vodPids().joinToString(","), prefs, vodCategory[kind] ?: "All", resume, genreVersion) { computeVodItems(kind) }
+        vodItemsMemo.getOrPut(kind) { Memo() }.get(vodVersion, vodPids().joinToString(","), prefs, vodCategory[kind] ?: "All", resume, genreVersion, vodSort) { computeVodItems(kind) }
     private fun computeVodItems(kind: String): List<VodItem> {
         val g = vodKindKey(kind)
         return when (val c = vodCategory[kind] ?: "All") {
-            "All" -> vodOf(kind)
+            "All" -> titles(com.avidviewer.tv.data.Catalog.Query(g, vodPids(), grouped = true, sort = vodSort))
             "Recently added" -> titles(com.avidviewer.tv.data.Catalog.Query(g, vodPids(), newestFirst = true, limit = 200, grouped = true))
             "My List" -> prefs.myList.filter { if (kind == "series") it.kind == "series" else it.kind != "series" }
             "Continue watching" -> continueKeys().let { ks -> val at = ks.withIndex().associate { it.value to it.index }
                 withLiveCard(catalog.byKeys(ks).filter { Catalog.group(it.kind) == g && !isVodHidden(it) }.sortedBy { at[it.key] ?: Int.MAX_VALUE }) }
-            else -> if (genreOf(c) != null) titles(com.avidviewer.tv.data.Catalog.Query(g, vodPids(), grouped = true, genre = genreOf(c)))
-                else vodPrefetched.remove(prefetchKey(kind, c)) ?: titles(com.avidviewer.tv.data.Catalog.Query(g, vodPids(), category = c, grouped = true))
+            else -> if (genreOf(c) != null) titles(com.avidviewer.tv.data.Catalog.Query(g, vodPids(), grouped = true, genre = genreOf(c), sort = vodSort))
+                else vodPrefetched.remove(prefetchKey(kind, c)) ?: titles(com.avidviewer.tv.data.Catalog.Query(g, vodPids(), category = c, grouped = true, sort = vodSort))
         }
     }
 
@@ -5572,14 +5588,14 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, List<VodItem>>?) = size > 3
     }
     private var vodPrefetchJob: Job? = null
-    private fun prefetchKey(kind: String, cat: String) = "$kind|$cat|$vodVersion|${vodPids().joinToString(",")}|${prefs.vodHiddenTitles.size}"
+    private fun prefetchKey(kind: String, cat: String) = "$kind|$cat|$vodVersion|${vodPids().joinToString(",")}|${prefs.vodHiddenTitles.size}|$vodSort"
 
     fun prefetchVodCategory(kind: String, cat: String) {
         vodPrefetchJob?.cancel()
         if (genreOf(cat) != null) return
         val key = prefetchKey(kind, cat)
         if (key in vodPrefetched) return
-        val q = com.avidviewer.tv.data.Catalog.Query(vodKindKey(kind), vodPids(), category = cat, grouped = true)
+        val q = com.avidviewer.tv.data.Catalog.Query(vodKindKey(kind), vodPids(), category = cat, grouped = true, sort = vodSort)
         vodPrefetchJob = viewModelScope.launch {
             delay(250)
             val list = withContext(Dispatchers.IO) { titles(q).also { if (it.size > 0) it[0] } }

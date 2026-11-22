@@ -32,6 +32,8 @@ data class Profile(
     val theme: String = "",
     /** Movies and Series layout: "grid", "featured" or "showcase". */
     val vodLayout: String = "grid",
+    /** Nov 22, 2026: how Movies, Series and Discover sort ("added", "az", "rating"); the layout is always Grid now. */
+    val vodSort: String = "added",
     /** 1.15.0: the avidviewer.app account profile this one is (empty = only on this device). */
     val remoteId: String = "",
     /**
@@ -58,7 +60,7 @@ data class Profile(
     fun toJson(): JSONObject = JSONObject()
         .put("id", id).put("name", name).put("color", color).put("kids", kids).put("parent", parent).put("pin", pinHash)
         .put("allowedGroups", JSONArray(allowedGroups.toList())).put("allowedVodCats", JSONArray(allowedVodCats.toList()))
-        .put("theme", theme).put("vodLayout", vodLayout)
+        .put("theme", theme).put("vodLayout", vodLayout).put("vodSort", vodSort)
         .apply { if (remoteId.isNotEmpty()) put("remoteId", remoteId); if (acctHidden.isNotEmpty()) put("acctHidden", JSONArray(acctHidden.toList())) }
 
     companion object {
@@ -68,7 +70,7 @@ data class Profile(
             id = o.getString("id"), name = o.optString("name", "Profile"), color = o.optInt("color", 0),
             kids = o.optBoolean("kids"), parent = o.optBoolean("parent"), pinHash = o.optString("pin"),
             allowedGroups = strings(o.optJSONArray("allowedGroups")), allowedVodCats = strings(o.optJSONArray("allowedVodCats")),
-            theme = o.optString("theme", ""), vodLayout = o.optString("vodLayout", "grid"),
+            theme = o.optString("theme", ""), vodLayout = o.optString("vodLayout", "grid"), vodSort = o.optString("vodSort", "added"),
             remoteId = o.optString("remoteId", ""), acctHidden = strings(o.optJSONArray("acctHidden")),
         )
 

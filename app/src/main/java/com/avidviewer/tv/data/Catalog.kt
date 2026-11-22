@@ -167,6 +167,9 @@ class Catalog(context: Context) : SQLiteOpenHelper(context.applicationContext, "
         private const val BY_NAME = "INDEXED BY title_name"
         /** A title's key in the genre tables: its kind group and [GROUP_KEY]. Matches [genreKeyOf]. */
         private const val GENRE_KEY = "(title.g || '|' || (CASE WHEN title.nn = '' THEN title.k ELSE title.nn END))"
+        const val SORT_AZ = "az"
+        const val SORT_RATING = "rating"
+        const val SORT_ADDED = "added"
         const val GENRE_OTHER = -1
         const val GENRE_PENDING = -2
         /** This week's TMDB trending titles that are on the user's playlists. */
@@ -362,6 +365,8 @@ class Catalog(context: Context) : SQLiteOpenHelper(context.applicationContext, "
         val grouped: Boolean = false,
         /** A TMDB genre id, or [GENRE_OTHER] (looked up, no genre) or [GENRE_PENDING] (not looked up yet). */
         val genre: Int? = null,
+        /** Nov 22, 2026: [SORT_AZ], [SORT_RATING] or [SORT_ADDED] (null: the playlists' and provider's order). */
+        val sort: String? = null,
     ) {
         fun where(): Pair<String, Array<String>> {
             val sb = StringBuilder("g = ?")
@@ -393,6 +398,11 @@ class Catalog(context: Context) : SQLiteOpenHelper(context.applicationContext, "
             genre == GENRE_TRENDING -> "(SELECT pos FROM trending t WHERE t.gk = $GENRE_KEY), o"
             genre == GENRE_TOP -> "(SELECT r FROM genre_done d WHERE d.gk = $GENRE_KEY) DESC, o"
             newestFirst -> "a DESC, o"
+            sort == SORT_AZ -> "(CASE WHEN nn = '' THEN 1 ELSE 0 END), nn, n COLLATE NOCASE"
+            // TMDB's rating where the genre lookups found one (with votes), else the provider's; unrated last.
+            sort == SORT_RATING -> "COALESCE((SELECT d.r FROM genre_done d WHERE d.gk = $GENRE_KEY AND d.v > 0), " +
+                "CASE WHEN CAST(title.r AS REAL) > 0 THEN CAST(title.r AS REAL) END, -1) DESC, ${plIndex()}, o"
+            sort == SORT_ADDED -> "a DESC, ${plIndex()}, o"
             else -> "${plIndex()}, o"
         }
         private fun plIndex() = "CASE p ${playlists.mapIndexed { i, p -> "WHEN '${p.replace("'", "''")}' THEN $i" }.joinToString(" ")} END"

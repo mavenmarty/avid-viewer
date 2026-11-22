@@ -52,6 +52,10 @@ fun DiscoverScreen(vm: AppViewModel) {
             Text("Discover", color = C.Text, fontSize = 22.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(end = 10.dp))
             TABS.forEachIndexed { i, (id, label) -> TvButton(label, selected = vm.discoverTab == id, modifier = if (i == 0) Modifier.entryFocus(vm, Screen.DISCOVER) else Modifier) { vm.chooseDiscoverTab(id) } }
             Spacer(Modifier.weight(1f))
+            // Nov 22, 2026 (owner): a sort; TMDB's own order (trending rank, newest first…) until one is chosen.
+            listOf("az" to "A–Z", "rating" to "Rating", "added" to "Release date").forEach { (id, label) ->
+                TvButton(label, selected = vm.discoverSort == id, modifier = Modifier.testTag("discover-sort-$id")) { vm.discoverSort = if (vm.discoverSort == id) null else id }
+            }
             TvButton(if (vm.onlyOnProvider) "✓ On your provider" else "On your provider", selected = vm.onlyOnProvider, modifier = Modifier.testTag("only-on-provider")) {
                 vm.onlyOnProvider = !vm.onlyOnProvider
             }
@@ -88,7 +92,7 @@ fun DiscoverScreen(vm: AppViewModel) {
                 verticalArrangement = Arrangement.spacedBy(12.dp),
                 contentPadding = PaddingValues(bottom = 16.dp),
             ) {
-                items(list.distinctBy { it.key }, key = { it.key }) { t -> TitleCard(vm, t) }
+                items(vm.sortDiscover(list.distinctBy { it.key }), key = { it.key }) { t -> TitleCard(vm, t) }
             }
         }
         val hint = vm.discoverHint
