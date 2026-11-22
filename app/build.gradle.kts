@@ -122,6 +122,8 @@ dependencies {
 
     implementation("androidx.media3:media3-exoplayer:1.5.1")
     implementation("androidx.media3:media3-exoplayer-hls:1.5.1")
+    // Nov 22, 2026: DASH channels (.mpd) crashed the app without it (AVR-efddbf19, ClassNotFoundException).
+    implementation("androidx.media3:media3-exoplayer-dash:1.5.1")
     implementation("androidx.media3:media3-ui:1.5.1")
 
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
