@@ -216,4 +216,16 @@ class CatalogStreamTest {
         assertEquals(5, catalog.findAllByName("movie", com.avidviewer.tv.data.Tmdb.normalize("Movie 7"), pids).size)
         assertEquals("p1:m7", catalog.findByName("movie", com.avidviewer.tv.data.Tmdb.normalize("Movie 7"), pids)?.key)
     }
+
+    @Test
+    fun moviesSortByNameRatingAndDateAdded() {
+        // Nov 22, 2026: Sort in Movies and Series (A–Z · Rating · Date added); TMDB's rating wins over the provider's.
+        fun m(id: String, name: String, rating: String, added: Long) = VodItem("p:$id", "p", "movie", name, null, "http://x/$id.mp4", category = "Action", rating = rating, added = added)
+        catalog.replace("p", sequenceOf(m("a", "Zodiac", "6.0", 3), m("b", "Alien", "", 1), m("c", "Memento", "8.4", 2), m("d", "The Batman", "7.0", 4))) { false }
+        catalog.saveGenres("movie|alien", Catalog.GenreFound(listOf(878), 8.5, 9000))
+        fun names(sort: String) = catalog.page(Catalog.Query("movie", listOf("p"), sort = sort), 0, 10).map { it.name }
+        assertEquals(listOf("Alien", "Memento", "The Batman", "Zodiac"), names(Catalog.SORT_AZ))
+        assertEquals("TMDB's 8.5 first, then the provider's ratings", listOf("Alien", "Memento", "The Batman", "Zodiac"), names(Catalog.SORT_RATING))
+        assertEquals("newest first", listOf("The Batman", "Zodiac", "Memento", "Alien"), names(Catalog.SORT_ADDED))
+    }
 }

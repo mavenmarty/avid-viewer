@@ -184,8 +184,15 @@ fun VodScreen(vm: AppViewModel, kind: String) {
             if (layout == "grid" && items.isNotEmpty()) GridDetails(vm, shown, Modifier.fillMaxWidth().height(176.dp).padding(start = 8.dp, bottom = 6.dp))
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(bottom = 10.dp)) {
                 Label(if (vq.isNotBlank()) "Results for “$vq”  ·  ${items.size} titles" else "${vm.vodCatName(kind, current)}  ·  ${items.size} titles", size = 14.sp, color = if (layout == "showcase") Color.White.copy(alpha = 0.85f) else C.Soft, weight = FontWeight.Bold, modifier = Modifier.weight(1f))
-                listOf("grid" to "▦  Grid", "showcase" to "▣  Showcase").forEach { (id, label) ->
-                    TvButton(label, selected = layout == id, modifier = Modifier.testTag("vod-layout-$id")) { if (layout != id) vm.setVodLayout(id) }
+                // Nov 22, 2026 (owner): a sort in place of the layouts (Grid stays). Lists with their own order (Recently
+                // added, Continue watching, My List, Trending, Top rated) keep it.
+                val ownOrder = vq.isBlank() && (current in listOf("Recently added", "Continue watching", "My List") ||
+                    vm.genreOf(current).let { it == com.avidviewer.tv.data.Catalog.GENRE_TRENDING || it == com.avidviewer.tv.data.Catalog.GENRE_TOP })
+                if (!ownOrder && vq.isBlank()) {
+                    Label("Sort", size = 13.sp, color = C.Soft)
+                    listOf("added" to "Date added", "az" to "A–Z", "rating" to "Rating").forEach { (id, label) ->
+                        TvButton(label, selected = vm.vodSort == id, modifier = Modifier.testTag("vod-sort-$id")) { vm.setVodSort(id) }
+                    }
                 }
             }
             if (items.isEmpty()) {
