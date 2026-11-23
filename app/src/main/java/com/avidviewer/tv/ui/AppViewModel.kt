@@ -5420,6 +5420,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         vodVersion++
     }
 
+    /** Whether [key] (a movie, or a series by its episodes) has been watched or stopped part-way on this profile. */
+    private fun watchedCopy(key: String): Boolean = key in resume || resume.keys.any { it.startsWith("$key:") } || watched.any { it.startsWith("$key:") }
+
     /** For tests: marks an episode watched to the end, as the player does. */
     internal fun markWatched(key: String) { watched.add(key); store.saveWatched(watched); notePlace(key, 0) }
 
@@ -5479,6 +5482,19 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
      */
     fun nextUpEpisode(series: VodItem, eps: List<Episode>): Episode? {
         if (eps.isEmpty()) return null
+        // Nov 22, 2026 (owner): where the profile last left off: the episode stopped or finished most recently (on any
+        // TV); a part-watched one opens itself, a finished one the next episode not watched yet.
+        var best = -1; var bestAt = 0L
+        eps.forEachIndexed { i, e ->
+            val k = episodeKey(series, e)
+            val t = placeInfo[k]?.at ?: 0L
+            if (t > bestAt && (k in watched || resumeOf(k) > 0)) { best = i; bestAt = t }
+        }
+        if (best >= 0) {
+            val k = episodeKey(series, eps[best])
+            return if (resumeOf(k) > 0) eps[best]
+            else eps.drop(best + 1).firstOrNull { episodeKey(series, it) !in watched } ?: eps.drop(best + 1).firstOrNull() ?: eps[best]
+        }
         var at = -1
         eps.forEachIndexed { i, e -> val k = episodeKey(series, e); if (k in watched || resumeOf(k) > 0) at = i }
         if (at < 0) return eps.first()
@@ -5749,7 +5765,11 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             "Recently added" -> titles(com.avidviewer.tv.data.Catalog.Query(g, vodPids(), newestFirst = true, limit = 200, grouped = true))
             "My List" -> prefs.myList.filter { if (kind == "series") it.kind == "series" else it.kind != "series" }
             "Continue watching" -> continueKeys().let { ks -> val at = ks.withIndex().associate { it.value to it.index }
-                withLiveCard(catalog.byKeys(ks).filter { Catalog.group(it.kind) == g && !isVodHidden(it) }.sortedBy { at[it.key] ?: Int.MAX_VALUE }) }
+                withLiveCard(catalog.byKeys(ks).filter { Catalog.group(it.kind) == g && !isVodHidden(it) }.sortedBy { at[it.key] ?: Int.MAX_VALUE }
+                    // Nov 22, 2026 (owner): one entry per title, the copy (version) that was being watched, not another
+                    // copy of it that's in My List.
+                    .let { list -> list.groupBy { Tmdb.normalize(it.name) }.values.map { same -> same.firstOrNull { watchedCopy(it.key) } ?: same.first() }
+                        .sortedBy { at[it.key] ?: Int.MAX_VALUE } }) }
             else -> if (genreOf(c) != null) titles(com.avidviewer.tv.data.Catalog.Query(g, vodPids(), grouped = true, genre = genreOf(c), sort = vodSort))
                 else vodPrefetched.remove(prefetchKey(kind, c)) ?: titles(com.avidviewer.tv.data.Catalog.Query(g, vodPids(), category = c, grouped = true, sort = vodSort))
         }
@@ -5784,6 +5804,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         screen = if (item.kind == "series") Screen.SERIES else Screen.MOVIES
         if (navMode == NavMode.FULL || navMode == NavMode.GROUPS) navMode = NavMode.COLLAPSED
         vodDetail = item; vodInfo = null; detailEpisodes = null; detailSeason = null
+        // A page opened afresh starts where the profile left off; the episode last played here only steers the
+        // highlight when coming back from the player (the page stays open then).
+        lastEpisode = null
         val p = playlists.firstOrNull { it.id == item.playlistId }
         if (p == null || !p.isXtream) { vodInfo = VodInfo(); detailEpisodes = emptyList(); return }
         viewModelScope.launch {
@@ -5815,6 +5838,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun playDetailEpisode(e: Episode, fromStart: Boolean = false) {
         val s = vodDetail ?: return
         lastEpisode = e
+        detailSeason = e.season // Back from the player (also after Next episode into a new season) shows its season
         playVod(VodItem(episodeKey(s, e), s.playlistId, "episode", "${s.name} · S${e.season} E${e.number} · ${e.title}", s.logo, e.url), fromStart)
     }
 
