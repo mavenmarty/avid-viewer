@@ -483,7 +483,10 @@ private fun VodDetail(vm: AppViewModel, v: VodItem) {
     // to the left and below; the name, facts, buttons and ratings sit on it, then the seasons and episodes.
     LaunchedEffect(v.key) { vm.wantArt(v) }
     val art = vm.artOf(v)
-    Box(Modifier.fillMaxSize().onFocusChanged { inside = it.hasFocus }) {
+    // Nov 22, 2026 (owner): Left at the page's left edge goes back to the posters (as Back does), not to the main menu.
+    Box(Modifier.fillMaxSize().onFocusChanged { inside = it.hasFocus }.focusProperties {
+        exit = { dir -> if (dir == androidx.compose.ui.focus.FocusDirection.Left) { vm.closeVodDetail(); FocusRequester.Cancel } else FocusRequester.Default }
+    }) {
         val img = art?.backdrop ?: info?.image ?: v.logo
         Box(Modifier.fillMaxSize().background(C.Bg))
         if (img != null) Box(Modifier.align(Alignment.TopEnd).fillMaxWidth(0.8f).fillMaxHeight(0.86f)) {
