@@ -1870,7 +1870,7 @@ class UsabilityTest {
                             target.contains("action=get_series_info") -> """{"info":{"name":"Test Show","plot":"$plot"},"episodes":{
                                 "1":[{"id":"101","episode_num":1,"title":"Pilot","container_extension":"mp4","info":{"duration":"00:42:00"}},
                                      {"id":"102","episode_num":2,"title":"Second","container_extension":"mp4","info":{}}],
-                                "2":[{"id":"201","episode_num":1,"title":"Season Two Opener","container_extension":"mkv","info":{}}]""" +
+                                "2":[{"id":"201","episode_num":1,"title":"Season Two Opener","container_extension":"mkv","info":{"air_date":"${if (target.contains("series_id=79")) "2026-11-01" else "2025-03-10"}"}}]""" +
                                 (if (season3) ""","3":[{"id":"301","episode_num":1,"title":"Season Three","container_extension":"mkv","info":{}}]""" else "") + "}}"
                             target.contains("action=") -> "[]"
                             else -> """{"user_info":{"auth":1,"status":"Active"},"server_info":{}}"""
@@ -2025,6 +2025,36 @@ class UsabilityTest {
             // Every episode watched: off Continue watching even though it's in My List.
             rule.runOnIdle { vm.setEpisodesWatched(show, vm.detailEpisodes!!, true) }
             assertTrue(vm.continueKeysForTests().isEmpty())
+        }
+    }
+
+    /**
+     * Nov 22, 2026 (owner): series in Continue watching sort by their newest episode's release date, and leave once
+     * no episode is left to watch.
+     */
+    @Test
+    fun continueWatchingSeriesSortByNewestEpisodeAndLeaveWhenAllWatched() {
+        FakeProvider().use { server ->
+            rule.runOnIdle { vm.addPlaylist("Fake provider", "xtream", "http://127.0.0.1:${server.port}", "u", "", "", "", liveOn = false, vodOn = true) }
+            waitFor("the provider to be added (status=${vm.status})") { vm.playlists.any { it.name == "Fake provider" } }
+            val pid = vm.playlists.first { it.name == "Fake provider" }.id
+            val older = com.avidviewer.tv.data.VodItem("$pid:s78", pid, "series", "Older Show", null, "", seriesId = "78", category = "Shows")
+            val newer = com.avidviewer.tv.data.VodItem("$pid:s79", pid, "series", "Newer Show", null, "", seriesId = "79", category = "Shows")
+            rule.runOnIdle { vm.catalog.replace(pid, sequenceOf(older, newer)) { false } }
+            rule.runOnIdle { vm.toggleMyList(older); vm.toggleMyList(newer) }
+            go(Screen.SERIES)
+            // Watching the older show makes it the most recent activity, but the newer show's newest episode came out later.
+            rule.runOnIdle { vm.openVodDetail(older) }
+            waitFor("episodes") { vm.detailEpisodes?.size == 3 }
+            rule.runOnIdle { vm.setEpisodesWatched(older, vm.detailEpisodes!!.take(1), true) }
+            rule.runOnIdle { vm.openVodDetail(newer) }
+            waitFor("the newer show's episodes") { vm.vodDetail?.key == newer.key && vm.detailEpisodes?.size == 3 }
+            assertEquals(listOf(newer.key, older.key), vm.continueKeysForTests())
+            // Every episode of the older show watched: gone, even though it's in My List.
+            rule.runOnIdle { vm.openVodDetail(older) }
+            waitFor("the older show's episodes") { vm.vodDetail?.key == older.key && vm.detailEpisodes?.size == 3 }
+            rule.runOnIdle { vm.setEpisodesWatched(older, vm.detailEpisodes!!, true) }
+            assertEquals(listOf(newer.key), vm.continueKeysForTests())
         }
     }
 

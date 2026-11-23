@@ -39,7 +39,24 @@ data class VodItem(
     }
 }
 
-data class Episode(val season: String, val number: Int, val title: String, val url: String, val key: String = "", val plot: String = "", val duration: String = "")
+data class Episode(
+    val season: String, val number: Int, val title: String, val url: String, val key: String = "", val plot: String = "", val duration: String = "",
+    /** Nov 22, 2026: when the episode was released (air date), else when the provider added it; 0 when unknown. */
+    val released: Long = 0L,
+)
+
+/** An episode's release time from the provider's details: the air or release date, else the time it was added. */
+internal fun episodeReleased(e: JSONObject, info: JSONObject?): Long {
+    for (k in listOf("air_date", "release_date", "releasedate", "releaseDate")) {
+        val v = info?.optString(k).orEmpty().trim().take(10)
+        if (Regex("\\d{4}-\\d{2}-\\d{2}").matches(v)) {
+            // java.time needs Android 8; the app runs from Android 6.
+            val f = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).apply { timeZone = java.util.TimeZone.getTimeZone("UTC"); isLenient = false }
+            runCatching { f.parse(v)?.time }.getOrNull()?.let { return it }
+        }
+    }
+    return e.optString("added").trim().toLongOrNull()?.takeIf { it > 0 }?.let { if (it < 100_000_000_000L) it * 1000 else it } ?: 0L
+}
 
 data class VodInfo(
     val plot: String = "",
@@ -209,6 +226,7 @@ object XtreamVod {
                             key = "${p.id}:e$id",
                             plot = ei?.optString("plot") ?: "",
                             duration = ei?.optString("duration") ?: "",
+                            released = episodeReleased(e, ei),
                         )
                     )
                 }

@@ -386,15 +386,16 @@ class Store(private val context: Context) {
      * 1.17.1: the latest episode known for each series (season, episode), when it was checked, and when a newer one
      * than before was first seen (a new episode or season puts the series back in Continue watching). Shared.
      */
-    data class SeriesLatest(val season: Int, val episode: Int, val checked: Long, val newAt: Long)
+    /** [released]: the release time of the series' newest episode (Nov 22, 2026: Continue watching sorts by it). */
+    data class SeriesLatest(val season: Int, val episode: Int, val checked: Long, val newAt: Long, val released: Long = 0L)
 
     fun loadSeriesLatest(): Map<String, SeriesLatest> = runCatching {
         val o = JSONObject(File(dir, "series-latest.json").readText())
-        o.keys().asSequence().associateWith { k -> o.getJSONObject(k).let { SeriesLatest(it.optInt("s"), it.optInt("e"), it.optLong("c"), it.optLong("n")) } }
+        o.keys().asSequence().associateWith { k -> o.getJSONObject(k).let { SeriesLatest(it.optInt("s"), it.optInt("e"), it.optLong("c"), it.optLong("n"), it.optLong("r")) } }
     }.getOrDefault(emptyMap())
 
     fun saveSeriesLatest(m: Map<String, SeriesLatest>) = writeAtomic(File(dir, "series-latest.json"), JSONObject().apply {
-        m.entries.sortedByDescending { it.value.checked }.take(3000).forEach { (k, v) -> put(k, JSONObject().put("s", v.season).put("e", v.episode).put("c", v.checked).put("n", v.newAt)) }
+        m.entries.sortedByDescending { it.value.checked }.take(3000).forEach { (k, v) -> put(k, JSONObject().put("s", v.season).put("e", v.episode).put("c", v.checked).put("n", v.newAt).put("r", v.released)) }
     }.toString())
 
     /** 1.17.0: what this TV last sent or received for each profile's history (see AppViewModel.syncHistory). */
