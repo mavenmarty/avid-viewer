@@ -1206,6 +1206,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         player.addListener(object : Player.Listener {
             override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) { paused = !playWhenReady }
             override fun onPlayerError(error: PlaybackException) = playerFailed(error)
+            // Nov 22, 2026: a movie or episode that plays to its end is watched, even when the stream gives no length.
+            override fun onPlaybackStateChanged(state: Int) { if (state == Player.STATE_ENDED) markEndedWatched() }
 
             override fun onIsPlayingChanged(isPlaying: Boolean) {
                 playing = isPlaying
@@ -3544,10 +3546,14 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         return when { d == 0 -> "today $time"; d == 1 -> "yesterday $time"; else -> java.text.SimpleDateFormat("EEE MMM d", java.util.Locale.US).format(java.util.Date(t)) }
     }
     private var seriesLatest: Map<String, com.avidviewer.tv.data.Store.SeriesLatest> = store.loadSeriesLatest()
-    /** A series is finished when its latest known episode has been watched and no episode is part-way. */
+    /**
+     * A series has no episode left to watch when its newest known episode has been watched (Nov 22, 2026: a place
+     * left part-way in an earlier episode no longer keeps it; that one was skipped or watched elsewhere).
+     */
     private fun seriesFinished(series: String): Boolean {
         val latest = seriesLatest[series] ?: return false
-        return "$series:${latest.season}:${latest.episode}" in watched && resume.keys.none { it.startsWith("$series:") }
+        val k = "$series:${latest.season}:${latest.episode}"
+        return k in watched && k !in resume
     }
     private fun seriesOf(k: String): String? = EPISODE_KEY.find(k)?.let { k.substring(0, it.range.first) }
 
@@ -3559,20 +3565,20 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     private fun continueKeys(): List<String> {
         val act = HashMap<String, Long>()
         fun bump(k: String, t: Long) { act[k] = maxOf(act[k] ?: 0L, t) }
-        for (k in resume.keys) bump(seriesOf(k) ?: k, placeInfo[k]?.at ?: 1L)
-        watched.mapNotNull { k -> seriesOf(k)?.let { it to k } }.groupBy({ it.first }, { it.second }).forEach { (series, eps) ->
-            val latest = seriesLatest[series]
-            val finished = latest != null && "$series:${latest.season}:${latest.episode}" in watched &&
-                resume.keys.none { it.startsWith("$series:") }
-            if (!finished) bump(series, maxOf(eps.maxOf { placeInfo[it]?.at ?: 1L }, latest?.newAt ?: 0L))
-        }
-        // A new episode found for a series in progress counts as activity too.
-        act.keys.toList().forEach { k -> seriesLatest[k]?.newAt?.let { bump(k, it) } }
-        // Nov 22, 2026 (owner): a series in My List with episodes left to watch is in Continue watching too, after the
-        // titles being watched (unless the latest episode known has been watched and nothing is part-way).
-        for (m in prefs.myList) {
-            if (m.kind != "series" || m.key in act) continue
-            if (!seriesFinished(m.key)) bump(m.key, seriesLatest[m.key]?.newAt?.takeIf { it > 0 } ?: 1L)
+        // Movies (anything that isn't an episode) while they're part-way.
+        for (k in resume.keys) if (seriesOf(k) == null) bump(k, placeInfo[k]?.at ?: 1L)
+        // Series: the last time any of their episodes was watched or stopped...
+        val seen = HashMap<String, Long>()
+        for (k in resume.keys + watched) seriesOf(k)?.let { s -> seen[s] = maxOf(seen[s] ?: 1L, placeInfo[k]?.at ?: 1L) }
+        // ...and, Nov 22, 2026 (owner), series in My List.
+        for (m in prefs.myList) if (m.kind == "series") seen.putIfAbsent(m.key, 1L)
+        for ((s, t) in seen) {
+            // Nov 22, 2026 (owner): gone once no episode is left to watch; back when a new one appears.
+            if (seriesFinished(s)) continue
+            val latest = seriesLatest[s]
+            // Nov 22, 2026 (owner): series sort by the release date of their newest episode, when the provider gives
+            // one; otherwise by when they were last watched (or a new episode was found).
+            bump(s, latest?.released?.takeIf { it > 0 } ?: maxOf(t, latest?.newAt ?: 0L))
         }
         return act.entries.filter { (k, t) -> (placeInfo["hide|$k"]?.at ?: 0L) < t }.sortedByDescending { it.value }.map { it.key }
     }
@@ -3697,7 +3703,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         val old = seriesLatest[series.key]
         val s = seasonNum(last.season); val e = last.number
         val newer = old != null && (s > old.season || (s == old.season && e > old.episode))
-        seriesLatest = seriesLatest + (series.key to com.avidviewer.tv.data.Store.SeriesLatest(s, e, now, if (newer) now else old?.newAt ?: 0L))
+        val released = eps.maxOf { it.released }
+        seriesLatest = seriesLatest + (series.key to com.avidviewer.tv.data.Store.SeriesLatest(s, e, now, if (newer) now else old?.newAt ?: 0L, released))
         store.saveSeriesLatest(seriesLatest)
         val rm = resume.toMutableMap(); val inf = placeInfo.toMutableMap(); var moved = false
         for (x in eps) {
@@ -3708,7 +3715,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             inf.remove(x.key)?.let { if (nk !in inf) inf[nk] = it; moved = true }
         }
         if (moved) { resume = rm; placeInfo = inf; store.saveResume(rm); store.saveWatched(watched); store.savePlaceInfo(inf) }
-        if (moved || newer) vodVersion++
+        if (moved || newer || released != (old?.released ?: 0L)) vodVersion++
     }
 
     /**
@@ -5404,6 +5411,15 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     fun isWatched(key: String) = key in watched
 
+    /** The movie or episode playing reached its end: watched, and no place kept. */
+    private fun markEndedWatched() {
+        val v = vodPlaying ?: return
+        watched.remove(v.key); watched.add(v.key); store.saveWatched(watched)
+        if (v.key in resume) { resume = resume - v.key; store.saveResume(resume) }
+        notePlace(v.key, player.duration.coerceAtLeast(0L))
+        vodVersion++
+    }
+
     /** For tests: marks an episode watched to the end, as the player does. */
     internal fun markWatched(key: String) { watched.add(key); store.saveWatched(watched); notePlace(key, 0) }
 
@@ -5452,7 +5468,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun playNextEpisode() {
         val e = nextEpisode() ?: return
         saveResumePoint()
-        if (player.playbackState == Player.STATE_ENDED) vodPlaying?.let { v -> watched.remove(v.key); watched.add(v.key); store.saveWatched(watched); resume = resume - v.key; store.saveResume(resume) }
+        if (player.playbackState == Player.STATE_ENDED) markEndedWatched()
         trail("next episode")
         playDetailEpisode(e)
     }
