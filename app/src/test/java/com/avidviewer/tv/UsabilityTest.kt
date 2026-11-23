@@ -2084,6 +2084,11 @@ class UsabilityTest {
             rule.runOnIdle { vm.setEpisodesWatched(show, vm.detailEpisodes!!.filter { it.number == 25 }, true); vm.closeVodDetail() }
             rule.runOnIdle { vm.openVodDetail(show) }
             waitFor("the page opens on episode 26 (focus: ${focused()})") { focused().contains("Long Ep 26") }
+            // Left at the page's left edge goes back to the posters, not to the main menu.
+            press(listOf(Key.DirectionLeft))
+            waitFor("Left closes the title page (focus: ${focused()})") { vm.vodDetail == null }
+            assertEquals(Screen.SERIES, vm.screen)
+            assertNotEquals(NavMode.FULL, vm.navMode)
         }
     }
 

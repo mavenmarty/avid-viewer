@@ -30,6 +30,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
@@ -146,7 +147,10 @@ private fun TitleDetail(vm: AppViewModel, t: Title) {
     val first = remember { FocusRequester() }
     LaunchedEffect(t.key) { focusWhenReady(vm) { runCatching { first.requestFocus() }.isSuccess } }
     // Nov 18, 2026 (hero style): the title's wide artwork fills the screen and fades into the page.
-    Box(Modifier.fillMaxSize()) {
+    // Nov 22, 2026 (owner): Left at the page's left edge goes back to the titles (as Back does), not to the main menu.
+    Box(Modifier.fillMaxSize().focusProperties {
+        exit = { dir -> if (dir == androidx.compose.ui.focus.FocusDirection.Left) { vm.discoverDetail = null; FocusRequester.Cancel } else FocusRequester.Default }
+    }) {
         val img = com.avidviewer.tv.data.Art.big(t.backdrop) ?: t.poster
         if (img != null) Box(Modifier.align(Alignment.TopEnd).fillMaxWidth(0.8f).fillMaxHeight(0.86f)) {
             TvImage(model = img, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize().testTag("discover-art"))
