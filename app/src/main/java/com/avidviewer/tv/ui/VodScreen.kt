@@ -433,6 +433,7 @@ private fun Poster(vm: AppViewModel, v: VodItem, modifier: Modifier = Modifier, 
     }
 }
 
+@OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
 @Composable
 private fun VodDetail(vm: AppViewModel, v: VodItem) {
     BackHandler { vm.closeVodDetail() }

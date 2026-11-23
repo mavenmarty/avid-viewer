@@ -138,6 +138,7 @@ private fun TitleCard(vm: AppViewModel, t: Title) {
     }
 }
 
+@OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
 @Composable
 private fun TitleDetail(vm: AppViewModel, t: Title) {
     BackHandler { vm.discoverDetail = null }
