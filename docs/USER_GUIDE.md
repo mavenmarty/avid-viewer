@@ -2,7 +2,7 @@
 
 <!-- The version below and the Release notes section are updated automatically after each published build
      (.github/workflows/user-guide.yml). Feature descriptions are written by hand. -->
-This guide covers **Avid Viewer 1.28.0**, the current public release. Avid Viewer is an IPTV player for Android TV and Fire TV. You bring your own provider (an Xtream Codes login or an M3U link); the app doesn't include any channels.
+This guide covers **Avid Viewer 1.29.0**, the current public release. Avid Viewer is an IPTV player for Android TV and Fire TV. You bring your own provider (an Xtream Codes login or an M3U link); the app doesn't include any channels.
 
 **Contents:** [Getting started](#1-getting-started) · [Main menu](#2-main-menu) · [TV Guide](#3-tv-guide) · [Full-screen playback](#4-full-screen-playback) · [Search](#5-search) · [Discover](#6-discover) · [Sports](#7-sports) · [Movies and Series](#8-movies-and-series) · [Settings](#9-settings) ([Profiles](#profiles)) · [Privacy](#10-privacy) · [Troubleshooting](#11-troubleshooting) · [Control4](#12-control4) · [Supplemental services](#13-supplemental-services) · [Cable & satellite](#14-using-your-cable-or-satellite-subscription) · [Free services](#15-free-services) · [Release notes](#release-notes)
 
@@ -987,7 +987,20 @@ Every public release since 1.0.35, newest first. From 1.1.0, versions are number
 
 <!-- new-releases: entries for new builds are added automatically below this line -->
 
-### 1.28.0 — November 22, 2026, 9:48 AM CT (current)
+### 1.29.0 — November 23, 2026, 3:56 PM CT (current)
+
+**Change log**
+
+- Series in My List with episodes left appear in Continue watching; mark an episode or season watched; Next episode in the player
+- Sports live score readable on the highlighted game card (deep red on the light highlight)
+- Series leave Continue watching once no episode is left; series sort by their newest episode's release date; an episode played to its end is always watched
+- Back from full screen highlights the episode that was playing; series pages open where the profile left off; one Continue watching entry per title, the copy being watched
+- Series pages open on the furthest episode watched or part-way (part-way: itself; watched: the next one)
+- The long-season stand-in is series 99
+- Left at the left edge of a movie, series or Discover title page goes back to the titles, not the main menu
+- Opt in to the focus exit API on the title pages
+
+### 1.28.0 — November 22, 2026, 9:48 AM CT
 
 **Release notes**
 
