@@ -441,6 +441,7 @@ private fun VodDetail(vm: AppViewModel, v: VodItem) {
     val episodeFocus = remember { FocusRequester() }
     var inside by remember { mutableStateOf(false) }
     var onEpisode by remember { mutableStateOf(false) }
+    val listState = androidx.compose.foundation.lazy.rememberLazyListState()
     val isSeries = v.kind == "series"
     val versions = vm.versionsOfItem(v)
     vm.versionPicker?.let { VersionPickerDialog(vm, it, versions) }
@@ -465,7 +466,16 @@ private fun VodDetail(vm: AppViewModel, v: VodItem) {
             // Done once the highlight has stayed for a few frames (the menu may grab it right after).
             if (ok) { if (++held >= 12) break; continue }
             held = 0
-            if (wantEpisode) runCatching { episodeFocus.requestFocus() } else runCatching { playFocus.requestFocus() }
+            if (wantEpisode) {
+                // Nov 22, 2026: an episode further down isn't laid out, so it can't take the highlight: scroll to it
+                // first (the highlight used to fall back to My List). Episodes are the list's last items.
+                if (runCatching { episodeFocus.requestFocus() }.isFailure && ep != null && eps != null) {
+                    val shown = eps.filter { it.season == (vm.detailSeason ?: ep.season) }
+                    val i = shown.indexOfFirst { it.key == ep.key && it.season == ep.season && it.number == ep.number }
+                    val total = listState.layoutInfo.totalItemsCount
+                    if (i >= 0 && total >= shown.size) runCatching { listState.scrollToItem((total - shown.size + i).coerceAtLeast(0)) }
+                }
+            } else runCatching { playFocus.requestFocus() }
             if (frame % 20 == 0) vm.trail("vod f$frame ep=$wantEpisode in=$inside onEp=$onEpisode")
         }
     }
@@ -487,7 +497,7 @@ private fun VodDetail(vm: AppViewModel, v: VodItem) {
         val seasonFr = remember { FocusRequester() }
         /** #22: whether the selected season's button is on screen (▲ from the first episode only aims at it then). */
         val seasonOn = remember { mutableStateOf(false) }
-        LazyColumn(Modifier.fillMaxSize().testTag("vod-detail"), verticalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(start = 48.dp, end = 48.dp, top = 56.dp, bottom = 20.dp)) {
+        LazyColumn(Modifier.fillMaxSize().testTag("vod-detail"), state = listState, verticalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(start = 48.dp, end = 48.dp, top = 56.dp, bottom = 20.dp)) {
           item(key = "head") { Column(Modifier.fillMaxWidth(0.62f), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text(v.name, color = C.Text, fontSize = 44.sp, fontWeight = FontWeight.Bold, maxLines = 2, lineHeight = 48.sp,
                 overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, modifier = Modifier.testTag("detail-title"))
