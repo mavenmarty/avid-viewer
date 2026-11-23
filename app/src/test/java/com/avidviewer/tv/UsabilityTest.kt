@@ -1854,7 +1854,7 @@ class UsabilityTest {
     private class FakeProvider(private val plot: String = "A show for testing.") : AutoCloseable {
         /** A third season appears (a new episode is released). */
         @Volatile var season3 = false
-        /** Series 80 has one long season (30 episodes), so most of them are off screen. */
+        /** Series 99 has one long season (30 episodes), so most of them are off screen. */
         private fun longSeason() = (1..30).joinToString(",") { n -> """{"id":"${8000 + n}","episode_num":$n,"title":"Long Ep $n","container_extension":"mp4","info":{}}""" }
         private val socket = java.net.ServerSocket(0, 50, java.net.InetAddress.getByName("127.0.0.1"))
         val port get() = socket.localPort
@@ -1869,7 +1869,7 @@ class UsabilityTest {
                         val target = requestLine.split(" ").getOrElse(1) { "/" }
                         val body = when {
                             target.contains("xmltv") -> "<tv></tv>"
-                            target.contains("action=get_series_info") && target.contains("series_id=80") -> """{"info":{"name":"Long Show"},"episodes":{"1":[${longSeason()}]}}"""
+                            target.contains("action=get_series_info") && target.contains("series_id=99") -> """{"info":{"name":"Long Show"},"episodes":{"1":[${longSeason()}]}}"""
                             target.contains("action=get_series_info") -> """{"info":{"name":"Test Show","plot":"$plot"},"episodes":{
                                 "1":[{"id":"101","episode_num":1,"title":"Pilot","container_extension":"mp4","info":{"duration":"00:42:00"}},
                                      {"id":"102","episode_num":2,"title":"Second","container_extension":"mp4","info":{}}],
@@ -2071,7 +2071,7 @@ class UsabilityTest {
             rule.runOnIdle { vm.addPlaylist("Fake provider", "xtream", "http://127.0.0.1:${server.port}", "u", "", "", "", liveOn = false, vodOn = true) }
             waitFor("the provider to be added (status=${vm.status})") { vm.playlists.any { it.name == "Fake provider" } }
             val pid = vm.playlists.first { it.name == "Fake provider" }.id
-            val show = com.avidviewer.tv.data.VodItem("$pid:s80", pid, "series", "Long Show", null, "", seriesId = "80", category = "Shows")
+            val show = com.avidviewer.tv.data.VodItem("$pid:s99", pid, "series", "Long Show", null, "", seriesId = "99", category = "Shows")
             rule.runOnIdle { vm.catalog.replace(pid, sequenceOf(show)) { false } }
             go(Screen.SERIES)
             rule.runOnIdle { vm.openVodDetail(show) }
