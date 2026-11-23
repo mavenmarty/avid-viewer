@@ -5482,24 +5482,15 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
      */
     fun nextUpEpisode(series: VodItem, eps: List<Episode>): Episode? {
         if (eps.isEmpty()) return null
-        // Nov 22, 2026 (owner): where the profile last left off: the episode stopped or finished most recently (on any
-        // TV); a part-watched one opens itself, a finished one the next episode not watched yet.
-        var best = -1; var bestAt = 0L
-        eps.forEachIndexed { i, e ->
-            val k = episodeKey(series, e)
-            val t = placeInfo[k]?.at ?: 0L
-            if (t > bestAt && (k in watched || resumeOf(k) > 0)) { best = i; bestAt = t }
-        }
-        if (best >= 0) {
-            val k = episodeKey(series, eps[best])
-            return if (resumeOf(k) > 0) eps[best]
-            else eps.drop(best + 1).firstOrNull { episodeKey(series, it) !in watched } ?: eps.drop(best + 1).firstOrNull() ?: eps[best]
-        }
-        var at = -1
-        eps.forEachIndexed { i, e -> val k = episodeKey(series, e); if (k in watched || resumeOf(k) > 0) at = i }
-        if (at < 0) return eps.first()
-        val e = eps[at]
-        return if (episodeKey(series, e) in watched) eps.getOrNull(at + 1) ?: e else e
+        // Nov 22, 2026 (owner): bias for the furthest episode (season and episode order) that's watched or part-way:
+        // part-way opens itself; watched opens the next episode after it not watched yet (else the one after it).
+        val ordered = eps.sortedWith(compareBy<Episode>({ seasonNum(it.season) }, { it.number }))
+        val at = ordered.indexOfLast { val k = episodeKey(series, it); k in watched || resumeOf(k) > 0 }
+        if (at < 0) return ordered.first()
+        val e = ordered[at]
+        if (resumeOf(episodeKey(series, e)) > 0) return e
+        val after = ordered.drop(at + 1)
+        return after.firstOrNull { val k = episodeKey(series, it); k !in watched } ?: after.firstOrNull() ?: e
     }
 
     /** Every movie (or series) of the switched-on playlists, hidden ones included. */
