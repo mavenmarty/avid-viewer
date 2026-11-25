@@ -1122,7 +1122,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     private val channelIndexMemo = Memo<Map<String, Channel>>()
     private val channelsByGroupMemo = Memo<Map<String, List<Channel>>>()
     private val channelsInMemo = Memo<HashMap<String, List<Channel>>>()
-    private val vodOfMemo = HashMap<String, Memo<List<VodItem>>>()
+    private val vodOfMemo = HashMap<String, BgMemo<List<VodItem>>>()
     private val vodCatsMemo = HashMap<String, BgMemo<List<Pair<String, Int>>>>()
     private val vodItemsMemo = HashMap<String, BgMemo<List<VodItem>>>()
     private val vodSearchMemo = HashMap<String, BgMemo<List<VodItem>>>()
@@ -5623,9 +5623,11 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun isVodHidden(v: VodItem) = v.key in prefs.vodHiddenTitles || isVodCatHidden(v.kind, v.playlistId, v.category.ifBlank { "Other" })
 
     /** What the Movies / Series screens show: hidden titles and categories left out. */
-    fun vodOf(kind: String): List<VodItem> = vodOfMemo.getOrPut(kind) { Memo() }.get(vodVersion, vodPids().joinToString(",")) {
-        titles(com.avidviewer.tv.data.Catalog.Query(vodKindKey(kind), vodPids(), grouped = true))
-    }
+    fun vodOf(kind: String): List<VodItem> = vodOfMemo.getOrPut(kind) { BgMemo(emptyList()) }.get(vodVersion, vodPids().joinToString(","),
+        onScreen = { titles(com.avidviewer.tv.data.Catalog.Query(vodKindKey(kind), vodPids(), grouped = true)) }, readyNow = ::shownAtOnce, inBackground = { warmed(it) })
+
+    /** Whether the whole list for [kind] is still being counted (Movies says Loading… rather than "no titles"). */
+    fun vodOfLoading(kind: String) = vodOfMemo[kind]?.loading == true
 
     fun vodCatName(kind: String, cat: String) = prefs.vodCatNames[vodKindKey(kind) + "|" + cat] ?: genreOf(cat)?.let { genreCatName(it) } ?: cat
 
