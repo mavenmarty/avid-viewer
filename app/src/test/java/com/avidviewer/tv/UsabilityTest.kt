@@ -2100,6 +2100,7 @@ class UsabilityTest {
     @Test
     fun movieListsNeverReadTheCatalogOnTheScreenThread() {
         val pid = TestData.P1
+        go(Screen.MOVIES)
         waitFor("movies to load") { vm.vodOf("movie").isNotEmpty() }
         rule.runOnIdle {
             vm.catalog.replace(pid, (1..900).asSequence().map { n ->
@@ -2110,6 +2111,7 @@ class UsabilityTest {
         val wasAsync = com.avidviewer.tv.data.PagedTitles.asyncPages
         try {
             rule.runOnIdle { vm.asyncLists = true; com.avidviewer.tv.data.PagedTitles.asyncPages = true; vm.catalog.mainThreadReads.set(0) }
+            go(Screen.GUIDE)
             go(Screen.MOVIES)
             waitFor("the list to arrive") { vm.vodItems("movie").size >= 900 }
             rule.runOnIdle { vm.setVodSort("az") }
