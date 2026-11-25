@@ -211,6 +211,14 @@ fun AppRoot(vm: AppViewModel) {
                 },
             )
         }
+        // #39: no Menu button on this remote (Google TV): say how to open options, until it's been used a few times.
+        if (MenuKey.showTip && vm.notice == null && !vm.showWelcome && !vm.choosingProfile &&
+            vm.screen in setOf(Screen.GUIDE, Screen.LIVE, Screen.MOVIES, Screen.SERIES, Screen.FAVORITES)) {
+            Box(Modifier.fillMaxSize().padding(bottom = 18.dp, end = 24.dp), contentAlignment = Alignment.BottomEnd) {
+                Label("Tip: hold OK on a channel or title for its options", size = 13.sp, color = C.Text,
+                    modifier = Modifier.testTag("hold-ok-tip").clip(RoundedCornerShape(16.dp)).background(C.Surface2).padding(horizontal = 16.dp, vertical = 8.dp))
+            }
+        }
         vm.notice?.let { text ->
             Box(Modifier.fillMaxSize().padding(bottom = 36.dp), contentAlignment = Alignment.BottomCenter) {
                 Label(text, size = 15.sp, color = C.Text, weight = FontWeight.Bold,

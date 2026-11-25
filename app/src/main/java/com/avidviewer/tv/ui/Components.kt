@@ -120,7 +120,7 @@ fun Focusable(
                 // too: left to the system it beeped as an unhandled key, and on 1.0.170 a tester saw only the beep
                 // (BUG-015 retest). A release without a press seen here (e.g. after a dialog closed) is ignored.
                 if (onMenu == null || it.key != Key.Menu) false
-                else if (it.type == KeyEventType.KeyDown) { if (it.nativeKeyEvent.repeatCount == 0) menuDown[0] = true; true }
+                else if (it.type == KeyEventType.KeyDown) { MenuKey.sawMenu(); if (it.nativeKeyEvent.repeatCount == 0) menuDown[0] = true; true }
                 else if (it.type == KeyEventType.KeyUp) { if (menuDown[0]) { menuDown[0] = false; onMenu() }; true }
                 else false
             }
@@ -132,7 +132,7 @@ fun Focusable(
             .clip(shape)
             .background(if (focused) focusedColor else color)
             .then(if (focused && (focusedColor != C.FocusFill || !C.FocusLight)) Modifier.border(ringWidth, C.FocusRing, shape) else Modifier)
-            .combinedClickable(onLongClick = onMenu, onClick = onClick),
+            .combinedClickable(onLongClick = onMenu?.let { m -> { MenuKey.heldOk(); m() } }, onClick = onClick),
         verticalAlignment = Alignment.CenterVertically,
     ) { androidx.compose.runtime.CompositionLocalProvider(LocalOnLight provides (focused && focusedColor == C.FocusFill && C.FocusLight)) { content(focused) } }
 }

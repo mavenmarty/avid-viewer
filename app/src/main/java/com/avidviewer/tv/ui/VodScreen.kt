@@ -438,7 +438,7 @@ private fun Poster(vm: AppViewModel, v: VodItem, modifier: Modifier = Modifier, 
     }
 }
 
-@OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
+@OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 private fun VodDetail(vm: AppViewModel, v: VodItem) {
     BackHandler { vm.closeVodDetail() }
@@ -518,8 +518,17 @@ private fun VodDetail(vm: AppViewModel, v: VodItem) {
                 ?: art?.genres?.firstNotNullOfOrNull { com.avidviewer.tv.data.Art.genreName(it) } ?: v.category.ifBlank { null }
             val on = vm.playlists.firstOrNull { it.id == v.playlistId }?.name
             val stars = (info?.rating?.ifBlank { null } ?: v.rating).takeIf { it.isNotBlank() && it != "0" }
-            Row(horizontalArrangement = Arrangement.spacedBy(32.dp), modifier = Modifier.padding(vertical = 4.dp)) {
+            // #43 (Nov 24, 2026): the language, from the provider's code on the name or category; other copies' languages under it.
+            val lang = com.avidviewer.tv.data.Language.of(v.name, v.category)
+            val otherLangs = versions.filter { it.key != v.key }.mapNotNull { com.avidviewer.tv.data.Language.of(it.name, it.category) }
+                .distinct().filter { it != lang }
+            androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(32.dp), verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(vertical = 4.dp)) {
                 genre?.let { DetailFact("Genre", it, v.category.takeIf { c -> c.isNotBlank() && !c.equals(it, true) }) }
+                DetailFact("Language", lang ?: "Not marked", when {
+                    otherLangs.isEmpty() -> null
+                    otherLangs.size <= 2 -> "also in " + otherLangs.joinToString(" and ")
+                    else -> "also in ${otherLangs.size} other languages"
+                })
                 on?.let { DetailFact("On", it, if (versions.size > 1) "and ${versions.size - 1} more copies" else null) }
                 stars?.let { DetailFact("Rating", "★ $it", "provider") }
             }
@@ -599,7 +608,7 @@ private fun androidx.compose.foundation.lazy.LazyListScope.seasonsAndEpisodes(vm
                     }
                 }
             }
-            item(key = "eps-hint") { Label("Menu (or hold OK) on an episode: mark it or the whole season as watched.", size = 12.sp, color = C.Muted) }
+            item(key = "eps-hint") { Label("${MenuKey.short} on an episode: mark it or the whole season as watched.", size = 12.sp, color = C.Muted) }
             val shown = eps.filter { it.season == season }
             // The episode the page opens on: the one that was playing, else the next one to watch.
             val target = vm.lastEpisode?.takeIf { l -> eps.any { it.key == l.key && it.season == l.season && it.number == l.number } } ?: vm.nextUpEpisode(series, eps)

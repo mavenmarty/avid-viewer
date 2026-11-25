@@ -2129,6 +2129,34 @@ class UsabilityTest {
         }
     }
 
+    /** #39: without a Menu button (Google TV) a tip says to hold OK; a Menu press shows the remote has one, and it goes. */
+    @Test
+    fun holdOkTipShowsUntilTheRemoteShowsAMenuButton() {
+        rule.runOnIdle { com.avidviewer.tv.ui.MenuKey.reset(hasMenu = false) }
+        try {
+            go(Screen.GUIDE)
+            rule.runOnIdle { vm.chooseGroup(TestData.P1, "NEWS") }
+            settle()
+            waitFor("the tip") { rule.onAllNodesWithTag("hold-ok-tip").fetchSemanticsNodes().isNotEmpty() }
+            rule.onAllNodes(androidx.compose.ui.test.hasText("NEWS Channel 1 with", substring = true) and androidx.compose.ui.test.hasClickAction()).onFirst().requestFocus()
+            press(listOf(Key.Menu))
+            waitFor("the tip to go") { rule.onAllNodesWithTag("hold-ok-tip").fetchSemanticsNodes().isEmpty() }
+            assertTrue(com.avidviewer.tv.ui.MenuKey.hasMenu)
+            press(listOf(Key.Back))
+        } finally {
+            rule.runOnIdle { com.avidviewer.tv.ui.MenuKey.reset(hasMenu = true) }
+        }
+    }
+
+    /** #43: a title page says the title's language. */
+    @Test
+    fun titlePageShowsTheLanguage() {
+        go(Screen.MOVIES)
+        waitFor("movies to load") { vm.vodItems("movie").isNotEmpty() }
+        rule.runOnIdle { vm.openVodDetail(vm.vodItems("movie")[0]) }
+        waitFor("the Language fact") { rule.onAllNodesWithText("Language").fetchSemanticsNodes().isNotEmpty() }
+    }
+
     /** Nov 12: from My List, a series with several copies (versions line) left no room for its episodes. */
     @Test
     fun aSeriesFromMyListWithSeveralCopiesStillReachesItsEpisodes() {

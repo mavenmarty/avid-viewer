@@ -360,9 +360,9 @@ fun GuideScreen(vm: AppViewModel) {
         if (vm.guideQuery.isNotBlank()) Label("Results for “${vm.guideQuery}”  ·  clear it with ✕ in the category list", size = 13.sp, color = C.Soft, weight = FontWeight.Bold)
         if (vm.selectedGroup == FAV_GROUP && vm.guideQuery.isBlank()) LocalSuggestions(vm)
         if (list.isEmpty() && vm.selectedGroup == FAV_GROUP) {
-            Label("No favorites yet. Press Menu (or hold OK) on any channel and choose Add to List — favorites from every playlist appear here.", size = 13.sp, color = C.Soft, lines = Int.MAX_VALUE)
+            Label("No favorites yet. ${MenuKey.press} on any channel and choose Add to List — favorites from every playlist appear here.", size = 13.sp, color = C.Soft, lines = Int.MAX_VALUE)
         } else if (list.isEmpty() && isListGroup(vm.selectedGroup)) {
-            Label("This list is empty. Press Menu (or hold OK) on any channel and choose Add to List. Channels from every playlist can go in one list.", size = 13.sp, color = C.Soft, lines = Int.MAX_VALUE)
+            Label("This list is empty. ${MenuKey.press} on any channel and choose Add to List. Channels from every playlist can go in one list.", size = 13.sp, color = C.Soft, lines = Int.MAX_VALUE)
         }
         if (vm.guideQuery.isNotBlank()) {
             GuideSearchResults(vm, Modifier.weight(1f))
