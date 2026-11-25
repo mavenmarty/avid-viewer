@@ -228,4 +228,20 @@ class CatalogStreamTest {
         assertEquals("TMDB's 8.5 first, then the provider's ratings", listOf("Alien", "Memento", "The Batman", "Zodiac"), names(Catalog.SORT_RATING))
         assertEquals("newest first", listOf("The Batman", "Zodiac", "Memento", "Alien"), names(Catalog.SORT_ADDED))
     }
+
+    @Test
+    fun englishOnlyKeepsEnglishAndUnmarkedTitles() {
+        // Nov 24, 2026: English only leaves out titles marked as another language or multi-language; a title with an
+        // English copy stays (shown as that copy); titles with no language marked stay.
+        fun m(id: String, name: String, cat: String) = VodItem("p:$id", "p", "movie", name, null, "http://x/$id.mp4", category = cat)
+        catalog.replace("p", sequenceOf(
+            m("a", "Alien", "EN | Action"), m("b", "Alien", "FR | Action"), m("c", "Amelie", "FR | Comedy"),
+            m("d", "Paddington", "Family"), m("e", "Babel", "MULTI | Drama"), m("f", "Heat", "Action"),
+        )) { false }
+        catalog.fillLanguages(pause = {}); catalog.regroup(listOf("p"))
+        fun names(en: Boolean, cat: String? = null) = catalog.page(Catalog.Query("movie", listOf("p"), grouped = true, category = cat, sort = Catalog.SORT_AZ, englishOnly = en), 0, 20).map { it.name + " (" + it.category + ")" }
+        assertEquals(listOf("Alien (EN | Action)", "Amelie (FR | Comedy)", "Babel (MULTI | Drama)", "Heat (Action)", "Paddington (Family)"), names(false))
+        assertEquals(listOf("Alien (EN | Action)", "Heat (Action)", "Paddington (Family)"), names(true))
+        assertEquals("inside a French category nothing is left", emptyList<String>(), names(true, "FR | Comedy"))
+    }
 }

@@ -194,6 +194,11 @@ fun VodScreen(vm: AppViewModel, kind: String) {
                         TvButton(label, selected = vm.vodSort == id, modifier = Modifier.testTag("vod-sort-$id")) { vm.setVodSort(id) }
                     }
                 }
+                // Nov 24, 2026 (owner): English only (with titles not marked with a language), per profile. Not on My
+                // List, Continue watching or search results, which hold what you chose.
+                if (vq.isBlank() && current != "Continue watching" && current != "My List") {
+                    TvButton(if (vm.vodEnglishOnly) "✓ English only" else "English only", selected = vm.vodEnglishOnly, modifier = Modifier.testTag("vod-english")) { vm.setVodEnglishOnly(!vm.vodEnglishOnly) }
+                }
             }
             if (items.isEmpty()) {
                 Label(

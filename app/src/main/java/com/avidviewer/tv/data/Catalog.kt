@@ -367,6 +367,12 @@ class Catalog(context: Context) : SQLiteOpenHelper(context.applicationContext, "
         val genre: Int? = null,
         /** Nov 22, 2026: [SORT_AZ], [SORT_RATING] or [SORT_ADDED] (null: the playlists' and provider's order). */
         val sort: String? = null,
+        /**
+         * Nov 24, 2026 (owner): English only: titles marked English or not marked at all (also those not worked out
+         * yet); titles marked as another language or multi-language are left out. With [grouped], a title with an
+         * English copy is kept (that copy is the one shown).
+         */
+        val englishOnly: Boolean = false,
     ) {
         fun where(): Pair<String, Array<String>> {
             val sb = StringBuilder("g = ?")
@@ -376,6 +382,7 @@ class Catalog(context: Context) : SQLiteOpenHelper(context.applicationContext, "
             if (grouped) sb.append(if (category != null) " AND repc = 1" else " AND rep = 1")
             if (category != null) { sb.append(" AND c = ?"); args.add(category) }
             if (kind != null) { sb.append(" AND t = ?"); args.add(kind) }
+            if (englishOnly) sb.append(" AND lr < 2")
             when (genre) {
                 null -> {}
                 GENRE_PENDING -> sb.append(" AND NOT EXISTS (SELECT 1 FROM genre_done d WHERE d.gk = $GENRE_KEY)")

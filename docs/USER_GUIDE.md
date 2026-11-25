@@ -2,7 +2,7 @@
 
 <!-- The version below and the Release notes section are updated automatically after each published build
      (.github/workflows/user-guide.yml). Feature descriptions are written by hand. -->
-This guide covers **Avid Viewer 1.28.0**, the current public release. Avid Viewer is an IPTV player for Android TV and Fire TV. You bring your own provider (an Xtream Codes login or an M3U link); the app doesn't include any channels.
+This guide covers **Avid Viewer 1.29.0**, the current public release. Avid Viewer is an IPTV player for Android TV and Fire TV. You bring your own provider (an Xtream Codes login or an M3U link); the app doesn't include any channels.
 
 **Contents:** [Getting started](#1-getting-started) · [Main menu](#2-main-menu) · [TV Guide](#3-tv-guide) · [Full-screen playback](#4-full-screen-playback) · [Search](#5-search) · [Discover](#6-discover) · [Sports](#7-sports) · [Movies and Series](#8-movies-and-series) · [Settings](#9-settings) ([Profiles](#profiles)) · [Privacy](#10-privacy) · [Troubleshooting](#11-troubleshooting) · [Control4](#12-control4) · [Supplemental services](#13-supplemental-services) · [Cable & satellite](#14-using-your-cable-or-satellite-subscription) · [Free services](#15-free-services) · [Release notes](#release-notes)
 
@@ -98,7 +98,7 @@ While Avid Viewer is open, a device picks up changes within a minute: a playlist
 Where a profile stopped in each movie and episode, and the episodes it finished, follow it to its other TVs:
 
 - A title's page says where it stopped on another TV (for example **Stopped at 34:12 on Living room, today 8:40 PM**) with **▶ Resume** and **Start over**. A series opens on the next episode as usual, including episodes finished on another TV.
-- **Continue watching** (Movies and Series) lists the newest first; a place from another TV says **from Bedroom**. A series stays there until its latest episode is watched, and comes back when a new episode or season appears. **Menu** on a poster there removes it, on every TV; a removed series stays off until something new happens to it.
+- **Continue watching** (Movies and Series) lists movies part-way, series with episodes left to watch, and series in your **My List** that you haven't finished. Series come first by the release date of their newest episode (when your provider gives one), the others by when you last watched them; a place from another TV says **from Bedroom**. Each title is listed once, as the copy (version) you were watching. A series leaves once its newest episode is watched, and comes back when a new episode or season appears. **Menu** on a poster there removes it, on every TV; a removed series stays off until something new happens to it.
 - **The last live channel** comes first in Continue watching, on every TV: the channel this profile last watched for 2 minutes or more, until the program on it ends (if less than 10 minutes were left when you stopped, until the next one ends; 1 hour on a channel with no guide). **OK** tunes it; **Menu** › Remove takes it off. When this TV's own last channel is newer, it comes second. On the website it's on the profile's **Watching** tab ("Live TV · until 9:00 PM").
 - The same title on another playlist (another provider, a 4K copy) picks up there too, matched by title and year, or series, season and episode.
 - **Private:** everything is locked on the TV with a key only your TVs and your passkey have; avidviewer.app and its admins can't read titles, times or TV names. The first time, unlock once with your passkey on the website (Needs your attention says when a TV is waiting for the key). For live TV only the last channel is sent, never the program.
@@ -262,7 +262,8 @@ While you're moving it, the item has a blue outline. A category shows its positi
 - **OK / Play-Pause**: pause or resume.
 - **Up, Down or Info**: show the progress bar.
 - The progress bar appears when playback starts or you press a button, and hides 5 seconds after the last press. It shows "Loading…" while the video starts, and stays up while paused ("Paused · …").
-- Stopping part-way saves your place for **Resume**.
+- Stopping part-way saves your place for **Resume**. A movie or episode played to its end counts as watched.
+- **▶ Next episode:** once an episode counts as watched (95% played, or it ended), a card at the top right shows the next one (season, episode and title). **OK** starts it; your place in the current episode is saved as watched first. While the card shows, **OK** starts the next episode instead of pausing (**Play/Pause** still pauses). It's offered for episodes started from their series page, and goes on to the next season after a season's last episode.
 - **Menu**: open **Picture & sound** (below).
 
 ### Picture & sound
@@ -326,7 +327,7 @@ Discover shows what's new and popular, and where to watch it, using TMDB and Jus
 - **Where to watch** lists Stream, Free, Rent and Buy options for your region.
 - **Sort**: **A–Z**, **Rating** or **Release date** (newest first) put the titles of the tab in that order; press the same button again to go back to TMDB's order.
 - **☆ Rate** on a title's page rates it on TMDB with the profile's own TMDB account (see [Rating titles on TMDB](#rating-titles-on-tmdb)).
-- **A title's page:** its artwork fills the screen, with the name in large type, the year, and **Genre**, **On** (your provider, or not on it) and its TMDB rating with how many people rated it.
+- **A title's page:** its artwork fills the screen, with the name in large type, the year, and **Genre**, **On** (your provider, or not on it) and its TMDB rating with how many people rated it. **Left** at the page's left edge goes back to the titles, like **Back**.
 
 Discover needs a free **TMDB API key**. Enter it in **Settings › Discover**; it's stored encrypted on the device. How to get one: [TMDB](#tmdb-discover) in Supplemental services.
 
@@ -339,7 +340,7 @@ Sports lists real games from **ESPN's schedules** for today and the next 2 days,
 - **Top:** the preview window and the highlighted game. It shows the league, the status (**LIVE** with the period and clock, **FINAL**, or the start time), both teams with logos, records and the score, the venue, and the national TV or streaming service.
 - **Left:**
   - **League filters:** **All**, then each league you've switched on.
-  - **Games:** grouped as **Live now**, **Later today**, the next days and **Final**. Each card shows the matchup, its networks, its time or score, and how many channels were found. Games with no channel found are greyed out.
+  - **Games:** grouped as **Live now**, **Later today**, the next days and **Final**. Each card shows the matchup, its networks, its time or score (a live score in red, deep red on the highlighted card so it's easy to read), and how many channels were found. Games with no channel found are greyed out.
 - **Right: Where to watch.** The game's channels, each with why it matched. They're listed in this order, for the profile in use:
   1. channels in your **★ Favorites** and your **lists**, including local stations you've added (for example your city's Fox or ABC affiliate when it carries the game);
   2. channels in the **league's own categories** in your playlists (for example "NHL" or "NFL Sunday Ticket"); replay categories such as "NHL Replay" are skipped;
@@ -365,7 +366,7 @@ Sports lists real games from **ESPN's schedules** for today and the next 2 days,
 
 ![Series](images/series-grid.jpg)
 
-- **Left side**: Playlists, then categories: **All**, **Recently added**, **Continue watching** (movies part-way, and series until their latest episode is watched), **My List**, and your provider's categories, or TMDB genres (see [Sorted by genre](#sorted-by-genre)).
+- **Left side**: Playlists, then categories: **All**, **Recently added**, **Continue watching** (movies part-way, series with episodes left, and unfinished series in My List; see [Pick up where you left off](#pick-up-where-you-left-off)), **My List**, and your provider's categories, or TMDB genres (see [Sorted by genre](#sorted-by-genre)).
 - **Right side**: posters for the chosen category. A category you pause on is read ahead, so OK shows it at once.
 - **Posters fill their tiles.** The title and year appear on a dark fade only on the highlighted poster, and on titles that have no artwork (most posters already show their title). The highlighted poster grows a little and gets a ring. **✓** in a corner means the title is in My List.
 - **The posters**: rows of posters, with the highlighted title's artwork filling the screen behind them and fading into the page. Above the posters: its name, year, content rating (such as PG-13 or TV-14), genre, TMDB rating (with how many people rated it) and a short description. Moving the highlight fades to the next title's picture. **Right** from the categories goes to the poster you were on.
@@ -381,10 +382,11 @@ Sports lists real games from **ESPN's schedules** for today and the next 2 days,
   ![A movie's page](images/movie-page.jpg)
 
 - **Artwork, descriptions and TMDB ratings** come from TMDB, using the TMDB key (see [TMDB](#tmdb-discover)). Each title is looked up once, when you highlight or open it, and remembered on the TV. Without a key, the provider's own pictures and details are used. Kids profiles never look titles up.
-- **⇄ N versions** (on a title with several copies) lists each copy with its language, name, category and playlist; ✓ marks the one shown, and the line **This version: …** under the buttons says which one you're on. **OK** on another copy shows that one, with its own episodes, resume point and My List button. The language comes from codes on the name or category ("EN |", "FR -", "VF", "MULTI"…); copies without one show "Language not marked". Series pages list episodes by **Season**, with resume points; episodes you've played to the end say **✓ Watched**. **A series page opens on the next episode to watch**, with its season chosen: Season 1, Episode 1 for a series you haven't started, otherwise the episode after the last one you finished (or the one you stopped part-way through). The page scrolls as one: **Up** from the episode goes to the season buttons, then the title's buttons; from the buttons, **Down** goes to the season buttons, then through every episode, however long the description. After you watch an episode and press **Back**, that episode is highlighted.
+- **⇄ N versions** (on a title with several copies) lists each copy with its language, name, category and playlist; ✓ marks the one shown, and the line **This version: …** under the buttons says which one you're on. **OK** on another copy shows that one, with its own episodes, resume point and My List button. The language comes from codes on the name or category ("EN |", "FR -", "VF", "MULTI"…); copies without one show "Language not marked". Series pages list episodes by **Season**, with resume points; episodes you've played to the end say **✓ Watched**. **A series page opens where you left off**, with its season chosen: the furthest episode you've watched or started (on any TV). If you stopped part-way through it, the page opens on it (**Resume**); if you finished it, on the next episode. A series you haven't started opens on Season 1, Episode 1. The page scrolls as one: **Up** from the episode goes to the season buttons, then the title's buttons; from the buttons, **Down** goes to the season buttons, then through every episode, however long the description. After you watch an episode and press **Back**, that episode is highlighted, however far down the season it is (after **Next episode** into a new season, that season is shown).
+- **Mark as watched:** **Menu** (or hold **OK**) on an episode offers **Mark as watched** (or **Mark as not watched**) and **Mark season N as watched** (or not watched). Watched episodes follow the profile to its other TVs, and the page then opens on the next episode to watch.
 - **Each category (and each search) keeps its own place.**
 - **Back** goes one step at a time: from a title's page to its poster, from a poster to the category you're in (highlighted), then to the main menu, on **Movies** or **Series**.
-- **Left** from the first column of posters goes to the category you're browsing.
+- **Left** from the first column of posters goes to the category you're browsing. On a title's page, **Left** at the left edge (the leftmost button, the season buttons or an episode) goes back to the posters, like **Back**.
 - **Category list wraps around**: Up on **All** jumps to the last category, and Down on the last returns to All. The poster grid stops at the end.
 - **Menu on a category**: **Rename**, **Re-order** or **Hide** it. Hidden categories come back in Settings › List Editor.
 - If you have more than one playlist, movies and series from all of them are merged.
@@ -987,7 +989,28 @@ Every public release since 1.0.35, newest first. From 1.1.0, versions are number
 
 <!-- new-releases: entries for new builds are added automatically below this line -->
 
-### 1.28.0 — November 22, 2026, 9:48 AM CT (current)
+### 1.29.0 — November 23, 2026, 3:56 PM CT (current)
+
+**Release notes**
+
+- **Continue watching, for series.** Series in your **My List** that you haven't finished are listed too. A series leaves once no episode is left to watch and comes back when a new one appears. Series sort by the release date of their newest episode. Each title is listed once, as the copy you were watching. See [Pick up where you left off](#pick-up-where-you-left-off).
+- **Series pages open where you left off:** the furthest episode you've watched or started; part-way opens that episode, finished opens the next one. See [Movies and Series](#8-movies-and-series).
+- **Mark episodes watched:** **Menu** (or hold **OK**) on an episode marks it, or its whole season, as watched or not watched.
+- **▶ Next episode** appears in full screen once an episode counts as watched; **OK** starts the next one, into the next season too. See [Movies and episodes](#movies-and-episodes).
+- **Easier to find your place:** **Back** from full screen highlights the episode that was playing, however far down the season; **Left** at the left edge of a movie, series or Discover title page goes back to the titles instead of the main menu.
+- **An episode or movie played to its end always counts as watched**, also when the stream doesn't give its length.
+- **Sports:** the live score on the highlighted game card is now easy to read.
+
+**Change log**
+
+- Series in My List with episodes left appear in Continue watching; mark an episode or season watched; Next episode in the player
+- Sports live score readable on the highlighted game card
+- Series leave Continue watching once no episode is left; series sort by their newest episode's release date; an episode played to its end is always watched
+- Back from full screen highlights the episode that was playing; one Continue watching entry per title, the copy being watched
+- Series pages open on the furthest episode watched or part-way
+- Left at the left edge of a movie, series or Discover title page goes back to the titles, not the main menu
+
+### 1.28.0 — November 22, 2026, 9:48 AM CT
 
 **Release notes**
 
