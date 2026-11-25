@@ -87,7 +87,7 @@ fun FavoritesScreen(vm: AppViewModel) {
     Column(Modifier.fillMaxSize().padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text("Favorites", color = C.Text, fontSize = 24.sp, fontWeight = FontWeight.Bold)
         if (favs.isEmpty() && other.isEmpty() && myList.isEmpty()) {
-            Label("Nothing here yet. Press Menu (or hold OK) on a channel to add it, or use ☆ Favorite and + My List in Search.", size = 14.sp, color = C.Soft, lines = Int.MAX_VALUE)
+            Label("Nothing here yet. ${MenuKey.press} on a channel to add it, or use ☆ Favorite and + My List in Search.", size = 14.sp, color = C.Soft, lines = Int.MAX_VALUE)
             return@Column
         }
         LazyColumn(verticalArrangement = Arrangement.spacedBy(5.dp), contentPadding = PaddingValues(bottom = 20.dp)) {

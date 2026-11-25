@@ -177,7 +177,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     val profile: Profile get() = profiles.activeProfile
     /** The active profile's colour theme; every screen reads its colours through it ([C]). */
     val theme: Theme get() = Themes.of(profile.theme)
-    init { C.source = { theme } }
+    init { C.source = { theme }; MenuKey.init(app) }
     fun setTheme(id: String, p: Profile = profile) = profiles.get(p.id)?.let { updateProfile(it.copy(theme = id)) }
     /** Movies and Series layout for the profile: "grid", "featured" or "showcase". */
     // Nov 18, 2026: Featured is retired; the Grid now carries the highlighted title's artwork. A profile set to

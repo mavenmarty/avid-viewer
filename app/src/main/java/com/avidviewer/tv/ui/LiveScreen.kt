@@ -136,7 +136,7 @@ private fun PreviewPane(vm: AppViewModel, modifier: Modifier) {
                 TvButton("Watch", primary = true) { vm.openFullScreen(c.key, PlayContext.GROUP) }
                 TvButton(if (vm.isFavorite(c.key)) "★ Saved" else "☆ Favorite") { vm.toggleFavorite(c.key) }
             }
-            Label("OK on a channel: preview · OK again: full screen · Menu or hold OK: favorite", size = 12.sp, lines = Int.MAX_VALUE)
+            Label("OK on a channel: preview · OK again: full screen · ${MenuKey.short}: favorite", size = 12.sp, lines = Int.MAX_VALUE)
         }
     }
 }
