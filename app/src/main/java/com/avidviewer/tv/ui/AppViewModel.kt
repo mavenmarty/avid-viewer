@@ -1122,9 +1122,62 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     private val channelIndexMemo = Memo<Map<String, Channel>>()
     private val channelsByGroupMemo = Memo<Map<String, List<Channel>>>()
     private val channelsInMemo = Memo<HashMap<String, List<Channel>>>()
-    private val vodOfMemo = HashMap<String, Memo<List<VodItem>>>()
-    private val vodCatsMemo = HashMap<String, Memo<List<Pair<String, Int>>>>()
-    private val vodItemsMemo = HashMap<String, Memo<List<VodItem>>>()
+    private val vodOfMemo = HashMap<String, BgMemo<List<VodItem>>>()
+    private val vodCatsMemo = HashMap<String, BgMemo<List<Pair<String, Int>>>>()
+    private val vodItemsMemo = HashMap<String, BgMemo<List<VodItem>>>()
+    private val vodSearchMemo = HashMap<String, BgMemo<List<VodItem>>>()
+
+    /**
+     * Nov 24, 2026 (#42): Movies and Series lists and their category lists are read off the screen's thread. The count
+     * and first page of a poster list used to be read while the screen drew it; with big catalogs on a Fire TV Cube
+     * that took long enough for Fire OS to close the app. Off in tests, which build lists straight away.
+     */
+    internal var asyncLists = android.os.Build.FINGERPRINT != "robolectric"
+    /** Bumped when a list built in the background is ready, so the screen shows it. */
+    var vodListTick by mutableIntStateOf(0); private set
+
+    /**
+     * Like [Memo], but finished on a background thread: until it's ready the last value (or [empty]) is returned.
+     * [onScreen] runs first, on the screen's thread (what reads the view model's own state); [inBackground] then does
+     * the database work with its result.
+     */
+    private inner class BgMemo<V>(private val empty: V) {
+        private var inputs: Array<out Any?>? = null
+        private var value: V = empty
+        private var pending: Array<out Any?>? = null
+        private var job: Job? = null
+        /** Nothing to show yet: the first list for these inputs is still being read. */
+        val loading: Boolean get() = pending != null && value === empty
+        private fun same(a: Array<out Any?>?, b: Array<out Any?>) = a != null && a.size == b.size &&
+            a.indices.all { val x = a[it]; val y = b[it]; x === y || ((x is String || x is Number || x is Boolean) && x == y) }
+
+        fun get(vararg now: Any?, compute: () -> V): V = get(*now, onScreen = { }, inBackground = { compute() })
+
+        fun <T> get(vararg now: Any?, onScreen: () -> T, readyNow: (T) -> Boolean = { false }, inBackground: (T) -> V): V {
+            vodListTick // read, so the screen draws again when a list is ready
+            if (same(inputs, now)) return value
+            if (!asyncLists) { value = inBackground(onScreen()); inputs = now; pending = null; return value }
+            if (same(pending, now)) return value
+            pending = now
+            job?.cancel()
+            val start = onScreen()
+            if (readyNow(start)) { job?.cancel(); job = null; value = inBackground(start); inputs = now; pending = null; return value }
+            job = viewModelScope.launch {
+                val v = runCatching { withContext(Dispatchers.IO) { inBackground(start) } }.getOrElse { if (it is kotlinx.coroutines.CancellationException) throw it; empty }
+                if (pending === now) { value = v; inputs = now; pending = null; vodListTick++ }
+            }
+            return value
+        }
+    }
+
+    /** Whether Movies or Series is still reading the list for [kind] (the screen says Loading… instead of "No titles"). */
+    fun vodListLoading(kind: String): Boolean = (vodItemsMemo[kind]?.loading == true) || (vodSearchMemo[kind]?.loading == true)
+
+    /** A list with nothing left to read (My List, Continue watching, a category read ahead) is shown straight away. */
+    private fun shownAtOnce(list: List<VodItem>) = list !is com.avidviewer.tv.data.PagedTitles || list.warmed
+
+    /** The list as it will be shown: counted, and its first page read (off the screen's thread). */
+    private fun warmed(list: List<VodItem>): List<VodItem> { (list as? com.avidviewer.tv.data.PagedTitles)?.warm(); return list }
     private val vodAllMemo = HashMap<String, Memo<List<VodItem>>>()
     private val matchCache = HashMap<String, VodItem?>()
     private val versionsCache = HashMap<String, List<VodItem>>()
@@ -5514,7 +5567,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun vodSearch(kind: String, q: String): List<VodItem> {
         val t = q.trim()
         vodNear[kind]?.takeIf { it.first == t && it.third == vodVersion }?.second?.let { return it }
-        return titles(vodSearchQuery(kind, t))
+        val q = vodSearchQuery(kind, t)
+        return vodSearchMemo.getOrPut(kind) { BgMemo(emptyList()) }.get(t, vodVersion, vodPids().joinToString(","), onScreen = { titles(q) }, readyNow = ::shownAtOnce, inBackground = { warmed(it) })
     }
 
     private fun vodSearchQuery(kind: String, t: String) =
@@ -5569,9 +5623,11 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun isVodHidden(v: VodItem) = v.key in prefs.vodHiddenTitles || isVodCatHidden(v.kind, v.playlistId, v.category.ifBlank { "Other" })
 
     /** What the Movies / Series screens show: hidden titles and categories left out. */
-    fun vodOf(kind: String): List<VodItem> = vodOfMemo.getOrPut(kind) { Memo() }.get(vodVersion, vodPids().joinToString(",")) {
-        titles(com.avidviewer.tv.data.Catalog.Query(vodKindKey(kind), vodPids(), grouped = true))
-    }
+    fun vodOf(kind: String): List<VodItem> = vodOfMemo.getOrPut(kind) { BgMemo(emptyList()) }.get(vodVersion, vodPids().joinToString(","),
+        onScreen = { titles(com.avidviewer.tv.data.Catalog.Query(vodKindKey(kind), vodPids(), grouped = true)) }, readyNow = ::shownAtOnce, inBackground = { warmed(it) })
+
+    /** Whether the whole list for [kind] is still being counted (Movies says Loading… rather than "no titles"). */
+    fun vodOfLoading(kind: String) = vodOfMemo[kind]?.loading == true
 
     fun vodCatName(kind: String, cat: String) = prefs.vodCatNames[vodKindKey(kind) + "|" + cat] ?: genreOf(cat)?.let { genreCatName(it) } ?: cat
 
@@ -5581,7 +5637,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         return ord.filter { it in names } + names.filterNot { it in ord }
     }
 
-    fun vodCategories(kind: String): List<Pair<String, Int>> = vodCatsMemo.getOrPut(kind) { Memo() }.get(vodVersion, vodPids().joinToString(","), prefs, genreVersion, kidsMode) {
+    fun vodCategories(kind: String): List<Pair<String, Int>> = vodCatsMemo.getOrPut(kind) { BgMemo(emptyList()) }.get(vodVersion, vodPids().joinToString(","), prefs, genreVersion, kidsMode) {
         if (genresOn()) computeGenreCategories(kind) else computeVodCategories(kind)
     }
 
@@ -5751,7 +5807,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun vodItems(kind: String): List<VodItem> = vodItemsNow(kind).also { ensureGrouped() }
 
     private fun vodItemsNow(kind: String): List<VodItem> =
-        vodItemsMemo.getOrPut(kind) { Memo() }.get(vodVersion, vodPids().joinToString(","), prefs, vodCategory[kind] ?: "All", resume, genreVersion, vodSort, vodEnglishOnly) { computeVodItems(kind) }
+        vodItemsMemo.getOrPut(kind) { BgMemo(emptyList()) }.get(vodVersion, vodPids().joinToString(","), prefs, vodCategory[kind] ?: "All", resume, genreVersion, vodSort, vodEnglishOnly, onScreen = { computeVodItems(kind) }, readyNow = ::shownAtOnce, inBackground = { warmed(it) })
     private fun computeVodItems(kind: String): List<VodItem> {
         val g = vodKindKey(kind)
         val en = vodEnglishOnly
@@ -5766,7 +5822,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                     .let { list -> list.groupBy { Tmdb.normalize(it.name) }.values.map { same -> same.firstOrNull { watchedCopy(it.key) } ?: same.first() }
                         .sortedBy { at[it.key] ?: Int.MAX_VALUE } }) }
             else -> if (genreOf(c) != null) titles(com.avidviewer.tv.data.Catalog.Query(g, vodPids(), grouped = true, genre = genreOf(c), sort = vodSort, englishOnly = en))
-                else vodPrefetched.remove(prefetchKey(kind, c)) ?: titles(com.avidviewer.tv.data.Catalog.Query(g, vodPids(), category = c, grouped = true, sort = vodSort, englishOnly = en))
+                else synchronized(vodPrefetched) { vodPrefetched.remove(prefetchKey(kind, c)) } ?: titles(com.avidviewer.tv.data.Catalog.Query(g, vodPids(), category = c, grouped = true, sort = vodSort, englishOnly = en))
         }
     }
 
@@ -5782,12 +5838,12 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         vodPrefetchJob?.cancel()
         if (genreOf(cat) != null) return
         val key = prefetchKey(kind, cat)
-        if (key in vodPrefetched) return
+        if (synchronized(vodPrefetched) { key in vodPrefetched }) return
         val q = com.avidviewer.tv.data.Catalog.Query(vodKindKey(kind), vodPids(), category = cat, grouped = true, sort = vodSort, englishOnly = vodEnglishOnly)
         vodPrefetchJob = viewModelScope.launch {
             delay(250)
             val list = withContext(Dispatchers.IO) { titles(q).also { if (it.size > 0) it[0] } }
-            if (prefetchKey(kind, cat) == key) vodPrefetched[key] = list
+            if (prefetchKey(kind, cat) == key) synchronized(vodPrefetched) { vodPrefetched[key] = list }
         }
     }
 

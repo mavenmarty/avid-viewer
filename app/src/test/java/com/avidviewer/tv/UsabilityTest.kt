@@ -2092,6 +2092,43 @@ class UsabilityTest {
         }
     }
 
+    /**
+     * Nov 24, 2026 (#42): with lists read in the background, opening Movies, switching categories and sorts, and
+     * scrolling a long list never count or read titles on the screen's thread (a Fire TV Cube closed the app when the
+     * count took too long there).
+     */
+    @Test
+    fun movieListsNeverReadTheCatalogOnTheScreenThread() {
+        val pid = TestData.P1
+        go(Screen.MOVIES)
+        waitFor("movies to load") { vm.vodOf("movie").isNotEmpty() }
+        rule.runOnIdle {
+            vm.catalog.replace(pid, (1..900).asSequence().map { n ->
+                com.avidviewer.tv.data.VodItem("$pid:m$n", pid, "movie", "Movie %03d".format(n), null, "http://x/$n.mp4", category = if (n % 2 == 0) "EN | Action" else "EN | Drama", added = n.toLong())
+            }) { false }
+            vm.regroupLater(0)
+        }
+        val wasAsync = com.avidviewer.tv.data.PagedTitles.asyncPages
+        try {
+            rule.runOnIdle { vm.asyncLists = true; com.avidviewer.tv.data.PagedTitles.asyncPages = true; vm.catalog.mainThreadReads.set(0); vm.catalog.mainThreadReadsFrom.clear() }
+            go(Screen.GUIDE)
+            go(Screen.MOVIES)
+            waitFor("the list to arrive") { vm.vodItems("movie").size >= 900 }
+            rule.runOnIdle { vm.setVodSort("az") }
+            waitFor("A–Z to arrive") { vm.vodItems("movie").let { it.size >= 900 && it[0].name == "Movie 001" } }
+            // Scroll far down the grid with the remote: pages beyond the first are read in the background.
+            press(listOf(Key.DirectionRight))
+            waitFor("a poster has the highlight (focus: ${focused()})") { focused().contains("Movie") }
+            repeat(4) { press(List(10) { Key.DirectionDown }) }
+            waitFor("posters far down drawn (focus: ${focused()})") { Regex("Movie (\\d{3})").find(focused())?.groupValues?.get(1)?.toInt()?.let { it > 200 } == true }
+            rule.runOnIdle { vm.chooseVodCategory("movie", "EN | Drama") }
+            waitFor("the category to arrive") { vm.vodItems("movie").size == 450 }
+            assertEquals("catalog reads on the screen's thread: ${vm.catalog.mainThreadReadsFrom.joinToString(" || ")}", 0, vm.catalog.mainThreadReads.get())
+        } finally {
+            rule.runOnIdle { vm.asyncLists = false; com.avidviewer.tv.data.PagedTitles.asyncPages = wasAsync }
+        }
+    }
+
     /** Nov 12: from My List, a series with several copies (versions line) left no room for its episodes. */
     @Test
     fun aSeriesFromMyListWithSeveralCopiesStillReachesItsEpisodes() {

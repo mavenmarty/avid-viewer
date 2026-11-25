@@ -76,7 +76,7 @@ fun VodScreen(vm: AppViewModel, kind: String) {
             val playlists = "Playlists" to { vm.navSelect(Screen.PLAYLISTS) }
             when {
                 src == null -> StateMessage(StateKind.EMPTY, "Movies & series are off", "Turn them on for a playlist in Settings › Playlists.", action = playlists)
-                vm.vodLoading -> StateMessage(StateKind.LOADING, "Loading ${title.lowercase()}…", vm.status)
+                vm.vodLoading || vm.vodOfLoading(kind) -> StateMessage(StateKind.LOADING, "Loading ${title.lowercase()}…", vm.status)
                 vm.vodError != null -> StateMessage(StateKind.ERROR, "Couldn't load ${title.lowercase()}", vm.vodError, retry = { vm.ensureVod(refresh = true) }, action = playlists)
                 else -> StateMessage(StateKind.EMPTY, "No ${title.lowercase()} yet", "If your provider offers them, choose Refresh in Settings › Playlists.", action = playlists)
             }
@@ -202,7 +202,7 @@ fun VodScreen(vm: AppViewModel, kind: String) {
             }
             if (items.isEmpty()) {
                 Label(
-                    when (current) {
+                    if (vm.vodListLoading(kind)) "Loading…" else when (current) {
                         "My List" -> if (vq.isNotBlank()) "No titles match." else "Nothing in My List yet. Open a title and choose + My List."
                         "Continue watching" -> "Titles you stop part-way through appear here."
                         else -> "No titles in this category."

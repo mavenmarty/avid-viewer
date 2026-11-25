@@ -415,7 +415,21 @@ class Catalog(context: Context) : SQLiteOpenHelper(context.applicationContext, "
         private fun plIndex() = "CASE p ${playlists.mapIndexed { i, p -> "WHEN '${p.replace("'", "''")}' THEN $i" }.joinToString(" ")} END"
     }
 
+    /**
+     * Nov 24, 2026 (#42): counts and pages read on the screen's thread. The poster lists now read in the
+     * background, so this stays 0 in normal use; tests check it.
+     */
+    val mainThreadReads = java.util.concurrent.atomic.AtomicInteger()
+    /** Where the first few of those came from (tests). */
+    val mainThreadReadsFrom = java.util.concurrent.ConcurrentLinkedQueue<String>()
+    private fun noteThread() {
+        if (android.os.Looper.myLooper() != android.os.Looper.getMainLooper()) return
+        if (mainThreadReads.incrementAndGet() <= 5 && android.os.Build.FINGERPRINT == "robolectric")
+            mainThreadReadsFrom.add(Throwable().stackTrace.filter { it.className.startsWith("com.avidviewer") }.take(8).joinToString(" < ") { "${it.className.substringAfterLast('.')}.${it.methodName}:${it.lineNumber}" })
+    }
+
     fun count(q: Query): Int {
+        noteThread()
         if (q.playlists.isEmpty()) return 0
         val (w, a) = q.where()
         val n = readableDatabase.rawQuery("SELECT COUNT(*) FROM title WHERE $w", a).use { if (it.moveToFirst()) it.getInt(0) else 0 }
@@ -423,6 +437,7 @@ class Catalog(context: Context) : SQLiteOpenHelper(context.applicationContext, "
     }
 
     fun page(q: Query, offset: Int, size: Int): List<VodItem> {
+        noteThread()
         if (q.playlists.isEmpty()) return emptyList()
         val (w, a) = q.where()
         val lim = q.limit?.let { minOf(size, it - offset) } ?: size
@@ -605,7 +620,8 @@ class Catalog(context: Context) : SQLiteOpenHelper(context.applicationContext, "
  * catalog makes a new list.
  */
 class PagedTitles(private val catalog: Catalog, val query: Catalog.Query, private val pageSize: Int = 100) : AbstractList<VodItem>(), RandomAccess {
-    override val size: Int by lazy { runCatching { catalog.count(query) }.getOrDefault(0) }
+    private val counted = lazy { runCatching { catalog.count(query) }.getOrDefault(0) }
+    override val size: Int get() = counted.value
 
     // Compared by identity. A list's usual equals/hashCode walk every item, which here means reading
     // every page from the database; Compose compares a state's old and new value with equals, so
@@ -616,14 +632,55 @@ class PagedTitles(private val catalog: Catalog, val query: Catalog.Query, privat
     private val pages = object : LinkedHashMap<Int, List<VodItem>>(16, 0.75f, true) {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<Int, List<VodItem>>?) = size > 12
     }
+    private val requested = HashSet<Int>()
 
-    @Synchronized
+    /** Bumped when a page read in the background arrives, so the posters that showed a blank tile draw again. */
+    private val arrived = androidx.compose.runtime.mutableIntStateOf(0)
+
+    /**
+     * Nov 24, 2026 (#42): the count and the first page, read now. Called off the screen's thread before the list is
+     * shown, so the screen never waits for the database (on a Fire TV Cube with big catalogs the count took long
+     * enough for Fire OS to close the app).
+     */
+    fun warm(): PagedTitles { if (size > 0) synchronized(this) { load(0) }; return this }
+    val warmed: Boolean get() = counted.isInitialized() && (size == 0 || synchronized(this) { pages.containsKey(0) })
+
+    private fun load(p: Int): List<VodItem> =
+        pages[p] ?: runCatching { catalog.page(query, p * pageSize, pageSize) }.getOrDefault(emptyList()).also { pages[p] = it }
+
+    /** Reads page [p] in the background (once), then lets the screen draw it. */
+    private fun request(p: Int) {
+        if (p < 0 || p * pageSize >= size) return
+        synchronized(this) { if (pages.containsKey(p) || !requested.add(p)) return }
+        LOADER.execute {
+            val page = runCatching { catalog.page(query, p * pageSize, pageSize) }.getOrDefault(emptyList())
+            synchronized(this) { pages[p] = page; requested.remove(p) }
+            MAIN.post { arrived.intValue++ }
+        }
+    }
+
     override fun get(index: Int): VodItem {
+        arrived.intValue // a poster drawn as a blank tile draws again when its page arrives
         if (index < 0 || index >= size) throw IndexOutOfBoundsException("$index of $size")
         val p = index / pageSize
-        val page = pages[p] ?: runCatching { catalog.page(query, p * pageSize, pageSize) }.getOrDefault(emptyList()).also { pages[p] = it }
+        val onScreenThread = asyncPages && android.os.Looper.myLooper() == android.os.Looper.getMainLooper()
+        val page = synchronized(this) {
+            pages[p] ?: if (onScreenThread) null else load(p)
+        }
+        if (onScreenThread) {
+            // Read ahead: the next page once within 30 titles of this one's end.
+            if (index - p * pageSize >= pageSize - 30) request(p + 1)
+            if (page == null) { request(p); return VodItem("loading:$index", "", query.group, "", null, "") }
+        }
         // The catalog changed under this list (a refresh just finished): show an empty tile until the
         // screen picks up the new list, rather than failing.
-        return page.getOrNull(index - p * pageSize) ?: VodItem("gone:$index", "", query.group, "", null, "")
+        return page?.getOrNull(index - p * pageSize) ?: VodItem("gone:$index", "", query.group, "", null, "")
+    }
+
+    companion object {
+        /** Pages missing on the screen's thread are read in the background (off in tests, which read straight away). */
+        @Volatile var asyncPages = android.os.Build.FINGERPRINT != "robolectric"
+        private val LOADER = java.util.concurrent.Executors.newSingleThreadExecutor { r -> Thread(r, "avid-pages").apply { isDaemon = true; priority = Thread.NORM_PRIORITY - 1 } }
+        private val MAIN by lazy { android.os.Handler(android.os.Looper.getMainLooper()) }
     }
 }
