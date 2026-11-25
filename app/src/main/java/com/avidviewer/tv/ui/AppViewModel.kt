@@ -187,6 +187,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** How Movies, Series and Discover sort for this profile: "added" (newest first), "az" or "rating". */
     val vodSort: String get() = profile.vodSort.takeIf { it in VOD_SORTS } ?: "added"
     fun setVodSort(s: String) { if (s in VOD_SORTS && s != vodSort) updateProfile(profile.copy(vodSort = s)) }
+    /** Nov 24, 2026 (owner): Movies and Series lists show English and unmarked titles only (not My List, Continue watching or searches). */
+    val vodEnglishOnly: Boolean get() = profile.englishOnly
+    fun setVodEnglishOnly(on: Boolean) { if (on != vodEnglishOnly) updateProfile(profile.copy(englishOnly = on)) }
     fun setVodLayout(l: String) = updateProfile(profile.copy(vodLayout = l))
     /** The profile in use is a Kids profile: only its categories, no Settings, Discover or Sports. */
     val kidsMode: Boolean get() = profile.kids
@@ -5748,12 +5751,13 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun vodItems(kind: String): List<VodItem> = vodItemsNow(kind).also { ensureGrouped() }
 
     private fun vodItemsNow(kind: String): List<VodItem> =
-        vodItemsMemo.getOrPut(kind) { Memo() }.get(vodVersion, vodPids().joinToString(","), prefs, vodCategory[kind] ?: "All", resume, genreVersion, vodSort) { computeVodItems(kind) }
+        vodItemsMemo.getOrPut(kind) { Memo() }.get(vodVersion, vodPids().joinToString(","), prefs, vodCategory[kind] ?: "All", resume, genreVersion, vodSort, vodEnglishOnly) { computeVodItems(kind) }
     private fun computeVodItems(kind: String): List<VodItem> {
         val g = vodKindKey(kind)
+        val en = vodEnglishOnly
         return when (val c = vodCategory[kind] ?: "All") {
-            "All" -> titles(com.avidviewer.tv.data.Catalog.Query(g, vodPids(), grouped = true, sort = vodSort))
-            "Recently added" -> titles(com.avidviewer.tv.data.Catalog.Query(g, vodPids(), newestFirst = true, limit = 200, grouped = true))
+            "All" -> titles(com.avidviewer.tv.data.Catalog.Query(g, vodPids(), grouped = true, sort = vodSort, englishOnly = en))
+            "Recently added" -> titles(com.avidviewer.tv.data.Catalog.Query(g, vodPids(), newestFirst = true, limit = 200, grouped = true, englishOnly = en))
             "My List" -> prefs.myList.filter { if (kind == "series") it.kind == "series" else it.kind != "series" }
             "Continue watching" -> continueKeys().let { ks -> val at = ks.withIndex().associate { it.value to it.index }
                 withLiveCard(catalog.byKeys(ks).filter { Catalog.group(it.kind) == g && !isVodHidden(it) }.sortedBy { at[it.key] ?: Int.MAX_VALUE }
@@ -5761,8 +5765,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                     // copy of it that's in My List.
                     .let { list -> list.groupBy { Tmdb.normalize(it.name) }.values.map { same -> same.firstOrNull { watchedCopy(it.key) } ?: same.first() }
                         .sortedBy { at[it.key] ?: Int.MAX_VALUE } }) }
-            else -> if (genreOf(c) != null) titles(com.avidviewer.tv.data.Catalog.Query(g, vodPids(), grouped = true, genre = genreOf(c), sort = vodSort))
-                else vodPrefetched.remove(prefetchKey(kind, c)) ?: titles(com.avidviewer.tv.data.Catalog.Query(g, vodPids(), category = c, grouped = true, sort = vodSort))
+            else -> if (genreOf(c) != null) titles(com.avidviewer.tv.data.Catalog.Query(g, vodPids(), grouped = true, genre = genreOf(c), sort = vodSort, englishOnly = en))
+                else vodPrefetched.remove(prefetchKey(kind, c)) ?: titles(com.avidviewer.tv.data.Catalog.Query(g, vodPids(), category = c, grouped = true, sort = vodSort, englishOnly = en))
         }
     }
 
@@ -5772,14 +5776,14 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, List<VodItem>>?) = size > 3
     }
     private var vodPrefetchJob: Job? = null
-    private fun prefetchKey(kind: String, cat: String) = "$kind|$cat|$vodVersion|${vodPids().joinToString(",")}|${prefs.vodHiddenTitles.size}|$vodSort"
+    private fun prefetchKey(kind: String, cat: String) = "$kind|$cat|$vodVersion|${vodPids().joinToString(",")}|${prefs.vodHiddenTitles.size}|$vodSort|$vodEnglishOnly"
 
     fun prefetchVodCategory(kind: String, cat: String) {
         vodPrefetchJob?.cancel()
         if (genreOf(cat) != null) return
         val key = prefetchKey(kind, cat)
         if (key in vodPrefetched) return
-        val q = com.avidviewer.tv.data.Catalog.Query(vodKindKey(kind), vodPids(), category = cat, grouped = true, sort = vodSort)
+        val q = com.avidviewer.tv.data.Catalog.Query(vodKindKey(kind), vodPids(), category = cat, grouped = true, sort = vodSort, englishOnly = vodEnglishOnly)
         vodPrefetchJob = viewModelScope.launch {
             delay(250)
             val list = withContext(Dispatchers.IO) { titles(q).also { if (it.size > 0) it[0] } }
