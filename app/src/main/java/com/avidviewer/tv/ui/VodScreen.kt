@@ -202,7 +202,7 @@ fun VodScreen(vm: AppViewModel, kind: String) {
             }
             if (items.isEmpty()) {
                 Label(
-                    when (current) {
+                    if (vm.vodListLoading(kind)) "Loading…" else when (current) {
                         "My List" -> if (vq.isNotBlank()) "No titles match." else "Nothing in My List yet. Open a title and choose + My List."
                         "Continue watching" -> "Titles you stop part-way through appear here."
                         else -> "No titles in this category."
