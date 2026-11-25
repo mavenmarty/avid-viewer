@@ -6,7 +6,7 @@ object Links {
     const val USER_GUIDE = "https://avidviewer.app/guide/"
 
     /** The Control4 universal mini driver (um_avid_viewer.c4z) on Google Drive, viewable by anyone with the link. */
-    const val CONTROL4_DRIVER = "https://drive.google.com/file/d/10XxPywvX456lPTmou6xsqERmbTfhOJul/view"
+    const val CONTROL4_DRIVER = "https://drive.google.com/file/d/1W0G6EryHxrOq-dsFYn8BBdtXUAc87Wi0/view"
 
     /**
      * The crash relay (tools/crash-relay/Code.gs, a Google Apps Script web app) that passes "Report issue"
