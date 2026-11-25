@@ -2117,7 +2117,8 @@ class UsabilityTest {
             rule.runOnIdle { vm.setVodSort("az") }
             waitFor("A–Z to arrive") { vm.vodItems("movie").let { it.size >= 900 && it[0].name == "Movie 001" } }
             // Scroll far down the grid with the remote: pages beyond the first are read in the background.
-            waitFor("a poster has the highlight (focus: ${focused()})") { focused().contains("Movie") || runCatching { rule.onAllNodesWithText("Movie 001", substring = true).onFirst().requestFocus(); true }.getOrDefault(false) && focused().contains("Movie") }
+            press(listOf(Key.DirectionRight))
+            waitFor("a poster has the highlight (focus: ${focused()})") { focused().contains("Movie") }
             repeat(4) { press(List(10) { Key.DirectionDown }) }
             waitFor("posters far down drawn (focus: ${focused()})") { Regex("Movie (\\d{3})").find(focused())?.groupValues?.get(1)?.toInt()?.let { it > 200 } == true }
             rule.runOnIdle { vm.chooseVodCategory("movie", "EN | Drama") }
