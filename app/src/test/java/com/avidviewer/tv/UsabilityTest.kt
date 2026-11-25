@@ -2110,7 +2110,7 @@ class UsabilityTest {
         }
         val wasAsync = com.avidviewer.tv.data.PagedTitles.asyncPages
         try {
-            rule.runOnIdle { vm.asyncLists = true; com.avidviewer.tv.data.PagedTitles.asyncPages = true; vm.catalog.mainThreadReads.set(0) }
+            rule.runOnIdle { vm.asyncLists = true; com.avidviewer.tv.data.PagedTitles.asyncPages = true; vm.catalog.mainThreadReads.set(0); vm.catalog.mainThreadReadsFrom.clear() }
             go(Screen.GUIDE)
             go(Screen.MOVIES)
             waitFor("the list to arrive") { vm.vodItems("movie").size >= 900 }
@@ -2123,7 +2123,7 @@ class UsabilityTest {
             waitFor("posters far down drawn (focus: ${focused()})") { Regex("Movie (\\d{3})").find(focused())?.groupValues?.get(1)?.toInt()?.let { it > 200 } == true }
             rule.runOnIdle { vm.chooseVodCategory("movie", "EN | Drama") }
             waitFor("the category to arrive") { vm.vodItems("movie").size == 450 }
-            assertEquals("catalog reads on the screen's thread", 0, vm.catalog.mainThreadReads.get())
+            assertEquals("catalog reads on the screen's thread: ${vm.catalog.mainThreadReadsFrom.joinToString(" || ")}", 0, vm.catalog.mainThreadReads.get())
         } finally {
             rule.runOnIdle { vm.asyncLists = false; com.avidviewer.tv.data.PagedTitles.asyncPages = wasAsync }
         }

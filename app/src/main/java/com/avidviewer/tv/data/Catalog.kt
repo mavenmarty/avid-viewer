@@ -420,7 +420,13 @@ class Catalog(context: Context) : SQLiteOpenHelper(context.applicationContext, "
      * background, so this stays 0 in normal use; tests check it.
      */
     val mainThreadReads = java.util.concurrent.atomic.AtomicInteger()
-    private fun noteThread() { if (android.os.Looper.myLooper() == android.os.Looper.getMainLooper()) mainThreadReads.incrementAndGet() }
+    /** Where the first few of those came from (tests). */
+    val mainThreadReadsFrom = java.util.concurrent.ConcurrentLinkedQueue<String>()
+    private fun noteThread() {
+        if (android.os.Looper.myLooper() != android.os.Looper.getMainLooper()) return
+        if (mainThreadReads.incrementAndGet() <= 5 && android.os.Build.FINGERPRINT == "robolectric")
+            mainThreadReadsFrom.add(Throwable().stackTrace.filter { it.className.startsWith("com.avidviewer") }.take(8).joinToString(" < ") { "${it.className.substringAfterLast('.')}.${it.methodName}:${it.lineNumber}" })
+    }
 
     fun count(q: Query): Int {
         noteThread()
