@@ -1107,6 +1107,41 @@ private fun BugReportBlock(vm: AppViewModel) {
     }
 }
 
+/**
+ * Nov 25, 2026: how to get a free TMDB key, with what to enter in each field of TMDB's form (it asks about the
+ * "application"), and a QR code for the same steps on a phone (avidviewer.app/tmdb, with copy buttons).
+ */
+@Composable
+private fun TmdbHowTo(saved: Boolean) {
+    val L = com.avidviewer.tv.data.Links
+    SettingBlock(
+        "How to get a free key",
+        if (saved) "For a new key, or another TV. Scan to open these steps on your phone, with copy buttons." else "TMDB gives each person a free key for personal use. It takes about five minutes. Scan to open these steps on your phone, with copy buttons.",
+        focusable = true,
+    ) {
+        Row(horizontalArrangement = Arrangement.spacedBy(20.dp), verticalAlignment = Alignment.Top) {
+            QrCode(L.TMDB_HELP, Modifier.size(150.dp).testTag("tmdb-qr"))
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Label("1. At themoviedb.org, sign in and confirm your email. Open Settings › API › Request an API Key, choose Developer and accept the terms.", size = 12.sp, color = C.Text, lines = Int.MAX_VALUE)
+                Label("2. Fill in TMDB's form with these, and your own name and contact details:", size = 12.sp, color = C.Text, lines = Int.MAX_VALUE)
+                TmdbField("Type of Use", "Personal (or the closest choice)")
+                TmdbField("Application Name", L.TMDB_APP_NAME)
+                TmdbField("Application URL", L.TMDB_APP_URL)
+                TmdbField("Application Summary", L.TMDB_APP_SUMMARY)
+                Label("3. Copy the API Key (32 letters and numbers). Easiest: paste it at avidviewer.app › Profiles › Discover and every TV gets it. Or type it in TMDB API key above.", size = 12.sp, color = C.Text, lines = Int.MAX_VALUE)
+            }
+        }
+    }
+}
+
+@Composable
+private fun TmdbField(name: String, value: String) {
+    Row(Modifier.padding(start = 14.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Label(name, size = 12.sp, color = C.Soft, modifier = Modifier.width(150.dp))
+        Label(value, size = 12.sp, color = C.Accent, weight = FontWeight.Bold, lines = Int.MAX_VALUE, modifier = Modifier.weight(1f))
+    }
+}
+
 /** QR codes for the user guide and the Control4 driver: a TV can't open them, a phone can. */
 @Composable
 private fun GuideAndDriverBlock() {
@@ -1302,6 +1337,7 @@ private fun androidx.compose.foundation.lazy.LazyListScope.discoverSettings(vm: 
             vm.tmdbStatus?.let { Label(it, size = 12.sp, color = C.Soft, lines = 2) }
         }
     }
+    item(key = "tmdb-how") { TmdbHowTo(saved = p.tmdbKeyEnc.isNotBlank()) }
     if (p.tmdbKeyEnc.isNotBlank() && !vm.kidsMode) {
         item {
             val prog = vm.genreProgress

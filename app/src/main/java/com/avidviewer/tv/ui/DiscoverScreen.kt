@@ -66,7 +66,7 @@ fun DiscoverScreen(vm: AppViewModel) {
         }
         Spacer(Modifier.padding(top = 10.dp))
         if (vm.tmdbKey().isBlank()) {
-            StateMessage(StateKind.EMPTY, "Discover needs your free TMDB API key.", "Enter it in Settings › Discover. It's stored encrypted on this device only.",
+            StateMessage(StateKind.EMPTY, "Discover needs your free TMDB API key.", "Settings › Discover shows how to get one (about five minutes). Enter it there, or once at avidviewer.app › Profiles › Discover for every TV.",
                 action = "Open Settings" to { vm.settingsSection = "discover"; vm.navSelect(Screen.SETTINGS); vm.settingsSection = "discover" })
             return@Column
         }

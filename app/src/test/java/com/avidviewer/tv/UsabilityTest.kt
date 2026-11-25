@@ -2157,6 +2157,16 @@ class UsabilityTest {
         waitFor("the Language fact") { rule.onAllNodesWithText("Language").fetchSemanticsNodes().isNotEmpty() }
     }
 
+    /** Nov 25: Settings › Discover says how to get a TMDB key, with the answers for TMDB's form and a QR code. */
+    @Test
+    fun discoverSettingsSayHowToGetATmdbKey() {
+        rule.runOnIdle { vm.settingsSection = "discover"; vm.navSelect(Screen.SETTINGS); vm.settingsSection = "discover" }
+        settle()
+        waitFor("the how-to") { rule.onAllNodesWithText("How to get a free key").fetchSemanticsNodes().isNotEmpty() }
+        for (t in listOf("Application Name", "Avid Viewer", "https://avidviewer.app", "Application Summary"))
+            assertTrue(t, rule.onAllNodesWithText(t).fetchSemanticsNodes().isNotEmpty())
+    }
+
     /** Nov 12: from My List, a series with several copies (versions line) left no room for its episodes. */
     @Test
     fun aSeriesFromMyListWithSeveralCopiesStillReachesItsEpisodes() {
