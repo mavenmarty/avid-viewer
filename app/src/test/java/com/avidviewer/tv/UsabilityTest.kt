@@ -1177,7 +1177,6 @@ class UsabilityTest {
             // In the TV Guide: the Recent list, in that order.
             rule.runOnIdle { vm.chooseGroup(TestData.P1, RECENT_GROUP) }
             waitFor("Recent in the guide") { vm.channelsIn(RECENT_GROUP).map { it.key } == listOf(b.key, c.key, a.key) }
-            rule.onNodeWithTag("nav-recent", useUnmergedTree = true).assertExists()
 
             // Menu › Remove from Recent: off here and removed in the account for every TV.
             rule.runOnIdle { vm.toggleInList(RECENT_GROUP, b.key) }

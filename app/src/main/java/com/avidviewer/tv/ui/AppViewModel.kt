@@ -3726,7 +3726,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Works out [recent] again: each entry matched to this TV's copy of its channel (off the screen's thread). */
     fun refreshRecent() {
-        if (profile.kids) { recent = emptyList(); return }
+        if (profile.kids) { if (recent.isNotEmpty()) recent = emptyList(); return }
         val pid = profile.id
         recentJob?.cancel()
         recentJob = viewModelScope.launch {
@@ -3742,7 +3742,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             }
             if (profile.id != pid) return@launch
             found.forEach { (c, _) -> liveCardChannels[c.key] = c }
-            recent = found.distinctBy { it.first.key }.map { (c, o) -> RecentChannel(c.key, o.optString("tv"), o.optLong("at"), isMine(o), recentId(o)) }
+            val now = found.distinctBy { it.first.key }.map { (c, o) -> RecentChannel(c.key, o.optString("tv"), o.optLong("at"), isMine(o), recentId(o)) }
+            if (now != recent) recent = now // the same list: nothing on screen redraws
         }
     }
 
