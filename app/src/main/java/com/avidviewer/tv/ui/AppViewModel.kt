@@ -2742,7 +2742,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             val shownHere = shownChannel(prefs.lastChannel, list, gs)
             if (shownHere != null) {
                 currentKey = shownHere.key; selectedGroup = shownHere.group
-                if (!toContinue) launchPreview(currentKey); guideFocusTick++
+                if (!toContinue) launchPreview(currentKey) else previewDeferred = true; guideFocusTick++
             } else {
                 selectedGroup = selectedGroup?.takeIf { g -> gs.any { it.raw == g } } ?: gs.firstOrNull()?.raw
                 viewModelScope.launch { startOnListedChannel() }
@@ -2785,7 +2785,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         if (currentKey != null && lastKeyAt > 0) return // the viewer has already picked something
         currentKey = key; selectedGroup = group
         guideFocusMode = GuideFocus.CURRENT
-        if (screen != Screen.CONTINUE) launchPreview(key); guideFocusTick++
+        if (screen != Screen.CONTINUE) launchPreview(key) else previewDeferred = true; guideFocusTick++
     }
 
     /**
@@ -3887,6 +3887,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** Whether Continue watching has anything to show (the app opens on it then). */
     fun continueHasAny(): Boolean = recent.isNotEmpty() || continueKeys().isNotEmpty() ||
         (!profile.kids && (liveState().optJSONArray("recent")?.length() ?: 0) > 0)
+
+    /** The app opened on Continue watching, so the guide's start-up preview waits until Live TV is opened. */
+    private var previewDeferred = false
 
     /** A title page opened from Continue watching: Back from it returns there. */
     var detailFrom: Screen? = null
@@ -5476,8 +5479,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         if (!screenAllowed(target) || (target == Screen.MANAGE && kidsMode)) return
         jumpedFrom = null; detailFrom = null
         if (target == Screen.CONTINUE) { refreshRecent(); screen = Screen.CONTINUE; navMode = NavMode.COLLAPSED; entryFocusFor = Screen.CONTINUE; cwFocusKey = null; cwFocusTick++; return }
-        // Opened on Continue watching: the guide's preview starts when Live TV is first opened.
-        if ((target == Screen.GUIDE || target == Screen.LIVE) && player.mediaItemCount == 0 && vodPlaying == null && currentKey != null) launchPreview(currentKey)
+        // Opened on Continue watching: the guide's preview starts when Live TV is first opened (only then: a stream
+        // stopped because no video was on screen still waits for a channel to be picked).
+        if ((target == Screen.GUIDE || target == Screen.LIVE) && previewDeferred) { previewDeferred = false; if (player.mediaItemCount == 0 && vodPlaying == null && currentKey != null) launchPreview(currentKey) }
         entryFocusFor = if (target == Screen.PLAYLISTS || target == Screen.MANAGE) Screen.SETTINGS else target
         val s = if (target == Screen.LIVE) Screen.GUIDE else target
         if (s == Screen.FAVORITES) {
