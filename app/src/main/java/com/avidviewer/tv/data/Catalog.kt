@@ -20,14 +20,15 @@ data class Ingest<T>(val result: T, val added: Int, val committed: Boolean)
  * stream address token (ChannelKeys.token), to follow saved choices when keys change, lr the
  * language rank (Language.rank: 0 English … 3 other), so a title listed once shows its English copy.
  */
-class Catalog(context: Context) : SQLiteOpenHelper(context.applicationContext, "catalog.db", null, 6) {
+class Catalog(context: Context) : SQLiteOpenHelper(context.applicationContext, "catalog.db", null, 7) {
 
     override fun onCreate(db: SQLiteDatabase) {
         db.execSQL(
             """CREATE TABLE title (k TEXT PRIMARY KEY, p TEXT NOT NULL, t TEXT NOT NULL, g TEXT NOT NULL, c TEXT NOT NULL,
                n TEXT NOT NULL, nn TEXT NOT NULL, l TEXT, u TEXT NOT NULL, s TEXT, a INTEGER NOT NULL DEFAULT 0,
                r TEXT NOT NULL DEFAULT '', y TEXT NOT NULL DEFAULT '', o INTEGER NOT NULL, h INTEGER NOT NULL DEFAULT 0, tk TEXT,
-               lr INTEGER NOT NULL DEFAULT -1, rep INTEGER NOT NULL DEFAULT 1, repc INTEGER NOT NULL DEFAULT 1)""",
+               lr INTEGER NOT NULL DEFAULT -1, rep INTEGER NOT NULL DEFAULT 1, repc INTEGER NOT NULL DEFAULT 1,
+               rept INTEGER NOT NULL DEFAULT 1)""",
         )
         db.execSQL("CREATE INDEX title_list ON title (g, h, c, p, o)")
         db.execSQL("CREATE INDEX title_all ON title (g, h, p, o)")
@@ -46,7 +47,8 @@ class Catalog(context: Context) : SQLiteOpenHelper(context.applicationContext, "
      * title share one lookup. genre_done: looked up (matched = 0: TMDB had no match), with TMDB's rating and votes.
      */
     private fun createGenres(db: SQLiteDatabase) {
-        db.execSQL("CREATE TABLE IF NOT EXISTS genre_done (gk TEXT PRIMARY KEY, at INTEGER NOT NULL, matched INTEGER NOT NULL, r REAL NOT NULL DEFAULT 0, v INTEGER NOT NULL DEFAULT 0)")
+        db.execSQL("CREATE TABLE IF NOT EXISTS genre_done (gk TEXT PRIMARY KEY, at INTEGER NOT NULL, matched INTEGER NOT NULL, r REAL NOT NULL DEFAULT 0, v INTEGER NOT NULL DEFAULT 0, tid INTEGER NOT NULL DEFAULT 0)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS genre_done_tid ON genre_done (tid)")
         // This week's TMDB trending titles, by genre key, in TMDB's order (only those on the user's playlists show).
         db.execSQL("CREATE TABLE IF NOT EXISTS trending (gk TEXT PRIMARY KEY, pos INTEGER NOT NULL)")
         db.execSQL("CREATE TABLE IF NOT EXISTS title_genre (gk TEXT NOT NULL, genre INTEGER NOT NULL, PRIMARY KEY (genre, gk))")
@@ -74,6 +76,17 @@ class Catalog(context: Context) : SQLiteOpenHelper(context.applicationContext, "
             db.execSQL("ALTER TABLE title ADD COLUMN repc INTEGER NOT NULL DEFAULT 1")
         }
         if (oldVersion < 6) createGenres(db)
+        // 7 (Nov 26, 2026): the TMDB title each lookup matched (tid), and rept: the copy that stands for a TMDB title in
+        // the lists TMDB ranks (Top rated, Trending, genres, rating order), so copies a provider named differently
+        // ("SC - Batman: Knightfall Part 1: Knightfall" and "Batman: Knightfall Part 1") show once there.
+        // Lookups saved before have no tid and are done again, a few at a time, in the background.
+        if (oldVersion < 7) {
+            if (oldVersion >= 6) {
+                db.execSQL("ALTER TABLE genre_done ADD COLUMN tid INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("CREATE INDEX IF NOT EXISTS genre_done_tid ON genre_done (tid)")
+            }
+            db.execSQL("ALTER TABLE title ADD COLUMN rept INTEGER NOT NULL DEFAULT 1")
+        }
     }
 
     /**
@@ -93,8 +106,35 @@ class Catalog(context: Context) : SQLiteOpenHelper(context.applicationContext, "
             try {
                 db.execSQL("UPDATE title SET rep = CASE WHEN rowid IN (SELECT r FROM (SELECT rowid AS r, $pick FROM title WHERE g = ? AND h = 0 AND $inPids GROUP BY $GROUP_KEY)) THEN 1 ELSE 0 END WHERE g = ?", arrayOf(g, g))
                 db.execSQL("UPDATE title SET repc = CASE WHEN rowid IN (SELECT r FROM (SELECT rowid AS r, $pick FROM title WHERE g = ? AND h = 0 AND $inPids GROUP BY c, $GROUP_KEY)) THEN 1 ELSE 0 END WHERE g = ?", arrayOf(g, g))
+                regroupTmdb(db, g, pick)
                 db.setTransactionSuccessful()
             } finally { db.endTransaction() }
+        }
+    }
+
+    /**
+     * rept (Nov 26, 2026): among the copies that stand for their title ([rep]), one per TMDB match: copies whose
+     * names differ but that TMDB matched to the same title show once in the lists TMDB ranks. Titles not matched
+     * (or not looked up yet) keep their own.
+     */
+    private fun regroupTmdb(db: SQLiteDatabase, g: String, pick: String) {
+        db.execSQL(
+            "UPDATE title SET rept = CASE WHEN rep = 0 THEN 0 " +
+                "WHEN NOT EXISTS (SELECT 1 FROM genre_done d WHERE d.gk = $GENRE_KEY AND d.tid > 0) THEN 1 " +
+                "WHEN rowid IN (SELECT r FROM (SELECT title.rowid AS r, $pick FROM title JOIN genre_done d ON d.gk = $GENRE_KEY " +
+                "WHERE title.g = ? AND title.rep = 1 AND d.tid > 0 GROUP BY d.tid)) THEN 1 ELSE 0 END WHERE g = ?",
+            arrayOf(g, g),
+        )
+    }
+
+    /** Works out [regroupTmdb] again for both kinds (after lookups were saved). */
+    fun regroupByTmdb(pids: List<String>) {
+        val db = writableDatabase
+        val pl = if (pids.isEmpty()) "0" else "CASE p ${pids.mapIndexed { i, p -> "WHEN '${p.replace("'", "''")}' THEN $i" }.joinToString(" ")} ELSE ${pids.size} END"
+        val pick = "MIN((CASE WHEN lr < 0 THEN 1 ELSE lr END) * $RANK + ($pl) * $PER_PLAYLIST + o)"
+        for (g in listOf("movie", "series")) {
+            db.beginTransaction()
+            try { regroupTmdb(db, g, pick); db.setTransactionSuccessful() } finally { db.endTransaction() }
         }
     }
 
@@ -302,7 +342,7 @@ class Catalog(context: Context) : SQLiteOpenHelper(context.applicationContext, "
         val db = writableDatabase
         db.beginTransaction()
         try {
-            db.execSQL("UPDATE title SET h = 0, rep = 1, repc = 1 WHERE h = 1")
+            db.execSQL("UPDATE title SET h = 0, rep = 1, repc = 1, rept = 1 WHERE h = 1")
             // A Kids profile: everything is hidden except its chosen categories ("movie|playlistId|category").
             if (onlyCats != null) {
                 db.execSQL("UPDATE title SET h = 1")
@@ -335,13 +375,13 @@ class Catalog(context: Context) : SQLiteOpenHelper(context.applicationContext, "
         try {
             for (k in afterCats - beforeCats) catArgs(k)?.let { db.execSQL("UPDATE title SET h = 1 WHERE g = ? AND p = ? AND c = ?", it) }
             for (k in beforeCats - afterCats) catArgs(k)?.let { a ->
-                db.execSQL("UPDATE title SET h = 0, rep = 1, repc = 1 WHERE g = ? AND p = ? AND c = ?", a)
+                db.execSQL("UPDATE title SET h = 0, rep = 1, repc = 1, rept = 1 WHERE g = ? AND p = ? AND c = ?", a)
                 afterTitles.chunked(400).forEach { ch -> db.execSQL("UPDATE title SET h = 1 WHERE g = ? AND p = ? AND c = ? AND k IN (${ch.joinToString(",") { "?" }})", a + ch) }
             }
             (afterTitles - beforeTitles).chunked(400).forEach { ch -> db.execSQL("UPDATE title SET h = 1 WHERE k IN (${ch.joinToString(",") { "?" }})", ch.toTypedArray()) }
             val shown = (beforeTitles - afterTitles).toList()
             shown.chunked(400).forEach { ch ->
-                db.execSQL("UPDATE title SET h = 0, rep = 1, repc = 1 WHERE k IN (${ch.joinToString(",") { "?" }})", ch.toTypedArray())
+                db.execSQL("UPDATE title SET h = 0, rep = 1, repc = 1, rept = 1 WHERE k IN (${ch.joinToString(",") { "?" }})", ch.toTypedArray())
                 for (k in afterCats) catArgs(k)?.let { a -> db.execSQL("UPDATE title SET h = 1 WHERE g = ? AND p = ? AND c = ? AND k IN (${ch.joinToString(",") { "?" }})", a + ch) }
             }
             db.setTransactionSuccessful()
@@ -374,12 +414,15 @@ class Catalog(context: Context) : SQLiteOpenHelper(context.applicationContext, "
          */
         val englishOnly: Boolean = false,
     ) {
+        /** Ranked or sorted by TMDB: a genre (Trending, Top rated included) or the rating order. */
+        fun byTmdb() = category == null && (genre != null && genre != GENRE_PENDING || sort == SORT_RATING)
         fun where(): Pair<String, Array<String>> {
             val sb = StringBuilder("g = ?")
             val args = ArrayList<String>(); args.add(group)
             if (!includeHidden) sb.append(" AND h = 0")
             // Each title once: the copy [regroup] marked (within the category when one is chosen).
-            if (grouped) sb.append(if (category != null) " AND repc = 1" else " AND rep = 1")
+            // The lists TMDB ranks show each TMDB title once (rept); the others each name once (rep).
+            if (grouped) sb.append(if (category != null) " AND repc = 1" else if (byTmdb()) " AND rept = 1" else " AND rep = 1")
             if (category != null) { sb.append(" AND c = ?"); args.add(category) }
             if (kind != null) { sb.append(" AND t = ?"); args.add(kind) }
             if (englishOnly) sb.append(" AND lr < 2")
@@ -488,21 +531,21 @@ class Catalog(context: Context) : SQLiteOpenHelper(context.applicationContext, "
         if (playlists.isEmpty()) return emptyList()
         val inP = playlists.joinToString(",") { "?" }
         return readableDatabase.rawQuery(
-            "SELECT $GENRE_KEY, g, n, y FROM title WHERE h = 0 AND rep = 1 AND p IN ($inP) AND NOT EXISTS (SELECT 1 FROM genre_done d WHERE d.gk = $GENRE_KEY) ORDER BY a DESC LIMIT $limit",
+            "SELECT $GENRE_KEY, g, n, y FROM title WHERE h = 0 AND rep = 1 AND p IN ($inP) AND NOT EXISTS (SELECT 1 FROM genre_done d WHERE d.gk = $GENRE_KEY AND NOT (d.matched = 1 AND d.tid = 0)) ORDER BY a DESC LIMIT $limit",
             playlists.toTypedArray(),
         ).use { c -> val out = ArrayList<GenreLookup>(); val seen = HashSet<String>(); while (c.moveToNext()) if (seen.add(c.getString(0))) out.add(GenreLookup(c.getString(0), c.getString(1), c.getString(2), c.getString(3))); out }
     }
 
     /** What TMDB says about a title: its genres, rating and number of votes. */
-    data class GenreFound(val genres: List<Int>, val rating: Double = 0.0, val votes: Int = 0)
+    data class GenreFound(val genres: List<Int>, val rating: Double = 0.0, val votes: Int = 0, val tmdbId: Int = 0)
 
     /** Saves a lookup: [found] null = TMDB had no match. */
     fun saveGenres(gk: String, found: GenreFound?, now: Long = System.currentTimeMillis()) {
         val db = writableDatabase
         db.beginTransaction()
         try {
-            db.execSQL("INSERT OR REPLACE INTO genre_done (gk, at, matched, r, v) VALUES (?, ?, ?, ?, ?)",
-                arrayOf<Any>(gk, now, if (found == null) 0 else 1, found?.rating ?: 0.0, found?.votes ?: 0))
+            db.execSQL("INSERT OR REPLACE INTO genre_done (gk, at, matched, r, v, tid) VALUES (?, ?, ?, ?, ?, ?)",
+                arrayOf<Any>(gk, now, if (found == null) 0 else 1, found?.rating ?: 0.0, found?.votes ?: 0, if (found == null) 0 else found.tmdbId.takeIf { it > 0 } ?: -1))
             db.execSQL("DELETE FROM title_genre WHERE gk = ?", arrayOf(gk))
             found?.genres?.distinct()?.forEach { db.execSQL("INSERT OR IGNORE INTO title_genre (gk, genre) VALUES (?, ?)", arrayOf<Any>(gk, it)) }
             db.setTransactionSuccessful()
