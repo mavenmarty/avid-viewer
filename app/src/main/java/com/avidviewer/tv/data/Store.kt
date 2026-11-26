@@ -406,6 +406,8 @@ class Store(private val context: Context) {
      * 1.18.0: the profile's last live channel. "mine": this TV's own (sent to the account, locked); "other": the
      * newest one from another TV (for the live card in Continue watching). Each: {pl, ch, name, epg, tv, at, until}.
      */
+    // Nov 26, 2026: also "recent": the TV Guide's Recent list, up to 10 entries {key (this TV's), pl, ch, name, epg,
+    // at, tv, dev}, newest first; and "recentGone": {entry id: when removed}, sent so other TVs remove it too.
     fun loadLive(id: String): JSONObject = runCatching { JSONObject(personalFile("live.json", id).readText()) }.getOrDefault(JSONObject())
     fun saveLive(o: JSONObject, id: String) = writeAtomic(personalFile("live.json", id), o.toString())
 

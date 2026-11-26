@@ -36,6 +36,8 @@ import com.avidviewer.tv.ui.FAV_GROUP
 import com.avidviewer.tv.ui.LIVE_KIND
 import com.avidviewer.tv.ui.LIVE_MATCH
 import com.avidviewer.tv.ui.LIVE_PREFIX
+import com.avidviewer.tv.ui.RECENT_GROUP
+import com.avidviewer.tv.ui.RECENT_MATCH
 import com.avidviewer.tv.ui.SORT_AZ
 import com.avidviewer.tv.ui.SORT_MANUAL
 import com.avidviewer.tv.ui.SORT_PROVIDER
@@ -1121,18 +1123,19 @@ class UsabilityTest {
     }
 
     /**
-     * 1.18.0 (boards 23–24): the profile's last live channel follows it, locked: sent from this TV, and another TV's
-     * shown as the live card in Continue watching (matched by name here), until its program ends; Menu removes it
-     * everywhere; this TV's own newer channel puts the card second.
+     * Nov 26, 2026: the TV Guide's Recent list. This TV's channels are sent locked (only the channel, never a show or a
+     * stream address); other TVs' channels arrive, told apart by device even when two TVs have the same name (why the
+     * 1.18.0 live card could stay empty); an older TV's single last channel shows too; newest first; Menu › Remove
+     * takes one off everywhere; and Continue watching has no live card any more.
      */
     @Test
-    fun theLastLiveChannelFollowsTheProfileToItsOtherTvs() {
+    fun recentChannelsFollowTheProfileIntoTheTvGuide() {
         FakeAvidSite().use { site ->
             val now = System.currentTimeMillis()
             restartWith { st -> st.savePlaylists(st.loadPlaylists().map { if (it.id == TestData.P1) it.copy(remoteId = "acctP1") else it }) }
             rule.runOnIdle { vm.chooseGroup(TestData.P1, "NEWS") }
-            waitFor("channels") { vm.channelsIn("NEWS").isNotEmpty() }
-            val news = vm.channelsIn("NEWS").first()
+            waitFor("channels") { vm.channelsIn("NEWS").size >= 3 }
+            val (a, b, c) = vm.channelsIn("NEWS").take(3)
             linkForTest(site)
             site.profileMap = mapOf("main" to "acctDad")
             site.profiles = org.json.JSONArray().put(org.json.JSONObject().put("id", "acctDad").put("name", "Dad").put("parent", true).put("color", 0).put("pin", "")
@@ -1142,48 +1145,49 @@ class UsabilityTest {
             val h = ByteArray(32).also { java.util.Random(11).nextBytes(it) }
             site.historySealed = sealFor(site.report!!.getString("pubkey"), org.json.JSONObject().put("historyKey", android.util.Base64.encodeToString(h, android.util.Base64.NO_WRAP)))
             rule.runOnIdle { vm.syncAccountPlaylists() }
-            waitFor("history key") { com.avidviewer.tv.data.AccountStore(ApplicationProvider.getApplicationContext<Application>()).historyKey != null }
-            val st = com.avidviewer.tv.data.Store(ApplicationProvider.getApplicationContext<Application>())
+            val ctx = ApplicationProvider.getApplicationContext<Application>()
+            waitFor("history key") { com.avidviewer.tv.data.AccountStore(ctx).historyKey != null }
+            val me = com.avidviewer.tv.data.AccountStore(ctx).deviceId.ifBlank { "here" }
+            val st = com.avidviewer.tv.data.Store(ctx)
             val pid = vm.profile.id
-            val lid = com.avidviewer.tv.data.History.itemId(h, LIVE_MATCH)
+            fun rid(ch: com.avidviewer.tv.data.Channel) = com.avidviewer.tv.data.History.itemId(h, RECENT_MATCH + "acctP1:" + ch.key.substringAfter(':'))
 
-            // This TV watched a channel: one locked entry, with the program's end, never a show name.
-            st.saveLive(org.json.JSONObject().put("mine", org.json.JSONObject().put("key", news.key).put("pl", "acctP1").put("ch", news.key.substringAfter(':'))
-                .put("name", news.name).put("epg", news.epgId ?: "").put("at", now - 60_000L).put("until", now + 1_800_000L)), pid)
-            rule.runOnIdle { vm.syncAccountPlaylists() }
-            waitFor("live sent") { site.historyItems["acctDad|$lid"]?.isNull("blob") == false }
-            val sent = com.avidviewer.tv.data.History.open(h, site.historyItems["acctDad|$lid"]!!.getString("blob"))
-            assertEquals("l", sent.getString("t")); assertEquals("acctP1", sent.getString("pl")); assertEquals(news.name, sent.getString("name"))
-            assertEquals("Living room", sent.getString("tv")); assertEquals(now + 1_800_000L, sent.getLong("until"))
+            // This TV watched channel A: sent locked, as this TV.
+            st.saveLive(org.json.JSONObject().put("recent", org.json.JSONArray().put(org.json.JSONObject().put("key", a.key).put("pl", "acctP1").put("ch", a.key.substringAfter(':'))
+                .put("name", a.name).put("epg", a.epgId ?: "").put("at", now - 60_000L).put("tv", "Living room").put("dev", me))), pid)
+            rule.runOnIdle { vm.refreshRecent(); vm.syncAccountPlaylists() }
+            waitFor("A sent") { site.historyItems["acctDad|${rid(a)}"]?.isNull("blob") == false }
+            val sent = com.avidviewer.tv.data.History.open(h, site.historyItems["acctDad|${rid(a)}"]!!.getString("blob"))
+            assertEquals("r", sent.getString("t")); assertEquals(a.name, sent.getString("name")); assertEquals(me, sent.getString("dev"))
             assertFalse("no stream address", sent.toString().contains("://"))
-            assertEquals("its own channel makes no card here", null, vm.liveCardForTests())
+            assertFalse("no show", sent.has("title") || sent.has("program"))
 
-            // Another TV (Bedroom) watched the same channel on another provider since: matched here by name.
-            site.putHistory("acctDad", lid, com.avidviewer.tv.data.History.lock(h, org.json.JSONObject().put("t", "l").put("pl", "acctOther").put("ch", "999")
-                .put("name", "US| " + news.name + " HD ᴿᴬᵂ").put("epg", "").put("until", now + 3_600_000L).put("tv", "Bedroom")), now)
+            // Another TV with the same name ("Living room") watched B later; an older app on Bedroom sends its last channel, C, by name.
+            site.putHistory("acctDad", rid(b), com.avidviewer.tv.data.History.lock(h, org.json.JSONObject().put("t", "r").put("pl", "acctP1").put("ch", b.key.substringAfter(':'))
+                .put("name", b.name).put("epg", "").put("tv", "Living room").put("dev", "dev-other")), now)
+            site.putHistory("acctDad", com.avidviewer.tv.data.History.itemId(h, LIVE_MATCH), com.avidviewer.tv.data.History.lock(h, org.json.JSONObject().put("t", "l").put("pl", "acctOther").put("ch", "999")
+                .put("name", "US| " + c.name + " HD").put("epg", "").put("until", now + 3_600_000L).put("tv", "Bedroom")), now - 30_000L)
             rule.runOnIdle { vm.syncAccountPlaylists() }
-            waitFor("live card") { vm.liveCardForTests() != null }
-            assertEquals(news.key to false, vm.liveCardForTests())
-            val card = VodItem(LIVE_PREFIX + news.key, TestData.P1, LIVE_KIND, news.name, null, "")
-            assertTrue(vm.continueFrom(card)!!.startsWith("from Bedroom · "))
+            waitFor("B and C in Recent (${vm.recent})") { vm.recent.map { it.key }.containsAll(listOf(a.key, b.key, c.key)) }
+            assertEquals("newest first", listOf(b.key, c.key, a.key), vm.recent.map { it.key })
+            assertTrue(vm.recentNote(b.key), vm.recentNote(b.key).startsWith("Living room · "))
+            assertTrue(vm.recentNote(a.key), vm.recentNote(a.key).startsWith("This TV · "))
+            assertTrue(vm.recentNote(c.key), vm.recentNote(c.key).startsWith("Bedroom · "))
 
-            // This TV's own channel is newer: the card stays, second.
-            val ls = st.loadLive(pid); ls.getJSONObject("mine").put("at", now + 5_000L); st.saveLive(ls, pid)
-            assertEquals(news.key to true, vm.liveCardForTests())
+            // In the TV Guide: the Recent list, in that order.
+            rule.runOnIdle { vm.chooseGroup(TestData.P1, RECENT_GROUP) }
+            waitFor("Recent in the guide") { vm.channelsIn(RECENT_GROUP).map { it.key } == listOf(b.key, c.key, a.key) }
 
-            // Menu on the card: off here, and removed in the account for every TV.
-            rule.runOnIdle { vm.removeFromContinue(card) }
-            assertEquals(null, vm.liveCardForTests())
+            // Menu › Remove from Recent: off here and removed in the account for every TV.
+            rule.runOnIdle { vm.toggleInList(RECENT_GROUP, b.key) }
+            assertEquals(listOf(c.key, a.key), vm.recent.map { it.key })
             rule.runOnIdle { vm.syncAccountPlaylists() }
-            waitFor("removal sent") { site.historyItems["acctDad|$lid"]?.isNull("blob") == true }
-
-            // Another channel from Bedroom whose program has ended: no card.
-            site.putHistory("acctDad", lid, com.avidviewer.tv.data.History.lock(h, org.json.JSONObject().put("t", "l").put("pl", "acctP1").put("ch", news.key.substringAfter(':'))
-                .put("name", news.name).put("until", System.currentTimeMillis() + 2_000L).put("tv", "Bedroom")), System.currentTimeMillis() + 1_000L)
+            waitFor("removal sent") { site.historyItems["acctDad|${rid(b)}"]?.isNull("blob") == true }
             rule.runOnIdle { vm.syncAccountPlaylists() }
-            waitFor("card back") { vm.liveCardForTests() != null }
-            Thread.sleep(2_500)
-            assertEquals("ended with its program", null, vm.liveCardForTests())
+            waitFor("stays removed") { vm.recent.none { it.key == b.key } }
+
+            // Continue watching is movies and episodes only now.
+            assertTrue(vm.continueKeysForTests().none { it.startsWith(LIVE_PREFIX) })
         }
     }
 
