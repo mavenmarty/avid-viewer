@@ -531,7 +531,9 @@ class Catalog(context: Context) : SQLiteOpenHelper(context.applicationContext, "
         if (playlists.isEmpty()) return emptyList()
         val inP = playlists.joinToString(",") { "?" }
         return readableDatabase.rawQuery(
-            "SELECT $GENRE_KEY, g, n, y FROM title WHERE h = 0 AND rep = 1 AND p IN ($inP) AND NOT EXISTS (SELECT 1 FROM genre_done d WHERE d.gk = $GENRE_KEY AND NOT (d.matched = 1 AND d.tid = 0)) ORDER BY a DESC LIMIT $limit",
+            "SELECT $GENRE_KEY, g, n, y FROM title WHERE h = 0 AND rep = 1 AND p IN ($inP) AND NOT EXISTS (SELECT 1 FROM genre_done d WHERE d.gk = $GENRE_KEY AND NOT (d.matched = 1 AND d.tid = 0)) " +
+                // Lookups done again for their TMDB id (version 7): Top rated's titles first, so it shows each title once soonest.
+                "ORDER BY (SELECT CASE WHEN d.v >= $TOP_VOTES AND d.r >= $TOP_RATING THEN 0 ELSE 1 END FROM genre_done d WHERE d.gk = $GENRE_KEY) IS NOT 0, a DESC LIMIT $limit",
             playlists.toTypedArray(),
         ).use { c -> val out = ArrayList<GenreLookup>(); val seen = HashSet<String>(); while (c.moveToNext()) if (seen.add(c.getString(0))) out.add(GenreLookup(c.getString(0), c.getString(1), c.getString(2), c.getString(3))); out }
     }

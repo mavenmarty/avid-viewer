@@ -2,7 +2,7 @@
 
 <!-- The version below and the Release notes section are updated automatically after each published build
      (.github/workflows/user-guide.yml). Feature descriptions are written by hand. -->
-This guide covers **Avid Viewer 1.30.0**, the current public release. Avid Viewer is an IPTV player for Android TV and Fire TV. You bring your own provider (an Xtream Codes login or an M3U link); the app doesn't include any channels.
+This guide covers **Avid Viewer 1.30.1**, the current public release. Avid Viewer is an IPTV player for Android TV and Fire TV. You bring your own provider (an Xtream Codes login or an M3U link); the app doesn't include any channels.
 
 **Contents:** [Getting started](#1-getting-started) · [Main menu](#2-main-menu) · [TV Guide](#3-tv-guide) · [Full-screen playback](#4-full-screen-playback) · [Search](#5-search) · [Discover](#6-discover) · [Sports](#7-sports) · [Movies and Series](#8-movies-and-series) · [Settings](#9-settings) ([Profiles](#profiles)) · [Privacy](#10-privacy) · [Troubleshooting](#11-troubleshooting) · [Control4](#12-control4) · [Supplemental services](#13-supplemental-services) · [Cable & satellite](#14-using-your-cable-or-satellite-subscription) · [Free services](#15-free-services) · [Release notes](#release-notes)
 
@@ -308,7 +308,7 @@ Audio tracks and captions only appear when the stream carries them, so they vary
 
 The **Search** screen searches **every playlist** at once: TV stations, programs in the TV guide (now and upcoming), movies and series.
 
-- **Results appear as you type**, after a short pause, playlist by playlist as each is searched. Typing more replaces the search at once. Pressing **Search** works too.
+- **Type, then press Search** (the button beside the box, or the Search key on the remote's on-screen keyboard). Typing alone doesn't search, so the TV isn't kept busy searching each letter. Results appear playlist by playlist as each is searched; a new search replaces the last one at once.
 - **Forgiving matching:** part of a word is enough ("farg" finds Fargo), words can come in any order ("news fargo" finds "KVLY Fargo News HD"), and punctuation doesn't matter ("spider man" finds "Spider-Man: No Way Home").
 - **Near matches:** a small typo still finds the name ("the ofice" finds The Office, "breking bad" finds Breaking Bad, "godfathr" finds The Godfather), and from a search of three or more words one may be missing ("the office us" finds The Office). A short word such as "tv" may be missing too. Numbers must match ("abc 6" doesn't offer ABC 3).
 - **Best matches first:** names that start with what you typed, then names holding every word, then near matches.
@@ -1003,7 +1003,17 @@ Every public release since 1.0.35, newest first. From 1.1.0, versions are number
 
 <!-- new-releases: entries for new builds are added automatically below this line -->
 
-### 1.30.0 — November 26, 2026, 10:27 AM CT (current)
+### 1.30.1 — November 26, 2026, 11:30 AM CT (current)
+
+**Release notes**
+
+- **Search waits for you:** the Search screen now searches when you press **Search** (on the screen or the remote's keyboard), not after every pause in typing, so it no longer keeps the TV busy searching each letter.
+
+**Change log**
+
+- Search: wait for the Search button instead of searching after each pause in typing
+
+### 1.30.0 — November 26, 2026, 10:27 AM CT
 
 **Release notes**
 
