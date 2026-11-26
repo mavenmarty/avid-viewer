@@ -233,6 +233,8 @@ fun TvField(
     selectAll: Boolean = false,
     openSignal: Int = 0,
     next: (() -> Unit)? = null,
+    /** Nov 26, 2026: drawn like an item of the main menu (this icon, then the label or what was typed). */
+    navIcon: androidx.compose.ui.graphics.vector.ImageVector? = null,
     onChange: (String) -> Unit,
 ) {
     // JVM tests only: a text field being edited inside a dialog never lets a test settle, so there the field
@@ -263,7 +265,35 @@ fun TvField(
         if (next != null) { handedOn = true; finish(); next() } else { finish(); onSubmit?.invoke() }
     }
 
-    if (!editing) {
+    if (!editing && navIcon != null) {
+        Focusable(
+            modifier = modifier.fillMaxWidth().height(36.dp).focusRequester(boxFocus).onFocusChanged { boxHas = it.isFocused }
+                .semantics {
+                    setText { onChange(it.text); true }
+                    onImeAction(imeAction) { submit(); true }
+                },
+            color = Color.Transparent,
+            focusedColor = C.FocusRaised,
+            onClick = { editing = true },
+        ) { focused ->
+            androidx.compose.material3.Icon(navIcon, contentDescription = null, tint = if (focused) C.Text else C.Soft, modifier = Modifier.padding(start = 10.dp).size(20.dp))
+            Text(if (value.isEmpty()) label else "“$value”", color = if (value.isEmpty() && !focused) C.Soft else C.Text, fontSize = 14.sp, maxLines = 1,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, fontWeight = FontWeight.Medium, modifier = Modifier.padding(start = 12.dp, end = 8.dp))
+        }
+        LaunchedEffect(Unit) {
+            if (wasEditing) {
+                wasEditing = false
+                val back = reclaim && !handedOn
+                reclaim = false; handedOn = false
+                if (!back) return@LaunchedEffect
+                for (frame in 0 until 60) {
+                    androidx.compose.runtime.withFrameNanos { }
+                    if (boxHas) break
+                    runCatching { boxFocus.requestFocus() }
+                }
+            }
+        }
+    } else if (!editing) {
         Focusable(
             modifier = modifier.fillMaxWidth().height(56.dp).focusRequester(boxFocus).onFocusChanged { boxHas = it.isFocused }
                 // TalkBack (and the tests) can set the text and submit it without opening the keyboard.
