@@ -127,7 +127,7 @@ class LiveDb(private val catalog: Catalog) {
         // Every word typed, in any order.
         val words = SearchText.words(needle).ifEmpty { listOf(needle.trim()) }
         val where = words.joinToString(" AND ") { "n LIKE ? ESCAPE '\\'" }
-        return db.rawQuery("SELECT $CH_COLS FROM channel WHERE p = ? AND $where ORDER BY o LIMIT $limit", arrayOf(pid) + words.map { contains(it) }).use { c ->
+        return db.rawQuery("SELECT $CH_COLS FROM channel WHERE p = ? AND $where ORDER BY o LIMIT $limit", arrayOf(pid) + words.map { contains(it) }, QueryCancel.signal()).use { c ->
             val l = ArrayList<Channel>(); while (c.moveToNext()) l.add(channel(c)); l
         }
     }
@@ -141,7 +141,7 @@ class LiveDb(private val catalog: Catalog) {
         val pats = SearchText.nearPatterns(q)
         if (pats.isEmpty()) return emptyList()
         val where = pats.joinToString(" OR ") { "n LIKE ? ESCAPE '\\'" }
-        val rows = db.rawQuery("SELECT $CH_COLS FROM channel WHERE p = ? AND ($where) ORDER BY o LIMIT $scan", arrayOf(pid) + pats).use { c ->
+        val rows = db.rawQuery("SELECT $CH_COLS FROM channel WHERE p = ? AND ($where) ORDER BY o LIMIT $scan", arrayOf(pid) + pats, QueryCancel.signal()).use { c ->
             val l = ArrayList<Channel>(); while (c.moveToNext()) l.add(channel(c)); l
         }
         return rows.filter { SearchText.near(it.name, q) }.take(limit)
@@ -294,7 +294,7 @@ class LiveDb(private val catalog: Catalog) {
         val where = words.joinToString(" AND ") { "(t || ' ' || IFNULL(st, '')) LIKE ? ESCAPE '\\'" }
         return db.rawQuery(
             "SELECT e, s, x, t, st, nw FROM prog WHERE p = ? AND x > ? AND $where ORDER BY s LIMIT $limit",
-            arrayOf(pid, after.toString()) + words.map { contains(it) },
+            arrayOf(pid, after.toString()) + words.map { contains(it) }, QueryCancel.signal(),
         ).use { c -> val l = ArrayList<Pair<String, Program>>(); while (c.moveToNext()) l.add(c.getString(0) to program(c, 1)); l }
     }
 
@@ -306,7 +306,7 @@ class LiveDb(private val catalog: Catalog) {
         val where = pats.joinToString(" OR ") { "(t || ' ' || IFNULL(st, '')) LIKE ? ESCAPE '\\'" }
         val rows = db.rawQuery(
             "SELECT e, s, x, t, st, nw FROM prog WHERE p = ? AND x > ? AND ($where) ORDER BY s LIMIT $scan",
-            arrayOf(pid, after.toString()) + pats,
+            arrayOf(pid, after.toString()) + pats, QueryCancel.signal(),
         ).use { c -> val l = ArrayList<Pair<String, Program>>(); while (c.moveToNext()) l.add(c.getString(0) to program(c, 1)); l }
         return rows.filter { (_, p) -> SearchText.near(p.title + " " + p.subtitle.orEmpty(), q) }.take(limit)
     }
