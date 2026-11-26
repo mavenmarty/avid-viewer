@@ -38,6 +38,7 @@ import com.avidviewer.tv.ui.LIVE_MATCH
 import com.avidviewer.tv.ui.LIVE_PREFIX
 import com.avidviewer.tv.ui.RECENT_GROUP
 import com.avidviewer.tv.ui.RECENT_MATCH
+import com.avidviewer.tv.ui.OPEN_ON_CONTINUE_IN_TESTS
 import com.avidviewer.tv.ui.SORT_AZ
 import com.avidviewer.tv.ui.SORT_MANUAL
 import com.avidviewer.tv.ui.SORT_PROVIDER
@@ -1189,6 +1190,77 @@ class UsabilityTest {
             // Continue watching is movies and episodes only now.
             assertTrue(vm.continueKeysForTests().none { it.startsWith(LIVE_PREFIX) })
         }
+    }
+
+    /**
+     * Nov 26, 2026 (owner, board 51): Continue watching on the main menu, after Search. Rows for Live TV, Series and
+     * Movies; OK on a channel plays it and Back comes back here; OK on a movie opens its page and Back comes back
+     * here; Menu › Clear Live TV history empties the Live TV row. Movies has no Continue watching category any more.
+     */
+    @Test
+    fun continueWatchingIsOnTheMainMenuWithRowsForLiveTvSeriesAndMovies() {
+        rule.runOnIdle { vm.chooseGroup(TestData.P1, "NEWS") }
+        waitFor("channels") { vm.channelsIn("NEWS").size >= 2 }
+        val (a, b) = vm.channelsIn("NEWS").take(2)
+        rule.runOnIdle { vm.navSelect(Screen.MOVIES) }
+        waitFor("movies") { vm.vodOf("movie").any { it.key == "${TestData.P1}:mDrama1" } }
+        val ctx = ApplicationProvider.getApplicationContext<Application>()
+        val st = com.avidviewer.tv.data.Store(ctx); val pid = vm.profile.id; val now = System.currentTimeMillis()
+        st.saveLive(org.json.JSONObject().put("recent", org.json.JSONArray()
+            .put(org.json.JSONObject().put("key", b.key).put("pl", "").put("ch", b.key.substringAfter(':')).put("name", b.name).put("at", now - 60_000L).put("tv", "").put("dev", "here"))
+            .put(org.json.JSONObject().put("key", a.key).put("pl", "").put("ch", a.key.substringAfter(':')).put("name", a.name).put("at", now - 600_000L).put("tv", "").put("dev", "here"))), pid)
+        rule.runOnIdle { vm.resumeForTests("${TestData.P1}:mDrama1", 300_000L) }
+        // The menu, in the owner's order.
+        rule.runOnIdle { vm.navMode = NavMode.FULL }
+        settle()
+        val order = listOf("Search", "Continue watching", "Discover", "Sports", "Live TV", "Series", "Movies", "Settings")
+        val tops = order.map { t -> rule.onAllNodes(androidx.compose.ui.test.hasText(t) and androidx.compose.ui.test.hasClickAction()).fetchSemanticsNodes().firstOrNull()?.boundsInRoot?.top ?: -1f }
+        assertTrue("menu order ${order.zip(tops)}", tops.all { it >= 0 } && tops.zipWithNext().all { (x, y) -> x < y })
+        // Continue watching: Live TV first, newest channel first, then Movies.
+        rule.runOnIdle { vm.navSelect(Screen.CONTINUE) }
+        waitFor("rows") { vm.recent.size == 2 && vm.continueTitles("movie").isNotEmpty() }
+        assertEquals(listOf(b.key, a.key), vm.recent.map { it.key })
+        rule.onNodeWithTag("cw-live", useUnmergedTree = true).assertExists()
+        rule.onNodeWithTag("cw-movies", useUnmergedTree = true).assertExists()
+        waitFor("the newest channel has the highlight (focus: ${focused()})") { focused().contains(vm.channelName(b)) || focused().contains("LIVE") }
+        // OK on it: full screen on that channel; Back: Continue watching again.
+        press(listOf(Key.DirectionCenter))
+        waitFor("full screen") { vm.screen == Screen.PLAYER && vm.currentKey == b.key }
+        press(listOf(Key.Back))
+        waitFor("back on Continue watching (screen ${vm.screen})") { vm.screen == Screen.CONTINUE }
+        // OK on the movie: its page; Back: Continue watching.
+        val drama = vm.continueTitles("movie").first { it.key == "${TestData.P1}:mDrama1" }
+        rule.runOnIdle { vm.openFromContinue(drama) }
+        waitFor("its page") { vm.vodDetail?.key == drama.key }
+        rule.runOnIdle { vm.closeVodDetail() }
+        waitFor("back on Continue watching") { vm.screen == Screen.CONTINUE }
+        // Menu › Clear Live TV history.
+        rule.runOnIdle { vm.clearRecent() }
+        assertTrue(vm.recent.isEmpty())
+        assertEquals(0, st.loadLive(pid).optJSONArray("recent")?.length() ?: 0)
+        assertTrue("both marked gone for the other TVs", (st.loadLive(pid).optJSONObject("recentGone")?.length() ?: 0) >= 2)
+        // Movies' own categories: no Continue watching.
+        rule.runOnIdle { vm.navSelect(Screen.MOVIES) }
+        settle()
+        assertTrue(rule.onAllNodes(androidx.compose.ui.test.hasText("Continue watching") and androidx.compose.ui.test.hasClickAction()).fetchSemanticsNodes().size <= 1)
+    }
+
+    /** Nov 26, 2026 (owner): with something to continue, the app opens on Continue watching, and nothing plays until Live TV is opened. */
+    @Test
+    fun theAppOpensOnContinueWatchingWhenItHasSomething() {
+        OPEN_ON_CONTINUE_IN_TESTS = true
+        try {
+            restartWith { st -> st.saveResume(mapOf("${TestData.P1}:mDrama1" to 300_000L)) }
+            waitFor("on Continue watching (screen ${vm.screen})") { vm.screen == Screen.CONTINUE }
+            Thread.sleep(500)
+            assertEquals("nothing plays on Continue watching", 0, rule.runOnIdle { vm.player.mediaItemCount })
+            rule.runOnIdle { vm.navSelect(Screen.GUIDE) }
+            waitFor("the guide's preview starts") { vm.player.mediaItemCount > 0 }
+            // Nothing to continue: Live TV, as before.
+            restartWith { st -> st.saveResume(emptyMap()); st.saveLive(org.json.JSONObject(), st.profileId) }
+            Thread.sleep(500)
+            assertEquals(Screen.GUIDE, vm.screen)
+        } finally { OPEN_ON_CONTINUE_IN_TESTS = false }
     }
 
     /** 1.15.0: with 2+ profiles, the info bar over video shows the profile in use; with one, it doesn't. */

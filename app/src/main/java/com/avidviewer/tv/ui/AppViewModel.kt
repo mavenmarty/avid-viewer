@@ -70,7 +70,7 @@ import java.util.Locale
 import java.util.TimeZone
 import java.util.UUID
 
-enum class Screen { SEARCH, DISCOVER, FAVORITES, LIVE, GUIDE, SPORTS, MOVIES, SERIES, MANAGE, PLAYLISTS, SETTINGS, PLAYER }
+enum class Screen { SEARCH, CONTINUE, DISCOVER, FAVORITES, LIVE, GUIDE, SPORTS, MOVIES, SERIES, MANAGE, PLAYLISTS, SETTINGS, PLAYER }
 
 /** Where full-screen Up/Down and Channel Up/Down move: the group the user came from, or Favorites. */
 enum class PlayContext { GROUP, FAVORITES, SPORTS }
@@ -114,7 +114,8 @@ const val PARK_MENU_MS = 1_500L
 /** Sorts for Movies, Series and Discover (Nov 22, 2026). */
 val VOD_SORTS = listOf("added", "az", "rating")
 /** The categories above the provider's (or the genres) in Movies and Series. */
-val VOD_SPECIALS = listOf("All", "Recently added", "Continue watching", "My List")
+// Nov 26, 2026 (owner): Continue watching moved to the main menu (one place for live TV, series and movies).
+val VOD_SPECIALS = listOf("All", "Recently added", "My List")
 /** 1.18.0: how channels and lists are sorted. */
 const val SORT_PROVIDER = "provider"
 /** How long after start Sports' schedules and channels are loaded in the background. */
@@ -132,13 +133,14 @@ const val LIVE_AFTER = 2 * 60_000L
 const val LIVE_MATCH = "l|live"
 /** 1.18.0's live card in Continue watching (Nov 26, 2026: replaced by the TV Guide's Recent list). */
 const val LIVE_CARD = false
+/** Tests: whether a new view model opens on Continue watching at launch like on a TV. */
+@Volatile internal var OPEN_ON_CONTINUE_IN_TESTS = false
 
 const val FAV_GROUP = "\u2605favorites"
 /**
- * Nov 26, 2026: the TV Guide's Recent list: the last [RECENT_MAX] live channels this profile watched, on any of its
- * TVs, newest first (it replaces the live card in Movies and Series › Continue watching).
+ * Nov 26, 2026: Continue watching (main menu) › Live TV: the last [RECENT_MAX] live channels this profile watched, on
+ * any of its TVs, newest first (it replaces 1.18.0's live card in Movies and Series › Continue watching).
  */
-const val RECENT_GROUP = "\u21bbrecent"
 const val RECENT_MAX = 10
 /** What a Recent entry's history item id is made from: [RECENT_MATCH] + the playlist's account id + ":" + channel id. */
 const val RECENT_MATCH = "l|r|"
@@ -146,7 +148,7 @@ const val RECENT_MATCH = "l|r|"
 const val LIST_PREFIX = "\u2605list:"
 
 /** True for Favorites and the user's own lists (collections of channels from any playlist). */
-fun isListGroup(g: String?) = g != null && (g == FAV_GROUP || g == RECENT_GROUP || g.startsWith(LIST_PREFIX))
+fun isListGroup(g: String?) = g != null && (g == FAV_GROUP || g.startsWith(LIST_PREFIX))
 
 data class GroupInfo(val raw: String, val name: String, val count: Int, val hidden: Boolean)
 
@@ -2732,11 +2734,15 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         val gs = groups()
         if (!startupPreviewDone && list.isNotEmpty()) {
             startupPreviewDone = true
+            // Nov 26, 2026 (owner): the app opens on Continue watching when it has something in it (nothing plays
+            // then: the guide's preview starts when Live TV is opened).
+            val toContinue = openOnContinue && screen == Screen.GUIDE && lastKeyAt == 0L && !choosingProfile && continueHasAny()
+            if (toContinue) { screen = Screen.CONTINUE; navMode = NavMode.COLLAPSED; entryFocusFor = Screen.CONTINUE; cwFocusTick++ }
             // At launch: the last channel watched, else the first favorite, else the first channel.
             val shownHere = shownChannel(prefs.lastChannel, list, gs)
             if (shownHere != null) {
                 currentKey = shownHere.key; selectedGroup = shownHere.group
-                launchPreview(currentKey); guideFocusTick++
+                if (!toContinue) launchPreview(currentKey); guideFocusTick++
             } else {
                 selectedGroup = selectedGroup?.takeIf { g -> gs.any { it.raw == g } } ?: gs.firstOrNull()?.raw
                 viewModelScope.launch { startOnListedChannel() }
@@ -2779,7 +2785,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         if (currentKey != null && lastKeyAt > 0) return // the viewer has already picked something
         currentKey = key; selectedGroup = group
         guideFocusMode = GuideFocus.CURRENT
-        launchPreview(key); guideFocusTick++
+        if (screen != Screen.CONTINUE) launchPreview(key); guideFocusTick++
     }
 
     /**
@@ -2833,7 +2839,6 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     // ---------------- groups & channels ----------------
     fun groupName(raw: String) = when {
         raw == FAV_GROUP -> "★ Favorites"
-        raw == RECENT_GROUP -> "↻ Recent"
         raw.startsWith(LIST_PREFIX) -> "☰ " + (userList(raw)?.name ?: "List")
         else -> prefs.groupNames[raw] ?: raw
     }
@@ -2965,7 +2970,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     fun channelsIn(group: String?): List<Channel> {
         if (group == null) return emptyList()
-        val cache = channelsInMemo.get(channels, prefs, favDataTick, searchPool, recent) { HashMap() }
+        val cache = channelsInMemo.get(channels, prefs, favDataTick, searchPool) { HashMap() }
         synchronized(cache) { cache[group]?.let { return it } }
         val list = computeChannelsIn(group)
         synchronized(cache) { cache[group] = list }
@@ -3000,7 +3005,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** Loads channels and guides of other playlists that hold favorites. */
     fun ensureFavoriteData() {
         val active = activePlaylist()?.id
-        val pids = (prefs.favorites + prefs.lists.flatMap { it.keys } + recent.map { it.key }).map { it.substringBefore(':') }.distinct().filter { it != active && !otherLive.containsKey(it) }
+        val pids = (prefs.favorites + prefs.lists.flatMap { it.keys }).map { it.substringBefore(':') }.distinct().filter { it != active && !otherLive.containsKey(it) }
         if (pids.isEmpty()) return
         viewModelScope.launch {
             pids.forEach { pid -> livePlaylists.firstOrNull { it.id == pid }?.let { liveFavorites(it) } }
@@ -3128,11 +3133,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     // ---------------- channel lists (Favorites + the user's own) ----------------
     fun userList(group: String): ChannelList? = prefs.lists.firstOrNull { LIST_PREFIX + it.id == group }
 
-    fun listKeys(group: String): List<String> = when (group) {
-        FAV_GROUP -> prefs.favorites
-        RECENT_GROUP -> recent.map { it.key }
-        else -> userList(group)?.keys ?: emptyList()
-    }
+    fun listKeys(group: String): List<String> = if (group == FAV_GROUP) prefs.favorites else userList(group)?.keys ?: emptyList()
 
     /** Every list as (group id, name), Favorites first. */
     fun allLists(): List<Pair<String, String>> = listOf(FAV_GROUP to "★ Favorites") + prefs.lists.map { (LIST_PREFIX + it.id) to (it.name + if (it.hidden) " (hidden)" else "") }
@@ -3151,7 +3152,6 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     fun toggleInList(group: String, key: String) {
         if (group == FAV_GROUP) return toggleFavorite(key)
-        if (group == RECENT_GROUP) return removeRecent(key)
         viewModelScope.launch { ensureFavoriteData() }
         leavingGuide(key, group) {
             updatePrefs { p -> p.copy(lists = p.lists.map { if (LIST_PREFIX + it.id == group) it.copy(keys = if (key in it.keys) it.keys - key else it.keys + key) else it }) }
@@ -3695,7 +3695,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     // ---------------- Recent (Nov 26, 2026) ----------------
     /** A channel in Recent: this TV's copy of it, where it was last watched and when. */
-    data class RecentChannel(val key: String, val tv: String, val at: Long, val here: Boolean, val rid: String)
+    data class RecentChannel(val key: String, val tv: String, val at: Long, val here: Boolean, val rid: String, val on: String? = null)
 
     /** The Recent list as shown, newest first (worked out in the background from live.json). */
     var recent by mutableStateOf<List<RecentChannel>>(emptyList()); private set
@@ -3742,7 +3742,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             }
             if (profile.id != pid) return@launch
             found.forEach { (c, _) -> liveCardChannels[c.key] = c }
-            val now = found.distinctBy { it.first.key }.map { (c, o) -> RecentChannel(c.key, o.optString("tv"), o.optLong("at"), isMine(o), recentId(o)) }
+            val t = System.currentTimeMillis()
+            val now = withContext(Dispatchers.IO) { found.distinctBy { it.first.key }.map { (c, o) ->
+                RecentChannel(c.key, o.optString("tv"), o.optLong("at"), isMine(o), recentId(o), runCatching { liveGuideNow(c, t).first?.title }.getOrNull()) } }
             if (now != recent) recent = now // the same list: nothing on screen redraws
         }
     }
@@ -3753,6 +3755,20 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         val day = dayLabel(r.at)
         val time = if (day == "Today") clockText(r.at) else day + " " + clockText(r.at)
         return (if (r.here) "This TV" else r.tv.ifBlank { "Another TV" }) + " · " + time
+    }
+
+    /** Continue watching › Live TV › Menu › Clear Live TV history: every channel off, here and on the profile's other TVs. */
+    fun clearRecent() {
+        val st = liveState(); val now = System.currentTimeMillis()
+        val a = st.optJSONArray("recent") ?: org.json.JSONArray()
+        val gone = st.optJSONObject("recentGone") ?: org.json.JSONObject()
+        for (i in 0 until a.length()) a.optJSONObject(i)?.let { gone.put(recentId(it), now) }
+        st.put("recent", org.json.JSONArray()); st.put("recentGone", gone)
+        if (st.has("mine")) { st.remove("mine"); st.put("removedAt", now) }
+        st.remove("other")
+        store.saveLive(st, profile.id)
+        recent = emptyList()
+        status = "Cleared your Live TV history" + if (account.token != null) " on every TV." else "."
     }
 
     /** Menu › Remove from Recent: off the list here and, through the account, on the profile's other TVs. */
@@ -3771,7 +3787,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         if (st.optJSONObject("mine")?.optString("key") == key) { st.remove("mine"); st.put("removedAt", now) }
         store.saveLive(st, profile.id)
         recent = recent.filter { it.key != key }
-        status = "Removed from Recent" + if (account.token != null) " on every TV." else "."
+        status = "Removed from Continue watching" + if (account.token != null) " on every TV." else "."
     }
 
     private fun liveUntil(c: Channel, now: Long): Long {
@@ -3853,6 +3869,55 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     /** For tests: the live card's channel key and whether it comes second, or null. */
     internal fun liveCardForTests(): Pair<String, Boolean>? = liveCard()?.let { (it.first.key.removePrefix(LIVE_PREFIX)) to it.second }
+
+    // ---------------- Continue watching on the main menu (Nov 26, 2026, design board 51) ----------------
+    private val cwMemo = HashMap<String, BgMemo<List<VodItem>>>()
+
+    /** Continue watching › Series or Movies ([kind] "series" or "movie"): newest first, one copy per title. */
+    fun continueTitles(kind: String): List<VodItem> {
+        val ks = continueKeys()
+        return cwMemo.getOrPut(kind) { BgMemo(emptyList()) }.get(ks.joinToString("\u0001"), vodVersion, vodPids().joinToString(","), prefs.vodHiddenTitles.size, onScreen = { ks }, readyNow = { it.isEmpty() }) { keys ->
+            val g = vodKindKey(kind); val at = keys.withIndex().associate { it.value to it.index }
+            runCatching { catalog.byKeys(keys) }.getOrDefault(emptyList()).filter { Catalog.group(it.kind) == g && !isVodHidden(it) }
+                .groupBy { Tmdb.normalize(it.name) }.values.map { same -> same.firstOrNull { watchedCopy(it.key) } ?: same.first() }
+                .sortedBy { at[it.key] ?: Int.MAX_VALUE }
+        }
+    }
+
+    /** Whether Continue watching has anything to show (the app opens on it then). */
+    fun continueHasAny(): Boolean = recent.isNotEmpty() || continueKeys().isNotEmpty() ||
+        (!profile.kids && (liveState().optJSONArray("recent")?.length() ?: 0) > 0)
+
+    /** A title page opened from Continue watching: Back from it returns there. */
+    var detailFrom: Screen? = null
+    /** The tile in Continue watching to highlight again when coming back ("live:<key>" or a title's key). */
+    var cwFocusKey by mutableStateOf<String?>(null)
+    var cwFocusTick by mutableIntStateOf(0)
+
+    /** OK on a Live TV tile: the channel, full screen; Back comes back to Continue watching. */
+    fun watchRecent(key: String) {
+        cwFocusKey = "live:$key"
+        val c = channel(key) ?: liveCardChannels[key] ?: run { status = "That channel isn't in your playlists on this TV."; return }
+        trail("continue watching: live")
+        openFullScreen(c.key, PlayContext.GROUP)
+        jumpedFrom = Screen.CONTINUE; lastHit = null
+    }
+
+    /** OK on a series or movie: its page, which opens where the profile left off; Back comes back here. */
+    fun openFromContinue(v: VodItem) {
+        cwFocusKey = v.key
+        openVodDetail(v)
+        detailFrom = Screen.CONTINUE
+    }
+
+    /** Open on Continue watching at launch (in tests only when [OPEN_ON_CONTINUE_IN_TESTS]: they start on Live TV). */
+    internal var openOnContinue = android.os.Build.FINGERPRINT != "robolectric" || OPEN_ON_CONTINUE_IN_TESTS
+
+    /** For tests: a place part-way through [key], saved now. */
+    internal fun resumeForTests(key: String, ms: Long) {
+        resume = resume + (key to ms); placeInfo = placeInfo + (key to com.avidviewer.tv.data.Store.PlaceInfo(ms * 3, System.currentTimeMillis()))
+        vodVersion++
+    }
 
     /** For tests: Continue watching's titles, newest first. */
     internal fun continueKeysForTests() = continueKeys()
@@ -4611,6 +4676,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         if (from != null) {
             jumpedFrom = null
             screen = from; navMode = NavMode.COLLAPSED
+            if (from == Screen.CONTINUE) { cwFocusTick++; return }
             navFocusKey = lastHit
             return
         }
@@ -5408,7 +5474,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     fun navSelect(target: Screen) {
         if (!screenAllowed(target) || (target == Screen.MANAGE && kidsMode)) return
-        jumpedFrom = null
+        jumpedFrom = null; detailFrom = null
+        if (target == Screen.CONTINUE) { refreshRecent(); screen = Screen.CONTINUE; navMode = NavMode.COLLAPSED; entryFocusFor = Screen.CONTINUE; cwFocusKey = null; cwFocusTick++; return }
+        // Opened on Continue watching: the guide's preview starts when Live TV is first opened.
+        if ((target == Screen.GUIDE || target == Screen.LIVE) && player.mediaItemCount == 0 && vodPlaying == null && currentKey != null) launchPreview(currentKey)
         entryFocusFor = if (target == Screen.PLAYLISTS || target == Screen.MANAGE) Screen.SETTINGS else target
         val s = if (target == Screen.LIVE) Screen.GUIDE else target
         if (s == Screen.FAVORITES) {
@@ -6034,6 +6103,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun closeVodDetail(returnFocus: Boolean = true) {
         val had = vodDetail != null
         vodDetail = null; vodInfo = null; detailEpisodes = null; episodeMenu = null
+        if (had && returnFocus && detailFrom == Screen.CONTINUE) { detailFrom = null; screen = Screen.CONTINUE; navMode = NavMode.COLLAPSED; cwFocusTick++; return }
+        if (!returnFocus) detailFrom = null
         if (had && returnFocus) vodFocusBack++
     }
 

@@ -84,7 +84,7 @@ fun VodScreen(vm: AppViewModel, kind: String) {
         return
     }
     val current = vm.vodCategory[kind] ?: "All"
-    val specials = listOf("All" to all.size, "Recently added" to -1, "Continue watching" to -1, "My List" to -1)
+    val specials = listOf("All" to all.size, "Recently added" to -1, "My List" to -1) // Continue watching: on the main menu (Nov 26, 2026)
     val cats = vm.vodCategories(kind)
     // Sorting by genre: titles not looked up yet are looked up while Movies or Series is open (and after).
     LaunchedEffect(kind, vm.genresOn(), vm.vodVersion) { vm.startGenreLookups() }

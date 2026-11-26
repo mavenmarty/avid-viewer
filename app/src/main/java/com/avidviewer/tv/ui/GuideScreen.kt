@@ -361,8 +361,6 @@ fun GuideScreen(vm: AppViewModel) {
         if (vm.selectedGroup == FAV_GROUP && vm.guideQuery.isBlank()) LocalSuggestions(vm)
         if (list.isEmpty() && vm.selectedGroup == FAV_GROUP) {
             Label("No favorites yet. ${MenuKey.press} on any channel and choose Add to List — favorites from every playlist appear here.", size = 13.sp, color = C.Soft, lines = Int.MAX_VALUE)
-        } else if (list.isEmpty() && vm.selectedGroup == RECENT_GROUP) {
-            Label("Channels you watch for 2 minutes or more appear here, newest first, from every TV this profile uses. OK on one watches it here.", size = 13.sp, color = C.Soft, lines = Int.MAX_VALUE)
         } else if (list.isEmpty() && isListGroup(vm.selectedGroup)) {
             Label("This list is empty. ${MenuKey.press} on any channel and choose Add to List. Channels from every playlist can go in one list.", size = 13.sp, color = C.Soft, lines = Int.MAX_VALUE)
         }
@@ -422,8 +420,7 @@ fun GuideScreen(vm: AppViewModel) {
                             Label(if (isMoving) "⇅" else "${numbers[c.key] ?: ""}", size = 12.sp, color = if (isMoving) C.Accent else C.Muted, modifier = Modifier.width(30.dp).padding(start = 6.dp))
                             ChannelBadge(vm.channelName(c), c.logo, 28.dp)
                             Label(
-                                vm.channelName(c) + (if (vm.isFavorite(c.key)) " ★" else "") + (if (vm.failedRecently(c.key)) "  ⚠ didn't play" else "") +
-                                    (if (vm.selectedGroup == RECENT_GROUP) "\n" + vm.recentNote(c.key) else ""),
+                                vm.channelName(c) + (if (vm.isFavorite(c.key)) " ★" else "") + if (vm.failedRecently(c.key)) "  ⚠ didn't play" else "",
                                 size = 13.sp, color = C.Text, weight = FontWeight.SemiBold,
                                 lines = 2,
                                 modifier = Modifier.padding(start = 7.dp, end = 6.dp),
@@ -555,9 +552,9 @@ fun ChannelOptionsDialog(vm: AppViewModel) {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Label(listOf(vm.groupName(vm.selectedGroup ?: c.group), if (pos >= 0) "${pos + 1} of ${list.size}" else "", vm.playlistName(c)).filter { it.isNotBlank() }.joinToString(" · "), size = 13.sp, color = C.Soft, lines = 2)
                 OptionRow("＋  Add to List…" + if (inLists.isNotBlank()) "   (in $inLists)" else "") { vm.channelMenu = null; vm.listPickerKey = key }
-                if (isListGroup(vm.selectedGroup)) OptionRow("−  Remove from ${vm.groupName(vm.selectedGroup!!).removePrefix("★ ").removePrefix("☰ ").removePrefix("↻ ")}") { vm.toggleInList(vm.selectedGroup!!, key); vm.channelMenu = null }
+                if (isListGroup(vm.selectedGroup)) OptionRow("−  Remove from ${vm.groupName(vm.selectedGroup!!).removePrefix("★ ").removePrefix("☰ ")}") { vm.toggleInList(vm.selectedGroup!!, key); vm.channelMenu = null }
                 OptionRow("✎  Rename") { renaming = true }
-                if (vm.selectedGroup != RECENT_GROUP) OptionRow("⇅  Re-order") { vm.channelMenu = null; vm.movingChannel = key }
+                OptionRow("⇅  Re-order") { vm.channelMenu = null; vm.movingChannel = key }
                 OptionRow("▤  Match guide…" + if (vm.prefs.epgMap.containsKey(key)) "   (matched by hand)" else "") { vm.channelMenu = null; vm.matchingChannel = key }
                 if (!isListGroup(vm.selectedGroup)) OptionRow("⊘  Hide channel") { vm.hideChannel(key); vm.channelMenu = null }
             }

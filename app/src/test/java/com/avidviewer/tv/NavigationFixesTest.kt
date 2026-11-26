@@ -161,7 +161,7 @@ class NavigationFixesTest {
         key(Key.Menu); assertTrue(moveTo("Delete list")); key(Key.DirectionCenter)
         moveTo("Delete", Key.DirectionLeft, 2) || moveTo("Delete", Key.DirectionRight, 2)
         key(Key.DirectionCenter)
-        expectFocus("the item that took the list's place") { it.contains("New list") || it.contains("Favorites") || it.startsWith("Recent") }
+        expectFocus("the item that took the list's place") { it.contains("New list") || it.contains("Favorites") }
     }
 
     @Test fun takingAPosterOffMyListHighlightsTheNextPoster() {

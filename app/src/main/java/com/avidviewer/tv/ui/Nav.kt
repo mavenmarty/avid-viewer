@@ -64,6 +64,7 @@ object NavIcons {
     val Favorites = icon("favorites", "M12 3l2.8 5.7 6.2.9-4.5 4.4 1 6.2L12 17.3 6.5 20.2l1-6.2L3 9.6l6.2-.9z")
     val Live = icon("live", "M3 7h18v12H3z M8 3l4 4 4-4")
     val Guide = icon("guide", "M3 4h18v16H3z M3 10h18 M9 10v10")
+    val Continue = icon("continue", "M3.5 12a8.5 8.5 0 1 0 2.5-6 M3 3.5v4.5h4.5 M12 7.5v4.5l3 2")
     val Sports = icon("sports", "M8 21h8 M12 17v4 M7 4h10v5a5 5 0 0 1-10 0z M17 5h3v2a3 3 0 0 1-3 3 M7 5H4v2a3 3 0 0 0 3 3")
     val Discover = icon("discover", "M12 3l1.8 4.7 4.7 1.8-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8z M19 15l.8 2.2 2.2.8-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z")
     val Movies = icon("movies", "M3 4h18v16H3z M7 4v16 M17 4v16 M3 9h4 M3 15h4 M17 9h4 M17 15h4")
@@ -77,13 +78,15 @@ object NavIcons {
     val Settings = icon("settings", "M12 9a3 3 0 1 0 0 6a3 3 0 1 0 0-6z M12 2v3 M12 19v3 M4.2 4.2l2.1 2.1 M17.7 17.7l2.1 2.1 M2 12h3 M19 12h3 M4.2 19.8l2.1-2.1 M17.7 6.3l2.1-2.1")
 }
 
+// Nov 26, 2026 (owner): this order; Continue watching joins the menu and the TV Guide is called Live TV.
 private val MENU = listOf(
     Triple(Screen.SEARCH, "Search", NavIcons.Search),
+    Triple(Screen.CONTINUE, "Continue watching", NavIcons.Continue),
     Triple(Screen.DISCOVER, "Discover", NavIcons.Discover),
-    Triple(Screen.GUIDE, "TV Guide", NavIcons.Guide),
     Triple(Screen.SPORTS, "Sports", NavIcons.Sports),
-    Triple(Screen.MOVIES, "Movies", NavIcons.Movies),
+    Triple(Screen.GUIDE, "Live TV", NavIcons.Guide),
     Triple(Screen.SERIES, "Series", NavIcons.Series),
+    Triple(Screen.MOVIES, "Movies", NavIcons.Movies),
     Triple(Screen.SETTINGS, "Settings", NavIcons.Settings),
 )
 
@@ -146,7 +149,7 @@ fun NavRail(vm: AppViewModel) {
                     )
                 }
             }
-            if (s == Screen.DISCOVER || s == Screen.SERIES) Spacer(Modifier.height(4.dp))
+            if (s == Screen.CONTINUE || s == Screen.MOVIES) Spacer(Modifier.height(4.dp))
         }
         Spacer(Modifier.weight(1f))
         if (vm.prefs.showClock) {
@@ -173,7 +176,7 @@ fun PlaylistTree(vm: AppViewModel) {
     val first = remember { FocusRequester() }
     /** The keys of the list's items, in order: the same keys the items below are given. */
     fun treeKeys(): List<String> = buildList {
-        add("tfav"); if (!vm.kidsMode) add("trecent"); vm.shownLists.forEach { add("tl-" + it.id) }; add("ttitle")
+        add("tfav"); vm.shownLists.forEach { add("tl-" + it.id) }; add("ttitle")
         if (vm.livePlaylists.isEmpty()) add("tempty")
         vm.livePlaylists.forEach { p ->
             add("pl-" + p.id)
@@ -186,7 +189,7 @@ fun PlaylistTree(vm: AppViewModel) {
     // R-4: opens scrolled to the category being come back from, instead of drawing from the top and jumping.
     val treeState = remember {
         val k = vm.navFocusKey
-        val item = if (k == null) -1 else treeKeys().indexOf(when { k == FAV_GROUP -> "tfav"; k == RECENT_GROUP -> "trecent"; isListGroup(k) -> "tl-" + k.removePrefix(LIST_PREFIX); else -> "g-$active-$k" })
+        val item = if (k == null) -1 else treeKeys().indexOf(when { k == FAV_GROUP -> "tfav"; isListGroup(k) -> "tl-" + k.removePrefix(LIST_PREFIX); else -> "g-$active-$k" })
         androidx.compose.foundation.lazy.LazyListState(if (item > 3) item - 3 else 0)
     }
     // Leaving the screen while it had the highlight must not leave "in the playlist list" set (NAV-03):
@@ -198,7 +201,7 @@ fun PlaylistTree(vm: AppViewModel) {
         if (k != null) {
             // Found by key in the list's own item keys (no counting of header rows, NAV-13).
             val item = treeKeys().indexOf(
-                when { k == FAV_GROUP -> "tfav"; k == RECENT_GROUP -> "trecent"; isListGroup(k) -> "tl-" + k.removePrefix(LIST_PREFIX); else -> "g-$active-$k" },
+                when { k == FAV_GROUP -> "tfav"; isListGroup(k) -> "tl-" + k.removePrefix(LIST_PREFIX); else -> "g-$active-$k" },
             )
             if (item >= 0) { launch { treeState.scrollToItem((item - 3).coerceAtLeast(0)) }; return@LaunchedEffect }
             vm.navFocusKey = null
@@ -222,19 +225,6 @@ fun PlaylistTree(vm: AppViewModel) {
                 Column(Modifier.weight(1f)) {
                     Label("Favorites", size = 14.sp, color = C.Text, weight = FontWeight.SemiBold)
                     Label("${vm.prefs.favorites.size} channels · all playlists", size = 12.sp)
-                }
-            }
-        }
-        if (!vm.kidsMode) item(key = "trecent") {
-            Focusable(
-                modifier = Modifier.fillMaxWidth().height(44.dp).navFocusTarget(vm, RECENT_GROUP),
-                color = C.Surface,
-                onClick = { vm.refreshRecent(); vm.ensureFavoriteData(); vm.chooseGroup(active ?: "", RECENT_GROUP) },
-            ) {
-                Text("↻", color = C.Accent, fontSize = 14.sp, modifier = Modifier.padding(start = 10.dp, end = 8.dp))
-                Column(Modifier.weight(1f)) {
-                    Label("Recent", size = 14.sp, color = C.Text, weight = FontWeight.SemiBold)
-                    Label("${vm.recent.size} channels · all your TVs", size = 12.sp)
                 }
             }
         }
@@ -296,15 +286,15 @@ fun GroupNav(vm: AppViewModel) {
     val scope = androidx.compose.runtime.rememberCoroutineScope()
     /** The keys of the list's items, in order: the same keys the items below are given. */
     fun navKeys(): List<String> = buildList {
-        add("menu"); add("title"); add("fav"); if (!vm.kidsMode) add("recent"); vm.shownLists.forEach { add("list-" + it.id) }
+        add("menu"); add("title"); add("fav"); vm.shownLists.forEach { add("list-" + it.id) }
         add("newlist"); add("search"); add("spacer"); groups.forEach { add("g:" + it.raw) }
     }
     // R-4: a current category further down than a screenful opens already scrolled to it (it used to draw from the
     // top and then jump there). Nearer the top nothing changes: it's on screen either way.
     val navState = remember {
         val k = vm.navFocusKey ?: vm.selectedGroup
-        val item = k?.let { navKeys().indexOf(when { it == FAV_GROUP -> "fav"; it == RECENT_GROUP -> "recent"; isListGroup(it) -> "list-" + it.removePrefix(LIST_PREFIX); else -> "g:$it" }) } ?: -1
-        androidx.compose.foundation.lazy.LazyListState(if (item >= 13) item - 3 else 0)
+        val item = k?.let { navKeys().indexOf(when { it == FAV_GROUP -> "fav"; isListGroup(it) -> "list-" + it.removePrefix(LIST_PREFIX); else -> "g:$it" }) } ?: -1
+        androidx.compose.foundation.lazy.LazyListState(if (item >= 12) item - 3 else 0)
     }
     // Re-order mode: keep the moving category on screen as it moves.
     val moving = vm.movingGroup
@@ -321,7 +311,7 @@ fun GroupNav(vm: AppViewModel) {
     LaunchedEffect(vm.navFocusKey) {
         val k = vm.navFocusKey ?: return@LaunchedEffect
         // Found by key in the list's own item keys (no counting of header rows, NAV-13).
-        val item = navKeys().indexOf(when { k == FAV_GROUP -> "fav"; k == RECENT_GROUP -> "recent"; isListGroup(k) -> "list-" + k.removePrefix(LIST_PREFIX); else -> "g:$k" })
+        val item = navKeys().indexOf(when { k == FAV_GROUP -> "fav"; isListGroup(k) -> "list-" + k.removePrefix(LIST_PREFIX); else -> "g:$k" })
             .coerceAtLeast(0)
         val vis = navState.layoutInfo.visibleItemsInfo.map { it.index }
         if (vis.isEmpty() || item < vis.first() || item > vis.last()) scope.launch { navState.scrollToItem((item - 3).coerceAtLeast(0)) }
@@ -349,19 +339,6 @@ fun GroupNav(vm: AppViewModel) {
                 Glyph("★", C.Accent, 14.sp, Modifier.padding(start = 10.dp, end = 6.dp))
                 Label("Favorites", size = 14.sp, color = if (on) C.Text else C.Accent, weight = FontWeight.Bold, modifier = Modifier.weight(1f))
                 Label("${vm.prefs.favorites.size}", size = 12.sp, modifier = Modifier.padding(end = 10.dp))
-            }
-        }
-        // Nov 26, 2026: the channels this profile watched last, on any of its TVs.
-        if (!vm.kidsMode) item(key = "recent") {
-            val on = vm.selectedGroup == RECENT_GROUP
-            Focusable(
-                modifier = Modifier.fillMaxWidth().height(38.dp).navFocusTarget(vm, RECENT_GROUP).rightIntoGuide(vm, RECENT_GROUP).activePath(on).testTag("nav-recent"),
-                color = if (on) C.Surface2 else Color.Transparent,
-                onClick = { vm.refreshRecent(); vm.ensureFavoriteData(); vm.chooseGroup(vm.activePlaylist()?.id ?: "", RECENT_GROUP) },
-            ) {
-                Glyph("↻", C.Accent, 14.sp, Modifier.padding(start = 10.dp, end = 6.dp))
-                Label("Recent", size = 14.sp, color = if (on) C.Text else C.Accent, weight = FontWeight.Bold, modifier = Modifier.weight(1f))
-                Label("${vm.recent.size}", size = 12.sp, modifier = Modifier.padding(end = 10.dp))
             }
         }
         items(vm.shownLists, key = { "list-" + it.id }) { l ->
