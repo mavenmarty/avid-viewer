@@ -304,7 +304,7 @@ fun GroupNav(vm: AppViewModel) {
     val navState = remember {
         val k = vm.navFocusKey ?: vm.selectedGroup
         val item = k?.let { navKeys().indexOf(when { it == FAV_GROUP -> "fav"; it == RECENT_GROUP -> "recent"; isListGroup(it) -> "list-" + it.removePrefix(LIST_PREFIX); else -> "g:$it" }) } ?: -1
-        androidx.compose.foundation.lazy.LazyListState(if (item >= 12) item - 3 else 0)
+        androidx.compose.foundation.lazy.LazyListState(if (item >= 13) item - 3 else 0)
     }
     // Re-order mode: keep the moving category on screen as it moves.
     val moving = vm.movingGroup
