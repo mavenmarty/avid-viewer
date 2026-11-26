@@ -161,7 +161,7 @@ fun VodScreen(vm: AppViewModel, kind: String) {
                 // Nov 26, 2026 (owner): Search at the top, drawn like Search in the main menu; results replace the grid.
                 var text by remember(kind, vq.isBlank()) { mutableStateOf(vq) }
                 Column(Modifier.padding(bottom = 4.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    TvField("Search ${title.lowercase()}", text, modifier = Modifier.fillMaxWidth().wrapEnds(catWrap, isFirst = true, isLast = false).testTag("vod-search"), imeAction = androidx.compose.ui.text.input.ImeAction.Search,
+                    TvField("Search", text, modifier = Modifier.fillMaxWidth().wrapEnds(catWrap, isFirst = true, isLast = false).testTag("vod-search"), imeAction = androidx.compose.ui.text.input.ImeAction.Search,
                         navIcon = NavIcons.Search, onSubmit = { vm.vodQuery = vm.vodQuery + (kind to text.trim()) }) { text = it }
                     if (vq.isNotBlank()) TvButton("✕  Clear search", modifier = Modifier.fillMaxWidth()) { text = ""; vm.vodQuery = vm.vodQuery + (kind to "") }
                 }
