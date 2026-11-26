@@ -2704,8 +2704,11 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         val sq = com.avidviewer.tv.data.SearchText.prepare(q)
         val renamed = prefs.channelNames.filter { (k, v) -> k.startsWith(p.id + ":") && com.avidviewer.tv.data.SearchText.near(v, sq) }.keys
         // Every word first, then near matches (a typo, or a word left out); the screen ranks them.
-        val byName = live.searchChannels(p.id, q, maxChannels) + live.nearChannels(p.id, q, maxChannels) + live.channelsByKeys(renamed)
-        val progs = live.searchPrograms(p.id, q, nowMs, maxPrograms * 2) + live.nearPrograms(p.id, q, nowMs, maxPrograms)
+        // Nov 26, 2026: near matches only when the exact ones are few (each is another pass over the whole list).
+        val exactCh = live.searchChannels(p.id, q, maxChannels)
+        val byName = exactCh + (if (exactCh.size < 10) live.nearChannels(p.id, q, maxChannels) else emptyList()) + live.channelsByKeys(renamed)
+        val exactPr = live.searchPrograms(p.id, q, nowMs, maxPrograms * 2)
+        val progs = exactPr + if (exactPr.size < 20) live.nearPrograms(p.id, q, nowMs, maxPrograms) else emptyList()
         val ids = progs.map { it.first }.toHashSet()
         val mapped = prefs.epgMap.filter { (k, v) -> k.startsWith(p.id + ":") && v in ids }.keys
         val byProg = (live.channelsWithEpg(p.id, ids) + live.channelsByKeys(mapped)).filter { epgIdOf(it) in ids }
@@ -5400,6 +5403,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         com.avidviewer.tv.data.CrashLog.note(getApplication(), "Search: ${com.avidviewer.tv.data.SearchText.words(q).size} word(s), ${q.length} letters")
         searchJob = viewModelScope.launch {
             searching = true
+            // Nov 26, 2026: results show as each playlist is done (they used to wait for every playlist).
+            searchResults = null
             val sq = com.avidviewer.tv.data.SearchText.prepare(q)
             val nowMs = System.currentTimeMillis()
             val out = ArrayList<PlaylistHits>()
@@ -5408,12 +5413,13 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 ensureActive()
                 val isActive = p.id == activePlaylist()?.id
                 // The playlist being watched is in memory; the others are searched in the database.
-                val (chsAll, g) = if (isActive || !p.liveOn || !isOn(p)) liveFor(p) else withContext(Dispatchers.IO) { liveHits(p, q, 50, 60, nowMs) }
+                val (chsAll, g) = if (isActive || !p.liveOn || !isOn(p)) liveFor(p) else com.avidviewer.tv.data.QueryCancel.run { liveHits(p, q, 50, 60, nowMs) }
                 val chs = chsAll.filter { channelAllowed(it) } // a Kids profile: only its categories
                 // Titles: searched in the catalog database, not loaded. Every word first, then near matches.
                 if (p.vodOn && isOn(p)) importOldTitles(p)
-                val vodHitList = if (!p.vodOn || !isOn(p)) emptyList() else withContext(Dispatchers.IO) {
-                    fun find(query: Catalog.Query) = (catalog.page(query, 0, 50) + catalog.near(query, 50)).distinctBy { it.key }
+                val vodHitList = if (!p.vodOn || !isOn(p)) emptyList() else com.avidviewer.tv.data.QueryCancel.run {
+                    // Near matches (a typo) only when the exact ones are few: each is another pass over every title.
+                    fun find(query: Catalog.Query) = catalog.page(query, 0, 50).let { exact -> if (exact.size >= 10) exact else (exact + catalog.near(query, 50)).distinctBy { it.key } }
                     find(Catalog.Query("movie", listOf(p.id), nameContains = q, kind = "movie")) +
                         find(Catalog.Query("series", listOf(p.id), nameContains = q)) +
                         find(Catalog.Query("movie", listOf(p.id), nameContains = q, kind = "episode"))
@@ -5439,6 +5445,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                     )
                 }
                 out.add(res)
+                searchResults = out.toList()
             }
             searchResults = out
             searchedFor = q

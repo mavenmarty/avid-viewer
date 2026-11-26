@@ -443,7 +443,7 @@ class Catalog(context: Context) : SQLiteOpenHelper(context.applicationContext, "
         val lim = q.limit?.let { minOf(size, it - offset) } ?: size
         if (lim <= 0) return emptyList()
         val sql = "SELECT $COLS FROM title WHERE $w ORDER BY ${q.order()} LIMIT $lim OFFSET $offset"
-        return readableDatabase.rawQuery(sql, a).use { c ->
+        return readableDatabase.rawQuery(sql, a, QueryCancel.signal()).use { c ->
             val out = ArrayList<VodItem>(c.count); while (c.moveToNext()) out.add(read(c)); out
         }
     }
@@ -460,7 +460,7 @@ class Catalog(context: Context) : SQLiteOpenHelper(context.applicationContext, "
         val (w, a) = q.copy(nameContains = null, limit = null).where()
         val like = pats.joinToString(" OR ") { "n LIKE ? ESCAPE '\\'" }
         val sql = "SELECT $COLS FROM title WHERE $w AND ($like) ORDER BY ${q.order()} LIMIT $scan"
-        val rows = readableDatabase.rawQuery(sql, a + pats).use { c ->
+        val rows = readableDatabase.rawQuery(sql, a + pats, QueryCancel.signal()).use { c ->
             val out = ArrayList<VodItem>(c.count); while (c.moveToNext()) out.add(read(c)); out
         }
         return rows.map { it to SearchText.score(it.name, sq) }.filter { it.second > 0 }
