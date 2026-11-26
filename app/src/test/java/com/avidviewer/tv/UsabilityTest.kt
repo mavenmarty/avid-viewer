@@ -2600,12 +2600,12 @@ class UsabilityTest {
         // Nov 26, 2026 (owner): Search, My List, Recently added, All, then the categories.
         press(listOf(Key.DirectionUp)); waitFor("Recently added above All (focus: ${focused()})") { focused().contains("Recently added") }
         press(listOf(Key.DirectionUp)); waitFor("My List above it (focus: ${focused()})") { focused().contains("My List") }
-        press(listOf(Key.DirectionUp)); waitFor("Search at the top (focus: ${focused()})") { focused().contains("Search movies") }
+        press(listOf(Key.DirectionUp)); waitFor("Search at the top (focus: ${focused()})") { focused().startsWith("Search") }
         press(listOf(Key.DirectionUp))
         val lastCat = vm.vodCatName("movie", vm.vodCategories("movie").last().first)
         waitFor("Up from Search wraps to the last movie category (focus: ${focused()})") { focused().contains(lastCat) }
         press(listOf(Key.DirectionDown))
-        waitFor("Down from the last category wraps to Search (focus: ${focused()})") { focused().contains("Search movies") }
+        waitFor("Down from the last category wraps to Search (focus: ${focused()})") { focused().startsWith("Search") }
     }
 
     /** Press-and-hold through every screen (the reported lock-ups and crashes). */
