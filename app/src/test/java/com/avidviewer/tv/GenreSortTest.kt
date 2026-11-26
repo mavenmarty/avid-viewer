@@ -123,6 +123,35 @@ class GenreSortTest {
         assertEquals("nothing looked up twice", before, asked.size)
     }
 
+    /**
+     * Nov 26, 2026: copies a provider named differently but TMDB matched to the same title showed side by side in
+     * Top rated (and Top rated listed thousands though its count said 100). Now they show once there.
+     */
+    @Test
+    fun copiesMatchedToTheSameTmdbTitleShowOnceInTopRated() {
+        val vm = newVm()
+        val plain = vm.genreFinder
+        vm.genreFinder = { key, name, type ->
+            when {
+                // Two differently named titles, one TMDB film (as "SC - Batman: Knightfall Part 1: Knightfall" and
+                // "Batman: Knightfall Part 1" were).
+                name.startsWith("Drama Movie 7 ") || name.startsWith("Drama Movie 8 ") -> Found(listOf(18), 9.1, 515, tmdbId = 777)
+                else -> plain(key, name, type)?.let { it.copy(tmdbId = 1000 + (asked.size)) }
+            }
+        }
+        sorted(vm)
+        vm.chooseVodCategory("movie", GENRE_CAT + com.avidviewer.tv.data.Catalog.GENRE_TOP)
+        idleUntil("top rated") { vm.vodItems("movie").isNotEmpty() }
+        val top = vm.vodItems("movie").map { it.name }
+        assertEquals("one of the two copies, first", 1, top.count { it == "Drama Movie 7" || it == "Drama Movie 8" })
+        assertTrue(top.first() == "Drama Movie 7" || top.first() == "Drama Movie 8")
+        assertEquals("no name twice", top.size, top.toSet().size)
+        assertTrue("Top rated keeps to 100", top.size <= com.avidviewer.tv.data.Catalog.TOP_LIMIT)
+        // The drama genre lists the film once too; the provider's own categories still show both.
+        vm.chooseVodCategory("movie", GENRE_CAT + 18)
+        assertEquals(1, vm.vodItems("movie").count { it.name == "Drama Movie 7" || it.name == "Drama Movie 8" })
+    }
+
     @Test
     fun aKidsProfileNeverSortsByGenreOrLooksAnythingUp() {
         val vm = newVm()

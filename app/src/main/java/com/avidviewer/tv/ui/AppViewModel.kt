@@ -5915,7 +5915,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     internal var genreDelayMs = 250L
     /** Looks a title up on TMDB: its genre ids, or null when TMDB has no match. Tests replace it. */
     internal var genreFinder: (key: String, name: String, type: String) -> com.avidviewer.tv.data.Catalog.GenreFound? = { key, name, type ->
-        com.avidviewer.tv.data.Tmdb.find(key, name, type)?.let { com.avidviewer.tv.data.Catalog.GenreFound(it.genres, it.rating, it.votes) }
+        com.avidviewer.tv.data.Tmdb.find(key, name, type)?.let { com.avidviewer.tv.data.Catalog.GenreFound(it.genres, it.rating, it.votes, it.id) }
     }
     /** This week's trending titles' names, for "movie" or "tv". Tests replace it. */
     internal var trendingFinder: (key: String, type: String) -> List<String> = { key, type ->
@@ -5954,6 +5954,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                     }
                 }
                 genreVersion++
+                var batches = 0
                 while (genresOn() && vodPids() == pids) {
                     ensureActive()
                     genreProgress = withContext(Dispatchers.IO) { runCatching { catalog.genreProgress(pids) }.getOrNull() }
@@ -5971,6 +5972,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                         }
                         batch.isNotEmpty()
                     }
+                    // Nov 26, 2026: copies TMDB matched to the same title show once (every 10 batches, and at the end).
+                    if (++batches % 10 == 0 || !more) withContext(backgroundThread) { runCatching { catalog.regroupByTmdb(pids) } }
                     genreVersion++
                     if (!more) break
                 }
@@ -6051,7 +6054,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                     // copy of it that's in My List.
                     .let { list -> list.groupBy { Tmdb.normalize(it.name) }.values.map { same -> same.firstOrNull { watchedCopy(it.key) } ?: same.first() }
                         .sortedBy { at[it.key] ?: Int.MAX_VALUE } }) }
-            else -> if (genreOf(c) != null) titles(com.avidviewer.tv.data.Catalog.Query(g, vodPids(), grouped = true, genre = genreOf(c), sort = vodSort, englishOnly = en))
+            // Nov 26, 2026: Top rated keeps to its 100 here too (its count said 100; the list showed thousands).
+            else -> if (genreOf(c) != null) titles(com.avidviewer.tv.data.Catalog.Query(g, vodPids(), grouped = true, genre = genreOf(c), sort = vodSort, englishOnly = en,
+                    limit = if (genreOf(c) == com.avidviewer.tv.data.Catalog.GENRE_TOP) com.avidviewer.tv.data.Catalog.TOP_LIMIT else null))
                 else synchronized(vodPrefetched) { vodPrefetched.remove(prefetchKey(kind, c)) } ?: titles(com.avidviewer.tv.data.Catalog.Query(g, vodPids(), category = c, grouped = true, sort = vodSort, englishOnly = en))
         }
     }
