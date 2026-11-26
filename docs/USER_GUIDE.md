@@ -308,7 +308,7 @@ Audio tracks and captions only appear when the stream carries them, so they vary
 
 The **Search** screen searches **every playlist** at once: TV stations, programs in the TV guide (now and upcoming), movies and series.
 
-- **Results appear as you type**, after a short pause, playlist by playlist as each is searched. Typing more replaces the search at once. Pressing **Search** works too.
+- **Type, then press Search** (the button beside the box, or the Search key on the remote's on-screen keyboard). Typing alone doesn't search, so the TV isn't kept busy searching each letter. Results appear playlist by playlist as each is searched; a new search replaces the last one at once.
 - **Forgiving matching:** part of a word is enough ("farg" finds Fargo), words can come in any order ("news fargo" finds "KVLY Fargo News HD"), and punctuation doesn't matter ("spider man" finds "Spider-Man: No Way Home").
 - **Near matches:** a small typo still finds the name ("the ofice" finds The Office, "breking bad" finds Breaking Bad, "godfathr" finds The Godfather), and from a search of three or more words one may be missing ("the office us" finds The Office). A short word such as "tv" may be missing too. Numbers must match ("abc 6" doesn't offer ABC 3).
 - **Best matches first:** names that start with what you typed, then names holding every word, then near matches.
@@ -1004,6 +1004,10 @@ Every public release since 1.0.35, newest first. From 1.1.0, versions are number
 <!-- new-releases: entries for new builds are added automatically below this line -->
 
 ### 1.30.1 — November 26, 2026, 11:30 AM CT (current)
+
+**Release notes**
+
+- **Search waits for you:** the Search screen now searches when you press **Search** (on the screen or the remote's keyboard), not after every pause in typing, so it no longer keeps the TV busy searching each letter.
 
 **Change log**
 
