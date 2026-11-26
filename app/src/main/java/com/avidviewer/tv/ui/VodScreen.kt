@@ -84,7 +84,9 @@ fun VodScreen(vm: AppViewModel, kind: String) {
         return
     }
     val current = vm.vodCategory[kind] ?: "All"
-    val specials = listOf("All" to all.size, "Recently added" to -1, "My List" to -1) // Continue watching: on the main menu (Nov 26, 2026)
+    // Nov 26, 2026 (owner): Search first, then My List, Recently added and All, then the categories or genres
+    // (Continue watching is on the main menu now).
+    val specials = listOf("My List" to -1, "Recently added" to -1, "All" to all.size)
     val cats = vm.vodCategories(kind)
     // Sorting by genre: titles not looked up yet are looked up while Movies or Series is open (and after).
     LaunchedEffect(kind, vm.genresOn(), vm.vodVersion) { vm.startGenreLookups() }
@@ -96,7 +98,7 @@ fun VodScreen(vm: AppViewModel, kind: String) {
     // R-4: the category list opens scrolled to the category being shown (it used to start at the top on every visit).
     val catState = remember(kind) {
         val si = specials.indexOfFirst { it.first == current }
-        val row = if (si >= 0) 1 + si else cats.indexOfFirst { it.first == current }.let { if (it >= 0) 2 + specials.size + it else 1 }
+        val row = if (si >= 0) 2 + si else cats.indexOfFirst { it.first == current }.let { if (it >= 0) 2 + specials.size + it else 1 }
         androidx.compose.foundation.lazy.LazyListState((row - 2).coerceAtLeast(0))
     }
     // The category rows' highlight handles, by name: Back or Left from the posters goes to the current one.
@@ -115,7 +117,7 @@ fun VodScreen(vm: AppViewModel, kind: String) {
                 }
                 Focusable(
                     modifier = Modifier.fillMaxWidth().heightIn(min = 36.dp).focusRequester(fr).activePath(on && !isMoving).onFocusChanged { hasFocus = it.isFocused; if (it.isFocused && !special && !on) vm.prefetchVodCategory(kind, name) }
-                        .then(if (!isMoving) Modifier.wrapEnds(catWrap, isFirst = name == allCats.first().first, isLast = name == allCats.last().first) else Modifier)
+                        .then(if (!isMoving) Modifier.wrapEnds(catWrap, isFirst = false, isLast = name == allCats.last().first) else Modifier)
                         .then(if (name == "All") Modifier.entryFocus(vm, if (kind == "series") Screen.SERIES else Screen.MOVIES) else Modifier)
                         .then(if (isMoving) Modifier.border(2.dp, C.AccentFocus, androidx.compose.foundation.shape.RoundedCornerShape(8.dp)) else Modifier)
                         .onPreviewKeyEvent { e ->
@@ -142,7 +144,7 @@ fun VodScreen(vm: AppViewModel, kind: String) {
     LaunchedEffect(vm.vodCatFocus) {
         if (vm.vodCatFocus == 0) return@LaunchedEffect
         val si = specials.indexOfFirst { it.first == current }
-        val row = if (si >= 0) 1 + si else cats.indexOfFirst { it.first == current }.let { if (it >= 0) 2 + specials.size + it else 1 }
+        val row = if (si >= 0) 2 + si else cats.indexOfFirst { it.first == current }.let { if (it >= 0) 2 + specials.size + it else 1 }
         val vis = catState.layoutInfo.visibleItemsInfo.map { it.index }
         if (vis.isEmpty() || row <= vis.first() || row >= vis.last()) catState.scrollToItem((row - 2).coerceAtLeast(0))
         focusWhenReady(vm) { runCatching { (catFrs[current] ?: catFrs["All"])!!.requestFocus() }.isSuccess }
@@ -155,16 +157,16 @@ fun VodScreen(vm: AppViewModel, kind: String) {
             verticalArrangement = Arrangement.spacedBy(3.dp),
         ) {
             item { Text(title, color = C.Text, fontSize = 20.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 8.dp, bottom = 8.dp)) }
-            items(specials, key = { "c-" + it.first }) { (name, count) -> catRow(name, count) }
             item(key = "vod-search") {
-                // Search sits with the categories, below My List; results replace the grid.
+                // Nov 26, 2026 (owner): Search at the top, drawn like Search in the main menu; results replace the grid.
                 var text by remember(kind, vq.isBlank()) { mutableStateOf(vq) }
-                Column(Modifier.padding(vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    TvField("🔍  Search ${title.lowercase()}", text, modifier = Modifier.fillMaxWidth().testTag("vod-search"), imeAction = androidx.compose.ui.text.input.ImeAction.Search,
-                        onSubmit = { vm.vodQuery = vm.vodQuery + (kind to text.trim()) }) { text = it }
+                Column(Modifier.padding(bottom = 4.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    TvField("Search ${title.lowercase()}", text, modifier = Modifier.fillMaxWidth().wrapEnds(catWrap, isFirst = true, isLast = false).testTag("vod-search"), imeAction = androidx.compose.ui.text.input.ImeAction.Search,
+                        navIcon = NavIcons.Search, onSubmit = { vm.vodQuery = vm.vodQuery + (kind to text.trim()) }) { text = it }
                     if (vq.isNotBlank()) TvButton("✕  Clear search", modifier = Modifier.fillMaxWidth()) { text = ""; vm.vodQuery = vm.vodQuery + (kind to "") }
                 }
             }
+            items(specials, key = { "c-" + it.first }) { (name, count) -> catRow(name, count) }
             items(cats, key = { "c-" + it.first }) { (name, count) -> catRow(name, count) }
             item { Label("Menu on a category: rename, re-order, hide", size = 11.sp, lines = Int.MAX_VALUE, modifier = Modifier.padding(start = 10.dp, top = 8.dp)) }
         }
