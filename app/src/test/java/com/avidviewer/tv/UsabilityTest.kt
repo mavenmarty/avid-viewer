@@ -36,7 +36,6 @@ import com.avidviewer.tv.ui.FAV_GROUP
 import com.avidviewer.tv.ui.LIVE_KIND
 import com.avidviewer.tv.ui.LIVE_MATCH
 import com.avidviewer.tv.ui.LIVE_PREFIX
-import com.avidviewer.tv.ui.RECENT_GROUP
 import com.avidviewer.tv.ui.RECENT_MATCH
 import com.avidviewer.tv.ui.OPEN_ON_CONTINUE_IN_TESTS
 import com.avidviewer.tv.ui.SORT_AZ
@@ -1130,7 +1129,7 @@ class UsabilityTest {
      * takes one off everywhere; and Continue watching has no live card any more.
      */
     @Test
-    fun recentChannelsFollowTheProfileIntoTheTvGuide() {
+    fun recentChannelsFollowTheProfileToItsOtherTvs() {
         FakeAvidSite().use { site ->
             val now = System.currentTimeMillis()
             restartWith { st -> st.savePlaylists(st.loadPlaylists().map { if (it.id == TestData.P1) it.copy(remoteId = "acctP1") else it }) }
@@ -1175,12 +1174,9 @@ class UsabilityTest {
             assertTrue(vm.recentNote(a.key), vm.recentNote(a.key).startsWith("This TV · "))
             assertTrue(vm.recentNote(c.key), vm.recentNote(c.key).startsWith("Bedroom · "))
 
-            // In the TV Guide: the Recent list, in that order.
-            rule.runOnIdle { vm.chooseGroup(TestData.P1, RECENT_GROUP) }
-            waitFor("Recent in the guide") { vm.channelsIn(RECENT_GROUP).map { it.key } == listOf(b.key, c.key, a.key) }
 
             // Menu › Remove from Recent: off here and removed in the account for every TV.
-            rule.runOnIdle { vm.toggleInList(RECENT_GROUP, b.key) }
+            rule.runOnIdle { vm.removeRecent(b.key) }
             assertEquals(listOf(c.key, a.key), vm.recent.map { it.key })
             rule.runOnIdle { vm.syncAccountPlaylists() }
             waitFor("removal sent") { site.historyItems["acctDad|${rid(b)}"]?.isNull("blob") == true }
