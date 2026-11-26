@@ -5377,10 +5377,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     private var typingJob: Job? = null
 
     /** The Search box changed: search after a short pause in typing. */
+    /** The Search box changed. Nov 26, 2026: nothing is searched until Search is pressed (each pause in typing used to start one). */
     fun typeSearch(text: String) {
         searchQuery = text
-        typingJob?.cancel()
-        typingJob = viewModelScope.launch { delay(450); search(text) }
     }
 
     /** The TV Guide's search box changed: show its results after a short pause in typing. */

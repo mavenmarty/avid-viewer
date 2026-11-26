@@ -2,7 +2,7 @@
 
 <!-- The version below and the Release notes section are updated automatically after each published build
      (.github/workflows/user-guide.yml). Feature descriptions are written by hand. -->
-This guide covers **Avid Viewer 1.29.0**, the current public release. Avid Viewer is an IPTV player for Android TV and Fire TV. You bring your own provider (an Xtream Codes login or an M3U link); the app doesn't include any channels.
+This guide covers **Avid Viewer 1.30.0**, the current public release. Avid Viewer is an IPTV player for Android TV and Fire TV. You bring your own provider (an Xtream Codes login or an M3U link); the app doesn't include any channels.
 
 **Contents:** [Getting started](#1-getting-started) · [Main menu](#2-main-menu) · [TV Guide](#3-tv-guide) · [Full-screen playback](#4-full-screen-playback) · [Search](#5-search) · [Discover](#6-discover) · [Sports](#7-sports) · [Movies and Series](#8-movies-and-series) · [Settings](#9-settings) ([Profiles](#profiles)) · [Privacy](#10-privacy) · [Troubleshooting](#11-troubleshooting) · [Control4](#12-control4) · [Supplemental services](#13-supplemental-services) · [Cable & satellite](#14-using-your-cable-or-satellite-subscription) · [Free services](#15-free-services) · [Release notes](#release-notes)
 
@@ -98,10 +98,10 @@ While Avid Viewer is open, a device picks up changes within a minute: a playlist
 Where a profile stopped in each movie and episode, and the episodes it finished, follow it to its other TVs:
 
 - A title's page says where it stopped on another TV (for example **Stopped at 34:12 on Living room, today 8:40 PM**) with **▶ Resume** and **Start over**. A series opens on the next episode as usual, including episodes finished on another TV.
-- **Continue watching** (Movies and Series) lists movies part-way, series with episodes left to watch, and series in your **My List** that you haven't finished. Series come first by the release date of their newest episode (when your provider gives one), the others by when you last watched them; a place from another TV says **from Bedroom**. Each title is listed once, as the copy (version) you were watching. A series leaves once its newest episode is watched, and comes back when a new episode or season appears. **Menu** on a poster there removes it, on every TV; a removed series stays off until something new happens to it.
-- **The last live channel** comes first in Continue watching, on every TV: the channel this profile last watched for 2 minutes or more, until the program on it ends (if less than 10 minutes were left when you stopped, until the next one ends; 1 hour on a channel with no guide). **OK** tunes it; **Menu** › Remove takes it off. When this TV's own last channel is newer, it comes second. On the website it's on the profile's **Watching** tab ("Live TV · until 9:00 PM").
+- **Continue watching** (on the main menu; see [Continue watching](#continue-watching)) has a row for **Live TV**, **Series** and **Movies**, from every TV the profile uses. **Series** lists series with episodes left to watch, including series in your **My List** that you haven't finished; they come first by the release date of their newest episode (when your provider gives one), the others by when you last watched them. **Movies** lists movies part-way. A place from another TV says **from Bedroom**. Each title is listed once, as the copy (version) you were watching. A series leaves once its newest episode is watched, and comes back when a new episode or season appears. **Menu** on a title there removes it, on every TV; a removed series stays off until something new happens to it.
+- **Live TV:** the last 10 channels this profile watched for 2 minutes or more, on any of its TVs, newest first, with what's on now and where and when it was watched ("Living room · 8:41 PM"). **OK** tunes the channel live (it doesn't rewind to where you stopped). **Menu** › **Remove from Continue watching** takes one off, or **Clear Live TV history** takes them all off, on every TV. On the website they're on the profile's **Watching** tab.
 - The same title on another playlist (another provider, a 4K copy) picks up there too, matched by title and year, or series, season and episode.
-- **Private:** everything is locked on the TV with a key only your TVs and your passkey have; avidviewer.app and its admins can't read titles, times or TV names. The first time, unlock once with your passkey on the website (Needs your attention says when a TV is waiting for the key). For live TV only the last channel is sent, never the program.
+- **Private:** everything is locked on the TV with a key only your TVs and your passkey have; avidviewer.app and its admins can't read titles, times or TV names. The first time, unlock once with your passkey on the website (Needs your attention says when a TV is waiting for the key). For live TV only the channel is sent, never the program.
 - **On by default.** Turn it off for the whole account (Account tab, **Keep my watch history**) or for one profile (the profile's **Watching** tab, which also lists its places with **Mark watched** and **Remove**, and has **Clear history**). Off deletes what your account holds; each TV keeps its own place. **Pause history** on a TV stops that TV sending.
 - **Kids profiles** never share where they stopped and have no Discover, for their privacy.
 
@@ -134,7 +134,7 @@ Have cable or satellite TV (Xfinity, Spectrum, Cox, DIRECTV, DISH, Midco and oth
 
 - **Arrows** move the highlight. **Hold an arrow** to speed up (3, then 6, then 12 items per repeat).
 - **OK** selects. Text boxes open the keyboard only when you press OK on them.
-- **Menu** (or **hold OK**) opens options for the highlighted item.
+- **Menu** (or **hold OK**) opens options for the highlighted item. On remotes without a Menu button (Google TV remotes and the Google TV phone app), hold OK: a tip says so on Continue watching, Live TV, Movies and Series until you've used it a few times, and the hints say "Hold OK".
 - **Back** goes up one level, landing on the item that led there. On the full menu while on the TV Guide, Back shows **Press Back again to exit**; a second Back within about 2.5 seconds closes the app.
 - **Channel Up / Channel Down** (or Page Up / Page Down) move a page at a time in the TV Guide and change channels in full screen.
 - **Channel and category lists wrap around.** A single press past the last item goes to the first, and the reverse. Holding a button stops at the end, so a fast scroll doesn't fly past. Other lists (the main menu, the playlist list, Settings and poster grids) stop at the end.
@@ -145,7 +145,7 @@ Have cable or satellite TV (Xfinity, Spectrum, Cox, DIRECTV, DISH, Midco and oth
 
 ![Who's watching? when the TV has more than one profile](images/whos-watching.jpg)
 
-The menu on the left lists **Search, Discover, TV Guide, Sports, Movies, Series** and **Settings**. When the TV has more than one profile, the profile in use is shown at the top (its initial on its colour); **OK** on it opens **Switch profile** (see [Profiles](#profiles)). A Kids profile's menu has only Search, TV Guide, Movies and Series. Picking a screen highlights its first item. The menu is always on screen: once you've chosen a screen it shrinks to icons on the far left, and the labels come back when you move onto it.
+The menu on the left lists **Search, Continue watching, Discover, Sports, Live TV** (the TV Guide)**, Series, Movies** and **Settings**. When the TV has more than one profile, the profile in use is shown at the top (its initial on its colour); **OK** on it opens **Switch profile** (see [Profiles](#profiles)). A Kids profile's menu has only Search, Continue watching, Live TV, Series and Movies. Picking a screen highlights its first item. The menu is always on screen: once you've chosen a screen it shrinks to icons on the far left, and the labels come back when you move onto it.
 
 At the bottom of the menu you'll see:
 
@@ -153,18 +153,30 @@ At the bottom of the menu you'll see:
 - **Current weather** (if a postal code is set and Show weather is on).
 - An **Update x.y.z** button when a new version is available.
 
-When the TV has a Kids profile, the app first asks **Who's watching?**; otherwise it opens on the last profile used (see [Which profile opens](#profiles)). Then it opens on the TV Guide with the menu shown as icons, on:
+When the TV has a Kids profile, the app first asks **Who's watching?**; otherwise it opens on the last profile used (see [Which profile opens](#profiles)). Then, when there's something in **Continue watching**, it opens there (nothing plays until you open Live TV). Otherwise it opens on the TV Guide (**Live TV**) with the menu shown as icons, on:
 
 1. the last channel you watched, in its own category;
 2. if that channel is in ★ Favorites or one of your lists, that list (the channel can belong to another playlist);
 3. otherwise your first favorite, with ★ Favorites open;
 4. with no favorites, the first channel of the first category.
 
+When the app opened on Continue watching, Live TV starts on that channel the first time you open it.
+
+### Continue watching
+
+Everything this profile was watching, on every TV it uses, in three rows: **Live TV**, **Series** and **Movies**. Each row scrolls sideways: **Left** and **Right** move along it, **Up** and **Down** move between rows.
+
+- **Live TV**: the last 10 channels watched for 2 minutes or more, newest first, with what's on now and where and when it was watched ("This TV · 6:02 PM", "Living room · 8:41 PM"). **OK** tunes the channel full screen; **Back** comes back here.
+- **Series**: series with episodes left to watch (new episodes first, then the last watched). **OK** opens the series page on the episode to watch next.
+- **Movies**: movies you stopped part-way, the last watched first. **OK** opens its page with **▶ Resume**.
+- **Menu** (or hold **OK**): **Remove from Continue watching** (on every TV). On a channel, also **Clear Live TV history**, which empties the Live TV row here and on the profile's other TVs.
+- Kids profiles keep their own places on each TV and have no Live TV row. See [Pick up where you left off](#pick-up-where-you-left-off).
+
 ## 3. TV Guide
 
 ![The TV Guide: preview and details at the top, and the guide across the full width, 2 hours at a time](images/tv-guide.jpg)
 
-The TV Guide is the home screen for live TV. Next to the main menu it has:
+The TV Guide is the home screen for live TV; in the main menu it's **Live TV**. Next to the main menu it has:
 
 - **Playlist list**: ★ Favorites, your own lists, then every playlist with live TV switched on. Press OK on a playlist to open its categories.
 - **Category list**: the playlist's categories, with **‹ Menu**, ★ Favorites, your lists, **＋ New list** and **🔍 Search** at the top.
@@ -296,7 +308,7 @@ Audio tracks and captions only appear when the stream carries them, so they vary
 
 The **Search** screen searches **every playlist** at once: TV stations, programs in the TV guide (now and upcoming), movies and series.
 
-- **Results appear as you type**, after a short pause. Pressing **Search** works too.
+- **Results appear as you type**, after a short pause, playlist by playlist as each is searched. Typing more replaces the search at once. Pressing **Search** works too.
 - **Forgiving matching:** part of a word is enough ("farg" finds Fargo), words can come in any order ("news fargo" finds "KVLY Fargo News HD"), and punctuation doesn't matter ("spider man" finds "Spider-Man: No Way Home").
 - **Near matches:** a small typo still finds the name ("the ofice" finds The Office, "breking bad" finds Breaking Bad, "godfathr" finds The Godfather), and from a search of three or more words one may be missing ("the office us" finds The Office). A short word such as "tv" may be missing too. Numbers must match ("abc 6" doesn't offer ABC 3).
 - **Best matches first:** names that start with what you typed, then names holding every word, then near matches.
@@ -366,28 +378,29 @@ Sports lists real games from **ESPN's schedules** for today and the next 2 days,
 
 ![Series](images/series-grid.jpg)
 
-- **Left side**: Playlists, then categories: **All**, **Recently added**, **Continue watching** (movies part-way, series with episodes left, and unfinished series in My List; see [Pick up where you left off](#pick-up-where-you-left-off)), **My List**, and your provider's categories, or TMDB genres (see [Sorted by genre](#sorted-by-genre)).
+- **Left side**: **Search**, then **My List**, **Recently added** and **All**, then your provider's categories, or TMDB genres (see [Sorted by genre](#sorted-by-genre)). Opening Movies or Series highlights **All**. Continue watching is on the main menu (see [Continue watching](#continue-watching)).
 - **Right side**: posters for the chosen category. A category you pause on is read ahead, so OK shows it at once.
 - **Posters fill their tiles.** The title and year appear on a dark fade only on the highlighted poster, and on titles that have no artwork (most posters already show their title). The highlighted poster grows a little and gets a ring. **✓** in a corner means the title is in My List.
 - **The posters**: rows of posters, with the highlighted title's artwork filling the screen behind them and fading into the page. Above the posters: its name, year, content rating (such as PG-13 or TV-14), genre, TMDB rating (with how many people rated it) and a short description. Moving the highlight fades to the next title's picture. **Right** from the categories goes to the poster you were on.
 
   ![Movies: the highlighted title's artwork and details above the posters](images/movies-grid.jpg)
 
-- **Sort**: the buttons above the posters put the titles in order: **Date added** (newest first, the default), **A–Z**, or **Rating** (TMDB's rating, else your provider's, best first; titles with no rating go last). **Up** from the top row of posters reaches them. Each profile remembers its choice, for Movies and Series alike. **Recently added**, **Continue watching**, **My List**, **Trending this week**, **Top rated** and search results keep their own order, so they have no Sort buttons.
+- **Sort**: the buttons above the posters put the titles in order: **Date added** (newest first, the default), **A–Z**, or **Rating** (TMDB's rating, else your provider's, best first; titles with no rating go last). **Up** from the top row of posters reaches them. Each profile remembers its choice, for Movies and Series alike. **Recently added**, **My List**, **Trending this week**, **Top rated** and search results keep their own order, so they have no Sort buttons.
 
 - **Each title is listed once.** When your playlists have the same title several times (other languages, qualities such as 4K or HD, provider tags such as "NF -" in front of the name, or other playlists), it appears once, shown by its English copy (else one with no language marked). This applies to All, Recently added, every category and the search.
-- **🔍 Search movies / 🔍 Search series** is in the category list, below My List. Results replace the poster grid; **✕ Clear search** ends the search. When fewer than 30 titles hold every word you typed, near matches (a small typo, or a word left out) are added after them.
-- **OK on a poster** opens its page. The title's artwork fills the screen; on it are the name in large type, the year, content rating and length, three facts (**Genre**, **On**: the playlist, and **Rating**: your provider's), **▶ Play**, or **▶ Resume from [time]** and **Start over**, plus **+ My List**, **☆ Rate** (see [Rating titles on TMDB](#rating-titles-on-tmdb)), the plot, cast and director, and **Ratings** (the TMDB score and how many people rated it).
+- **English only**: the button next to Sort shows only titles in English and titles with no language marked (those marked as another language, or several, are left out). Each profile remembers it, for Movies and Series alike.
+- **Search** is at the top of the category list, drawn like Search in the main menu; what you typed shows in its place. Results replace the poster grid; **✕ Clear search** ends the search. When fewer than 30 titles hold every word you typed, near matches (a small typo, or a word left out) are added after them.
+- **OK on a poster** opens its page. The title's artwork fills the screen; on it are the name in large type, the year, content rating and length, its facts (**Genre**, **Language**, with the other copies' languages under it, **On**: the playlist, and **Rating**: your provider's), **▶ Play**, or **▶ Resume from [time]** and **Start over**, plus **+ My List**, **☆ Rate** (see [Rating titles on TMDB](#rating-titles-on-tmdb)), the plot, cast and director, and **Ratings** (the TMDB score and how many people rated it).
 
   ![A movie's page](images/movie-page.jpg)
 
 - **Artwork, descriptions and TMDB ratings** come from TMDB, using the TMDB key (see [TMDB](#tmdb-discover)). Each title is looked up once, when you highlight or open it, and remembered on the TV. Without a key, the provider's own pictures and details are used. Kids profiles never look titles up.
 - **⇄ N versions** (on a title with several copies) lists each copy with its language, name, category and playlist; ✓ marks the one shown, and the line **This version: …** under the buttons says which one you're on. **OK** on another copy shows that one, with its own episodes, resume point and My List button. The language comes from codes on the name or category ("EN |", "FR -", "VF", "MULTI"…); copies without one show "Language not marked". Series pages list episodes by **Season**, with resume points; episodes you've played to the end say **✓ Watched**. **A series page opens where you left off**, with its season chosen: the furthest episode you've watched or started (on any TV). If you stopped part-way through it, the page opens on it (**Resume**); if you finished it, on the next episode. A series you haven't started opens on Season 1, Episode 1. The page scrolls as one: **Up** from the episode goes to the season buttons, then the title's buttons; from the buttons, **Down** goes to the season buttons, then through every episode, however long the description. After you watch an episode and press **Back**, that episode is highlighted, however far down the season it is (after **Next episode** into a new season, that season is shown).
 - **Mark as watched:** **Menu** (or hold **OK**) on an episode offers **Mark as watched** (or **Mark as not watched**) and **Mark season N as watched** (or not watched). Watched episodes follow the profile to its other TVs, and the page then opens on the next episode to watch.
-- **Each category (and each search) keeps its own place.**
+- **Each category (and each search) keeps its own place.** Big catalogs load in the background: the list you had stays on screen (or **Loading…**) for a moment, and posters further down appear as plain tiles until they're read.
 - **Back** goes one step at a time: from a title's page to its poster, from a poster to the category you're in (highlighted), then to the main menu, on **Movies** or **Series**.
 - **Left** from the first column of posters goes to the category you're browsing. On a title's page, **Left** at the left edge (the leftmost button, the season buttons or an episode) goes back to the posters, like **Back**.
-- **Category list wraps around**: Up on **All** jumps to the last category, and Down on the last returns to All. The poster grid stops at the end.
+- **Category list wraps around**: Up on **Search** jumps to the last category, and Down on the last returns to Search. The poster grid stops at the end.
 - **Menu on a category**: **Rename**, **Re-order** or **Hide** it. Hidden categories come back in Settings › List Editor.
 - If you have more than one playlist, movies and series from all of them are merged.
 - **Content ratings** (G, PG, PG-13, R, NC-17, TV-Y to TV-MA) show with the year: your provider's when its details give one (on the title's page), otherwise TMDB's for your region (US ratings when your region has none). They're looked up with the artwork, so they need a TMDB key, and a title shows its rating once it has been highlighted or opened.
@@ -569,6 +582,7 @@ Rename, re-order and Add to List are done with Menu on the item itself in the TV
 ![Settings › Discover](images/settings-discover.jpg)
 
 - **TMDB API key**: Save it (or press Done on the keyboard), or Remove it (asks first). With a linked account it can be set once for every TV on the website.
+- **How to get a free key**: the steps, with what to enter in TMDB's form (Type of Use **Personal**, Application Name **Avid Viewer**, Application URL **https://avidviewer.app** and a summary), and a QR code that opens the same steps on your phone at **avidviewer.app/tmdb**, with Copy buttons.
 - **My streaming services**: pick the services you subscribe to. These belong to the profile and follow it to every TV.
 - **TMDB account for ratings**: **Link TMDB account** (a QR code to approve on your phone) or **Unlink**, for the profile in use. See [Rating titles on TMDB](#rating-titles-on-tmdb).
 
@@ -989,7 +1003,31 @@ Every public release since 1.0.35, newest first. From 1.1.0, versions are number
 
 <!-- new-releases: entries for new builds are added automatically below this line -->
 
-### 1.29.0 — November 23, 2026, 3:56 PM CT (current)
+### 1.30.0 — November 26, 2026, 10:27 AM CT (current)
+
+**Release notes**
+
+- **Continue watching on the main menu.** One place for everything you were watching, on every TV: a row each for **Live TV** (the last 10 channels, with what's on now), **Series** and **Movies**, each scrolling sideways. **OK** tunes a channel or opens a title where you left off; **Menu** removes one, or **Clear Live TV history**. The app opens on it when it has something in it. Movies and Series no longer have their own Continue watching. See [Continue watching](#continue-watching).
+- **Live channels follow you between TVs again.** Two TVs with the same name ignored each other's channel; they're now told apart properly.
+- **A new main menu order:** Search, Continue watching, Discover, Sports, **Live TV** (the TV Guide's new name), Series, Movies, Settings.
+- **Movies and Series:** **Search** at the top of the list, then My List, Recently added and All. A new **English only** button next to Sort. Title pages show the **language**.
+- **Faster:** big Movies and Series catalogs no longer freeze the screen (a Fire TV Cube could close the app), and Search shows results as each playlist is searched and stops an old search as soon as you type more.
+- **Google TV remotes:** without a Menu button, a tip says to hold OK for options.
+- **TMDB key help:** Settings › Discover shows how to get a free key, with what to enter in TMDB's form and a QR code to avidviewer.app/tmdb.
+
+**Change log**
+
+- English only button on Movies and Series (English and unmarked titles), per profile
+- Movies and Series lists read the catalog in the background (#42)
+- Hold OK tip on remotes without Menu (#39); language on title pages (#43)
+- Control4 driver link points at driver version 3 (current icon)
+- Settings › Discover explains how to get a free TMDB key
+- Continue watching on the main menu, with rows for Live TV, Series and Movies
+- Movies and Series: Search at the top, then My List, Recently added and All
+- Movies and Series search row says Search, like the main menu
+- Search shows results as each playlist is done, and stops a search a newer one replaced
+
+### 1.29.0 — November 23, 2026, 3:56 PM CT
 
 **Release notes**
 
