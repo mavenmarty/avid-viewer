@@ -144,6 +144,31 @@ class ResellerLinesTest {
         }
     }
 
+    /** Nov 26, 2026: first-time setup on the website asks for the postal code; every TV takes it once per change there. */
+    @Test
+    fun aPostalCodeSetOnTheWebsiteReachesTheTvAndTheTvsOwnChoiceStays() {
+        FakeAvidSite().use { site ->
+            setUp(Playlist("po", "Other", "m3u", m3uUrl = "http://other.example/get.php?username=bob&password=pw2", vodOn = false, enabled = false))
+            val vm = newVm()
+            vm.accountApi = site.base
+            vm.account.save(AccountApi.Linked("TVTOKEN_abcdefghijklmnopqrstuvwxyz", "viewer@example.com", "Living room", "d1"))
+            site.postal = """{"code":"58102","at":1000}"""
+            vm.checkAccount()
+            idleUntil("website postal code taken") { vm.prefs.postalAccountAt == 1000L }
+            idleUntil("looked up") { vm.postalStatus?.contains("58102") == true }
+            // Chosen later on the TV: the website's unchanged code isn't taken again.
+            vm.updatePrefs { it.copy(postalCode = "10001") }
+            vm.checkAccount(); idleUntil("check-in") { site.calls.count { it.contains("/api/tv/me") } >= 2 }
+            shadowOf(android.os.Looper.getMainLooper()).idleFor(java.time.Duration.ofSeconds(1))
+            assertEquals("10001", vm.prefs.postalCode)
+            assertEquals(1000L, vm.prefs.postalAccountAt)
+            // Changed again on the website: the TV takes the new one.
+            site.postal = """{"code":"58103","at":2000}"""
+            vm.checkAccount()
+            idleUntil("newer website code taken") { vm.prefs.postalAccountAt == 2000L && vm.postalStatus?.contains("58103") == true }
+        }
+    }
+
     @Test
     fun resellerLinesAreCheckedAndRenewedThroughTheWebsite() {
         Provider().use { prov ->

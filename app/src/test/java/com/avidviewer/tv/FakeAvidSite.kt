@@ -64,12 +64,15 @@ class FakeAvidSite : AutoCloseable {
     private fun profilesHash() = profiles?.toString()?.hashCode()?.toString(16) ?: ""
     /** One backup per TV: device id → (TV name, file text, PIN). */
     val backups = java.util.concurrent.ConcurrentHashMap<String, Triple<String, String, String>>()
+    /** Nov 26, 2026: the postal code set on the website, as /api/tv/me sends it ({"code","at"}), or null. */
+    @Volatile var postal: String? = null
     private fun meExtras(): String {
         val o = org.json.JSONObject()
         if (resellerHosts.isNotEmpty()) o.put("reseller", org.json.JSONObject().put("hosts", org.json.JSONArray(resellerHosts))
             .put("renew", org.json.JSONArray().apply { renew.forEach { put(org.json.JSONObject().put("id", it.first).put("localId", it.second)) } }))
         if (reloadChannels) { o.put("reloadChannels", true); reloadChannels = false }
         if (checkSubscription) { o.put("checkSubscription", true); checkSubscription = false }
+        postal?.let { o.put("postal", org.json.JSONObject(it)) }
         return if (o.length() == 0) "" else "," + o.toString().removePrefix("{").removeSuffix("}")
     }
     private fun deviceOf(auth: String) = if (auth.startsWith("Bearer TVTOKEN_claimed")) "d2" else "d1"

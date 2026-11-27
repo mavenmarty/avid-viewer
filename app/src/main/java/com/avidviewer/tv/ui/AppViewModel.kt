@@ -685,6 +685,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                     if (m.sendLog && playbackLog.entries().isNotEmpty()) sendPlaybackLog(auto = true)
                     if (unclaimedReports().isNotEmpty()) claimReports()
                     if (m.reloadChannels) reloadAllLive()
+                    takeAccountPostal(m)
                     resellerAfterCheckIn(token, m)
                     // Once per run (playlists may have changed while it was off); after that, each download reports itself.
                     if (!loadsReported) { loadsReported = true; reportLoadsLater() }
@@ -1412,6 +1413,17 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     // ---------------- postal code & weather ----------------
+    /**
+     * Nov 26, 2026: a postal code set on the website (first-time setup) reaches every TV. Taken once per change there,
+     * so a code chosen later on the TV (Settings › Location & weather) stays until the website's changes again.
+     */
+    fun takeAccountPostal(m: com.avidviewer.tv.data.AccountApi.Me) {
+        val code = m.postalCode ?: return
+        if (m.postalAt <= prefs.postalAccountAt) return
+        updatePrefs { it.copy(postalAccountAt = m.postalAt) }
+        if (!code.equals(prefs.postalCode, ignoreCase = true)) setPostalCode(code)
+    }
+
     fun setPostalCode(code: String) {
         val c = code.trim().uppercase()
         if (c.isEmpty()) {
