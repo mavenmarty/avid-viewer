@@ -340,7 +340,7 @@ After you play a channel, program, movie or episode from Search, **Back** return
 Discover shows what's new and popular, and where to watch it, using TMDB and JustWatch data.
 
 - **Tabs**: New, Trending, For you, In theaters.
-- **Per profile**, on the website (Profiles › a profile › **Discover**): My streaming services, how Discover opens (**Everything**, **On your provider** or **My services**) and **titles for grown-ups** (off: movies rated R or NC-17 are left out; TMDB's lists have no series ratings). My List follows the profile to every TV. Kids profiles have no Discover.
+- **Per profile**, on the website (Profiles › a profile › **Discover**): My streaming services, how Discover opens (**Everything**, **On your provider** or **My services**) and **titles for grown-ups** (off: movies rated R or NC-17 are left out; TMDB's lists have no series ratings). My List follows the profile to every TV: adding or removing a title on one TV (or on the website) reaches the others within about a minute while Avid Viewer is open on them, and changes made on two TVs are joined, not replaced. Kids profiles have no Discover.
 - **TMDB key for the whole account:** enter it once on a profile's Discover tab on the website; every TV gets it, locked.
 - **On your provider**: only show titles your own playlists have (the ones tagged **▶ ON YOUR PROVIDER**).
 - **My services**: only show titles on the streaming services you've picked.
@@ -1015,6 +1015,12 @@ Every public release since 1.0.35, newest first. From 1.1.0, versions are number
 <!-- new-releases: entries for new builds are added automatically below this line -->
 
 ### 1.31.1 — November 27, 2026, 10:49 AM CT (current)
+
+**Release notes**
+
+- **My List stays the same on every TV:** when two TVs changed My List, the one that saved last replaced the list everywhere, so a title added on one TV could disappear. Now each TV's additions and removals are joined in, also with changes made on the website. A change reaches your other TVs within about a minute while Avid Viewer is open on them.
+- Titles from your account that a TV couldn't find when the list arrived (a playlist still loading) now appear in My List there as soon as they're found.
+- **Website (Nov 27):** a long My List saves (very long lists used to stop syncing without a word). If a TV changed My List while you had it open on the website, the page says so and shows the latest list.
 
 **Change log**
 
