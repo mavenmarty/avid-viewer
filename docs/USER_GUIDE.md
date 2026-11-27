@@ -2,7 +2,7 @@
 
 <!-- The version below and the Release notes section are updated automatically after each published build
      (.github/workflows/user-guide.yml). Feature descriptions are written by hand. -->
-This guide covers **Avid Viewer 1.30.1**, the current public release. Avid Viewer is an IPTV player for Android TV and Fire TV. You bring your own provider (an Xtream Codes login or an M3U link); the app doesn't include any channels.
+This guide covers **Avid Viewer 1.31.0**, the current public release. Avid Viewer is an IPTV player for Android TV and Fire TV. You bring your own provider (an Xtream Codes login or an M3U link); the app doesn't include any channels.
 
 **Contents:** [Getting started](#1-getting-started) · [Main menu](#2-main-menu) · [TV Guide](#3-tv-guide) · [Full-screen playback](#4-full-screen-playback) · [Search](#5-search) · [Discover](#6-discover) · [Sports](#7-sports) · [Movies and Series](#8-movies-and-series) · [Settings](#9-settings) ([Profiles](#profiles)) · [Privacy](#10-privacy) · [Troubleshooting](#11-troubleshooting) · [Control4](#12-control4) · [Supplemental services](#13-supplemental-services) · [Cable & satellite](#14-using-your-cable-or-satellite-subscription) · [Free services](#15-free-services) · [Release notes](#release-notes)
 
@@ -48,14 +48,25 @@ Menu names differ a little between brands; if a path above doesn't match, search
 The first time you open Avid Viewer, and every time it starts while there are no playlists, it shows a welcome screen:
 
 - **A device is linked to an account before it gets playlists.** The welcome screen shows the steps to link it; playlists are added on the website, not with the remote.
-- **Link to your account** (right side): the device shows its own 8-character code and a QR code. Scan the QR code with your phone (it opens **avidviewer.app/link** with the code filled in), or go to avidviewer.app/link and type the code. Sign in or make an account, then choose **Add this device**. A new code replaces one that runs out (10 minutes).
-- **Linked:** the screen says **This device is linked** and shows your email. Next, add your playlists at **avidviewer.app/playlists** and give them to a profile on this device; they arrive within a minute while Avid Viewer is open. To copy another device's settings, use **Restore from your account** later in Settings › Updates & about (see [Backup & restore](#backup--restore)).
+- **Link to your account** (right side): the device shows its own 8-character code and a QR code. Scan the QR code with your phone: it opens first-time setup at **avidviewer.app/start**, and the device is linked as soon as you've signed in or made an account (see [Set up with your phone](#set-up-with-your-phone)). Or go to avidviewer.app/link, type the code and choose **Add this device**. A new code replaces one that runs out (10 minutes).
+- **Linked:** the screen says **This device is linked** and shows your email. Next, add your playlist on your phone (setup asks for it next); it arrives within a minute while Avid Viewer is open. To copy another device's settings, use **Restore from your account** later in Settings › Updates & about (see [Backup & restore](#backup--restore)).
 
 Once a playlist has been added, the app opens on the TV Guide instead.
 
 ### Set up with your phone
 
 Your playlists and profiles live in your account at avidviewer.app, and you manage them from a phone or computer instead of the remote: **playlists** go to **profiles**, each profile chooses what it can see, and profiles go to **devices**.
+
+**First-time setup (avidviewer.app/start).** Scanning the QR code on a new device's welcome screen opens it; making an account on the website opens it too. Four steps get the TV playing, about 4 minutes:
+
+1. **Account:** your first name (it names your profile) and email; open the sign-in link the email sends, on the same phone.
+2. **Your TV:** the device that showed the QR code is linked by itself. Didn't come from a TV? Type its code, or skip and link one later. **How to install Avid Viewer on a TV** shows the steps and the Downloader code.
+3. **Playlist:** a name and an Xtream login (server, username, password) or an M3U link. It goes to every profile, and it's locked in your browser for your TV, which loads it within a minute; the page then says how many channels the TV loaded, or what went wrong (for example a login your provider refused).
+4. **Passkey:** one Face ID, fingerprint or device PIN, so the next TV you add gets the login without typing. **Not now** skips it: your TV keeps working, and the next TV asks for the login once.
+
+Then **Make it yours**, all optional, in any order: **Who's watching** (more profiles, a Kids profile), **What each profile sees**, **Your area and favorites** (your postal code goes to every TV, which suggests local channels at the top of ★ Favorites) and **Discover** (with **How to get a free TMDB key**). What's left stays under **Needs your attention** until it's done or dismissed.
+
+Later, or to change anything, use the website's pages:
 
 1. **Link the device to your account:** its welcome screen shows a code and a QR code (or Settings › Account › **Link this device**). Scan the QR code with your phone, or type the code at **avidviewer.app/link**, and choose **Add this device**. See [Account](#account).
 2. **Playlists** (avidviewer.app/playlists): **＋ Add a playlist**, enter a **name** and either an **Xtream Codes login** (server, username, password) or an **M3U link**, with an optional guide (XMLTV) link, and tick the **profiles** that get it.
@@ -65,7 +76,7 @@ Your playlists and profiles live in your account at avidviewer.app, and you mana
 
 While Avid Viewer is open, a device picks up changes within a minute: a playlist arrives when any profile on the device has it, is checked like one added by hand, and leaves when no profile there has it any more. Each page shows where things stand (for example **waiting for the device to open**).
 
-**You type a login only when you add or edit a playlist.** The first time, choose **Set up with passkey** on the Playlists page. From then on the website keeps logins locked with a key that only your **passkey** can unlock: when a profile goes to a new device, the page asks for your passkey (not the login) and locks a copy for that device, and **Edit** can show the saved login. Your devices also send the logins they have (locked so only your browser opens them), so playlists you typed on a TV don't need typing again. Without a passkey (or with a password manager that can't do this yet), the login goes to the devices that have the playlist when you save it, and you type it again for new ones.
+**You type a login only when you add or edit a playlist.** First-time setup asks for your passkey last; if you skipped it, choose **Set up with passkey** on the Playlists page. From then on the website keeps logins locked with a key that only your **passkey** can unlock: when a profile goes to a new device, the page asks for your passkey (not the login) and locks a copy for that device, and **Edit** can show the saved login. Your devices also send the logins they have (locked so only your browser opens them), so playlists you typed on a TV don't need typing again. Without a passkey (or with a password manager that can't do this yet), the login goes to the devices that have the playlist when you save it, and you type it again for new ones.
 
 **Playlists added on a TV** are listed under **Added on your devices**. **Add to account** makes one an account playlist for that device's profiles; the device keeps its copy, favorites and everything else. If you add a playlist on the website that a device already has (the same server and username, or the same M3U link), that device uses its own copy for it rather than adding a second one.
 
@@ -420,7 +431,7 @@ Good to know: rating needs the TMDB key (see [TMDB](#tmdb-discover)) and a TMDB 
 With a TMDB key (see [TMDB](#tmdb-discover)), Movies and Series list **TMDB genres** in place of your provider's categories. It's on by default once a key is saved, and each profile can turn it off in **Settings › Discover › Sort Movies and Series by genre** (or on the website: Profiles › a profile › **Discover**).
 
 - **The list**: All, Recently added, Continue watching and My List at the top, then **Trending this week** (TMDB's trending titles that are on your playlists, in TMDB's order), **Top rated** (rated 7.0 or more by at least 250 people, best first, up to 100), the genres A to Z, **Other (not on TMDB)**, and **Not sorted yet** while titles are still being looked up.
-- **Inside a genre**, titles follow the **Sort** you've chosen, as in All. A title can be in more than one genre, and each title is listed once.
+- **Inside a genre**, titles follow the **Sort** you've chosen, as in All. A title can be in more than one genre, and each title is listed once: copies your provider named differently but that TMDB matched to the same film or show ("SC - Batman: Knightfall Part 1: Knightfall" and "Batman: Knightfall Part 1") show once in genres, Trending, Top rated and the Rating sort. Your provider's own categories still list every copy.
 - **Looking titles up**: each movie and series is looked up on TMDB once, by name and year, newest first, one at a time, and kept on the TV through every download. Settings › Discover shows **Sorting into genres… X of Y titles** while it runs. Lookups wait while something is playing, and carry on the next time Movies or Series opens if the TV was offline.
 - **Rename, Re-order and Hide** work on genres too (Menu on a genre). **Show hidden genres** in Settings › Discover brings them back.
 - **Turning it off** brings back your provider's categories, with your renames, order and hidden categories as you left them. The lookups are kept for next time.
@@ -547,7 +558,7 @@ Rename, re-order and Add to List are done with Menu on the item itself in the TV
 
 ![Settings › Location & weather](images/settings-location.jpg)
 
-- **Postal code**: a US ZIP or Canadian postal code (Done on the keyboard saves it). It's used for weather, local channel suggestions and the Auto time zone. Only the code is sent, to Open-Meteo.
+- **Postal code**: a US ZIP or Canadian postal code (Done on the keyboard saves it). It's used for weather, local channel suggestions and the Auto time zone. Only the code is sent, to Open-Meteo. A postal code set on the website (first-time setup's **Your area and favorites**) reaches every linked TV; one chosen here later stays until it's changed on the website again.
 - **Show weather**: current conditions under the clock, refreshed every 30 minutes.
 - **Suggest local channels**: on or off. **Show them again** restores suggestions you dismissed.
 - **Temperature units**.
@@ -1003,7 +1014,21 @@ Every public release since 1.0.35, newest first. From 1.1.0, versions are number
 
 <!-- new-releases: entries for new builds are added automatically below this line -->
 
-### 1.30.1 — November 26, 2026, 11:30 AM CT (current)
+### 1.31.0 — November 26, 2026, 7:41 PM CT (current)
+
+**Release notes**
+
+- **Top rated without duplicates:** copies of a film or show your provider named differently, which TMDB matched to the same title, show once in Top rated, Trending, the genres and the Rating sort. Top rated lists its 100 titles, as its count says. After updating, the TV looks its titles up again in the background (Top rated's first), so duplicates clear within a few minutes.
+- **Your postal code from the website:** first-time setup at avidviewer.app/start asks for it, and every linked TV takes it for local channel suggestions and the weather.
+- **Website (Nov 26): first-time setup.** Scanning a new TV's QR code opens avidviewer.app/start: account, the TV (linked by itself), your playlist (sent straight to that TV) and a passkey in one prompt, then optional steps. See [Set up with your phone](#set-up-with-your-phone).
+
+**Change log**
+
+- Top rated, Trending and genres show a title once when its copies have different names
+- Lookups done again for their TMDB id start with Top rated's titles
+- The TV takes the postal code set on the website
+
+### 1.30.1 — November 26, 2026, 11:30 AM CT
 
 **Release notes**
 
