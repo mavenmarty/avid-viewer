@@ -1123,6 +1123,66 @@ class UsabilityTest {
     }
 
     /**
+     * Nov 27, 2026 (Evan: "my list in movies and series are not syncing across devices"): each TV's My List changes are
+     * joined into the account's list. A TV that saves while another TV changed the list since gets the newer list
+     * back, keeps its own additions and removals, shows the joined list and sends it; removals elsewhere arrive.
+     * Before, the TV that saved last replaced the whole list, so a title added on one TV could vanish everywhere.
+     */
+    @Test
+    fun myListChangesOnTwoTvsAreJoinedNotReplaced() {
+        FakeAvidSite().use { site ->
+            val now = System.currentTimeMillis()
+            restartWith { st -> st.savePlaylists(st.loadPlaylists().map { if (it.id == TestData.P1) it.copy(remoteId = "acctP1") else it }) }
+            go(Screen.MOVIES)
+            waitFor("movies") { vm.vodOf("movie").isNotEmpty() }
+            linkForTest(site)
+            site.profileMap = mapOf("main" to "acctDad")
+            site.profiles = org.json.JSONArray().put(org.json.JSONObject().put("id", "acctDad").put("name", "Dad").put("parent", true).put("color", 0).put("pin", "")
+                .put("playlists", org.json.JSONArray().put("acctP1")).put("visibility", org.json.JSONObject()))
+            rule.runOnIdle { vm.syncAccountPlaylists() }
+            waitFor("managed") { vm.profiles.managed && site.report?.has("pubkey") == true }
+            val h = ByteArray(32).also { java.util.Random(13).nextBytes(it) }
+            fun entry(name: String, year: String) = org.json.JSONObject().put("t", "movie").put("name", name).put("year", year)
+            fun siteList(vararg e: org.json.JSONObject, at: Long) {
+                site.discoverDocs["acctDad"] = org.json.JSONObject().put("at", at).put("blob", com.avidviewer.tv.data.History.lock(h, org.json.JSONObject()
+                    .put("myList", org.json.JSONArray().apply { e.forEach { put(it) } }).put("services", org.json.JSONArray()).put("start", "all").put("grownUps", true)))
+            }
+            fun names(): List<String> {
+                val d = com.avidviewer.tv.data.History.open(h, site.discoverDocs["acctDad"]!!.getString("blob")).getJSONArray("myList")
+                return (0 until d.length()).map { d.getJSONObject(it).getString("name") }.sorted()
+            }
+            fun mine() = vm.prefs.myList.map { it.key.substringAfter(':') }.sorted()
+            siteList(entry("Drama Movie 3", "1993"), at = now - 60_000L)
+            site.historySealed = sealFor(site.report!!.getString("pubkey"), org.json.JSONObject().put("historyKey", android.util.Base64.encodeToString(h, android.util.Base64.NO_WRAP)))
+            rule.runOnIdle { vm.syncAccountPlaylists() }
+            waitFor("My List from the account (${mine()})") { mine() == listOf("mDrama3") }
+            // The joined list goes up once, saved because nobody changed it since.
+            rule.runOnIdle { vm.syncAccountPlaylists() }
+            waitFor("sent") { site.historyPosts.any { it.toString().contains("\"base\"") } }
+            val savedAt = site.discoverDocs["acctDad"]!!.getLong("at")
+
+            // Another TV adds Action Movie 2 while this TV adds Drama Movie 1 (its list doesn't have Action Movie 2 yet).
+            siteList(entry("Drama Movie 3", "1993"), entry("Action Movie 2", "1992"), at = savedAt + 5_000L)
+            val drama1 = vm.vodOf("movie").first { it.key == "${TestData.P1}:mDrama1" }
+            rule.runOnIdle { vm.toggleMyList(drama1) }
+            rule.runOnIdle { vm.syncAccountPlaylists() }
+            waitFor("both kept here (${mine()})") { mine() == listOf("mAction2", "mDrama1", "mDrama3") }
+            waitFor("both kept in the account (${names()})") { names() == listOf("Action Movie 2", "Drama Movie 1", "Drama Movie 3") }
+
+            // Removed on the other TV: removed here; removed here: removed in the account, the other TV's change kept.
+            val at2 = site.discoverDocs["acctDad"]!!.getLong("at") + 5_000L
+            siteList(entry("Action Movie 2", "1992"), entry("Drama Movie 1", "1991"), at = at2)
+            rule.runOnIdle { vm.syncAccountPlaylists() }
+            waitFor("removal arrived (${mine()})") { mine() == listOf("mAction2", "mDrama1") }
+            siteList(entry("Action Movie 2", "1992"), entry("Drama Movie 1", "1991"), entry("Drama Movie 2", "1992"), at = at2 + 5_000L)
+            rule.runOnIdle { vm.toggleMyList(drama1) }
+            rule.runOnIdle { vm.syncAccountPlaylists() }
+            waitFor("joined again (${names()})") { names() == listOf("Action Movie 2", "Drama Movie 2") }
+            waitFor("here too (${mine()})") { mine() == listOf("mAction2", "mDrama2") }
+        }
+    }
+
+    /**
      * Nov 26, 2026: the TV Guide's Recent list. This TV's channels are sent locked (only the channel, never a show or a
      * stream address); other TVs' channels arrive, told apart by device even when two TVs have the same name (why the
      * 1.18.0 live card could stay empty); an older TV's single last channel shows too; newest first; Menu › Remove

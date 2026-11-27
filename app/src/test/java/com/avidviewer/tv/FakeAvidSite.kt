@@ -171,12 +171,21 @@ class FakeAvidSite : AutoCloseable {
                         val cur = historyItems["$id|${x.getString("item")}"]
                         if (historyEnabled && (cur == null || x.getLong("at") >= cur.getLong("at"))) putHistory(id, x.getString("item"), if (x.isNull("blob")) null else x.getString("blob"), x.getLong("at"))
                     } }
-                    p.optJSONObject("discover")?.let { d -> if ((discoverDocs[id]?.optLong("at") ?: 0) <= d.getLong("at")) discoverDocs[id] = d }
+                    var discoverOk: Boolean? = null
+                    p.optJSONObject("discover")?.let { d ->
+                        if (d.has("base")) {
+                            // As the site: saved only if unchanged since the TV last had it; the site's clock.
+                            val base = d.optLong("base"); val stored = discoverDocs[id]?.optLong("at") ?: 0L
+                            discoverOk = stored <= base
+                            if (discoverOk == true) discoverDocs[id] = org.json.JSONObject().put("blob", d.getString("blob")).put("at", maxOf(now, base + 1))
+                        } else if ((discoverDocs[id]?.optLong("at") ?: 0) <= d.getLong("at")) discoverDocs[id] = d
+                    }
                     val since = p.optLong("since")
                     val items = org.json.JSONArray()
                     if (historyEnabled) historyItems.filter { it.key.startsWith("$id|") && it.value.getLong("seq") >= since }.values.sortedBy { it.getLong("seq") }
                         .forEach { items.put(org.json.JSONObject().put("item", it.getString("item")).put("blob", it.get("blob")).put("at", it.getLong("at"))) }
-                    out.put(org.json.JSONObject().put("id", id).put("enabled", historyEnabled).put("seq", now).put("items", items).put("discover", discoverDocs[id] ?: org.json.JSONObject.NULL))
+                    out.put(org.json.JSONObject().put("id", id).put("enabled", historyEnabled).put("seq", now).put("items", items).put("discover", discoverDocs[id] ?: org.json.JSONObject.NULL)
+                        .apply { discoverOk?.let { put("discoverOk", it) } })
                 }
                 200 to org.json.JSONObject().put("enabled", historyEnabled).put("key", historySealed ?: org.json.JSONObject.NULL)
                     .put("tmdb", tmdbBlob?.let { org.json.JSONObject().put("blob", it).put("at", now) } ?: org.json.JSONObject.NULL).put("profiles", out).toString()

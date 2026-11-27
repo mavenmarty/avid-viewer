@@ -3286,6 +3286,18 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     fun toggleMyList(item: VodItem) = updatePrefs {
         it.copy(myList = if (it.myList.any { x -> x.key == item.key }) it.myList.filterNot { x -> x.key == item.key } else it.myList + item)
+    }.also { syncAccountSoon() }
+
+    private var accountSoonJob: Job? = null
+
+    /**
+     * Nov 27, 2026: a My List change goes to the account a few seconds later (not at the next minute), so the other
+     * TVs have it sooner and are less likely to save an older list in the meantime.
+     */
+    private fun syncAccountSoon() {
+        if (account.token == null || !profiles.managed) return
+        accountSoonJob?.cancel()
+        accountSoonJob = viewModelScope.launch { delay(3_000); syncAccountPlaylists() }
     }
 
     // ---------------- guide ----------------
@@ -4081,17 +4093,63 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             .put("start", p.discoverStart).put("grownUps", p.discoverGrownUps).put("genres", p.genreSort)
     }
 
+    /** A My List entry from the account, on this TV: the same account playlist's title, else by name and year. */
+    private fun findListEntry(o: org.json.JSONObject): VodItem? {
+        val series = o.optString("t") == "series"
+        val local = playlists.firstOrNull { it.remoteId.isNotEmpty() && it.remoteId == o.optString("pl") }?.id
+        return local?.let { runCatching { catalog.byKeys(listOf("$it:" + o.optString("id"))) }.getOrDefault(emptyList()).firstOrNull() }
+            ?: runCatching { catalog.findAllByName(vodKindKey(if (series) "series" else "movie"), com.avidviewer.tv.data.Tmdb.normalize(o.optString("name")), playlists.filter { it.vodOn }.map { it.id }, includeHidden = true, limit = 20) }
+                .getOrDefault(emptyList()).firstOrNull { val y = o.optString("year"); y.isBlank() || it.year.isBlank() || it.year.take(4) == y.take(4) }
+    }
+
+    /** The same title in every TV's My List, whichever playlist each TV has it from. */
+    private fun listId(o: org.json.JSONObject): String =
+        (if (o.optString("t") == "series") "s|" else "m|") + com.avidviewer.tv.data.Tmdb.normalize(o.optString("name")) + "|" + o.optString("year").take(4)
+
+    /** What the account and this TV last agreed on (to tell this TV's own changes from other TVs'). */
+    private fun discoverBase(doc: org.json.JSONObject): org.json.JSONObject {
+        val l = doc.optJSONArray("myList") ?: org.json.JSONArray()
+        val sv = doc.optJSONArray("services") ?: org.json.JSONArray()
+        return org.json.JSONObject().put("ids", org.json.JSONArray().apply { for (i in 0 until l.length()) put(listId(l.getJSONObject(i))) })
+            .put("services", org.json.JSONArray().apply { for (i in 0 until sv.length()) put(sv.getJSONObject(i).optInt("id")) })
+            .put("start", doc.optString("start", "all")).put("grownUps", doc.optBoolean("grownUps", true)).put("genres", doc.optBoolean("genres", false))
+    }
+
+    /**
+     * Nov 27, 2026: another TV (or the website) changed My List after this TV last had it, and this TV changed it too:
+     * the account's [remote] list with this TV's own changes since [base] joined in: titles added here are added,
+     * titles removed here are removed, everything the others did stays. Settings changed here win; the rest are theirs.
+     * Before, the TV that saved last replaced the whole list, so a title added on one TV could vanish everywhere.
+     */
+    internal fun mergeDiscover(remote: org.json.JSONObject, mine: org.json.JSONObject, base: org.json.JSONObject?): org.json.JSONObject {
+        val baseIds = base?.optJSONArray("ids")?.let { a -> (0 until a.length()).map { a.getString(it) }.toSet() } ?: emptySet()
+        val ml = mine.optJSONArray("myList") ?: org.json.JSONArray()
+        val mineIds = (0 until ml.length()).map { listId(ml.getJSONObject(it)) }.toSet()
+        val removedHere = if (base == null) emptySet() else baseIds - mineIds
+        val rl = remote.optJSONArray("myList") ?: org.json.JSONArray()
+        val out = org.json.JSONArray(); val have = HashSet<String>()
+        for (i in 0 until rl.length()) { val o = rl.getJSONObject(i); val id = listId(o); if (id !in removedHere && have.add(id)) out.put(o) }
+        for (i in 0 until ml.length()) { val o = ml.getJSONObject(i); val id = listId(o); if (id !in baseIds && have.add(id)) out.put(o) }
+        val doc = org.json.JSONObject(remote.toString()).put("myList", out)
+        if (base != null) {
+            val ms = mine.optJSONArray("services") ?: org.json.JSONArray()
+            val mineSv = (0 until ms.length()).map { ms.getJSONObject(it).optInt("id") }
+            val bs = base.optJSONArray("services") ?: org.json.JSONArray()
+            if (mineSv.toSet() != (0 until bs.length()).map { bs.getInt(it) }.toSet()) doc.put("services", org.json.JSONArray(ms.toString()))
+            if (mine.optString("start", "all") != base.optString("start", "all")) doc.put("start", mine.optString("start", "all"))
+            if (mine.optBoolean("grownUps", true) != base.optBoolean("grownUps", true)) doc.put("grownUps", mine.optBoolean("grownUps", true))
+            if (mine.optBoolean("genres", false) != base.optBoolean("genres", false)) doc.put("genres", mine.optBoolean("genres", false))
+        }
+        return doc
+    }
+
     private fun withDiscoverDoc(p: Prefs, d: org.json.JSONObject): Pair<Prefs, org.json.JSONArray> {
         val keep = org.json.JSONArray()
         val list = ArrayList<VodItem>()
         val a = d.optJSONArray("myList") ?: org.json.JSONArray()
         for (i in 0 until a.length()) {
             val o = a.getJSONObject(i)
-            val series = o.optString("t") == "series"
-            val local = playlists.firstOrNull { it.remoteId.isNotEmpty() && it.remoteId == o.optString("pl") }?.id
-            val found = local?.let { runCatching { catalog.byKeys(listOf("$it:" + o.optString("id"))) }.getOrDefault(emptyList()).firstOrNull() }
-                ?: runCatching { catalog.findAllByName(vodKindKey(if (series) "series" else "movie"), com.avidviewer.tv.data.Tmdb.normalize(o.optString("name")), playlists.filter { it.vodOn }.map { it.id }, includeHidden = true, limit = 20) }
-                    .getOrDefault(emptyList()).firstOrNull { val y = o.optString("year"); y.isBlank() || it.year.isBlank() || it.year.take(4) == y.take(4) }
+            val found = findListEntry(o)
             if (found != null) list.add(found) else keep.put(o)
         }
         val sv = d.optJSONArray("services") ?: org.json.JSONArray()
@@ -4113,6 +4171,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         val states = HashMap<String, org.json.JSONObject>()
         val sent = HashMap<String, Map<String, String>>()
         val sentDisc = HashMap<String, String>()
+        val builtDocs = HashMap<String, org.json.JSONObject>()
+        val resolved = HashMap<String, List<VodItem>>()
         // BUG-057: off the screen's thread (an HMAC for every place, AES for each one sent).
         withContext(Dispatchers.Default) { for (p in acc) {
             val st = withContext(Dispatchers.IO) { store.loadHistorySync(p.id) }; states[p.id] = st
@@ -4120,7 +4180,16 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             if (H != null) {
                 val hk: ByteArray = H
                 val cur = p.id == profile.id
-                val pr = if (cur) prefs else withContext(Dispatchers.IO) { store.loadPrefs(p.id) }
+                var pr = if (cur) prefs else withContext(Dispatchers.IO) { store.loadPrefs(p.id) }
+                // Nov 27, 2026: titles from the account this TV couldn't find when the list arrived (its playlist
+                // still loading, a title not there yet) are looked for again each time, so they show up in My List
+                // here. Before, they stayed out of sight on this TV until another TV changed the list.
+                val kept = st.optJSONArray("keep")
+                if (kept != null && kept.length() > 0) {
+                    val found = ArrayList<VodItem>(); val still = org.json.JSONArray()
+                    withContext(Dispatchers.IO) { for (i in 0 until kept.length()) { val e = kept.getJSONObject(i); findListEntry(e)?.let { found.add(it) } ?: still.put(e) } }
+                    if (found.isNotEmpty()) { pr = pr.copy(myList = (pr.myList + found).distinctBy { it.key }); st.put("keep", still); resolved[p.id] = found }
+                }
                 val rm = if (cur) resume else withContext(Dispatchers.IO) { store.loadResume(p.id) }
                 val ws = if (cur) watched else withContext(Dispatchers.IO) { store.loadWatched(p.id) }
                 val inf = if (cur) placeInfo else withContext(Dispatchers.IO) { store.loadPlaceInfo(p.id) }
@@ -4180,8 +4249,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 sent[p.id] = sigs
                 val doc = discoverDoc(pr, st.optJSONArray("keep"))
                 val dsig = doc.toString().hashCode().toString(16)
-                sentDisc[p.id] = dsig
-                if (st.has("disc") && st.optString("disc") != dsig) { o.put("discover", org.json.JSONObject().put("blob", com.avidviewer.tv.data.History.lock(hk, doc)).put("at", System.currentTimeMillis())); discSent.add(p.id) }
+                sentDisc[p.id] = dsig; builtDocs[p.id] = doc
+                // base: when the account last gave this TV the list (its clock): it's only saved if nobody changed it since.
+                if (st.has("disc") && st.optString("disc") != dsig) { o.put("discover", org.json.JSONObject().put("blob", com.avidviewer.tv.data.History.lock(hk, doc)).put("at", System.currentTimeMillis()).put("base", st.optLong("discAt"))); discSent.add(p.id) }
             }
             arr.put(o)
         } }
@@ -4285,9 +4355,16 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 onMain.add { if (p.id == profile.id) { resume = rm; watched = ws; placeInfo = inf; vodVersion++ } }
             }
             st.put("items", items)
-            // Discover settings and My List: the first time, the account's and this TV's join; after that the newer wins.
+            // Discover settings and My List: the first time, the account's and this TV's join; after that each TV's
+            // changes are joined into the account's list (Nov 27, 2026; before, the newer list replaced the other).
             val d = o.optJSONObject("discover")
             val first = !st.has("disc")
+            resolved[p.id]?.let { found ->
+                onMain.add {
+                    if (p.id == profile.id) { applyingAccount = true; try { updatePrefs { it.copy(myList = (it.myList + found).distinctBy { x -> x.key }) } } finally { applyingAccount = false } }
+                    else store.savePersonal(p.id, com.avidviewer.tv.data.personalOf(store.loadPrefs(p.id).let { it.copy(myList = (it.myList + found).distinctBy { x -> x.key }) }))
+                }
+            }
             fun applyDoc(doc: org.json.JSONObject) {
                 val pr = if (cur) prefs else store.loadPrefs(p.id)
                 val (np, keep) = withDiscoverDoc(pr, doc)
@@ -4314,13 +4391,39 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                         val ms = mine.optJSONArray("services")!!
                         for (n in 0 until ms.length()) if (ms.getJSONObject(n).optInt("id") !in ids) sv.put(ms.getJSONObject(n))
                         applyDoc(doc)
-                        st.put("discAt", d.optLong("at"))
+                        st.put("discAt", d.optLong("at")).put("base", discoverBase(doc))
                     }
                     st.put("disc", "") // send the joined (or this TV's) next time
                 }
-                p.id in discSent -> st.put("disc", sentDisc[p.id]).put("discAt", System.currentTimeMillis())
+                p.id in discSent && o.optString("discoverError").isNotEmpty() -> {
+                    // Not saved (too long): said on the TV, tried again with the next change.
+                    val why = o.optString("discoverError")
+                    if (why != discoverProblem) { discoverProblem = why; status = "Couldn't share My List with your other TVs: $why" }
+                }
+                p.id in discSent && o.optBoolean("discoverOk", true) -> {
+                    st.put("disc", sentDisc[p.id]).put("discAt", d?.optLong("at")?.takeIf { it > 0 } ?: System.currentTimeMillis())
+                    builtDocs[p.id]?.let { st.put("base", discoverBase(it)) }
+                    discoverProblem = ""
+                }
+                p.id in discSent -> {
+                    // Another TV or the website changed it since this TV last had it: join this TV's changes into
+                    // theirs, show that here, and send the joined list right away.
+                    val remote = d?.let { runCatching { com.avidviewer.tv.data.History.open(HK, it.optString("blob")) }.getOrNull() }
+                    val mine = builtDocs[p.id]
+                    if (remote != null && mine != null) {
+                        trail("my list: joined with a newer list")
+                        applyDoc(mergeDiscover(remote, mine, st.optJSONObject("base")))
+                        st.put("disc", "").put("discAt", d?.optLong("at") ?: 0L).put("base", discoverBase(remote))
+                        accountSyncAgain = true
+                    }
+                }
                 d != null && d.optLong("at") > st.optLong("discAt") ->
-                    runCatching { com.avidviewer.tv.data.History.open(HK, d.optString("blob")) }.getOrNull()?.let { doc -> applyDoc(doc); st.put("discAt", d.optLong("at")) }
+                    runCatching { com.avidviewer.tv.data.History.open(HK, d.optString("blob")) }.getOrNull()?.let { doc -> applyDoc(doc); st.put("discAt", d.optLong("at")).put("base", discoverBase(doc)) }
+                !st.has("base") -> {
+                    // Set up by an older version: what's on this TV is what the account has (nothing to send).
+                    builtDocs[p.id]?.let { st.put("base", discoverBase(it)) }
+                    d?.optLong("at")?.takeIf { it > 0 }?.let { st.put("discAt", it) }
+                }
             }
             store.saveHistorySync(st, p.id)
         } }
@@ -4328,6 +4431,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         if (liveChanged) { vodVersion++; refreshRecent() }
         historyProblem = ""
     }
+
+    private var discoverProblem = ""
 
     /** Discover opens the way the profile chose (on your provider / my services / everything). */
     fun applyDiscoverStart() {
