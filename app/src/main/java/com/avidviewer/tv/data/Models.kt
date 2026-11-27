@@ -144,6 +144,8 @@ data class Prefs(
     val historyPaused: Boolean = false,
     val lastChannel: String? = null,
     val postalCode: String = "",
+    /** Nov 26, 2026: when the postal code set on the website was last taken (a newer one there replaces the TV's). */
+    val postalAccountAt: Long = 0L,
     val placeName: String = "",
     val placeTz: String = "",
     val lat: Double = 0.0,
@@ -220,7 +222,7 @@ data class Prefs(
         o.put("clearCacheOnExit", clearCacheOnExit)
         o.put("historyPaused", historyPaused)
         o.put("lastChannel", lastChannel ?: "")
-        o.put("postalCode", postalCode).put("placeName", placeName).put("placeTz", placeTz)
+        o.put("postalCode", postalCode).put("placeName", placeName).put("placeTz", placeTz).put("postalAccountAt", postalAccountAt)
         o.put("lat", lat).put("lon", lon).put("units", units).put("showWeather", showWeather)
         o.put("sportLeagues", JSONArray().apply { sportLeagues.forEach { put(it.toJson()) } })
         o.put("sportsShowUnmatched", sportsShowUnmatched); o.put("sportsFinalHours", sportsFinalHours); o.put("sportsShowScores", sportsShowScores)
@@ -274,6 +276,7 @@ data class Prefs(
                 historyPaused = o.optBoolean("historyPaused", false),
                 lastChannel = o.optString("lastChannel").ifBlank { null },
                 postalCode = o.optString("postalCode"),
+                postalAccountAt = o.optLong("postalAccountAt", 0L),
                 placeName = o.optString("placeName"),
                 placeTz = o.optString("placeTz"),
                 lat = o.optDouble("lat", 0.0),

@@ -37,6 +37,9 @@ object AccountApi {
         /** Asked on the website's Account › Troubleshooting. */
         val reloadChannels: Boolean = false,
         val checkSubscription: Boolean = false,
+        /** Nov 26, 2026: the postal code set on the website ("" = removed there) and when; null when never set there. */
+        val postalCode: String? = null,
+        val postalAt: Long = 0L,
     )
     /** One TV's backup in the account (each TV keeps only its most recent). */
     data class CloudBackup(
@@ -105,8 +108,10 @@ object AccountApi {
                 val s8 = o.optJSONObject("reseller")
                 val hosts = s8?.optJSONArray("hosts")?.let { a -> (0 until a.length()).map { a.optString(it).lowercase() }.filter { it.isNotBlank() } }.orEmpty()
                 val renew = s8?.optJSONArray("renew")?.let { a -> (0 until a.length()).mapNotNull { i -> a.optJSONObject(i)?.let { it.optString("id") to it.optString("localId") }?.takeIf { it.first.isNotBlank() && it.second.isNotBlank() } } }.orEmpty()
+                val postal = o.optJSONObject("postal")
                 Me(o.optString("email"), o.optString("name"), b?.optBoolean("in") == true, b?.optString("tag")?.takeIf { it.isNotBlank() && it != "null" }, o.optBoolean("sendLog"),
-                    hosts, renew, o.optBoolean("reloadChannels"), o.optBoolean("checkSubscription"))
+                    hosts, renew, o.optBoolean("reloadChannels"), o.optBoolean("checkSubscription"),
+                    postal?.optString("code")?.trim(), postal?.optLong("at") ?: 0L)
             }
             401 -> null
             else -> throw Problem("avidviewer.app answered $code.")
