@@ -44,6 +44,13 @@ import com.avidviewer.tv.data.Tmdb
 fun LazyListScope.guideSettings(vm: AppViewModel, confirm: (title: String, message: String, yes: String, run: () -> Unit) -> Unit) {
     val p = vm.prefs
     item {
+        // Nov 28, 2026 (owner): no duplicate channels.
+        SettingSwitch("Show each channel once",
+            "Copies of a channel in a category (HD, FHD, 4K…) show as one; the best plays first, and if it fails the next one does. Event channels (PPV, games) stay as they are." +
+                (vm.combinedNote()?.let { " $it" } ?: ""),
+            p.combineCopies, compact = true) { vm.setCombineCopies(!p.combineCopies) }
+    }
+    item {
         SettingBlock("Download the guide every", "How often the TV guide downloads again. Shorter keeps late schedule changes; longer uses less data and is easier on a Fire TV Stick. It also downloads on this schedule while the app stays open.") {
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 listOf(4, 8, 12, 24).forEach { h ->
