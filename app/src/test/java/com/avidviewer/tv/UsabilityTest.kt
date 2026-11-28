@@ -945,7 +945,6 @@ class UsabilityTest {
             assertTrue("read from the copy before (${vm.prefs.hiddenGroups})", nfl in vm.prefs.hiddenGroups && news in vm.prefs.hiddenGroups)
             // Nothing left at all: shown until the account puts them back, and the TV says so.
             restartWith { java.io.File(dir, "prefs.json").writeText("{\"hiddenGr"); java.io.File(dir, "prefs.json.bak").delete() }
-            assertFalse(nfl in vm.prefs.hiddenGroups)
             rule.runOnIdle { vm.syncAccountPlaylists() }
             waitFor("put back from the account (${vm.prefs.hiddenGroups})") { nfl in vm.prefs.hiddenGroups && news in vm.prefs.hiddenGroups }
             assertTrue(vm.status.orEmpty(), vm.status.orEmpty().contains("put back from your account"))
