@@ -186,6 +186,7 @@ fun AppRoot(vm: AppViewModel) {
         if (vm.startSplash) StartSplash()
         // Nov 21, 2026: a playlist's subscription ends within 30, 14 or 2 days (each once), or has ended.
         if (!vm.linkRequired && !vm.showWelcome && !vm.choosingProfile) {
+            vm.fixCheck?.let { FixCheckDialog(vm, it) }
             vm.expiredNotice?.let { pid -> ExpiryDialog(vm, pid, expired = true) }
             if (vm.expiredNotice == null && vm.screen != Screen.PLAYER) vm.expiryReminder?.let { (pid, _) -> ExpiryDialog(vm, pid, expired = false) }
         }
@@ -337,6 +338,35 @@ private fun androidx.compose.foundation.layout.BoxScope.ReorderHelp(vm: AppViewM
         Text("▲ ▼  Move (hold = faster)   ◀  To the top   ▶  To the bottom", color = C.Soft, fontSize = 12.sp)
         Text("OK or Back  Done — the new order is saved", color = C.Accent, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
     }
+}
+
+/**
+ * Nov 28, 2026: "Is it fixed?" for a problem this device's person reported, now fixed in the version it has. One press
+ * answers; Back is Ask me later.
+ */
+@Composable
+private fun FixCheckDialog(vm: AppViewModel, c: com.avidviewer.tv.data.AccountApi.FixCheck) {
+    val first = remember { androidx.compose.ui.focus.FocusRequester() }
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = { vm.answerFix("later") },
+        containerColor = C.Surface,
+        modifier = Modifier.testTag("fix-check-dialog"),
+        title = { Text("Is it fixed?", color = C.Text, fontWeight = FontWeight.Bold) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Label("You reported: \u201c${c.text.trim().let { if (it.length > 160) it.take(157).trimEnd() + "\u2026" else it }}\u201d", size = 14.sp, color = C.Soft, lines = 5)
+                Label("A fix is in Avid Viewer ${c.fixedIn}, which this TV has now. Is it working for you?", size = 14.sp, color = C.Text, lines = 3)
+            }
+        },
+        confirmButton = {
+            androidx.compose.foundation.layout.Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                TvButton("Yes, it's fixed", primary = true, modifier = Modifier.focusRequester(first).testTag("fix-yes")) { vm.answerFix("fixed") }
+                TvButton("It's still happening", modifier = Modifier.testTag("fix-still")) { vm.answerFix("still") }
+                TvButton("Ask me later", modifier = Modifier.testTag("fix-later")) { vm.answerFix("later") }
+            }
+        },
+    )
+    LaunchedEffect(c.id) { runCatching { first.requestFocus() } }
 }
 
 /** "Service expires soon" / "Service has expired": contact the provider to renew. Dismissed with OK or Back. */

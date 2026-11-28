@@ -76,6 +76,7 @@ class MainActivity : ComponentActivity() {
         com.avidviewer.tv.data.CrashLog.inUse(this)
         if (android.os.Build.FINGERPRINT != "robolectric") com.avidviewer.tv.data.CrashLog.watchMainThread(this) { vm.screen.name.lowercase() }
         vm.resetIdle()
+        vm.onAppOpened()
         if (vm.player.mediaItemCount > 0) {
             vm.player.prepare()
             vm.player.play()

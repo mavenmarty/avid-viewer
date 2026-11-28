@@ -686,6 +686,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                     if (unclaimedReports().isNotEmpty()) claimReports()
                     if (m.reloadChannels) reloadAllLive()
                     takeAccountPostal(m)
+                    account.fixChecks = org.json.JSONArray(m.fixChecks.map { org.json.JSONObject().put("id", it.id).put("text", it.text).put("fixedIn", it.fixedIn) }).toString()
+                    sendFixAnswers(token)
                     resellerAfterCheckIn(token, m)
                     // Once per run (playlists may have changed while it was off); after that, each download reports itself.
                     if (!loadsReported) { loadsReported = true; reportLoadsLater() }
@@ -6660,7 +6662,71 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         store.saveHistory(emptyList())
     }
 
+    // ---------------- "Is it fixed?" (Nov 28, 2026) ----------------
+    /**
+     * The owner: someone who reported a problem is asked whether the fix works once the TV has the fixed version, on
+     * the 2nd or 3rd time the app is opened on it (not the first, so updating and getting back to watching stays
+     * quick). One press answers; Back is Ask me later. After the 3rd opening it isn't asked again on the TV (the
+     * account's Reports page still has It's still happening).
+     */
+    var fixCheck by mutableStateOf<com.avidviewer.tv.data.AccountApi.FixCheck?>(null); private set
+    private var openedThisRun = false
+    private var askedThisOpen = false
+
+    private fun vnum(v: String): Long = Regex("(\\d+)\\.(\\d+)\\.(\\d+)").find(v)?.destructured?.let { (a, b, c) -> a.toLong() * 1_000_000 + b.toLong() * 1_000 + c.toLong() } ?: -1L
+
+    internal fun accountInfoVersionForTests() = accountInfo().appVersion
+
+    /** The app came on screen ([now]): a new opening when it started, or after 30 minutes away. */
+    fun onAppOpened(now: Long = System.currentTimeMillis()) {
+        val v = accountInfo().appVersion
+        val fresh = !openedThisRun || now - account.awaySince > 30 * 60_000L
+        openedThisRun = true
+        if (!fresh) return
+        if (account.opensVersion != v) { account.opensVersion = v; account.opens = 1 } else account.opens = account.opens + 1
+        askedThisOpen = false
+        if (account.opens in 2..3) viewModelScope.launch { askFixWhenCalm() }
+    }
+
+    /** Within 20 s of opening, while nothing else asks for attention and no video fills the screen; else next time. */
+    private suspend fun askFixWhenCalm() {
+        val v = vnum(accountInfo().appVersion)
+        val done = account.fixAnswered
+        val next = runCatching { com.avidviewer.tv.data.AccountApi.fixChecksOf(org.json.JSONArray(account.fixChecks)) }.getOrDefault(emptyList())
+            .firstOrNull { it.id !in done && vnum(it.fixedIn) in 0..v } ?: return
+        delay(3_000)
+        repeat(17) {
+            if (account.token == null || askedThisOpen) return
+            val busy = startSplash || screen == Screen.PLAYER || linkRequired || choosingProfile || showWelcome || expiredNotice != null || expiryReminder != null
+            if (!busy) { askedThisOpen = true; fixCheck = next; trail("asked: is it fixed"); return }
+            delay(1_000)
+        }
+    }
+
+    /** [answer]: fixed, still or later. */
+    fun answerFix(answer: String) {
+        val c = fixCheck ?: return
+        fixCheck = null
+        if (answer != "later") account.fixAnswered = account.fixAnswered + c.id
+        status = when (answer) {
+            "fixed" -> "Thanks for letting us know it's fixed."
+            "still" -> "Thanks. It's back on our list, and this TV will send a playback log to help."
+            else -> null
+        } ?: status
+        account.fixUnsent = account.fixUnsent + (c.id + ":" + answer)
+        account.token?.let { t -> viewModelScope.launch { sendFixAnswers(t) } }
+    }
+
+    private suspend fun sendFixAnswers(token: String) {
+        val v = accountInfo().appVersion
+        for (e in account.fixUnsent) {
+            val (id, answer) = e.split(':', limit = 2).let { it[0] to it.getOrElse(1) { "later" } }
+            if (withContext(Dispatchers.IO) { com.avidviewer.tv.data.AccountApi.verifyFix(token, id, answer, v, accountApi) }) account.fixUnsent = account.fixUnsent - e
+        }
+    }
+
     fun onAppExit() {
+        account.awaySince = System.currentTimeMillis()
         onScreen = false
         recordWatch()
         if (prefs.clearCacheOnExit) store.clearCache()
