@@ -5630,6 +5630,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     var entryFocusFor by mutableStateOf<Screen?>(null)
     /** When the last remote button was pressed (so a late automatic highlight never overrides the viewer). */
     var lastKeyAt = 0L
+    /** The last key pressed (Android key code). */
+    var lastKeyCode = 0
 
     fun navSelect(target: Screen) {
         if (!screenAllowed(target) || (target == Screen.MANAGE && kidsMode)) return
@@ -5748,7 +5750,12 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** A category (raw name, ★ Favorites or a list) the left-hand list should highlight next; cleared once it has. */
-    var navFocusKey by mutableStateOf<String?>(null)
+    private var navFocusKeyState by mutableStateOf<String?>(null)
+    var navFocusKey: String?
+        get() = navFocusKeyState
+        set(v) { if (v != null) navFocusSetAt = android.os.SystemClock.uptimeMillis(); navFocusKeyState = v }
+    /** When a category was last asked to take the highlight (the guide doesn't cancel a request that young). */
+    var navFocusSetAt = 0L
 
     /**
      * Back, one layer at a time: guide channels → the current category in the category list →

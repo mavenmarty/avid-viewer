@@ -54,7 +54,7 @@ fun AppRoot(vm: AppViewModel) {
         Modifier.fillMaxSize().background(C.Bg)
             .onFocusChanged { vm.anyFocus = it.hasFocus }
             .onPreviewKeyEvent {
-                if (it.type == KeyEventType.KeyDown) { vm.lastKeyAt = android.os.SystemClock.uptimeMillis(); Images.holding = it.nativeKeyEvent.repeatCount > 0 }
+                if (it.type == KeyEventType.KeyDown) { vm.lastKeyAt = android.os.SystemClock.uptimeMillis(); vm.lastKeyCode = it.nativeKeyEvent.keyCode; Images.holding = it.nativeKeyEvent.repeatCount > 0 }
                 else if (it.type == KeyEventType.KeyUp) Images.holding = false
                 false
             }
@@ -130,7 +130,13 @@ fun AppRoot(vm: AppViewModel) {
                     // if a request to highlight a category was still pending. Losing the highlight (to full screen,
                     // or a channel's dialogs) changes nothing, so coming back doesn't redraw (R-1); anywhere else, the
                     // menus come back as before.
-                    if (browsing && it.hasFocus) { if (!vm.guideHasFocus) vm.navFocusKey = null; vm.guideHasFocus = true }
+                    // Nov 28, 2026: only when the remote moved it there (▶ or OK); the highlight falling into the guide
+                    // because what had it went away (Back to the playlist list, ▶ from the main menu) keeps the request.
+                    if (browsing && it.hasFocus) {
+                        val byRemote = vm.lastKeyCode == android.view.KeyEvent.KEYCODE_DPAD_RIGHT || vm.lastKeyCode == android.view.KeyEvent.KEYCODE_DPAD_CENTER || vm.lastKeyCode == android.view.KeyEvent.KEYCODE_ENTER
+                        if (!vm.guideHasFocus && byRemote && android.os.SystemClock.uptimeMillis() - vm.navFocusSetAt > 700) vm.navFocusKey = null
+                        vm.guideHasFocus = true
+                    }
                     else if (!it.hasFocus && guideHad[0] && !vm.guideAwayBriefly()) vm.guideHasFocus = false
                     guideHad[0] = it.hasFocus
                 }) {
