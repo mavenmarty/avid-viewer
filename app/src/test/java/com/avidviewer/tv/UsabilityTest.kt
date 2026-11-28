@@ -929,7 +929,9 @@ class UsabilityTest {
             rule.runOnIdle { vm.checkAccount() }
             waitFor("list kept") { vm.account.fixChecks.contains("AVR-1") }
             val t0 = System.currentTimeMillis()
-            rule.runOnIdle { vm.account.opensVersion = now; vm.account.opens = 1 }
+            // Updated and opened: the 1st opening on this version.
+            rule.runOnIdle { vm.account.opensVersion = "0.0.1"; vm.onAppOpened(t0 - 60_000L) }
+            assertEquals(1, vm.account.opens)
             // Back after 10 minutes: the same opening. Not asked.
             rule.runOnIdle { vm.account.awaySince = t0; vm.onAppOpened(t0 + 10 * 60_000L) }
             assertEquals(1, vm.account.opens)
