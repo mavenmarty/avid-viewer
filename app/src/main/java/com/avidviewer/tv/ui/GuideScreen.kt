@@ -1,3 +1,5 @@
+@file:OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
+
 package com.avidviewer.tv.ui
 
 import androidx.compose.ui.focus.focusProperties
