@@ -339,6 +339,7 @@ class Catalog(context: Context) : SQLiteOpenHelper(context.applicationContext, "
 
     /** Recomputes the hidden flag from the user's hidden categories ("movie|pid|cat") and titles. */
     fun applyHidden(hiddenCats: Set<String>, hiddenTitles: Set<String>, onlyCats: Set<String>? = null) {
+        noteWrite()
         val db = writableDatabase
         db.beginTransaction()
         try {
@@ -369,6 +370,7 @@ class Catalog(context: Context) : SQLiteOpenHelper(context.applicationContext, "
      * presses the button, so lists are right immediately).
      */
     fun applyHiddenChange(beforeCats: Set<String>, afterCats: Set<String>, beforeTitles: Set<String>, afterTitles: Set<String>) {
+        noteWrite()
         val db = writableDatabase
         fun catArgs(key: String) = key.split('|', limit = 3).takeIf { it.size == 3 }?.toTypedArray()
         db.beginTransaction()
@@ -465,6 +467,10 @@ class Catalog(context: Context) : SQLiteOpenHelper(context.applicationContext, "
     val mainThreadReads = java.util.concurrent.atomic.AtomicInteger()
     /** Where the first few of those came from (tests). */
     val mainThreadReadsFrom = java.util.concurrent.ConcurrentLinkedQueue<String>()
+    /** #47 (Nov 28, 2026): catalog writes on the screen's thread (tests check it stays 0). */
+    val mainThreadWrites = java.util.concurrent.atomic.AtomicInteger()
+    private fun noteWrite() { if (android.os.Looper.myLooper() == android.os.Looper.getMainLooper()) mainThreadWrites.incrementAndGet() }
+
     private fun noteThread() {
         if (android.os.Looper.myLooper() != android.os.Looper.getMainLooper()) return
         if (mainThreadReads.incrementAndGet() <= 5 && android.os.Build.FINGERPRINT == "robolectric")

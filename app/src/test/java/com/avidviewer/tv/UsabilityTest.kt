@@ -2312,6 +2312,31 @@ class UsabilityTest {
      * scrolling a long list never count or read titles on the screen's thread (a Fire TV Cube closed the app when the
      * count took too long there).
      */
+    /**
+     * #47 (Nov 28, 2026): Fire OS closed the app on the Series screen after the screen's thread waited 30 s and more
+     * for the catalog: hiding a category (or any account sync that rebuilt the hidden lists, though nothing changed)
+     * wrote the catalog's hidden marks on it, while lookups were writing the catalog on slow storage. Hiding and
+     * showing now write off the screen's thread, and only when something changed.
+     */
+    @Test
+    fun hidingSeriesCategoriesNeverWritesTheCatalogOnTheScreenThread() {
+        go(Screen.SERIES)
+        waitFor("series to load") { vm.vodOf("series").isNotEmpty() }
+        val cat = vm.vodOf("series").first().category
+        rule.runOnIdle { vm.asyncHides = true; vm.catalog.mainThreadWrites.set(0) }
+        try {
+            rule.runOnIdle { vm.hideVodCatEverywhere("series", cat) }
+            waitFor("hidden") { vm.vodItems("series").none { it.category == cat } }
+            // The same hidden lists rebuilt (as an account sync does): nothing to write.
+            rule.runOnIdle { vm.updatePrefs { it.copy(vodHiddenCats = it.vodHiddenCats.toHashSet().toSet(), vodHiddenTitles = it.vodHiddenTitles.toList().toSet()) } }
+            rule.runOnIdle { vm.setVodCatsHidden(vm.prefs.vodHiddenCats.toList(), false) }
+            waitFor("shown again") { vm.vodItems("series").any { it.category == cat } }
+            assertEquals("catalog writes on the screen's thread", 0, vm.catalog.mainThreadWrites.get())
+        } finally {
+            rule.runOnIdle { vm.asyncHides = false }
+        }
+    }
+
     @Test
     fun movieListsNeverReadTheCatalogOnTheScreenThread() {
         val pid = TestData.P1
