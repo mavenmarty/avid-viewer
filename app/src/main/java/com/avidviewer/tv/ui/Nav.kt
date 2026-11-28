@@ -181,11 +181,13 @@ fun NavRail(vm: AppViewModel, hidden: Boolean = false) {
 fun PlaylistTree(vm: AppViewModel) {
     val active = vm.activePlaylist()?.id
     val first = remember { FocusRequester() }
+    // One Live TV: one entry for every playlist together (its categories are the joined ones).
+    val treePlaylists = if (vm.oneLive) listOfNotNull(vm.activePlaylist()) else vm.livePlaylists
     /** The keys of the list's items, in order: the same keys the items below are given. */
     fun treeKeys(): List<String> = buildList {
         add("tfav"); vm.shownLists.forEach { add("tl-" + it.id) }; add("ttitle")
         if (vm.livePlaylists.isEmpty()) add("tempty")
-        vm.livePlaylists.forEach { p ->
+        treePlaylists.forEach { p ->
             add("pl-" + p.id)
             if (vm.expandedPlaylist == p.id) {
                 val groups = if (p.id == active) vm.groups() else vm.playlistGroups[p.id]
@@ -258,7 +260,7 @@ fun PlaylistTree(vm: AppViewModel) {
         }
         item(key = "ttitle") { SectionTitle("Playlists", Modifier.padding(start = 6.dp, top = 10.dp, bottom = 6.dp)) }
         if (vm.livePlaylists.isEmpty()) item(key = "tempty") { Label(if (vm.playlists.isEmpty()) "No playlists yet. Add one in Settings › Playlists." else "No playlist has live TV switched on. Turn it on in Settings › Playlists.", size = 13.sp, lines = 3) }
-        vm.livePlaylists.forEach { p ->
+        treePlaylists.forEach { p ->
             val open = vm.expandedPlaylist == p.id
             item(key = "pl-" + p.id) {
                 Focusable(
@@ -268,8 +270,9 @@ fun PlaylistTree(vm: AppViewModel) {
                 ) {
                     Glyph(if (open) "▾" else "▸", C.Accent, 14.sp, Modifier.padding(start = 10.dp, end = 8.dp))
                     Column(Modifier.weight(1f)) {
-                        Label(p.name, size = 14.sp, color = C.Text, weight = FontWeight.SemiBold)
-                        if (p.id == active) Label("Active", size = 12.sp, color = C.Accent)
+                        Label(if (vm.oneLive) "All playlists" else p.name, size = 14.sp, color = C.Text, weight = FontWeight.SemiBold)
+                        if (vm.oneLive) Label("${vm.livePlaylists.size} playlists as one", size = 12.sp, color = C.Accent)
+                        else if (p.id == active) Label("Active", size = 12.sp, color = C.Accent)
                     }
                 }
             }

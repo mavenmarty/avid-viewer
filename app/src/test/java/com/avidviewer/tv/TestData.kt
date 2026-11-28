@@ -70,6 +70,8 @@ object TestData {
             Prefs(
                 activePlaylist = P1,
                 autoUpdateCheck = false,
+                // The tests written before One Live TV (Nov 28, 2026) look at one playlist at a time.
+                oneLiveTv = false,
                 favorites = listOf("$P1:c1-1", "$P1:c0-2"),
                 lists = listOf(ChannelList("l1", "Kids night", listOf("$P1:c4-1", "$P1:c4-2"))),
             ),

@@ -314,7 +314,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         (hiddenId(pid, raw) in profile.allowedGroups) && !Kids.isAdult(raw)
 
     /** [c] can be shown and played by the profile in use. */
-    fun channelAllowed(c: Channel): Boolean = !kidsMode || kidsAllowsGroup(c.key.substringBefore(':'), c.group)
+    fun channelAllowed(c: Channel): Boolean = !kidsMode || kidsAllowsGroup(c.key.substringBefore(':'), rawGroupOf(c))
 
     // ---- managing profiles (Settings › Profiles) ----
     private fun newProfileId() = "p" + java.lang.Long.toString(System.currentTimeMillis(), 36)
@@ -695,7 +695,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                     if (unclaimedReports().isNotEmpty()) claimReports()
                     if (m.reloadChannels) reloadAllLive()
                     takeAccountPostal(m)
-                    m.liveOrder?.let { o -> if (o != liveOrder) { liveOrderCache = o; account.liveOrder = o.joinToString(","); favDataTick++; trail("live order from the account") } }
+                    m.liveOrder?.let { o -> if (o != liveOrder) { liveOrderCache = o; account.liveOrder = o.joinToString(","); favDataTick++; trail("live order from the account"); if (oneLive) loadActive(refresh = false) } }
                     account.fixChecks = org.json.JSONArray(m.fixChecks.map { org.json.JSONObject().put("id", it.id).put("text", it.text).put("fixedIn", it.fixedIn) }).toString()
                     sendFixAnswers(token)
                     resellerAfterCheckIn(token, m)
@@ -1522,6 +1522,16 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         val order = liveOrder
         if (order.isEmpty()) l else l.sortedBy { p -> order.indexOf(p.remoteId).let { if (p.remoteId.isEmpty() || it < 0) Int.MAX_VALUE else it } }
     }
+    /**
+     * One Live TV (Nov 28, 2026, owner): with two or more live playlists, Live TV shows them as one: categories with the
+     * same name joined, copies of a channel combined (the primary playlist's first), and no playlist step.
+     */
+    val oneLive: Boolean get() = prefs.oneLiveTv && livePlaylists.size > 1
+    /** Whether [pid]'s channels are in the guide now (the playlist in use, or every live playlist with One Live TV). */
+    fun isLiveNow(pid: String?): Boolean = pid != null && (if (oneLive) livePlaylists.any { it.id == pid } else pid == activePlaylist()?.id)
+    /** The live playlists after the Back step: none with One Live TV (it behaves like one playlist). */
+    val playlistStep: Boolean get() = livePlaylists.size > 1 && !oneLive
+
     // Read when first needed (the list is used while the view model is still being set up).
     private var liveOrderCache: List<String>? = null
     val liveOrder: List<String>
@@ -1777,6 +1787,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** Loads channels and guide from storage, downloading when missing, stale or [refresh] is set. */
     fun loadActive(refresh: Boolean, download: Boolean = false) {
         val p = activePlaylist() ?: return
+        if (oneLive && p.liveOn) { loadAllLive(refresh, download); return }
         viewModelScope.launch {
             busy = true
             if (!p.liveOn) { applyChannels(emptyList()); guide = emptyMap() }
@@ -1863,7 +1874,11 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         status = "Loading TV guide…"
         try {
             val n = downloadGuide(p, guideIdsFor(p)) ?: return
-            guide = withContext(Dispatchers.IO) { guideWindow(p.id, null) }
+            if (oneLive) {
+                val g = withContext(Dispatchers.IO) { guideWindow(p.id, shownGuideIds(p.id)) }
+                guides = guides + (p.id to g)
+                if (p.id == activePlaylist()?.id) guide = g
+            } else guide = withContext(Dispatchers.IO) { guideWindow(p.id, null) }
             refreshGuideEnd()
             rematchSports()
             status = "Guide loaded for $n channels."
@@ -2009,7 +2024,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         if (raws.none { it in skippedGroups[pid].orEmpty() }) return
         val p = playlists.firstOrNull { it.id == pid } ?: return
         status = "Loading the category's channels…"
-        if (p.id == activePlaylist()?.id) loadActive(refresh = true)
+        if (oneLive && isLiveNow(p.id)) viewModelScope.launch { runCatching { downloadLive(p) }; applyAcross(livePlaylists); playlistGroups = playlistGroups - p.id }
+        else if (p.id == activePlaylist()?.id) loadActive(refresh = true)
         else viewModelScope.launch { runCatching { downloadLive(p) }; otherLive.remove(p.id); playlistGroups = playlistGroups - p.id }
     }
 
@@ -2182,7 +2198,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         if (activePlaylist()?.liveOn == true) loadActive(refresh = true)
         viewModelScope.launch {
             for (p in shownPlaylists) {
-                if (!p.liveOn || p.id == activePlaylist()?.id) continue
+                if (!p.liveOn || isLiveNow(p.id)) continue
                 runCatching { downloadLive(p) }
                 otherLive.remove(p.id); playlistGroups = playlistGroups - p.id
             }
@@ -2460,7 +2476,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 // What the saved guide was downloaded for (none yet: a download now uses the new set anyway).
                 if (validatorPrefs.getString("kept|${p.id}", null) == sig) continue
                 trail("guide: the channels kept changed, downloading again")
-                if (p.id == activePlaylist()?.id) refreshGuide(p) else runCatching { downloadGuide(p, ids) }
+                if (isLiveNow(p.id)) refreshGuide(p) else runCatching { downloadGuide(p, ids) }
             }
         }
     }
@@ -2512,7 +2528,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             for (p in targets) {
                 guideBusy = p.id
                 try {
-                    if (p.id == activePlaylist()?.id) refreshGuide(p)
+                    if (isLiveNow(p.id)) refreshGuide(p)
                     else {
                         runCatching { downloadGuide(p, guideIdsFor(p)) }.onFailure { status = "Couldn't load the TV guide for ${p.name}: ${it.message}" }
                         otherLive.remove(p.id)
@@ -2614,9 +2630,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                     if (force || chAt == 0L || nowMs - chAt > dayMs) {
                         downloadLive(p)
                         otherLive.remove(p.id); playlistGroups = playlistGroups - p.id
+                        if (oneLive && isLiveNow(p.id)) applyAcross(livePlaylists)
                     }
                     if (force || nowMs - withContext(Dispatchers.IO) { live.guideSavedAt(p.id) } > guideMs) {
-                        downloadGuide(p, guideIdsFor(p))
+                        if (oneLive && isLiveNow(p.id)) refreshGuide(p) else downloadGuide(p, guideIdsFor(p))
                         otherLive.remove(p.id)
                     }
                 }
@@ -2658,7 +2675,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             val hidden = prefs.hiddenChannels
             val others = HashMap<String, Pair<List<Channel>, Map<String, List<Program>>>>()
             for (p in livePlaylists) {
-                if (p.id == activePlaylist()?.id || !p.enabled) continue
+                if (isLiveNow(p.id) || !p.enabled) continue
                 others[p.id] = withContext(Dispatchers.IO) { liveHits(p, q, 60, 80, nowMs) }
             }
             val active = channels
@@ -2668,7 +2685,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 fun progs(c: Channel): List<Program> {
                     val id = epgIdOf(c) ?: return emptyList()
                     val pid = c.key.substringBefore(':')
-                    return (if (pid == activePlaylist()?.id) activeGuide[id] else others[pid]?.second?.get(id)).orEmpty()
+                    return if (isLiveNow(pid)) programs(c) else others[pid]?.second?.get(id).orEmpty()
                 }
                 val chHits = bestChannels(all, sq, 60)
                 val progHits = bestPrograms(all, sq, nowMs, 80) { progs(it) }
@@ -2753,7 +2770,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** Tunes a channel from any playlist: the guide moves to that playlist and category, then previews it. */
     fun tuneAnywhere(key: String) {
         val pid = key.substringBefore(':')
-        if (pid == activePlaylist()?.id) { selectChannel(key, PlayContext.GROUP); return }
+        if (isLiveNow(pid)) { selectChannel(shownKey(key) ?: key, PlayContext.GROUP); return }
         viewModelScope.launch {
             switchPlaylist(pid)
             val c = channel(key) ?: return@launch
@@ -2777,13 +2794,13 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** Settings › TV guide › Show each channel once. */
     fun setCombineCopies(on: Boolean) {
         updatePrefs { it.copy(combineCopies = on) }
-        applyChannels(rawChannels)
+        if (oneLive) loadActive(refresh = false) else applyChannels(rawChannels)
         favDataTick++
     }
 
     /** "Now 13,400 channels instead of 19,689." for the playlist in use, when copies were combined. */
     fun combinedNote(): String? = if (!prefs.combineCopies || channelVersions.isEmpty()) null
-        else "${activePlaylist()?.name ?: "This playlist"}: ${"%,d".format(channels.size)} channels instead of ${"%,d".format(rawChannels.size)}."
+        else "${if (oneLive) "Your playlists" else activePlaylist()?.name ?: "This playlist"}: ${"%,d".format(channels.size)} channels instead of ${"%,d".format(rawCount)}."
 
     /** The channel a version's key is shown as (itself when it isn't a combined copy). */
     fun shownKey(key: String?): String? = key?.let { shownAs[it] ?: it }
@@ -2798,11 +2815,106 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     private fun applyChannels(raw: List<Channel>) {
         rawChannels = raw.distinctBy { it.key }
+        rawCount = rawChannels.size
+        groupMembers = emptyMap(); guideFrom = emptyMap(); guides = emptyMap()
         val merged = if (prefs.combineCopies) com.avidviewer.tv.data.ChannelMerge.merge(rawChannels, uhdScreen) else null
         channelVersions = merged?.versions ?: emptyMap()
         shownAs = merged?.shownAs ?: emptyMap()
         val list = merged?.channels ?: rawChannels
         if (merged != null && merged.versions.isNotEmpty()) trail("combined ${rawChannels.size} channels into ${list.size}")
+        showChannels(list)
+    }
+
+    // ---------------- One Live TV (Nov 28, 2026) ----------------
+    /** Joined category shown → the playlists' own categories in it; empty unless One Live TV is on. */
+    private var groupMembers: Map<String, List<Pair<String, String>>> = emptyMap()
+    /** Shown channel → the copy whose guide it shows (another playlist's), when it has none of its own. */
+    private var guideFrom: Map<String, Channel> = emptyMap()
+    /** One Live TV: each live playlist's guide in memory, for the channels shown. */
+    private var guides: Map<String, Map<String, List<Program>>> = emptyMap()
+    /** How many channels the playlists have before copies are combined. */
+    private var rawCount = 0
+
+    /** Guide ids of [pid] that the guide shows (its shown channels, and copies lending their guide to another). */
+    private fun shownGuideIds(pid: String): Set<String> {
+        val pre = "$pid:"
+        val ids = HashSet<String>()
+        channels.forEach { c -> if (c.key.startsWith(pre)) epgIdOf(c)?.let { ids.add(it) } }
+        guideFrom.values.forEach { c -> if (c.key.startsWith(pre)) epgIdOf(c)?.let { ids.add(it) } }
+        return ids
+    }
+
+    /**
+     * Shows every live playlist's channels as one list ([com.avidviewer.tv.data.ChannelMerge.mergeAcross]), read and
+     * combined off the screen's thread, one playlist read at a time; only the combined list stays in memory.
+     */
+    private suspend fun applyAcross(pls: List<Playlist>) {
+        val combine = prefs.combineCopies
+        val r = withContext(Dispatchers.Default) {
+            liveReady()
+            val lists = pls.map { p -> live.channels(p.id).distinctBy { it.key } }
+            val n = lists.sumOf { it.size }
+            com.avidviewer.tv.data.ChannelMerge.mergeAcross(lists, pls.map { it.name }, uhdScreen, combine) to n
+        }
+        val (m, n) = r
+        rawChannels = emptyList(); rawCount = n
+        groupMembers = m.groupMembers; guideFrom = m.guideFrom
+        channelVersions = m.versions; shownAs = m.shownAs
+        trail("one live TV: ${pls.size} playlists, $n channels shown as ${m.channels.size}")
+        showChannels(m.channels)
+    }
+
+    /** One Live TV: [loadActive] for every live playlist, primary first. */
+    private fun loadAllLive(refresh: Boolean, download: Boolean) {
+        val pls = livePlaylists
+        viewModelScope.launch {
+            busy = true
+            for (p in pls) skippedGroups = skippedGroups + (p.id to withContext(Dispatchers.IO) { store.loadSkippedGroups(p.id) })
+            val counts = withContext(Dispatchers.IO) { liveReady(); pls.map { live.channelCount(it.id) } }
+            if (counts.any { it > 0 }) applyAcross(pls)
+            val toLoad = pls.filterIndexed { i, _ -> refresh || download || counts[i] == 0 }
+            for (p in toLoad) {
+                status = "Loading channels from ${p.name}…"
+                try {
+                    downloadLive(p)
+                    otherLive.remove(p.id)
+                    if (!p.isXtream && p.vodOn) {
+                        otherVod.remove(p.id)
+                        if (vodLoadedFor?.split(',')?.contains(p.id) == true) vodLoadedFor = null
+                    }
+                } catch (e: Exception) {
+                    status = "Couldn't load channels from ${p.name}: ${e.message}"
+                }
+            }
+            if (toLoad.isNotEmpty()) { applyAcross(pls); status = "Loaded ${"%,d".format(channels.size)} channels from ${pls.size} playlists." }
+            val loaded = withContext(Dispatchers.IO) { pls.associate { it.id to (guideWindow(it.id, shownGuideIds(it.id)) to live.guideSavedAt(it.id)) } }
+            guides = loaded.mapValues { it.value.first }
+            pls.firstOrNull()?.let { guide = guides[it.id].orEmpty() }
+            refreshGuideEnd()
+            for (p in pls) {
+                val (g, savedAt) = loaded[p.id] ?: continue
+                val stale = System.currentTimeMillis() - savedAt > guideMs()
+                if (refresh || download || g.isEmpty()) refreshGuide(p)
+                else if (stale) { if (quietStartDone.isCompleted) refreshGuide(p) else viewModelScope.launch { afterQuietStart(); inTurn("guide of ${p.name}") { refreshGuide(p) } } }
+            }
+            ensureFavoriteData()
+            busy = false
+            refreshSuggestions()
+            syncAllPlaylists(force = false)
+        }
+    }
+
+    /** Settings › TV guide › One Live TV for all playlists. */
+    fun setOneLiveTv(on: Boolean) {
+        updatePrefs { it.copy(oneLiveTv = on) }
+        selectedGroup = null
+        loadActive(refresh = false)
+        favDataTick++
+    }
+
+    internal suspend fun applyAcrossForTests() = applyAcross(livePlaylists)
+
+    private fun showChannels(list: List<Channel>) {
         channels = list
         refreshRecent()
         val gs = groups()
@@ -2846,7 +2958,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     private suspend fun startOnListedChannel() {
         val last = prefs.lastChannel
         // Other playlists' favorites and list channels, so they can be found.
-        val pids = (listOf(last) + prefs.favorites).filterNotNull().map { it.substringBefore(':') }.distinct().filter { it != activePlaylist()?.id }
+        val pids = (listOf(last) + prefs.favorites).filterNotNull().map { it.substringBefore(':') }.distinct().filter { !isLiveNow(it) }
         for (pid in pids) livePlaylists.firstOrNull { it.id == pid }?.let { runCatching { liveFavorites(it) } }
         favDataTick++
         fun ok(k: String?) = k != null && k !in prefs.hiddenChannels && channel(k) != null
@@ -2934,11 +3046,12 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         val counts = LinkedHashMap<String, Int>()
         channels.forEach { counts[it.group] = (counts[it.group] ?: 0) + 1 }
         // Categories left out of the download (hidden everywhere) are still listed, so they can be shown again.
-        if (includeHidden) skippedGroups[activePlaylist()?.id].orEmpty().forEach { if (it !in counts) counts[it] = 0 }
+        if (includeHidden) (if (oneLive) livePlaylists.flatMap { skippedGroups[it.id].orEmpty() } else skippedGroups[activePlaylist()?.id].orEmpty())
+            .forEach { if (it !in counts) counts[it] = 0 }
         val inOrder = prefs.groupOrder.toHashSet()
         val ordered = prefs.groupOrder.filter { it in counts } + counts.keys.filterNot { it in inOrder }
         val pid = activePlaylist()?.id ?: ""
-        return ordered.map { GroupInfo(it, groupName(it), counts[it] ?: 0, isGroupHidden(pid, it)) }
+        return ordered.map { GroupInfo(it, groupName(it), counts[it] ?: 0, isShownGroupHidden(pid, it)) }
             .filter { includeHidden || !it.hidden }
     }
 
@@ -2948,6 +3061,20 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     fun isGroupHidden(pid: String, raw: String) = raw in prefs.hiddenGroups || hiddenId(pid, raw) in prefs.hiddenGroups ||
         (kidsMode && raw != FAV_GROUP && !raw.startsWith(LIST_PREFIX) && !kidsAllowsGroup(pid, raw))
+
+    /**
+     * One Live TV: a category shown in the guide is hidden when every playlist's own category in it is hidden (so hiding
+     * it on one playlist only, on the website, leaves the others' channels).
+     */
+    fun isShownGroupHidden(pid: String, raw: String): Boolean =
+        groupMembers[raw]?.let { ms -> ms.all { (mp, mr) -> isGroupHidden(mp, mr) } } ?: isGroupHidden(pid, raw)
+
+    /** The playlist's own name for [c]'s category (One Live TV shows joined categories under the primary's name). */
+    fun rawGroupOf(c: Channel): String {
+        val ms = groupMembers[c.group] ?: return c.group
+        val pid = c.key.substringBefore(':')
+        return ms.firstOrNull { it.first == pid }?.second ?: c.group
+    }
 
     /** Shows or hides many categories of one playlist at once. */
     fun setGroupsHidden(pid: String, raws: Collection<String>, hidden: Boolean) {
@@ -2975,7 +3102,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     suspend fun editorChannels(pid: String): List<Channel> {
         val p = playlists.firstOrNull { it.id == pid } ?: return emptyList()
         if (!p.liveOn) return emptyList()
-        if (p.id == activePlaylist()?.id) return channels
+        if (p.id == activePlaylist()?.id && !oneLive) return channels
         val skippedNow = withContext(Dispatchers.IO) { store.loadSkippedGroups(p.id) }
         skippedGroups = skippedGroups + (p.id to skippedNow)
         return withContext(Dispatchers.IO) { liveReady(); live.channels(p.id) }
@@ -3089,7 +3216,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** Loads channels and guides of other playlists that hold favorites. */
     fun ensureFavoriteData() {
         val active = activePlaylist()?.id
-        val pids = (prefs.favorites + prefs.lists.flatMap { it.keys }).map { it.substringBefore(':') }.distinct().filter { it != active && !otherLive.containsKey(it) }
+        val pids = (prefs.favorites + prefs.lists.flatMap { it.keys }).map { it.substringBefore(':') }.distinct().filter { it != active && !isLiveNow(it) && !otherLive.containsKey(it) }
         if (pids.isEmpty()) return
         viewModelScope.launch {
             pids.forEach { pid -> livePlaylists.firstOrNull { it.id == pid }?.let { liveFavorites(it) } }
@@ -3184,6 +3311,11 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun toggleHidden(raw: String) {
+        groupMembers[raw]?.takeIf { it.size > 1 || it.firstOrNull()?.second != raw }?.let { ms ->
+            val hide = !isShownGroupHidden("", raw)
+            ms.groupBy({ it.first }, { it.second }).forEach { (mp, raws) -> setGroupsHidden(mp, raws, hide) }
+            return
+        }
         val pid = activePlaylist()?.id ?: ""
         val wasHidden = raw in prefs.hiddenGroups || hiddenId(pid, raw) in prefs.hiddenGroups
         updatePrefs {
@@ -3335,7 +3467,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             val out = ArrayList<Pair<Playlist, Channel>>()
             for (p in shownPlaylists) {
-                if (p.id == active || prefs.favorites.none { it.startsWith(p.id + ":") }) continue
+                if (p.id == active || isLiveNow(p.id) || prefs.favorites.none { it.startsWith(p.id + ":") }) continue
                 val chs = liveFavorites(p).first.associateBy { it.key }
                 prefs.favorites.filter { it.startsWith(p.id + ":") }.mapNotNull { chs[it] }.forEach { out.add(p to it) }
             }
@@ -3370,9 +3502,12 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     // ---------------- guide ----------------
-    fun programs(c: Channel?): List<Program> {
+    fun programs(ch: Channel?): List<Program> {
+        // One Live TV: a channel with no guide of its own shows another playlist's copy's guide.
+        val c = ch?.let { if (epgIdOf(it) == null) guideFrom[it.key] ?: it else it }
         val id = c?.let { epgIdOf(it) } ?: return emptyList()
         val pid = c.key.substringBefore(':')
+        if (guides.isNotEmpty()) guides[pid]?.get(id)?.let { return it }
         return if (pid == activePlaylist()?.id) guide[id] ?: emptyList() else otherLive[pid]?.second?.get(id) ?: searchLive[pid]?.second?.get(id) ?: emptyList()
     }
 
@@ -3922,7 +4057,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     /** This TV's copy of the channel in [o]: the same playlist and channel, else the same guide id, else the same name. */
     private fun liveMatch(o: org.json.JSONObject): Channel? {
-        fun ok(c: Channel?) = c?.takeIf { channelAllowed(it) && it.key !in prefs.hiddenChannels && !isGroupHidden(it.key.substringBefore(':'), it.group) }
+        fun ok(c: Channel?) = c?.takeIf { channelAllowed(it) && it.key !in prefs.hiddenChannels && !isGroupHidden(it.key.substringBefore(':'), rawGroupOf(it)) }
         val pids = livePlaylists.map { it.id }
         playlists.firstOrNull { it.remoteId.isNotEmpty() && it.remoteId == o.optString("pl") && it.id in pids }?.let { p ->
             ok(runCatching { live.channelsByKeys(listOf(p.id + ":" + o.optString("ch"))) }.getOrNull()?.firstOrNull())?.let { return it }
@@ -5544,7 +5679,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** A playlist's whole channel list and guide, read from its saved files and not kept (the active one is in memory). */
     private suspend fun liveFor(p: Playlist): Pair<List<Channel>, Map<String, List<Program>>> {
         if (!p.liveOn || !isOn(p)) return emptyList<Channel>() to emptyMap()
-        if (p.id == activePlaylist()?.id) return channels to guide
+        if (p.id == activePlaylist()?.id && !oneLive) return channels to guide
         return withContext(Dispatchers.IO) { liveReady(); live.channels(p.id) to guideWindow(p.id, null) }
     }
 
@@ -5557,7 +5692,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** Another playlist's favorite/list channels and their guide, kept in memory (small). */
     private suspend fun liveFavorites(p: Playlist): Pair<List<Channel>, Map<String, List<Program>>> {
         if (!p.liveOn || !isOn(p)) return emptyList<Channel>() to emptyMap()
-        if (p.id == activePlaylist()?.id) return channels to guide
+        if (p.id == activePlaylist()?.id && !oneLive) return channels to guide
         otherLive[p.id]?.let { return it }
         val keys = listedKeys()
         val t = withContext(Dispatchers.IO) {
@@ -5609,7 +5744,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             for (p in shownPlaylists) {
                 if (!p.liveOn && !p.vodOn) continue
                 ensureActive()
-                val isActive = p.id == activePlaylist()?.id
+                val isActive = p.id == activePlaylist()?.id && !oneLive
                 // The playlist being watched is in memory; the others are searched in the database.
                 val (chsAll, g) = if (isActive || !p.liveOn || !isOn(p)) liveFor(p) else com.avidviewer.tv.data.QueryCancel.run { liveHits(p, q, 50, 60, nowMs) }
                 val chs = chsAll.filter { channelAllowed(it) } // a Kids profile: only its categories
@@ -5663,7 +5798,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Tunes a channel from any playlist, switching the active playlist first if needed. */
     private suspend fun switchPlaylist(pid: String) {
-        if (pid == activePlaylist()?.id) return
+        if (pid == activePlaylist()?.id || isLiveNow(pid)) return
         val p = shownPlaylists.firstOrNull { it.id == pid } ?: return
         if (!p.liveOn) return
         val (chs, g) = liveFor(p)
@@ -5744,7 +5879,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         // that row went away made the guide keep the highlight off the channels, so OK seemed to do nothing.
         suggestionsFocused = false
         viewModelScope.launch {
-            val same = raw == selectedGroup && pid == activePlaylist()?.id
+            val same = raw == selectedGroup && (pid == activePlaylist()?.id || oneLive)
             switchPlaylist(pid)
             // A category seen before comes back on the channel it was on; a new one starts at its first channel.
             guideFocusMode = if (same || nav.has(guidePath(raw))) GuideFocus.KEEP else GuideFocus.TOP
@@ -5821,7 +5956,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         NavMode.GROUPS -> {
             if (!inGroupNav && (screen == Screen.GUIDE || screen == Screen.LIVE) && selectedGroup != null) {
                 navFocusKey = selectedGroup
-            } else if ((screen == Screen.GUIDE || screen == Screen.LIVE) && livePlaylists.size <= 1) {
+            } else if ((screen == Screen.GUIDE || screen == Screen.LIVE) && !playlistStep) {
                 // With one playlist the playlist list only repeats the same name, so Back from the categories goes
                 // straight to the main menu: every Back press now visibly moves up a level (BUG-019, #7).
                 inGroupNav = false; inPlaylistTree = false; navFocusKey = null; navMode = NavMode.FULL

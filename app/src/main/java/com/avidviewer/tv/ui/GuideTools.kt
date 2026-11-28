@@ -59,6 +59,13 @@ fun LazyListScope.guideSettings(vm: AppViewModel, confirm: (title: String, messa
                 (vm.combinedNote()?.let { " $it" } ?: ""),
             p.combineCopies, compact = true) { vm.setCombineCopies(!p.combineCopies) }
     }
+    if (vm.livePlaylists.size > 1) item {
+        // Nov 28, 2026 (owner): Live TV like Movies and Series, the playlist doesn't matter.
+        SettingSwitch("One Live TV for all playlists",
+            "Your playlists' channels in one guide: categories with the same name are joined, and a channel in several playlists shows once. " +
+                "Your first playlist on avidviewer.app › Playlists (${vm.livePlaylists.first().name}) plays first; if it fails, the next one does.",
+            p.oneLiveTv, compact = true) { vm.setOneLiveTv(!p.oneLiveTv) }
+    }
     item {
         SettingBlock("Last downloaded", "Each playlist with live TV keeps its own guide.") {
             if (vm.livePlaylists.isEmpty()) Label("No playlist has live TV switched on.", size = 12.sp, color = C.Soft)
