@@ -36,6 +36,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
@@ -92,7 +93,10 @@ private val MENU = listOf(
 
 /** Main menu. Full width with labels at the top level; icons only once a choice is made (labels return while it has focus). */
 @Composable
-fun NavRail(vm: AppViewModel) {
+fun NavRail(vm: AppViewModel, hidden: Boolean = false) {
+    // Nov 28, 2026: hidden inside Live TV, Movies and Series (board 67): kept in place with no width, and it can't
+    // take the highlight, so the layers beside it behave as before.
+    if (hidden) { androidx.compose.foundation.layout.Box(Modifier.width(0.dp).fillMaxHeight().focusProperties { canFocus = false }); return }
     var railFocused by remember { mutableStateOf(false) }
     val expanded = vm.navMode == NavMode.FULL || railFocused
     // A Kids profile has no Discover, Sports or Settings.

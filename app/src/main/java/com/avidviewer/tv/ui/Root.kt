@@ -119,7 +119,7 @@ fun AppRoot(vm: AppViewModel) {
                 // Nov 28, 2026 (owner, board 67): inside Live TV, Movies and Series the main menu isn't on screen;
                 // ◀ at the left edge or Back steps back one level and the main menu shows as its own last step.
                 // Elsewhere it stays as icons beside the screen.
-                if (!guideFull && vm.railShown) NavRail(vm)
+                if (!guideFull) NavRail(vm, hidden = !vm.railShown)
                 if (browsing && vm.navMode == NavMode.COLLAPSED) PlaylistTree(vm)
                 if (browsing && vm.navMode == NavMode.GROUPS && !guideFull) GroupNav(vm)
                 // Whether the guide area had the highlight since it appeared (its first "no highlight" report, before the
