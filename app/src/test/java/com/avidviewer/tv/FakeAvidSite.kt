@@ -68,6 +68,8 @@ class FakeAvidSite : AutoCloseable {
     @Volatile var postal: String? = null
     /** Nov 28, 2026: "Is it fixed?" items sent at check-in, and the TV's answers. */
     @Volatile var fixChecks: org.json.JSONArray? = null
+    /** Nov 28, 2026: the account's playlist order for live TV (account playlist ids). */
+    @Volatile var liveOrder: List<String>? = null
     val fixAnswers = java.util.Collections.synchronizedList(mutableListOf<org.json.JSONObject>())
 
     private fun meExtras(): String {
@@ -78,6 +80,7 @@ class FakeAvidSite : AutoCloseable {
         if (checkSubscription) { o.put("checkSubscription", true); checkSubscription = false }
         postal?.let { o.put("postal", org.json.JSONObject(it)) }
         fixChecks?.let { o.put("verify", org.json.JSONArray(it.toString())) }
+        liveOrder?.let { o.put("liveOrder", org.json.JSONArray(it)) }
         return if (o.length() == 0) "" else "," + o.toString().removePrefix("{").removeSuffix("}")
     }
     private fun deviceOf(auth: String) = if (auth.startsWith("Bearer TVTOKEN_claimed")) "d2" else "d1"

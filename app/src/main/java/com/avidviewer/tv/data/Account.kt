@@ -42,6 +42,8 @@ object AccountApi {
         val postalAt: Long = 0L,
         /** Nov 28, 2026: problems reported from this device that are fixed in the version it has now. */
         val fixChecks: List<FixCheck> = emptyList(),
+        /** Nov 28, 2026: the account's playlists in order for live channels (account playlist ids, primary first). */
+        val liveOrder: List<String>? = null,
     )
     /** A problem this device's person reported ([text], their words), fixed in [fixedIn]: "Is it fixed?" */
     data class FixCheck(val id: String, val text: String, val fixedIn: String)
@@ -115,7 +117,8 @@ object AccountApi {
                 val postal = o.optJSONObject("postal")
                 Me(o.optString("email"), o.optString("name"), b?.optBoolean("in") == true, b?.optString("tag")?.takeIf { it.isNotBlank() && it != "null" }, o.optBoolean("sendLog"),
                     hosts, renew, o.optBoolean("reloadChannels"), o.optBoolean("checkSubscription"),
-                    postal?.optString("code")?.trim(), postal?.optLong("at") ?: 0L, fixChecksOf(o.optJSONArray("verify")))
+                    postal?.optString("code")?.trim(), postal?.optLong("at") ?: 0L, fixChecksOf(o.optJSONArray("verify")),
+                    o.optJSONArray("liveOrder")?.let { a -> (0 until a.length()).map { a.optString(it) }.filter { it.isNotBlank() } })
             }
             401 -> null
             else -> throw Problem("avidviewer.app answered $code.")
@@ -418,6 +421,11 @@ class AccountStore(context: Context) {
         set(v) { prefs.edit().putString("catalogSent", v).apply() }
 
     fun update(me: AccountApi.Me) { prefs.edit().putString("email", me.email).putString("name", me.name).apply() }
+
+    /** Nov 28, 2026: the account's playlist order for live channels (account ids, comma-separated). */
+    var liveOrder: String
+        get() = prefs.getString("liveOrder", "").orEmpty()
+        set(v) { prefs.edit().putString("liveOrder", v).apply() }
 
     /** Nov 28, 2026: the last "Is it fixed?" list from the account, as JSON (asked at a later opening, maybe offline). */
     var fixChecks: String

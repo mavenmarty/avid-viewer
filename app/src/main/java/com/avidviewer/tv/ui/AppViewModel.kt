@@ -695,6 +695,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                     if (unclaimedReports().isNotEmpty()) claimReports()
                     if (m.reloadChannels) reloadAllLive()
                     takeAccountPostal(m)
+                    m.liveOrder?.let { o -> if (o != liveOrder) { liveOrder = o; account.liveOrder = o.joinToString(","); trail("live order from the account") } }
                     account.fixChecks = org.json.JSONArray(m.fixChecks.map { org.json.JSONObject().put("id", it.id).put("text", it.text).put("fixedIn", it.fixedIn) }).toString()
                     sendFixAnswers(token)
                     resellerAfterCheckIn(token, m)
@@ -1510,11 +1511,18 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Playlist that feeds the TV Guide and Sports: switched on, with live TV on (any switched-on one as a last resort). */
     fun activePlaylist(): Playlist? =
-        shownPlaylists.firstOrNull { it.id == prefs.activePlaylist && it.liveOn } ?: shownPlaylists.firstOrNull { it.liveOn }
+        shownPlaylists.firstOrNull { it.id == prefs.activePlaylist && it.liveOn } ?: livePlaylists.firstOrNull()
             ?: shownPlaylists.firstOrNull { it.id == prefs.activePlaylist } ?: shownPlaylists.firstOrNull()
 
-    /** Playlists the TV Guide lists: switched on with live TV on. */
-    val livePlaylists: List<Playlist> get() = shownPlaylists.filter { it.liveOn }
+    /**
+     * Playlists the TV Guide lists: switched on with live TV on. Nov 28, 2026 (owner): in the account's playlist order
+     * for live TV (avidviewer.app › Playlists), primary first; playlists it doesn't rank (typed on this TV) after them.
+     */
+    val livePlaylists: List<Playlist> get() = shownPlaylists.filter { it.liveOn }.let { l ->
+        val order = liveOrder
+        if (order.isEmpty()) l else l.sortedBy { p -> order.indexOf(p.remoteId).let { if (p.remoteId.isEmpty() || it < 0) Int.MAX_VALUE else it } }
+    }
+    var liveOrder by mutableStateOf(account.liveOrder.split(',').filter { it.isNotBlank() }); private set
 
     /** Playlists Movies, Series, Discover and search can use: switched on with movies & series on. */
     val vodPlaylists: List<Playlist> get() = shownPlaylists.filter { it.vodOn }

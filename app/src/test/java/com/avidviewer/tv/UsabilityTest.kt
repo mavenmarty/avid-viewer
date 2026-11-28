@@ -916,6 +916,23 @@ class UsabilityTest {
     }
 
     /**
+     * Nov 28, 2026 (owner): the playlist order for live TV is set on the website (Playlists › Playlist order); every
+     * TV lists the live playlists in that order, the primary first, and opens Live TV on it when none was chosen.
+     */
+    @Test
+    fun theAccountsPlaylistOrderDecidesTheLivePlaylistsOrder() {
+        FakeAvidSite().use { site ->
+            restartWith { st -> st.savePlaylists(st.loadPlaylists().map { when (it.id) { TestData.P1 -> it.copy(remoteId = "acctA"); TestData.P2 -> it.copy(remoteId = "acctB"); else -> it } }) }
+            linkForTest(site)
+            assertEquals(listOf(TestData.P1, TestData.P2), vm.livePlaylists.map { it.id }.filter { it == TestData.P1 || it == TestData.P2 })
+            site.liveOrder = listOf("acctB", "acctA")
+            rule.runOnIdle { vm.checkAccount() }
+            waitFor("the account's order (${vm.livePlaylists.map { it.id }})") { vm.livePlaylists.map { it.id }.filter { it == TestData.P1 || it == TestData.P2 } == listOf(TestData.P2, TestData.P1) }
+            assertEquals(TestData.P2, vm.livePlaylists.first().id)
+        }
+    }
+
+    /**
      * Nov 28, 2026 (owner): someone who reported a problem is asked "Is it fixed?" once the TV has the fixed version,
      * on the 2nd or 3rd opening (not the 1st, so updating and getting back to watching stays quick); Ask me later on
      * the 2nd asks again on the 3rd; after that, not on the TV. The answer goes to the account.
