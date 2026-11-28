@@ -6,6 +6,8 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.key
 import androidx.compose.foundation.border
 import androidx.activity.compose.BackHandler
 import androidx.annotation.OptIn
@@ -98,14 +100,24 @@ fun AppRoot(vm: AppViewModel) {
         } else if (vm.screen == Screen.PLAYER) {
             PlayerScreen(vm)
         } else {
-            Row(Modifier.fillMaxSize()) {
+            val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
+            Row(Modifier.fillMaxSize().onKeyEvent { e ->
+                // ◀ that nothing on screen used: the highlight goes left if something is there; at the left edge it
+                // steps back one level (as Back does), and stops at the main menu.
+                if (e.type != KeyEventType.KeyDown || e.key != androidx.compose.ui.input.key.Key.DirectionLeft) return@onKeyEvent false
+                if (focusManager.moveFocus(androidx.compose.ui.focus.FocusDirection.Left)) return@onKeyEvent true
+                if (e.nativeKeyEvent.repeatCount == 0 && vm.navMode != NavMode.FULL) vm.navBack()
+                true
+            }) {
                 val browsing = vm.screen == Screen.LIVE || vm.screen == Screen.GUIDE
                 // Inside the TV Guide with a category chosen, the guide takes the whole screen: the main menu and
                 // the category list step aside. ◀ from the channel names, or Back, brings back the category list
                 // (on the current category) with the main menu as icons (both set navFocusKey).
                 val guideFull = vm.guideFullLayout
-                // The main menu is otherwise always there: icons only while a lower layer is in use.
-                if (!guideFull) NavRail(vm)
+                // Nov 28, 2026 (owner, board 67): inside Live TV, Movies and Series the main menu isn't on screen;
+                // ◀ at the left edge or Back steps back one level and the main menu shows as its own last step.
+                // Elsewhere it stays as icons beside the screen.
+                if (!guideFull && vm.railShown) NavRail(vm)
                 if (browsing && vm.navMode == NavMode.COLLAPSED) PlaylistTree(vm)
                 if (browsing && vm.navMode == NavMode.GROUPS && !guideFull) GroupNav(vm)
                 // Whether the guide area had the highlight since it appeared (its first "no highlight" report, before the

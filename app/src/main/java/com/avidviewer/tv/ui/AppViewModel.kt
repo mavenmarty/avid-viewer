@@ -5683,7 +5683,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         if (group == FAV_GROUP || isListGroup(group)) ensureFavoriteData()
         if (group != selectedGroup) { chooseGroup(activePlaylist()?.id ?: "", group); return }
         if (channelsIn(group).isEmpty()) return
-        guideFocusMode = GuideFocus.VISIBLE
+        // Nov 28, 2026 (owner): the channel you were last on in this category, not the first one on screen.
+        guideFocusMode = GuideFocus.KEEP
         guideFocusTick++
     }
 
@@ -5732,6 +5733,16 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     private var exitArmedAt = 0L
     /** A screen a jump started from (Search): Back from what it opened returns there (NAV-12). */
     var jumpedFrom: Screen? = null
+
+    /** Nov 28, 2026: the main menu beside the screen; inside Live TV, Movies and Series only as its own step (board 67). */
+    val railShown: Boolean get() = navMode == NavMode.FULL || screen !in setOf(Screen.GUIDE, Screen.LIVE, Screen.MOVIES, Screen.SERIES)
+
+    /** ▶ from the main menu on the screen in use: back into it where you were (the category), not its first item. */
+    fun railIntoScreen(): Boolean = when (screen) {
+        Screen.GUIDE, Screen.LIVE -> { navMode = NavMode.GROUPS; inGroupNav = true; navFocusKey = selectedGroup ?: FAV_GROUP; true }
+        Screen.MOVIES, Screen.SERIES -> { navMode = NavMode.COLLAPSED; vodOnPoster = false; vodCatFocus++; true }
+        else -> false
+    }
 
     /** A category (raw name, ★ Favorites or a list) the left-hand list should highlight next; cleared once it has. */
     var navFocusKey by mutableStateOf<String?>(null)

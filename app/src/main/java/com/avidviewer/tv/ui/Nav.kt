@@ -136,7 +136,10 @@ fun NavRail(vm: AppViewModel) {
         menu.forEachIndexed { i, (s, label, icon) ->
             val active = vm.screen == s
             Focusable(
-                modifier = Modifier.fillMaxWidth().height(36.dp).focusRequester(requesters[i]).activePath(active),
+                modifier = Modifier.fillMaxWidth().height(36.dp).focusRequester(requesters[i]).activePath(active)
+                    .onPreviewKeyEvent { e ->
+                        e.type == KeyEventType.KeyDown && e.key == Key.DirectionRight && e.nativeKeyEvent.repeatCount == 0 && active && vm.railIntoScreen()
+                    },
                 color = if (active) C.Surface2 else Color.Transparent,
                 focusedColor = C.FocusRaised,
                 onClick = { vm.navSelect(s) },
