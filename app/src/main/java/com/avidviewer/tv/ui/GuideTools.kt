@@ -53,6 +53,13 @@ fun LazyListScope.guideSettings(vm: AppViewModel, confirm: (title: String, messa
         }
     }
     item {
+        // Nov 28, 2026 (owner): no duplicate channels.
+        SettingSwitch("Show each channel once",
+            "Copies of a channel in a category (HD, FHD, 4K…) show as one; the best plays first, and if it fails the next one does. Event channels (PPV, games) stay as they are." +
+                (vm.combinedNote()?.let { " $it" } ?: ""),
+            p.combineCopies, compact = true) { vm.setCombineCopies(!p.combineCopies) }
+    }
+    item {
         SettingBlock("Last downloaded", "Each playlist with live TV keeps its own guide.") {
             if (vm.livePlaylists.isEmpty()) Label("No playlist has live TV switched on.", size = 12.sp, color = C.Soft)
             vm.livePlaylists.forEach { pl ->

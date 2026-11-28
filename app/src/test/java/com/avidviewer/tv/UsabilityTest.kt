@@ -916,6 +916,43 @@ class UsabilityTest {
     }
 
     /**
+     * Nov 28, 2026 (owner: no duplicate channels, also within one playlist): copies of a channel in one category show
+     * as one, the best version first; a favorite on any copy shows it once; a version that fails goes on to the next;
+     * Settings › TV guide › Show each channel once turns it off.
+     */
+    @Test
+    fun copiesOfAChannelShowOnceAndTheNextVersionPlaysWhenOneFails() {
+        val pid = TestData.P1
+        fun c(id: String, name: String) = com.avidviewer.tv.data.Channel("$pid:$id", name, "Copies", null, "http://127.0.0.1:9/$id.ts", null)
+        rule.runOnIdle {
+            vm.applyChannelsForTests(vm.channels + listOf(c("e1", "ESPN HD"), c("e2", "US| ESPN FHD"), c("e3", "ESPN SD"), c("n1", "CNN")))
+            vm.updatePrefs { it.copy(favorites = it.favorites + "$pid:e1") }
+        }
+        assertEquals(listOf("US| ESPN FHD", "CNN"), vm.channelsIn("Copies").map { it.name })
+        assertEquals(listOf("$pid:e2", "$pid:e1", "$pid:e3"), vm.channelVersions["$pid:e2"]!!.map { it.key })
+        assertTrue("a favorite on a copy is the channel's", vm.isFavorite("$pid:e2"))
+        assertEquals(1, vm.channelsIn(FAV_GROUP).count { it.key == "$pid:e2" })
+        assertEquals("$pid:e2", vm.channel("$pid:e3")?.key)
+        // The best version fails: the next one plays, the channel stays the same.
+        rule.runOnIdle { vm.selectChannel("$pid:e2", PlayContext.GROUP) }
+        rule.runOnIdle { vm.selectChannel("$pid:e2", PlayContext.GROUP) }
+        waitFor("playing ESPN") { vm.currentKey == "$pid:e2" }
+        rule.runOnIdle { vm.playerFailedForTests(androidx.media3.common.PlaybackException("refused", null, androidx.media3.common.PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS)) }
+        assertEquals(1, vm.versionPlaying)
+        assertEquals("$pid:e2", vm.currentKey)
+        assertNull(vm.playerError)
+        rule.runOnIdle { vm.playerFailedForTests(androidx.media3.common.PlaybackException("refused", null, androidx.media3.common.PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS)) }
+        assertEquals(2, vm.versionPlaying)
+        // None left: the error shows.
+        rule.runOnIdle { vm.playerFailedForTests(androidx.media3.common.PlaybackException("refused", null, androidx.media3.common.PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS)) }
+        assertTrue(vm.playerError != null)
+        // Off: every copy is its own channel again.
+        rule.runOnIdle { vm.setCombineCopies(false) }
+        assertEquals(listOf("ESPN HD", "US| ESPN FHD", "ESPN SD", "CNN"), vm.channelsIn("Copies").map { it.name })
+        rule.runOnIdle { vm.setCombineCopies(true) }
+    }
+
+    /**
      * Nov 28, 2026 (owner): the playlist order for live TV is set on the website (Playlists › Playlist order); every
      * TV lists the live playlists in that order, the primary first, and opens Live TV on it when none was chosen.
      */

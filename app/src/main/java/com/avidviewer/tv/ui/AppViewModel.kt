@@ -1298,7 +1298,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             }
 
             override fun onTracksChanged(tracks: androidx.media3.common.Tracks) { tracksChanged(tracks) }
-            override fun onRenderedFirstFrame() { if (firstPictureAt == 0L) { firstPictureAt = android.os.SystemClock.uptimeMillis() - startedUptime } }
+            override fun onRenderedFirstFrame() { pictureAt = android.os.SystemClock.uptimeMillis(); if (firstPictureAt == 0L) { firstPictureAt = android.os.SystemClock.uptimeMillis() - startedUptime } }
         })
         viewModelScope.launch {
             while (true) {
@@ -2764,8 +2764,45 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /**
+     * Nov 28, 2026: each channel's versions, best first (copies in one category combined, [com.avidviewer.tv.data.ChannelMerge]),
+     * and which channel each version is shown as. Empty when nothing was combined or combining is off.
+     */
+    var channelVersions: Map<String, List<Channel>> = emptyMap(); private set
+    private var shownAs: Map<String, String> = emptyMap()
+    private var rawChannels: List<Channel> = emptyList()
+
+    internal fun applyChannelsForTests(list: List<Channel>) = applyChannels(list)
+
+    /** Settings › TV guide › Show each channel once. */
+    fun setCombineCopies(on: Boolean) {
+        updatePrefs { it.copy(combineCopies = on) }
+        applyChannels(rawChannels)
+        favDataTick++
+    }
+
+    /** "Now 13,400 channels instead of 19,689." for the playlist in use, when copies were combined. */
+    fun combinedNote(): String? = if (!prefs.combineCopies || channelVersions.isEmpty()) null
+        else "${activePlaylist()?.name ?: "This playlist"}: ${"%,d".format(channels.size)} channels instead of ${"%,d".format(rawChannels.size)}."
+
+    /** The channel a version's key is shown as (itself when it isn't a combined copy). */
+    fun shownKey(key: String?): String? = key?.let { shownAs[it] ?: it }
+
+    /** The TV shows 4K (its display reports at least 3840 pixels across). */
+    private val uhdScreen: Boolean by lazy {
+        runCatching {
+            val dm = (getApplication<Application>().getSystemService(android.content.Context.DISPLAY_SERVICE) as android.hardware.display.DisplayManager).getDisplay(android.view.Display.DEFAULT_DISPLAY)
+            dm.supportedModes.any { it.physicalWidth >= 3840 }
+        }.getOrDefault(false)
+    }
+
     private fun applyChannels(raw: List<Channel>) {
-        val list = raw.distinctBy { it.key }
+        rawChannels = raw.distinctBy { it.key }
+        val merged = if (prefs.combineCopies) com.avidviewer.tv.data.ChannelMerge.merge(rawChannels, uhdScreen) else null
+        channelVersions = merged?.versions ?: emptyMap()
+        shownAs = merged?.shownAs ?: emptyMap()
+        val list = merged?.channels ?: rawChannels
+        if (merged != null && merged.versions.isNotEmpty()) trail("combined ${rawChannels.size} channels into ${list.size}")
         channels = list
         refreshRecent()
         val gs = groups()
@@ -3024,7 +3061,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     private fun computeChannelsIn(group: String): List<Channel> {
-        if (isListGroup(group)) return listKeys(group).mapNotNull { channel(it) }.let { l -> if (listSortOf(group) == SORT_AZ) l.sortedWith(byShownName) else l }
+        // Nov 28, 2026: a favorite on one copy of a combined channel shows that channel (once).
+        if (isListGroup(group)) return listKeys(group).mapNotNull { channel(it) }.distinctBy { it.key }.let { l -> if (listSortOf(group) == SORT_AZ) l.sortedWith(byShownName) else l }
         // #20: this used to go through every channel of the playlist for each category, so numbering the channels
         // (every category in turn) after any settings change went through the whole list once per category on the
         // screen's thread: millions of checks with a big playlist, and the guide stopped answering for seconds.
@@ -3039,7 +3077,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** [key]'s channel whether or not the profile in use may watch it. */
     private fun anyChannel(key: String?): Channel? {
         if (key == null) return null
-        channelIndexMemo.get(channels) { channels.associateBy { it.key } }[key]?.let { return it }
+        channelIndexMemo.get(channels) { channels.associateBy { it.key } }[shownAs[key] ?: key]?.let { return it }
         val pid = key.substringBefore(':')
         if (livePlaylists.none { it.id == pid }) return null
         return otherLive[pid]?.first?.firstOrNull { it.key == key } ?: searchLive[pid]?.first?.firstOrNull { it.key == key } ?: sportsChannels[key] ?: liveCardChannels[key]
@@ -3155,7 +3193,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         if (wasHidden) afterShowing(pid, listOf(raw))
     }
 
-    fun isFavorite(key: String?) = key != null && key in prefs.favorites
+    fun isFavorite(key: String?) = key != null && (key in prefs.favorites || channelVersions[key]?.any { it.key in prefs.favorites } == true)
 
     // ---------------- TV Guide options menus (Menu key) ----------------
     var channelMenu by mutableStateOf<String?>(null)
@@ -6422,9 +6460,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         vodPlaying = null
         currentKey = c.key
         playerError = null
-        val item = MediaItem.Builder().setUri(c.url).apply {
-            if (c.url.contains(".m3u8", ignoreCase = true)) setMimeType(MimeTypes.APPLICATION_M3U8)
-        }.build()
+        // Nov 28, 2026: a combined channel plays its best version first (the shown channel is that version).
+        versionPlaying = 0
+        watchVersionStart(c.key)
+        val item = liveItem(c.url)
         playback.started(c.key, live = true)
         decoders.startingNow(c.key); decoderRetried = null
         player.setMediaItem(item)
@@ -6568,8 +6607,49 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         showNotice("Reconnecting…", 2000)
     }
 
+    // ---------------- versions of a combined channel (Nov 28, 2026) ----------------
+    /** Which version of the playing channel plays now (0 = the best one). */
+    var versionPlaying by mutableIntStateOf(0); private set
+    private var versionWatch: Job? = null
+    @Volatile private var pictureAt = 0L
+
+    private fun liveItem(url: String) = MediaItem.Builder().setUri(url).apply {
+        if (url.contains(".m3u8", ignoreCase = true)) setMimeType(MimeTypes.APPLICATION_M3U8)
+    }.build()
+
+    /** A combined channel that shows no picture within 8 s of starting goes on to its next version. */
+    private fun watchVersionStart(key: String) {
+        versionWatch?.cancel()
+        if ((channelVersions[key]?.size ?: 0) < 2) return
+        val since = android.os.SystemClock.uptimeMillis()
+        versionWatch = viewModelScope.launch {
+            delay(8_000)
+            if (currentKey == key && vodPlaying == null && pictureAt < since && !streamParked) tryNextVersion("it didn't start in 8 s")
+        }
+    }
+
+    /** Plays the playing channel's next version, if it has one; false when there's none left. */
+    private fun tryNextVersion(why: String): Boolean {
+        val key = currentKey ?: return false
+        val vs = channelVersions[key] ?: return false
+        val next = versionPlaying + 1
+        if (next >= vs.size) return false
+        versionPlaying = next
+        val v = vs[next]
+        trail("version ${next + 1} of ${vs.size}: $why")
+        playerError = null
+        player.setMediaItem(liveItem(v.url))
+        player.prepare()
+        player.playWhenReady = true
+        showNotice("Trying another version (${com.avidviewer.tv.data.ChannelMerge.versionLabel(v)})…", 3000)
+        watchVersionStart(key)
+        return true
+    }
+
     private fun playerFailed(error: PlaybackException) {
         if (recoverFromDecoderError(error)) return
+        // Nov 28, 2026: a combined channel tries its next version before showing the error.
+        if (vodPlaying == null && tryNextVersion("it failed (${error.errorCodeName})")) return
         val (text, refused) = playErrorText(error)
         playerError = text
         // #29: a live channel the provider refused (or whose server can't be found) is marked in the guide.

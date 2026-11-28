@@ -172,6 +172,8 @@ data class Prefs(
     val discoverGrownUps: Boolean = true,
     /** Suggest local channels from the postal code at the top of Favorites. */
     val showSuggestions: Boolean = true,
+    /** Nov 28, 2026: copies of a channel in one category (HD, FHD, 4K…) show as one channel (Settings › TV guide). */
+    val combineCopies: Boolean = true,
     /** Channels the user dismissed from the suggestions. */
     val dismissedSuggestions: Set<String> = emptySet(),
     /** The user's own channel lists, shown after Favorites. */
@@ -244,6 +246,7 @@ data class Prefs(
         o.put("guideRefreshHours", guideRefreshHours)
         o.put("epgMap", JSONObject(epgMap))
         o.put("showSuggestions", showSuggestions)
+        o.put("combineCopies", combineCopies)
         o.put("dismissedSuggestions", JSONArray(dismissedSuggestions.toList()))
         o.put("avDefault", avDefault.toJson())
         o.put("avChannels", JSONObject().apply { avChannels.forEach { (k, v) -> if (!v.isEmpty) put(k, v.toJson()) } })
@@ -305,6 +308,7 @@ data class Prefs(
                 guideRefreshHours = o.optInt("guideRefreshHours", 8).let { if (it in listOf(4, 8, 12, 24)) it else 8 },
                 epgMap = strMap(o.optJSONObject("epgMap")),
                 showSuggestions = o.optBoolean("showSuggestions", true),
+                combineCopies = o.optBoolean("combineCopies", true),
                 dismissedSuggestions = strList(o.optJSONArray("dismissedSuggestions")).toSet(),
                 myServices = o.optJSONArray("myServices")?.let { a -> List(a.length()) { a.getJSONObject(it).let { s -> WatchProvider(s.getInt("id"), s.optString("name"), s.optString("logo").ifBlank { null }) } } } ?: emptyList(),
                 discoverStart = o.optString("discoverStart", "all").ifBlank { "all" },
