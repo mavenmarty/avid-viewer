@@ -695,7 +695,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                     if (unclaimedReports().isNotEmpty()) claimReports()
                     if (m.reloadChannels) reloadAllLive()
                     takeAccountPostal(m)
-                    m.liveOrder?.let { o -> if (o != liveOrder) { liveOrder = o; account.liveOrder = o.joinToString(","); trail("live order from the account") } }
+                    m.liveOrder?.let { o -> if (o != liveOrder) { liveOrderCache = o; account.liveOrder = o.joinToString(","); favDataTick++; trail("live order from the account") } }
                     account.fixChecks = org.json.JSONArray(m.fixChecks.map { org.json.JSONObject().put("id", it.id).put("text", it.text).put("fixedIn", it.fixedIn) }).toString()
                     sendFixAnswers(token)
                     resellerAfterCheckIn(token, m)
@@ -1522,7 +1522,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         val order = liveOrder
         if (order.isEmpty()) l else l.sortedBy { p -> order.indexOf(p.remoteId).let { if (p.remoteId.isEmpty() || it < 0) Int.MAX_VALUE else it } }
     }
-    var liveOrder by mutableStateOf(account.liveOrder.split(',').filter { it.isNotBlank() }); private set
+    // Read when first needed (the list is used while the view model is still being set up).
+    private var liveOrderCache: List<String>? = null
+    val liveOrder: List<String>
+        get() = liveOrderCache ?: (runCatching { account.liveOrder.split(',').filter { it.isNotBlank() } }.getOrNull() ?: emptyList()).also { liveOrderCache = it }
 
     /** Playlists Movies, Series, Discover and search can use: switched on with movies & series on. */
     val vodPlaylists: List<Playlist> get() = shownPlaylists.filter { it.vodOn }
