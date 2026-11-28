@@ -61,39 +61,4 @@ class ChannelMergeTest {
         val list = listOf(ch("1", "PPV 01 HD", "LIVE | PPV Events"), ch("2", "PPV 01 FHD", "LIVE | PPV Events"))
         assertEquals(2, ChannelMerge.merge(list, uhd = false).channels.size)
     }
-
-    private fun at(pid: String, id: String, name: String, group: String, epg: String? = null) = Channel("$pid:$id", name, group, null, "http://$pid/$id.ts", epg)
-
-    @Test
-    fun oneLiveTvJoinsCategoriesAndCopiesAcrossPlaylistsPrimaryFirst() {
-        val primary = listOf(at("a", "1", "ESPN SD", "USA: Sports"), at("a", "2", "WDAY", "US| Locals", "wday.us"))
-        val second = listOf(
-            at("b", "1", "US| ESPN FHD", "US| SPORTS", "espn.us"), at("b", "2", "KVLY", "US| LOCALS", "kvly.us"),
-            at("b", "3", "TSN 1", "CA| Sports"), at("b", "4", "WDAY HD", "US| Locals"),
-        )
-        val r = ChannelMerge.mergeAcross(listOf(primary, second), listOf("8K Live", "PDS Live"), uhd = false)
-        // Categories: the primary's names, the country kept apart.
-        assertEquals(listOf("USA: Sports", "US| Locals", "CA| Sports"), r.channels.map { it.group }.distinct())
-        assertEquals(listOf("ESPN SD", "WDAY", "KVLY", "TSN 1"), r.channels.map { it.name })
-        // The primary playlist's copy plays first even when another playlist's is better; then the other playlists'.
-        assertEquals(listOf("a:1", "b:1"), r.versions["a:1"]!!.map { it.key })
-        assertEquals(listOf("a:2", "b:4"), r.versions["a:2"]!!.map { it.key })
-        // WDAY and KVLY stay apart.
-        assertEquals(null, r.versions["b:2"])
-        // ESPN has no guide in the primary playlist: the second playlist's guide is shown for it.
-        assertEquals("b:1", r.guideFrom["a:1"]?.key)
-        assertEquals("a:1", r.shownAs["b:1"])
-        // Each shown category knows the playlists' own categories in it.
-        assertEquals(listOf("a" to "USA: Sports", "b" to "US| SPORTS"), r.groupMembers["USA: Sports"])
-    }
-
-    @Test
-    fun oneLiveTvKeepsEventChannelsApartPerPlaylist() {
-        val primary = listOf(at("a", "1", "NFL 01: Bears @ Packers", "NFL Sunday Ticket"), at("a", "2", "NFL 02", "NFL Sunday Ticket"))
-        val second = listOf(at("b", "1", "NFL 01: Bears @ Packers", "NFL SUNDAY TICKET"), at("b", "2", "PPV 1", "PPV"))
-        val r = ChannelMerge.mergeAcross(listOf(primary, second), listOf("8K Live", "PDS Live"), uhd = false)
-        assertEquals(4, r.channels.size)
-        assertTrue(r.versions.isEmpty())
-        assertEquals(listOf("NFL Sunday Ticket", "NFL SUNDAY TICKET (PDS Live)", "PPV"), r.channels.map { it.group }.distinct())
-    }
 }

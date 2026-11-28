@@ -745,6 +745,16 @@ The next time it starts, the app says **Avid Viewer closed unexpectedly**:
 
 **On smaller devices**, the app starts lighter to make this less likely: the preview starts a few seconds after the TV Guide, and less video and fewer pictures are kept in memory. If the app still vanishes, please send the report: it says the lighter start-up was in use, which helps find the cause.
 
+### If a passkey can't be made on an iPhone or iPad
+
+**Google's built-in browser (not Chrome) can't make passkeys.** The Gmail app, and other Google apps, open links in a browser of their own: it has a **✕** at the top left, a **⋯** menu, and an **Ask** bar at the bottom. On an iPhone or iPad, browsers built into apps aren't allowed to make passkeys for websites, so the passkey is refused straight away, with no Face ID prompt. The same goes for the built-in browsers of other apps (Outlook, Facebook, Instagram and so on). Chrome, Safari, Firefox and Edge themselves all work.
+
+- **Easiest:** when the sign-in link opens inside Gmail, tap **⋯** and choose **Open in Safari** (or **Open in browser**). avidviewer.app notices the built-in browser and doesn't use the link up there, so it still signs you in when it opens in the browser.
+- **To stop it happening:** in the Gmail app, go to **Settings › Default apps** and choose a browser (Safari or Chrome) for web links.
+- **Or** open avidviewer.app in your browser yourself and sign in there.
+
+You only need a browser for this once: after the passkey is made, you sign in with it and don't need email links.
+
 ### Backup questions
 
 **Backup & restore only says Link this device.** Backups live in your avidviewer.app account. Link the device in Settings › Account, then back up.

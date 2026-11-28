@@ -284,7 +284,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         screen = Screen.GUIDE; navMode = NavMode.GROUPS; vodDetail = null
         currentKey = null; selectedGroup = null; startupPreviewDone = false
         status = "Watching as ${target.name}"
-        if (channels.isNotEmpty()) applyChannels(channels)
+        // One Live TV combines again for this profile (its hidden categories and Kids rules decide what's left out).
+        if (acrossShown && oneLive) viewModelScope.launch { applyAcross(livePlaylists) }
+        else if (channels.isNotEmpty()) applyChannels(channels)
         ensureFavoriteData()
     }
 
@@ -2816,7 +2818,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     private fun applyChannels(raw: List<Channel>) {
         rawChannels = raw.distinctBy { it.key }
         rawCount = rawChannels.size
-        groupMembers = emptyMap(); guideFrom = emptyMap(); guides = emptyMap()
+        rawGroups = emptyMap(); acrossShown = false; guideFrom = emptyMap(); guides = emptyMap()
         val merged = if (prefs.combineCopies) com.avidviewer.tv.data.ChannelMerge.merge(rawChannels, uhdScreen) else null
         channelVersions = merged?.versions ?: emptyMap()
         shownAs = merged?.shownAs ?: emptyMap()
@@ -2826,8 +2828,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     // ---------------- One Live TV (Nov 28, 2026) ----------------
-    /** Joined category shown → the playlists' own categories in it; empty unless One Live TV is on. */
-    private var groupMembers: Map<String, List<Pair<String, String>>> = emptyMap()
+    /** One Live TV: shown channel → its playlist's own category (it's shown under a common one). */
+    private var rawGroups: Map<String, String> = emptyMap()
+    /** Whether the guide shows One Live TV's common categories (hidden ones are kept under [OneLive.PID]). */
+    private var acrossShown = false
     /** Shown channel → the copy whose guide it shows (another playlist's), when it has none of its own. */
     private var guideFrom: Map<String, Channel> = emptyMap()
     /** One Live TV: each live playlist's guide in memory, for the channels shown. */
@@ -2845,8 +2849,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * Shows every live playlist's channels as one list ([com.avidviewer.tv.data.ChannelMerge.mergeAcross]), read and
-     * combined off the screen's thread, one playlist read at a time; only the combined list stays in memory.
+     * Shows every live playlist's channels as one guide ([com.avidviewer.tv.data.OneLive.build]): each channel once, in
+     * common categories. Read and combined off the screen's thread; only the combined list stays in memory. Channels in
+     * categories hidden for the playlist (on the TV or the website) or not allowed for a Kids profile are left out.
      */
     private suspend fun applyAcross(pls: List<Playlist>) {
         val combine = prefs.combineCopies
@@ -2854,11 +2859,11 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             liveReady()
             val lists = pls.map { p -> live.channels(p.id).distinctBy { it.key } }
             val n = lists.sumOf { it.size }
-            com.avidviewer.tv.data.ChannelMerge.mergeAcross(lists, pls.map { it.name }, uhdScreen, combine) to n
+            com.avidviewer.tv.data.OneLive.build(lists, pls.map { it.name }, uhdScreen, combine) { pid, raw -> !isGroupHidden(pid, raw) } to n
         }
         val (m, n) = r
         rawChannels = emptyList(); rawCount = n
-        groupMembers = m.groupMembers; guideFrom = m.guideFrom
+        rawGroups = m.rawGroups; acrossShown = true; guideFrom = m.guideFrom
         channelVersions = m.versions; shownAs = m.shownAs
         trail("one live TV: ${pls.size} playlists, $n channels shown as ${m.channels.size}")
         showChannels(m.channels)
@@ -2913,6 +2918,13 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     internal suspend fun applyAcrossForTests() = applyAcross(livePlaylists)
+
+    private var remergeJob: Job? = null
+    /** Combines the playlists again after a moment (several hiding changes in a row combine once). */
+    private fun remergeSoon() {
+        remergeJob?.cancel()
+        remergeJob = viewModelScope.launch { delay(400); if (oneLive) applyAcross(livePlaylists) }
+    }
 
     private fun showChannels(list: List<Channel>) {
         channels = list
@@ -3067,14 +3079,11 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
      * it on one playlist only, on the website, leaves the others' channels).
      */
     fun isShownGroupHidden(pid: String, raw: String): Boolean =
-        groupMembers[raw]?.let { ms -> ms.all { (mp, mr) -> isGroupHidden(mp, mr) } } ?: isGroupHidden(pid, raw)
+        if (acrossShown) raw in prefs.hiddenGroups || hiddenId(com.avidviewer.tv.data.OneLive.PID, raw) in prefs.hiddenGroups
+        else isGroupHidden(pid, raw)
 
     /** The playlist's own name for [c]'s category (One Live TV shows joined categories under the primary's name). */
-    fun rawGroupOf(c: Channel): String {
-        val ms = groupMembers[c.group] ?: return c.group
-        val pid = c.key.substringBefore(':')
-        return ms.firstOrNull { it.first == pid }?.second ?: c.group
-    }
+    fun rawGroupOf(c: Channel): String = rawGroups[c.key] ?: c.group
 
     /** Shows or hides many categories of one playlist at once. */
     fun setGroupsHidden(pid: String, raws: Collection<String>, hidden: Boolean) {
@@ -3093,6 +3102,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     private fun afterHidingChanged(pid: String) {
+        // One Live TV leaves out the playlists' hidden categories when it combines: combine again.
+        if (acrossShown && pid != com.avidviewer.tv.data.OneLive.PID && isLiveNow(pid)) remergeSoon()
         playlistGroups = playlistGroups - pid
         if (expandedPlaylist == pid) loadPlaylistGroups(pid)
         viewModelScope.launch { rematchSports() }
@@ -3311,11 +3322,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun toggleHidden(raw: String) {
-        groupMembers[raw]?.takeIf { it.size > 1 || it.firstOrNull()?.second != raw }?.let { ms ->
-            val hide = !isShownGroupHidden("", raw)
-            ms.groupBy({ it.first }, { it.second }).forEach { (mp, raws) -> setGroupsHidden(mp, raws, hide) }
-            return
-        }
+        if (acrossShown) { setGroupsHidden(com.avidviewer.tv.data.OneLive.PID, listOf(raw), !isShownGroupHidden("", raw)); return }
         val pid = activePlaylist()?.id ?: ""
         val wasHidden = raw in prefs.hiddenGroups || hiddenId(pid, raw) in prefs.hiddenGroups
         updatePrefs {
@@ -3490,6 +3497,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }.also { syncAccountSoon() }
 
     private var accountSoonJob: Job? = null
+    /** For tests: what each profile hides was put back from the account (#46); the status line may move on. */
+    internal var hidesRestored = false
 
     /**
      * Nov 27, 2026: a My List change goes to the account a few seconds later (not at the next minute), so the other
@@ -3736,6 +3745,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         if (restore) {
             restoreAccountHides = false
             trail("hidden items put back from the account")
+            hidesRestored = true
             status = "Some settings on this TV couldn't be read after it was switched off. What each profile hides was put back from your account."
         }
         // Another profile's hidden items (or a Kids profile's categories) may have changed what the guide keeps.
