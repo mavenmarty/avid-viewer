@@ -938,16 +938,20 @@ class UsabilityTest {
             waitFor("hidden from the account") { nfl in vm.prefs.hiddenGroups && news in vm.prefs.hiddenGroups }
             rule.runOnIdle { vm.toggleFavorite(vm.channels.first().key) } // one more save after the hides
             val app = ApplicationProvider.getApplicationContext<Application>()
-            com.avidviewer.tv.data.Store(app).flushPrefs()
             val dir = app.filesDir
+            fun quiet() { rule.waitForIdle(); vm.store.flushPrefs(); Thread.sleep(300); rule.waitForIdle(); vm.store.flushPrefs() }
             // The power went while the last save was still on its way: an empty file, the save before it kept.
+            quiet()
             restartWith { java.io.File(dir, "prefs.json").writeText("") }
+            assertTrue("noticed", vm.store.settingsRecovered)
             assertTrue("read from the copy before (${vm.prefs.hiddenGroups})", nfl in vm.prefs.hiddenGroups && news in vm.prefs.hiddenGroups)
-            // Nothing left at all: shown until the account puts them back, and the TV says so.
+            // Nothing left at all: the TV notices, puts back what the account hides at the next check, and says so.
+            quiet()
             restartWith { java.io.File(dir, "prefs.json").writeText("{\"hiddenGr"); java.io.File(dir, "prefs.json.bak").delete() }
+            assertTrue("noticed again", vm.store.settingsRecovered)
             rule.runOnIdle { vm.syncAccountPlaylists() }
             waitFor("put back from the account (${vm.prefs.hiddenGroups})") { nfl in vm.prefs.hiddenGroups && news in vm.prefs.hiddenGroups }
-            assertTrue(vm.status.orEmpty(), vm.status.orEmpty().contains("put back from your account"))
+            waitFor("said (${vm.status})") { vm.status.orEmpty().contains("put back from your account") }
         }
     }
 
