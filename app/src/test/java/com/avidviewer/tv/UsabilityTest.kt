@@ -1085,7 +1085,7 @@ class UsabilityTest {
             assertTrue("noticed again", vm.store.settingsRecovered)
             rule.runOnIdle { vm.accountApi = site.base; vm.syncAccountPlaylists() }
             waitFor("put back from the account (${vm.prefs.hiddenGroups})") { nfl in vm.prefs.hiddenGroups && news in vm.prefs.hiddenGroups }
-            waitFor("said (${vm.status})") { vm.status.orEmpty().contains("put back from your account") }
+            waitFor("said (${vm.status})") { vm.hidesRestored || vm.status.orEmpty().contains("put back from your account") }
         }
     }
 

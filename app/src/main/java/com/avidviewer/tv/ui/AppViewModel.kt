@@ -3490,6 +3490,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }.also { syncAccountSoon() }
 
     private var accountSoonJob: Job? = null
+    /** For tests: what each profile hides was put back from the account (#46); the status line may move on. */
+    internal var hidesRestored = false
 
     /**
      * Nov 27, 2026: a My List change goes to the account a few seconds later (not at the next minute), so the other
@@ -3736,6 +3738,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         if (restore) {
             restoreAccountHides = false
             trail("hidden items put back from the account")
+            hidesRestored = true
             status = "Some settings on this TV couldn't be read after it was switched off. What each profile hides was put back from your account."
         }
         // Another profile's hidden items (or a Kids profile's categories) may have changed what the guide keeps.
