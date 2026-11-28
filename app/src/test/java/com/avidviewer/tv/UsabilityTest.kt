@@ -2012,15 +2012,27 @@ class UsabilityTest {
         waitFor("the category list (focus: ${focused()})") { vm.inGroupNav }
     }
 
+    /**
+     * Nov 28, 2026 (owner, board 67): inside Live TV the main menu isn't on screen; ◀ steps back one level at a time
+     * (channel → its category → the main menu, which then shows) and stops there. ▶ from the main menu goes back to
+     * the category you were on, and ▶ from it to the channel you were on, not the first one.
+     */
     @Test
-    fun theMainMenuShowsAsIconsAtLaunchOnTheGuide() {
+    fun leftStepsBackToTheMainMenuAndRightComesBackWhereYouWere() {
         settle()
         assertEquals(Screen.GUIDE, vm.screen)
         assertEquals(NavMode.GROUPS, vm.navMode)
-        // Nov 15: on the guide, with a category chosen, the guide fills the screen; ◀ brings the category list and the menu icons.
-        waitFor("the guide fills the screen") { vm.guideHasFocus && rule.onAllNodesWithContentDescription("Settings").fetchSemanticsNodes().isEmpty() }
+        fun menuShown() = rule.onAllNodesWithText("Settings").fetchSemanticsNodes().isNotEmpty() || rule.onAllNodesWithContentDescription("Settings").fetchSemanticsNodes().isNotEmpty()
+        waitFor("the guide fills the screen") { vm.guideHasFocus && !menuShown() }
         press(listOf(Key.DirectionLeft))
-        waitFor("main menu icons are on screen after ◀ (focus: ${focused()})") { rule.onAllNodesWithContentDescription("Settings").fetchSemanticsNodes().isNotEmpty() && vm.inGroupNav }
+        waitFor("◀: the category list, no main menu (focus: ${focused()})") { vm.inGroupNav && !menuShown() }
+        val cat = vm.selectedGroup
+        while (vm.navMode != NavMode.FULL) { press(listOf(Key.DirectionLeft)); if (vm.navMode == NavMode.COLLAPSED) continue }
+        waitFor("the main menu (focus: ${focused()})") { vm.navMode == NavMode.FULL && menuShown() }
+        press(listOf(Key.DirectionLeft))
+        waitFor("◀ at the main menu stays there") { vm.navMode == NavMode.FULL && vm.screen == Screen.GUIDE }
+        press(listOf(Key.DirectionRight))
+        waitFor("▶ goes back to the category you were on (focus: ${focused()})") { vm.navMode == NavMode.GROUPS && vm.inGroupNav && vm.selectedGroup == cat && !menuShown() }
     }
 
     @Test

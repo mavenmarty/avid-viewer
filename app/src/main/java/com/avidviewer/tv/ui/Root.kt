@@ -105,8 +105,10 @@ fun AppRoot(vm: AppViewModel) {
                 // ◀ that nothing on screen used: the highlight goes left if something is there; at the left edge it
                 // steps back one level (as Back does), and stops at the main menu.
                 if (e.type != KeyEventType.KeyDown || e.key != androidx.compose.ui.input.key.Key.DirectionLeft) return@onKeyEvent false
+                val before = vm.navSignature()
                 if (focusManager.moveFocus(androidx.compose.ui.focus.FocusDirection.Left)) return@onKeyEvent true
-                if (e.nativeKeyEvent.repeatCount == 0 && vm.navMode != NavMode.FULL) vm.navBack()
+                // A screen that handled leaving to the left itself (a title page closes) has already stepped back.
+                if (e.nativeKeyEvent.repeatCount == 0 && vm.navMode != NavMode.FULL && vm.navSignature() == before) vm.navBack()
                 true
             }) {
                 val browsing = vm.screen == Screen.LIVE || vm.screen == Screen.GUIDE

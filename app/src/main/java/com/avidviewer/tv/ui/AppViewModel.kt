@@ -5737,6 +5737,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** Nov 28, 2026: the main menu beside the screen; inside Live TV, Movies and Series only as its own step (board 67). */
     val railShown: Boolean get() = navMode == NavMode.FULL || screen !in setOf(Screen.GUIDE, Screen.LIVE, Screen.MOVIES, Screen.SERIES)
 
+    /** Where the remote is in the layers (to tell whether a key already stepped back). */
+    fun navSignature(): List<Any?> = listOf(screen, navMode, vodDetail?.key, discoverDetail, vodOnPoster, navFocusKey, vodCatFocus, settingsInContent)
+
     /** ▶ from the main menu on the screen in use: back into it where you were (the category), not its first item. */
     fun railIntoScreen(): Boolean = when (screen) {
         Screen.GUIDE, Screen.LIVE -> { navMode = NavMode.GROUPS; inGroupNav = true; navFocusKey = selectedGroup ?: FAV_GROUP; true }

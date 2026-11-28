@@ -202,11 +202,15 @@ fun PlaylistTree(vm: AppViewModel) {
         // Coming back from a category: that category takes the highlight instead (see below).
         val k = vm.navFocusKey
         if (k != null) {
-            // Found by key in the list's own item keys (no counting of header rows, NAV-13).
-            val item = treeKeys().indexOf(
-                when { k == FAV_GROUP -> "tfav"; isListGroup(k) -> "tl-" + k.removePrefix(LIST_PREFIX); else -> "g-$active-$k" },
-            )
-            if (item >= 0) { launch { treeState.scrollToItem((item - 3).coerceAtLeast(0)) }; return@LaunchedEffect }
+            // Found by key in the list's own item keys (no counting of header rows, NAV-13). Nov 28, 2026: the
+            // playlist's categories may still be loading: wait for them (up to ~2 s) instead of going to the top.
+            val want = when { k == FAV_GROUP -> "tfav"; isListGroup(k) -> "tl-" + k.removePrefix(LIST_PREFIX); else -> "g-$active-$k" }
+            for (f in 0 until 120) {
+                val item = treeKeys().indexOf(want)
+                if (item >= 0) { launch { treeState.scrollToItem((item - 3).coerceAtLeast(0)) }; return@LaunchedEffect }
+                if (treeKeys().none { it.startsWith("ld-") } && f > 2) break
+                androidx.compose.runtime.withFrameNanos { }
+            }
             vm.navFocusKey = null
         }
         focusWhenReady(vm) { runCatching { first.requestFocus() }.isSuccess }
