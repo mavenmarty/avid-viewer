@@ -2325,11 +2325,11 @@ class UsabilityTest {
         val cat = vm.vodOf("series").first().category
         rule.runOnIdle { vm.asyncHides = true; vm.catalog.mainThreadWrites.set(0) }
         try {
-            rule.runOnIdle { vm.hideVodCategory("series", cat) }
+            rule.runOnIdle { vm.hideVodCatEverywhere("series", cat) }
             waitFor("hidden") { vm.vodItems("series").none { it.category == cat } }
             // The same hidden lists rebuilt (as an account sync does): nothing to write.
             rule.runOnIdle { vm.updatePrefs { it.copy(vodHiddenCats = it.vodHiddenCats.toHashSet().toSet(), vodHiddenTitles = it.vodHiddenTitles.toList().toSet()) } }
-            rule.runOnIdle { vm.setVodCategoriesHidden("series", TestData.P1, listOf(cat), false) }
+            rule.runOnIdle { vm.setVodCatsHidden(vm.prefs.vodHiddenCats.toList(), false) }
             waitFor("shown again") { vm.vodItems("series").any { it.category == cat } }
             assertEquals("catalog writes on the screen's thread", 0, vm.catalog.mainThreadWrites.get())
         } finally {
