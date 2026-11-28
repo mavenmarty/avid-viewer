@@ -40,7 +40,11 @@ object AccountApi {
         /** Nov 26, 2026: the postal code set on the website ("" = removed there) and when; null when never set there. */
         val postalCode: String? = null,
         val postalAt: Long = 0L,
+        /** Nov 28, 2026: problems reported from this device that are fixed in the version it has now. */
+        val fixChecks: List<FixCheck> = emptyList(),
     )
+    /** A problem this device's person reported ([text], their words), fixed in [fixedIn]: "Is it fixed?" */
+    data class FixCheck(val id: String, val text: String, val fixedIn: String)
     /** One TV's backup in the account (each TV keeps only its most recent). */
     data class CloudBackup(
         val deviceId: String, val name: String, val model: String, val appVersion: String, val createdAt: Long,
@@ -111,12 +115,19 @@ object AccountApi {
                 val postal = o.optJSONObject("postal")
                 Me(o.optString("email"), o.optString("name"), b?.optBoolean("in") == true, b?.optString("tag")?.takeIf { it.isNotBlank() && it != "null" }, o.optBoolean("sendLog"),
                     hosts, renew, o.optBoolean("reloadChannels"), o.optBoolean("checkSubscription"),
-                    postal?.optString("code")?.trim(), postal?.optLong("at") ?: 0L)
+                    postal?.optString("code")?.trim(), postal?.optLong("at") ?: 0L, fixChecksOf(o.optJSONArray("verify")))
             }
             401 -> null
             else -> throw Problem("avidviewer.app answered $code.")
         }
     }
+
+    fun fixChecksOf(a: JSONArray?): List<FixCheck> = a?.let { (0 until it.length()).mapNotNull { i -> it.optJSONObject(i) } }.orEmpty()
+        .map { FixCheck(it.optString("id"), it.optString("text"), it.optString("fixedIn")) }.filter { it.id.isNotBlank() && it.fixedIn.isNotBlank() }
+
+    /** The answer to "Is it fixed?": fixed, still or later. False when the site couldn't be reached. */
+    fun verifyFix(token: String, id: String, answer: String, appVersion: String, base: String = BASE): Boolean =
+        runCatching { call(base, "/api/tv/reports/verify", JSONObject().put("id", id).put("answer", answer).put("version", appVersion), token, appVersion).first in listOf(200, 404) }.getOrDefault(false)
 
     private fun failed(code: Int, o: JSONObject): Nothing = throw Problem(when (code) {
         401 -> "This device is no longer linked to your account. Link it again in Settings › Account."
@@ -407,6 +418,28 @@ class AccountStore(context: Context) {
         set(v) { prefs.edit().putString("catalogSent", v).apply() }
 
     fun update(me: AccountApi.Me) { prefs.edit().putString("email", me.email).putString("name", me.name).apply() }
+
+    /** Nov 28, 2026: the last "Is it fixed?" list from the account, as JSON (asked at a later opening, maybe offline). */
+    var fixChecks: String
+        get() = prefs.getString("fixChecks", "[]").orEmpty()
+        set(v) { prefs.edit().putString("fixChecks", v).apply() }
+    /** Reports answered here (never asked again), and answers not sent yet ("id:answer"). */
+    var fixAnswered: Set<String>
+        get() = prefs.getStringSet("fixAnswered", emptySet()).orEmpty()
+        set(v) { prefs.edit().putStringSet("fixAnswered", v).apply() }
+    var fixUnsent: Set<String>
+        get() = prefs.getStringSet("fixUnsent", emptySet()).orEmpty()
+        set(v) { prefs.edit().putStringSet("fixUnsent", v).apply() }
+    /** Openings of the app on [opensVersion] (a new one: started, or back after 30 minutes away). */
+    var opensVersion: String
+        get() = prefs.getString("opensVersion", "").orEmpty()
+        set(v) { prefs.edit().putString("opensVersion", v).apply() }
+    var opens: Int
+        get() = prefs.getInt("opens", 0)
+        set(v) { prefs.edit().putInt("opens", v).apply() }
+    var awaySince: Long
+        get() = prefs.getLong("awaySince", 0L)
+        set(v) { prefs.edit().putLong("awaySince", v).apply() }
 
     fun clear() { prefs.edit().clear().apply() }
 

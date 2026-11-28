@@ -916,6 +916,49 @@ class UsabilityTest {
     }
 
     /**
+     * Nov 28, 2026 (owner): someone who reported a problem is asked "Is it fixed?" once the TV has the fixed version,
+     * on the 2nd or 3rd opening (not the 1st, so updating and getting back to watching stays quick); Ask me later on
+     * the 2nd asks again on the 3rd; after that, not on the TV. The answer goes to the account.
+     */
+    @Test
+    fun aReporterIsAskedWhetherTheFixWorksOnTheSecondOrThirdOpening() {
+        FakeAvidSite().use { site ->
+            linkForTest(site)
+            val now = vm.accountInfoVersionForTests()
+            site.fixChecks = org.json.JSONArray().put(org.json.JSONObject().put("id", "AVR-1").put("text", "All the hidden categories came back").put("fixedIn", now))
+            rule.runOnIdle { vm.checkAccount() }
+            waitFor("list kept") { vm.account.fixChecks.contains("AVR-1") }
+            val t0 = System.currentTimeMillis()
+            // Updated and opened: the 1st opening on this version.
+            rule.runOnIdle { vm.account.opensVersion = "0.0.1"; vm.onAppOpened(t0 - 60_000L) }
+            assertEquals(1, vm.account.opens)
+            // Back after 10 minutes: the same opening. Not asked.
+            rule.runOnIdle { vm.account.awaySince = t0; vm.onAppOpened(t0 + 10 * 60_000L) }
+            assertEquals(1, vm.account.opens)
+            Thread.sleep(4_500); rule.waitForIdle()
+            assertNull("not on the first opening", vm.fixCheck)
+            // The next opening: asked; Ask me later.
+            rule.runOnIdle { vm.account.awaySince = t0; vm.onAppOpened(t0 + 40 * 60_000L) }
+            assertEquals(2, vm.account.opens)
+            waitFor("asked") { vm.fixCheck != null }
+            rule.onNodeWithTag("fix-check-dialog").assertExists()
+            rule.onNodeWithText("You reported: \u201cAll the hidden categories came back\u201d").assertExists()
+            rule.onNodeWithTag("fix-later").performClick()
+            waitFor("later sent") { site.fixAnswers.any { it.optString("answer") == "later" } }
+            // The third: asked again; Yes, it's fixed.
+            rule.runOnIdle { vm.account.awaySince = t0; vm.onAppOpened(t0 + 80 * 60_000L) }
+            waitFor("asked again") { vm.fixCheck != null }
+            rule.onNodeWithTag("fix-yes").performClick()
+            waitFor("fixed sent") { site.fixAnswers.any { it.optString("id") == "AVR-1" && it.optString("answer") == "fixed" } }
+            assertTrue(vm.status.orEmpty().contains("fixed"))
+            // A 4th opening: never again.
+            rule.runOnIdle { vm.account.awaySince = t0; vm.onAppOpened(t0 + 120 * 60_000L) }
+            Thread.sleep(4_500); rule.waitForIdle()
+            assertNull(vm.fixCheck)
+        }
+    }
+
+    /**
      * Nov 28, 2026 (#46: after a night the app froze and the TV was switched off, every category the profile hid was
      * shown again, while the website still had them hidden). A settings file left unreadable is read from the copy
      * saved before it; with nothing left, the TV says so and puts back what the account hides, at the next check.

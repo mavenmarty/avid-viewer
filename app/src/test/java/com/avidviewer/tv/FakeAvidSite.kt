@@ -66,6 +66,10 @@ class FakeAvidSite : AutoCloseable {
     val backups = java.util.concurrent.ConcurrentHashMap<String, Triple<String, String, String>>()
     /** Nov 26, 2026: the postal code set on the website, as /api/tv/me sends it ({"code","at"}), or null. */
     @Volatile var postal: String? = null
+    /** Nov 28, 2026: "Is it fixed?" items sent at check-in, and the TV's answers. */
+    @Volatile var fixChecks: org.json.JSONArray? = null
+    val fixAnswers = java.util.Collections.synchronizedList(mutableListOf<org.json.JSONObject>())
+
     private fun meExtras(): String {
         val o = org.json.JSONObject()
         if (resellerHosts.isNotEmpty()) o.put("reseller", org.json.JSONObject().put("hosts", org.json.JSONArray(resellerHosts))
@@ -73,6 +77,7 @@ class FakeAvidSite : AutoCloseable {
         if (reloadChannels) { o.put("reloadChannels", true); reloadChannels = false }
         if (checkSubscription) { o.put("checkSubscription", true); checkSubscription = false }
         postal?.let { o.put("postal", org.json.JSONObject(it)) }
+        fixChecks?.let { o.put("verify", org.json.JSONArray(it.toString())) }
         return if (o.length() == 0) "" else "," + o.toString().removePrefix("{").removeSuffix("}")
     }
     private fun deviceOf(auth: String) = if (auth.startsWith("Bearer TVTOKEN_claimed")) "d2" else "d1"
@@ -108,6 +113,7 @@ class FakeAvidSite : AutoCloseable {
             path == "/api/tv/link/poll" -> 200 to (if (approved) """{"status":"approved","token":"TVTOKEN_abcdefghijklmnopqrstuvwxyz","email":"viewer@example.com","name":"Living room","deviceId":"d1"}""" else if (full) """{"status":"pending","full":true,"limit":4}""" else """{"status":"pending"}""")
             path == "/api/tv/link/claim" -> 200 to """{"status":"approved","token":"TVTOKEN_claimedabcdefghijklmnopqrst","email":"viewer@example.com","name":"Den TV","deviceId":"d2"}"""
             path == "/api/tv/me" -> if (removed || !auth.startsWith("Bearer TVTOKEN_")) 401 to """{"error":"This TV is not linked."}""" else 200 to """{"email":"viewer@example.com","name":"Living room"""" + (beta?.let { ""","beta":$it""" } ?: "") + (if (sendLog) ""","sendLog":true""" else "") + meExtras() + "}"
+            path == "/api/tv/reports/verify" -> { fixAnswers += org.json.JSONObject(body); 200 to """{"ok":true}""" }
             path == "/api/tv/signout" -> 200 to """{"ok":true}"""
             path == "/api/tv/reseller/check" -> {
                 val o = org.json.JSONObject(body); resellerChecks += o
