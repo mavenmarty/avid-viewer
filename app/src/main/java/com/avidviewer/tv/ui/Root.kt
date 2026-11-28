@@ -6,6 +6,8 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.key
 import androidx.compose.foundation.border
 import androidx.activity.compose.BackHandler
 import androidx.annotation.OptIn
@@ -52,7 +54,7 @@ fun AppRoot(vm: AppViewModel) {
         Modifier.fillMaxSize().background(C.Bg)
             .onFocusChanged { vm.anyFocus = it.hasFocus }
             .onPreviewKeyEvent {
-                if (it.type == KeyEventType.KeyDown) { vm.lastKeyAt = android.os.SystemClock.uptimeMillis(); Images.holding = it.nativeKeyEvent.repeatCount > 0 }
+                if (it.type == KeyEventType.KeyDown) { vm.lastKeyAt = android.os.SystemClock.uptimeMillis(); vm.lastKeyCode = it.nativeKeyEvent.keyCode; Images.holding = it.nativeKeyEvent.repeatCount > 0 }
                 else if (it.type == KeyEventType.KeyUp) Images.holding = false
                 false
             }
@@ -98,14 +100,26 @@ fun AppRoot(vm: AppViewModel) {
         } else if (vm.screen == Screen.PLAYER) {
             PlayerScreen(vm)
         } else {
-            Row(Modifier.fillMaxSize()) {
+            val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
+            Row(Modifier.fillMaxSize().onKeyEvent { e ->
+                // ◀ that nothing on screen used: the highlight goes left if something is there; at the left edge it
+                // steps back one level (as Back does), and stops at the main menu.
+                if (e.type != KeyEventType.KeyDown || e.key != androidx.compose.ui.input.key.Key.DirectionLeft) return@onKeyEvent false
+                val before = vm.navSignature()
+                if (focusManager.moveFocus(androidx.compose.ui.focus.FocusDirection.Left)) return@onKeyEvent true
+                // A screen that handled leaving to the left itself (a title page closes) has already stepped back.
+                if (e.nativeKeyEvent.repeatCount == 0 && vm.navMode != NavMode.FULL && vm.navSignature() == before) vm.navBack()
+                true
+            }) {
                 val browsing = vm.screen == Screen.LIVE || vm.screen == Screen.GUIDE
                 // Inside the TV Guide with a category chosen, the guide takes the whole screen: the main menu and
                 // the category list step aside. ◀ from the channel names, or Back, brings back the category list
                 // (on the current category) with the main menu as icons (both set navFocusKey).
                 val guideFull = vm.guideFullLayout
-                // The main menu is otherwise always there: icons only while a lower layer is in use.
-                if (!guideFull) NavRail(vm)
+                // Nov 28, 2026 (owner, board 67): inside Live TV, Movies and Series the main menu isn't on screen;
+                // ◀ at the left edge or Back steps back one level and the main menu shows as its own last step.
+                // Elsewhere it stays as icons beside the screen.
+                if (!guideFull) NavRail(vm, hidden = !vm.railShown)
                 if (browsing && vm.navMode == NavMode.COLLAPSED) PlaylistTree(vm)
                 if (browsing && vm.navMode == NavMode.GROUPS && !guideFull) GroupNav(vm)
                 // Whether the guide area had the highlight since it appeared (its first "no highlight" report, before the
@@ -116,7 +130,13 @@ fun AppRoot(vm: AppViewModel) {
                     // if a request to highlight a category was still pending. Losing the highlight (to full screen,
                     // or a channel's dialogs) changes nothing, so coming back doesn't redraw (R-1); anywhere else, the
                     // menus come back as before.
-                    if (browsing && it.hasFocus) { if (!vm.guideHasFocus) vm.navFocusKey = null; vm.guideHasFocus = true }
+                    // Nov 28, 2026: only when the remote moved it there (▶ or OK); the highlight falling into the guide
+                    // because what had it went away (Back to the playlist list, ▶ from the main menu) keeps the request.
+                    if (browsing && it.hasFocus) {
+                        val byRemote = vm.lastKeyCode == android.view.KeyEvent.KEYCODE_DPAD_RIGHT || vm.lastKeyCode == android.view.KeyEvent.KEYCODE_DPAD_CENTER || vm.lastKeyCode == android.view.KeyEvent.KEYCODE_ENTER
+                        if (!vm.guideHasFocus && byRemote && android.os.SystemClock.uptimeMillis() - vm.navFocusSetAt > 700) vm.navFocusKey = null
+                        vm.guideHasFocus = true
+                    }
                     else if (!it.hasFocus && guideHad[0] && !vm.guideAwayBriefly()) vm.guideHasFocus = false
                     guideHad[0] = it.hasFocus
                 }) {

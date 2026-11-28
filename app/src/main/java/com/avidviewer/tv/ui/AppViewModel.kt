@@ -695,6 +695,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                     if (unclaimedReports().isNotEmpty()) claimReports()
                     if (m.reloadChannels) reloadAllLive()
                     takeAccountPostal(m)
+                    m.liveOrder?.let { o -> if (o != liveOrder) { liveOrderCache = o; account.liveOrder = o.joinToString(","); favDataTick++; trail("live order from the account") } }
                     account.fixChecks = org.json.JSONArray(m.fixChecks.map { org.json.JSONObject().put("id", it.id).put("text", it.text).put("fixedIn", it.fixedIn) }).toString()
                     sendFixAnswers(token)
                     resellerAfterCheckIn(token, m)
@@ -1510,11 +1511,21 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Playlist that feeds the TV Guide and Sports: switched on, with live TV on (any switched-on one as a last resort). */
     fun activePlaylist(): Playlist? =
-        shownPlaylists.firstOrNull { it.id == prefs.activePlaylist && it.liveOn } ?: shownPlaylists.firstOrNull { it.liveOn }
+        shownPlaylists.firstOrNull { it.id == prefs.activePlaylist && it.liveOn } ?: livePlaylists.firstOrNull()
             ?: shownPlaylists.firstOrNull { it.id == prefs.activePlaylist } ?: shownPlaylists.firstOrNull()
 
-    /** Playlists the TV Guide lists: switched on with live TV on. */
-    val livePlaylists: List<Playlist> get() = shownPlaylists.filter { it.liveOn }
+    /**
+     * Playlists the TV Guide lists: switched on with live TV on. Nov 28, 2026 (owner): in the account's playlist order
+     * for live TV (avidviewer.app › Playlists), primary first; playlists it doesn't rank (typed on this TV) after them.
+     */
+    val livePlaylists: List<Playlist> get() = shownPlaylists.filter { it.liveOn }.let { l ->
+        val order = liveOrder
+        if (order.isEmpty()) l else l.sortedBy { p -> order.indexOf(p.remoteId).let { if (p.remoteId.isEmpty() || it < 0) Int.MAX_VALUE else it } }
+    }
+    // Read when first needed (the list is used while the view model is still being set up).
+    private var liveOrderCache: List<String>? = null
+    val liveOrder: List<String>
+        get() = liveOrderCache ?: (runCatching { account.liveOrder.split(',').filter { it.isNotBlank() } }.getOrNull() ?: emptyList()).also { liveOrderCache = it }
 
     /** Playlists Movies, Series, Discover and search can use: switched on with movies & series on. */
     val vodPlaylists: List<Playlist> get() = shownPlaylists.filter { it.vodOn }
@@ -5630,6 +5641,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     var entryFocusFor by mutableStateOf<Screen?>(null)
     /** When the last remote button was pressed (so a late automatic highlight never overrides the viewer). */
     var lastKeyAt = 0L
+    /** The last key pressed (Android key code). */
+    var lastKeyCode = 0
 
     fun navSelect(target: Screen) {
         if (!screenAllowed(target) || (target == Screen.MANAGE && kidsMode)) return
@@ -5683,7 +5696,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         if (group == FAV_GROUP || isListGroup(group)) ensureFavoriteData()
         if (group != selectedGroup) { chooseGroup(activePlaylist()?.id ?: "", group); return }
         if (channelsIn(group).isEmpty()) return
-        guideFocusMode = GuideFocus.VISIBLE
+        // Nov 28, 2026 (owner): the channel you were last on in this category, not the first one on screen.
+        guideFocusMode = GuideFocus.KEEP
         guideFocusTick++
     }
 
@@ -5733,14 +5747,34 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** A screen a jump started from (Search): Back from what it opened returns there (NAV-12). */
     var jumpedFrom: Screen? = null
 
+    /** Nov 28, 2026: the main menu beside the screen; inside Live TV, Movies and Series only as its own step (board 67). */
+    val railShown: Boolean get() = navMode == NavMode.FULL || screen !in setOf(Screen.GUIDE, Screen.LIVE, Screen.MOVIES, Screen.SERIES)
+
+    /** Where the remote is in the layers (to tell whether a key already stepped back). */
+    fun navSignature(): List<Any?> = listOf(screen, navMode, vodDetail?.key, discoverDetail, vodOnPoster, navFocusKey, vodCatFocus, settingsInContent)
+
+    /** ▶ from the main menu on the screen in use: back into it where you were (the category), not its first item. */
+    fun railIntoScreen(): Boolean = when (screen) {
+        Screen.GUIDE, Screen.LIVE -> { navMode = NavMode.GROUPS; inGroupNav = true; navFocusKey = selectedGroup ?: FAV_GROUP; true }
+        Screen.MOVIES, Screen.SERIES -> { navMode = NavMode.COLLAPSED; vodOnPoster = false; vodCatFocus++; true }
+        else -> false
+    }
+
     /** A category (raw name, ★ Favorites or a list) the left-hand list should highlight next; cleared once it has. */
-    var navFocusKey by mutableStateOf<String?>(null)
+    private var navFocusKeyState by mutableStateOf<String?>(null)
+    var navFocusKey: String?
+        get() = navFocusKeyState
+        set(v) { if (v != null) navFocusSetAt = android.os.SystemClock.uptimeMillis(); navFocusKeyState = v }
+    /** When a category was last asked to take the highlight (the guide doesn't cancel a request that young). */
+    var navFocusSetAt = 0L
 
     /**
      * Back, one layer at a time: guide channels → the current category in the category list →
      * the same category in the playlist list → the main menu.
      */
     fun navBack(): Boolean = if (movingGroup != null || movingChannel != null || vodMovingCat != null) { movingGroup = null; movingChannel = null; vodMovingCat = null; true }
+    // A movie or series page: back to its poster (◀ at its left edge has nothing to go to now the menu is hidden).
+    else if ((screen == Screen.MOVIES || screen == Screen.SERIES) && vodDetail != null) { closeVodDetail(); true }
     else if (screen == Screen.SETTINGS && settingsInContent) { settingsBackTick++; true }
     // Movies / Series: Back from the posters goes to the category list first (on the current category),
     // then the main menu. (It used to skip the category list.)

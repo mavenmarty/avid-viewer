@@ -36,6 +36,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
@@ -92,7 +93,10 @@ private val MENU = listOf(
 
 /** Main menu. Full width with labels at the top level; icons only once a choice is made (labels return while it has focus). */
 @Composable
-fun NavRail(vm: AppViewModel) {
+fun NavRail(vm: AppViewModel, hidden: Boolean = false) {
+    // Nov 28, 2026: hidden inside Live TV, Movies and Series (board 67): kept in place with no width, and it can't
+    // take the highlight, so the layers beside it behave as before.
+    if (hidden) { androidx.compose.foundation.layout.Box(Modifier.width(0.dp).fillMaxHeight().focusProperties { canFocus = false }); return }
     var railFocused by remember { mutableStateOf(false) }
     val expanded = vm.navMode == NavMode.FULL || railFocused
     // A Kids profile has no Discover, Sports or Settings.
@@ -136,7 +140,10 @@ fun NavRail(vm: AppViewModel) {
         menu.forEachIndexed { i, (s, label, icon) ->
             val active = vm.screen == s
             Focusable(
-                modifier = Modifier.fillMaxWidth().height(36.dp).focusRequester(requesters[i]).activePath(active),
+                modifier = Modifier.fillMaxWidth().height(36.dp).focusRequester(requesters[i]).activePath(active)
+                    .onPreviewKeyEvent { e ->
+                        e.type == KeyEventType.KeyDown && e.key == Key.DirectionRight && e.nativeKeyEvent.repeatCount == 0 && active && vm.railIntoScreen()
+                    },
                 color = if (active) C.Surface2 else Color.Transparent,
                 focusedColor = C.FocusRaised,
                 onClick = { vm.navSelect(s) },
@@ -199,11 +206,17 @@ fun PlaylistTree(vm: AppViewModel) {
         // Coming back from a category: that category takes the highlight instead (see below).
         val k = vm.navFocusKey
         if (k != null) {
-            // Found by key in the list's own item keys (no counting of header rows, NAV-13).
-            val item = treeKeys().indexOf(
-                when { k == FAV_GROUP -> "tfav"; isListGroup(k) -> "tl-" + k.removePrefix(LIST_PREFIX); else -> "g-$active-$k" },
-            )
-            if (item >= 0) { launch { treeState.scrollToItem((item - 3).coerceAtLeast(0)) }; return@LaunchedEffect }
+            // Found by key in the list's own item keys (no counting of header rows, NAV-13). Nov 28, 2026: the
+            // playlist's categories may still be loading: wait for them (up to ~2 s) instead of going to the top.
+            val want = when { k == FAV_GROUP -> "tfav"; isListGroup(k) -> "tl-" + k.removePrefix(LIST_PREFIX); else -> "g-$active-$k" }
+            vm.trail("tree want=$want keys=${treeKeys().size}")
+            for (f in 0 until 120) {
+                val item = treeKeys().indexOf(want)
+                if (f == 0 || item >= 0) vm.trail("tree f$f item=$item")
+                if (item >= 0) { launch { treeState.scrollToItem((item - 3).coerceAtLeast(0)) }; return@LaunchedEffect }
+                if (treeKeys().none { it.startsWith("ld-") } && f > 2) break
+                androidx.compose.runtime.withFrameNanos { }
+            }
             vm.navFocusKey = null
         }
         focusWhenReady(vm) { runCatching { first.requestFocus() }.isSuccess }

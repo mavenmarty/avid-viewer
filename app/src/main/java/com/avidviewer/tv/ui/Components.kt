@@ -288,9 +288,10 @@ fun Modifier.navFocusTarget(vm: AppViewModel, key: String?): Modifier {
         if (vm.navFocusKey != key) return@LaunchedEffect
         val started = android.os.SystemClock.uptimeMillis()
         var held = 0
+        vm.trail("nft $key")
         for (frame in 0 until 120) {
             androidx.compose.runtime.withFrameNanos { }
-            if (vm.lastKeyAt > started) break
+            if (vm.lastKeyAt > started) { vm.trail("nft $key key f$frame"); break }
             if (focused) { if (++held >= 8) break; continue }
             held = 0
             runCatching { fr.requestFocus() }

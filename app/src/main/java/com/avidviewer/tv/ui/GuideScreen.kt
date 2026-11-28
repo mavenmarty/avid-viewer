@@ -1,3 +1,5 @@
+@file:OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
+
 package com.avidviewer.tv.ui
 
 import androidx.compose.ui.focus.focusProperties
@@ -394,6 +396,8 @@ fun GuideScreen(vm: AppViewModel) {
                         Focusable(
                             modifier = Modifier.width(CH_COL.dp).fillMaxHeight().focusRequester(rowFr(idx)!!)
                                 .then(if (idx == 0) Modifier.focusProperties { up = if (days.isNotEmpty()) dayFr else upFr } else Modifier)
+                                // Nov 28, 2026 (owner): ▶ stays on this channel's row (the programme at the remembered time).
+                                .focusProperties { right = progFr(idx)!! }
                                 .then(if (isMoving) Modifier.border(2.dp, C.AccentFocus, RoundedCornerShape(8.dp)) else Modifier)
                                 .onFocusChanged {
                                     if (isMoving) movingFocused = it.isFocused
@@ -430,6 +434,7 @@ fun GuideScreen(vm: AppViewModel) {
                         if (progs.isEmpty()) {
                             Focusable(
                                 modifier = Modifier.width((winMin * dpm).dp).fillMaxHeight().focusRequester(progFr(idx)!!)
+                                    .focusProperties { left = rowFr(idx)!!; right = FocusRequester.Cancel }
                                     .onPreviewKeyEvent { e ->
                                         if (e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
                                         when (e.key) {
@@ -452,6 +457,9 @@ fun GuideScreen(vm: AppViewModel) {
                             val at = anchor.coerceIn(winStart, winEnd - 1)
                             val target = (laid.firstOrNull { at >= it.second && at < it.third }
                                 ?: laid.firstOrNull { it.second >= at } ?: laid.last()).first
+                            // Nov 28, 2026 (owner): ◀ ▶ move along this row only; the highlight never slides to a
+                            // neighbouring channel because a programme there happens to line up better.
+                            val cells = remember(c.key, laid.size) { List(laid.size) { FocusRequester() } }
                             laid.forEachIndexed { pi, (p, a, b) ->
                                 if (a > cursor) Box(Modifier.width((((a - cursor) / 60000f * dpm).dp - 3.dp).coerceAtLeast(0.dp)))
                                 val isNow = vm.now >= p.start && vm.now < p.end
@@ -460,6 +468,11 @@ fun GuideScreen(vm: AppViewModel) {
                                 Focusable(
                                     modifier = Modifier.width(((((b - a) / 60000f) * dpm).dp - 3.dp).coerceAtLeast(4.dp)).fillMaxHeight()
                                         .then(if (p === target) Modifier.focusRequester(progFr(idx)!!) else Modifier)
+                                        .focusRequester(cells[pi])
+                                        .focusProperties {
+                                            left = if (pi == 0) rowFr(idx)!! else cells[pi - 1]
+                                            right = if (pi < laid.lastIndex) cells[pi + 1] else FocusRequester.Cancel
+                                        }
                                         .then(if (aired) Modifier.semantics { stateDescription = "Already aired" } else Modifier)
                                         .onPreviewKeyEvent { e ->
                                             if (e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
