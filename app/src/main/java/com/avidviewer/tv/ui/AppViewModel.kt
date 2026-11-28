@@ -5755,6 +5755,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
      * the same category in the playlist list → the main menu.
      */
     fun navBack(): Boolean = if (movingGroup != null || movingChannel != null || vodMovingCat != null) { movingGroup = null; movingChannel = null; vodMovingCat = null; true }
+    // A movie or series page: back to its poster (◀ at its left edge has nothing to go to now the menu is hidden).
+    else if ((screen == Screen.MOVIES || screen == Screen.SERIES) && vodDetail != null) { closeVodDetail(); true }
     else if (screen == Screen.SETTINGS && settingsInContent) { settingsBackTick++; true }
     // Movies / Series: Back from the posters goes to the category list first (on the current category),
     // then the main menu. (It used to skip the category list.)

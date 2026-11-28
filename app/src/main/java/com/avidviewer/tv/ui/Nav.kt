@@ -209,8 +209,10 @@ fun PlaylistTree(vm: AppViewModel) {
             // Found by key in the list's own item keys (no counting of header rows, NAV-13). Nov 28, 2026: the
             // playlist's categories may still be loading: wait for them (up to ~2 s) instead of going to the top.
             val want = when { k == FAV_GROUP -> "tfav"; isListGroup(k) -> "tl-" + k.removePrefix(LIST_PREFIX); else -> "g-$active-$k" }
+            vm.trail("tree want=$want keys=${treeKeys().size}")
             for (f in 0 until 120) {
                 val item = treeKeys().indexOf(want)
+                if (f == 0 || item >= 0) vm.trail("tree f$f item=$item")
                 if (item >= 0) { launch { treeState.scrollToItem((item - 3).coerceAtLeast(0)) }; return@LaunchedEffect }
                 if (treeKeys().none { it.startsWith("ld-") } && f > 2) break
                 androidx.compose.runtime.withFrameNanos { }
