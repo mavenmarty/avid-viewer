@@ -953,9 +953,8 @@ class UsabilityTest {
     }
 
     /**
-     * Nov 28, 2026 (owner): One Live TV. With two live playlists the guide shows them as one: categories with the same
-     * name joined, a channel both have shown once (the primary playlist's copy plays first, then the other's), and no
-     * playlist step. Hiding a joined category hides it in each playlist.
+     * Nov 28, 2026 (owner): One Live TV. With two live playlists the guide shows them as one, in Avid Viewer's common
+     * categories, each channel once (the first playlist's copy plays first, then the other's), and no playlist step.
      */
     @Test
     fun oneLiveTvShowsEveryPlaylistAsOneGuide() {
@@ -971,19 +970,27 @@ class UsabilityTest {
         waitFor("both playlists in the guide") { vm.channels.any { it.key == "$p2:x1" } }
         assertTrue(vm.oneLive)
         assertFalse(vm.playlistStep)
+        // Avid Viewer's common categories, not the playlists' own.
         val groups = vm.groups().map { it.raw }
-        assertTrue(groups.toString(), "NEWS" in groups && "Extra" in groups && "News" !in groups)
-        // In both playlists: shown once, the primary's copy first.
-        assertEquals(12, vm.channelsIn("NEWS").size)
+        assertTrue(groups.toString(), "News" in groups && "Entertainment" in groups && "Local stations" in groups && "NEWS" !in groups && "Extra" !in groups)
+        assertEquals(groups.toString(), "Local stations", groups.first())
+        // In both playlists: shown once, the first playlist's copy first.
+        assertEquals(12, vm.channelsIn("News").size)
         assertEquals(listOf("$p1:c1-1", "$p2:n1"), vm.channelVersions["$p1:c1-1"]!!.map { it.key })
         assertEquals("$p1:c1-1", vm.channel("$p2:n1")?.key)
-        waitFor("the primary's guide") { vm.programs(vm.channel("$p1:c1-1")).isNotEmpty() }
-        // Hiding the joined category hides each playlist's own.
-        rule.runOnIdle { vm.toggleHidden("NEWS") }
-        assertTrue(vm.isGroupHidden(p1, "NEWS") && vm.isGroupHidden(p2, "News"))
-        assertTrue(vm.groups().none { it.raw == "NEWS" })
-        rule.runOnIdle { vm.toggleHidden("NEWS") }
-        assertTrue(vm.groups().any { it.raw == "NEWS" })
+        // Twelve copies of WDAY (one call sign) are one channel.
+        assertEquals(1, vm.channelsIn("Local stations").size)
+        waitFor("the first playlist's guide") { vm.programs(vm.channel("$p1:c1-1")).isNotEmpty() }
+        // Hiding a common category hides it in the one guide.
+        rule.runOnIdle { vm.toggleHidden("News") }
+        assertTrue(vm.groups().none { it.raw == "News" })
+        rule.runOnIdle { vm.toggleHidden("News") }
+        assertTrue(vm.groups().any { it.raw == "News" })
+        // A category hidden for one playlist (here, or on the website) leaves its copies out.
+        rule.runOnIdle { vm.setGroupsHidden(p2, listOf("News"), true) }
+        waitFor("the hidden category's copy left out") { vm.channelVersions["$p1:c1-1"] == null && vm.channel("$p1:c1-1") != null }
+        rule.runOnIdle { vm.setGroupsHidden(p2, listOf("News"), false) }
+        waitFor("back") { vm.channelVersions["$p1:c1-1"]?.size == 2 }
         // Off: one playlist at a time again.
         rule.runOnIdle { vm.setOneLiveTv(false) }
         waitFor("one playlist again") { vm.channels.none { it.key.startsWith("$p2:") } }
