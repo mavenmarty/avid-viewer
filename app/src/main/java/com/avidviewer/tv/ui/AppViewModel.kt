@@ -298,7 +298,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         val cats = prefs.vodHiddenCats
         val titles = prefs.vodHiddenTitles
         viewModelScope.launch {
-            withContext(Dispatchers.IO) {
+            withContext(catalogWrites) {
                 runCatching { catalog.applyHidden(cats, titles, if (p.kids) kidsVodAllowed(p) else null) }
                 store.catalogProfile = p.id
             }
@@ -577,6 +577,15 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** Start-up work that waits for [quietStartDone] runs one job at a time, in turn. */
     private val backgroundTurn = kotlinx.coroutines.sync.Mutex()
     /** A low-priority thread for the catalog's heavy work, so it never competes with the video or the remote. */
+    /**
+     * #47: changes to the catalog's hidden marks, one at a time and in order, off the screen's thread (not on
+     * [backgroundThread], which can be busy with lookups for minutes). Tests apply them at once unless [asyncHides].
+     */
+    private val catalogWrites: kotlinx.coroutines.CoroutineDispatcher = java.util.concurrent.Executors.newSingleThreadExecutor { r ->
+        Thread(r, "avid-catalog-writes").apply { isDaemon = true }
+    }.asCoroutineDispatcher()
+    internal var asyncHides = android.os.Build.FINGERPRINT != "robolectric"
+
     private val backgroundThread: kotlinx.coroutines.CoroutineDispatcher = java.util.concurrent.Executors.newSingleThreadExecutor { r ->
         Thread({ android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_BACKGROUND); r.run() }, "avid-background").apply { isDaemon = true }
     }.asCoroutineDispatcher()
@@ -2829,11 +2838,20 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         if (before.hiddenGroups != prefs.hiddenGroups || before.hiddenChannels != prefs.hiddenChannels ||
             before.favorites != prefs.favorites || before.lists != prefs.lists) guideWantedChanged()
         if (before.favorites != prefs.favorites || before.lists != prefs.lists) reorderSportChannels()
-        if (before.vodHiddenCats !== prefs.vodHiddenCats || before.vodHiddenTitles !== prefs.vodHiddenTitles) {
-            // Right away, so the lists on screen (and the next one read) are already correct.
-            runCatching { catalog.applyHiddenChange(before.vodHiddenCats, prefs.vodHiddenCats, before.vodHiddenTitles, prefs.vodHiddenTitles) }
-            vodVersion++
-            regroupLater() // a hidden copy may have stood for its title
+        // #47 (Nov 28, 2026): only when what's hidden really changed (the sets were compared as objects, so every
+        // account sync that rebuilt them wrote the catalog), and on its own thread: on a TV with slow storage, with
+        // lookups writing the catalog meanwhile, the screen's thread waited 30 s and more and Fire OS closed the app.
+        if (before.vodHiddenCats != prefs.vodHiddenCats || before.vodHiddenTitles != prefs.vodHiddenTitles) {
+            val bc = before.vodHiddenCats; val ac = prefs.vodHiddenCats; val bt = before.vodHiddenTitles; val at = prefs.vodHiddenTitles
+            if (!asyncHides) {
+                runCatching { catalog.applyHiddenChange(bc, ac, bt, at) }
+                vodVersion++
+                regroupLater() // a hidden copy may have stood for its title
+            } else viewModelScope.launch {
+                withContext(catalogWrites) { runCatching { catalog.applyHiddenChange(bc, ac, bt, at) } }
+                vodVersion++
+                regroupLater()
+            }
         }
         if (!applyingAccount && account.token != null) {
             if (before.favorites != prefs.favorites || before.lists != prefs.lists) runCatching {
