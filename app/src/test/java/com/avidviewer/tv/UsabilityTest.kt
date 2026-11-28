@@ -916,6 +916,43 @@ class UsabilityTest {
     }
 
     /**
+     * Nov 28, 2026 (#46: after a night the app froze and the TV was switched off, every category the profile hid was
+     * shown again, while the website still had them hidden). A settings file left unreadable is read from the copy
+     * saved before it; with nothing left, the TV says so and puts back what the account hides, at the next check.
+     * Before, the TV kept showing everything until a hide was changed on the website.
+     */
+    @Test
+    fun hiddenCategoriesComeBackFromTheAccountWhenTheSettingsFileIsLost() {
+        FakeAvidSite().use { site ->
+            restartWith { st -> st.savePlaylists(st.loadPlaylists().map { if (it.id == TestData.P1) it.copy(remoteId = "acctP1") else it }) }
+            linkForTest(site)
+            site.profileMap = mapOf("main" to "acctEvan")
+            val vis = org.json.JSONObject().put("acctP1", org.json.JSONObject()
+                .put("hidden", org.json.JSONObject().put("live", org.json.JSONArray().put("SPORTS | NFL").put("NEWS")).put("movie", org.json.JSONArray()).put("series", org.json.JSONArray()))
+                .put("allowed", org.json.JSONObject().put("live", org.json.JSONArray()).put("movie", org.json.JSONArray()).put("series", org.json.JSONArray()))
+                .put("channels", org.json.JSONArray()))
+            site.profiles = org.json.JSONArray().put(org.json.JSONObject().put("id", "acctEvan").put("name", "Evan").put("color", 0).put("pin", "")
+                .put("playlists", org.json.JSONArray().put("acctP1")).put("visibility", vis))
+            rule.runOnIdle { vm.syncAccountPlaylists() }
+            val nfl = vm.liveCategoryId(TestData.P1, "SPORTS | NFL"); val news = vm.liveCategoryId(TestData.P1, "NEWS")
+            waitFor("hidden from the account") { nfl in vm.prefs.hiddenGroups && news in vm.prefs.hiddenGroups }
+            rule.runOnIdle { vm.toggleFavorite(vm.channels.first().key) } // one more save after the hides
+            val app = ApplicationProvider.getApplicationContext<Application>()
+            com.avidviewer.tv.data.Store(app).flushPrefs()
+            val dir = app.filesDir
+            // The power went while the last save was still on its way: an empty file, the save before it kept.
+            restartWith { java.io.File(dir, "prefs.json").writeText("") }
+            assertTrue("read from the copy before (${vm.prefs.hiddenGroups})", nfl in vm.prefs.hiddenGroups && news in vm.prefs.hiddenGroups)
+            // Nothing left at all: shown until the account puts them back, and the TV says so.
+            restartWith { java.io.File(dir, "prefs.json").writeText("{\"hiddenGr"); java.io.File(dir, "prefs.json.bak").delete() }
+            assertFalse(nfl in vm.prefs.hiddenGroups)
+            rule.runOnIdle { vm.syncAccountPlaylists() }
+            waitFor("put back from the account (${vm.prefs.hiddenGroups})") { nfl in vm.prefs.hiddenGroups && news in vm.prefs.hiddenGroups }
+            assertTrue(vm.status.orEmpty(), vm.status.orEmpty().contains("put back from your account"))
+        }
+    }
+
+    /**
      * 1.15.1: a device with account profiles tells the account every playlist it has, with each login locked for the
      * account's own key (only the owner's browser opens it); "Add to account" then makes a playlist typed on the TV that
      * account playlist, keeping it.

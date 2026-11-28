@@ -14,13 +14,37 @@ class Store(private val context: Context) {
     private val dir: File get() = context.filesDir
     internal val dataDir: File get() = File(dir, "data").apply { mkdirs() }
 
+    /**
+     * Nov 28, 2026 (#46: after a night the app froze and the TV was switched off, a profile's hidden categories were
+     * all shown again): the new file is forced onto the flash before it replaces the old one, and the old one is kept
+     * as name.bak. Before, a write still in the TV's memory when the power went could leave an empty or cut-off file,
+     * which was read as no settings at all.
+     */
     private fun writeAtomic(f: File, text: String) {
         val tmp = File(f.parentFile, f.name + ".tmp")
-        tmp.writeText(text)
+        java.io.FileOutputStream(tmp).use { out -> out.write(text.toByteArray(Charsets.UTF_8)); out.flush(); runCatching { out.fd.sync() } }
+        val bak = File(f.parentFile, f.name + ".bak")
+        if (f.length() > 0) { bak.delete(); f.renameTo(bak) }
         if (!tmp.renameTo(f)) {
             f.writeText(text)
             tmp.delete()
         }
+    }
+
+    /** Set when a settings file couldn't be read at start (its .bak was used, or nothing was left). */
+    @Volatile var settingsRecovered = false
+
+    /**
+     * A settings file's JSON, or its copy from the save before ([writeAtomic]) when it's missing, empty or cut off.
+     * Null when there's neither (nothing saved yet).
+     */
+    private fun <T> readSaved(f: File, parse: (String) -> T): T? {
+        val main = if (f.exists()) runCatching { parse(f.readText()) }.getOrNull() else null
+        if (main != null) return main
+        val bak = File(f.parentFile, f.name + ".bak")
+        val old = if (bak.exists()) runCatching { parse(bak.readText()) }.getOrNull() else null
+        if (f.exists() || old != null) { settingsRecovered = true; CrashLog.note(context, "settings: ${f.name} unreadable, ${if (old != null) "the copy before it used" else "nothing to recover"}") }
+        return old
     }
 
     /**
@@ -68,10 +92,8 @@ class Store(private val context: Context) {
 
     // ---- playlists (passwords encrypted) ----
     fun loadPlaylists(): List<Playlist> {
-        val f = File(dir, "playlists.json")
-        if (!f.exists()) return emptyList()
+        val a = readSaved(File(dir, "playlists.json")) { JSONArray(it) } ?: return emptyList()
         return try {
-            val a = JSONArray(f.readText())
             List(a.length()) {
                 val o = a.getJSONObject(it)
                 Playlist.extraFrom(o, Playlist.guideFrom(o, Playlist(
@@ -108,10 +130,7 @@ class Store(private val context: Context) {
     }
 
     // ---- profiles ----
-    fun loadProfiles(): ProfileSet = runCatching {
-        val f = File(dir, "profiles.json")
-        if (f.exists()) ProfileSet.fromJson(JSONObject(f.readText())) else ProfileSet()
-    }.getOrDefault(ProfileSet())
+    fun loadProfiles(): ProfileSet = readSaved(File(dir, "profiles.json")) { ProfileSet.fromJson(JSONObject(it)) } ?: ProfileSet()
 
     /** Nothing saved yet: a new install (the app had no playlists, settings or profiles). */
     fun isNewInstall(): Boolean = listOf("prefs.json", "playlists.json", "profiles.json").none { File(dir, it).exists() }
@@ -131,7 +150,7 @@ class Store(private val context: Context) {
     fun loadPersonal(id: String): JSONObject? = onPrefsThread {
         runCatching {
             if (id == Profile.OWNER) personalOf(loadPrefsFile())
-            else File(profileDir(id), "personal.json").takeIf { it.exists() }?.let { JSONObject(it.readText()) }
+            else readSaved(File(profileDir(id), "personal.json")) { JSONObject(it) }
         }.getOrNull()
     }
 
@@ -164,12 +183,7 @@ class Store(private val context: Context) {
     private fun loadPrefsFile(): Prefs = onPrefsThread { readPrefsFile() }
 
     private fun readPrefsFile(): Prefs {
-        val f = File(dir, "prefs.json")
-        return try {
-            if (f.exists()) Prefs.fromJson(JSONObject(f.readText())) else Prefs()
-        } catch (e: Exception) {
-            Prefs()
-        }
+        return readSaved(File(dir, "prefs.json")) { Prefs.fromJson(JSONObject(it)) } ?: Prefs()
     }
 
     private fun savePrefsFile(p: Prefs) = writeAtomic(File(dir, "prefs.json"), p.toJson().toString())

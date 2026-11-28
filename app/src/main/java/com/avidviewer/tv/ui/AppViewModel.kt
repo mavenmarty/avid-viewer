@@ -3374,8 +3374,11 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                     }
                     reported = key.publicB64 + reportProfiles() + profiles.managed
                 }
+                // #46 (Nov 28, 2026): a settings file on this TV couldn't be read at start: put the account's hidden
+                // items back (the profiles are asked for even if unchanged).
+                if (store.settingsRecovered) { store.settingsRecovered = false; restoreAccountHides = true }
                 // Until the one-time repair has run, ask for the profiles even if they haven't changed.
-                val box = withContext(Dispatchers.IO) { com.avidviewer.tv.data.AccountApi.inbox2(token, account.profilesHash.ifEmpty { null }?.takeIf { account.hidesRepaired }, accountApi) }
+                val box = withContext(Dispatchers.IO) { com.avidviewer.tv.data.AccountApi.inbox2(token, account.profilesHash.ifEmpty { null }?.takeIf { account.hidesRepaired && !restoreAccountHides }, accountApi) }
                 box.profiles?.let { list ->
                     account.profilesJson = list.toString()
                     applyAccountProfiles(list)
@@ -3459,6 +3462,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
      * the device already has keeps its favorites, lists and history; one taken off the device just isn't shown (its data
      * stays, in case it comes back). With none, the device goes back to one profile of its own and shows no profiles.
      */
+    /** Set when a settings file couldn't be read at start, until the account's hidden items are put back. */
+    private var restoreAccountHides = false
+
     internal fun applyAccountProfiles(list: org.json.JSONArray) {
         val cur = profiles.list
         val acctPl = playlists.filter { it.remoteId.isNotEmpty() }
@@ -3477,6 +3483,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         // 1.17.2: once, every profile's hidden items in the account's playlists become exactly the account's (1.17.0–1.17.1
         // could write one profile's settings onto another during a sync; the account has each profile's own).
         val repair = !account.hidesRepaired
+        val restore = restoreAccountHides
         val used = HashSet<String>()
         val out = ArrayList<Profile>()
         for (i in 0 until list.length()) {
@@ -3513,7 +3520,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 p = p.copy(allowedGroups = p.allowedGroups.filterNot { it.substringBefore('\u0001') in acctLocal }.toSet() + allowLive,
                     allowedVodCats = p.allowedVodCats.filterNot { it.split('|').getOrNull(1) in acctLocal }.toSet() + allowVod)
             }
-            if (repair || p.acctHidden != hidden) { putAccountHides(p, p.acctHidden, hidden, if (repair) acctLocal else null); p = p.copy(acctHidden = hidden) }
+            // restore: every hide the account has is added again (the TV's own hides stay).
+            if (repair || restore || p.acctHidden != hidden) { putAccountHides(p, p.acctHidden, hidden, if (repair) acctLocal else null); p = p.copy(acctHidden = hidden) }
             out += p
         }
         val before = profile
@@ -3521,6 +3529,11 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         val set = profiles.copy(list = out, active = active ?: out.first().id, managed = true)
         saveProfiles(set)
         if (repair) { account.hidesRepaired = true; trail("hidden items matched to the account") }
+        if (restore) {
+            restoreAccountHides = false
+            trail("hidden items put back from the account")
+            status = "Some settings on this TV couldn't be read after it was switched off. What each profile hides was put back from your account."
+        }
         // Another profile's hidden items (or a Kids profile's categories) may have changed what the guide keeps.
         guideWantedChanged()
         val now = profile
